@@ -32,3 +32,9 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Environment locals
+frontend/.env*
+
+# Pytest
+.pytest_cache/
