@@ -1,35 +1,38 @@
 """Serializers for authentication app."""
 from django.contrib.auth import authenticate
-from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
-from rest_framework_simplejwt.tokens import RefreshToken
+
 from .models import CustomUser
 
 
 class LoginSerializer(serializers.Serializer):
-    """Serializer for user login."""
-    username = serializers.CharField()
+    """Serializer for user login via email."""
+    email    = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        username = attrs.get('username')
+        email    = attrs.get('email')
         password = attrs.get('password')
 
         user = authenticate(
             request=self.context.get('request'),
-            username=username,
+            username=email,
             password=password,
         )
 
-        if not user:
+        if user is None:
+            # Check if the user exists but is inactive
+            try:
+                db_user = CustomUser.objects.get(email=email)
+                if not db_user.is_active:
+                    raise serializers.ValidationError(
+                        {'code': 'ACCOUNT_INACTIVE', 'error': 'Cuenta desactivada. Contacte al administrador.'},
+                        code='account_inactive',
+                    )
+            except CustomUser.DoesNotExist:
+                pass
             raise serializers.ValidationError(
-                _('Credenciales inválidas. Por favor, intente nuevamente.'),
-                code='authorization',
-            )
-
-        if not user.is_active:
-            raise serializers.ValidationError(
-                _('Cuenta desactivada. Contacte al administrador.'),
+                {'code': 'INVALID_CREDENTIALS', 'error': 'Credenciales inválidas.'},
                 code='authorization',
             )
 
@@ -39,40 +42,36 @@ class LoginSerializer(serializers.Serializer):
 
 class UserDataSerializer(serializers.ModelSerializer):
     """Serializer for user data representation."""
-    full_name = serializers.SerializerMethodField()
+    full_name    = serializers.SerializerMethodField()
     role_display = serializers.CharField(source='get_role_display', read_only=True)
 
     class Meta:
-        model = CustomUser
+        model  = CustomUser
         fields = (
-            'id', 'username', 'email', 'first_name', 'last_name',
+            'id', 'email', 'first_name', 'last_name',
             'full_name', 'role', 'role_display', 'phone', 'is_active',
-            'date_joined',
+            'created_at',
         )
-        read_only_fields = ('id', 'date_joined')
+        read_only_fields = ('id', 'created_at')
 
     def get_full_name(self, obj):
-        return obj.get_full_name() or obj.username
+        return obj.get_full_name()
 
 
-class PasswordRecoverySerializer(serializers.Serializer):
-    """Serializer for password recovery request."""
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """Serializer for password reset request (always succeeds)."""
     email = serializers.EmailField()
 
-    def validate_email(self, value):
-        if not CustomUser.objects.filter(email=value, is_active=True).exists():
-            # Return success even if email doesn't exist to prevent enumeration
-            return value
-        return value
 
-
-class PasswordResetSerializer(serializers.Serializer):
-    """Serializer for password reset with token."""
-    token = serializers.CharField()
-    new_password = serializers.CharField(min_length=8, write_only=True)
-    confirm_password = serializers.CharField(write_only=True)
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Serializer for password reset confirmation."""
+    token            = serializers.CharField()
+    password         = serializers.CharField(min_length=8, write_only=True)
+    password_confirm = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        if attrs['new_password'] != attrs['confirm_password']:
-            raise serializers.ValidationError('Las contraseñas no coinciden.')
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError(
+                {'code': 'PASSWORD_MISMATCH', 'error': 'Las contraseñas no coinciden.'}
+            )
         return attrs

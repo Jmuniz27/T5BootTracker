@@ -1,3 +1,3 @@
-from django.urls import path
+"""URLs."""
 
-urlpatterns = []
+urlpatterns: list = []
