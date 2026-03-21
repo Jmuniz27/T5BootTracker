@@ -1,10 +1,10 @@
 """Views for authentication app."""
 import logging
-from django.contrib.auth.tokens import default_token_generator
+import uuid
+
+import redis
+from django.conf import settings
 from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -16,30 +16,55 @@ from .models import CustomUser
 from .serializers import (
     LoginSerializer,
     UserDataSerializer,
-    PasswordRecoverySerializer,
-    PasswordResetSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
 )
 
 logger = logging.getLogger(__name__)
 
 
+def _get_redis():
+    return redis.from_url(settings.REDIS_URL)
+
+
 class LoginView(APIView):
-    """JWT login endpoint."""
+    """JWT login endpoint — authenticates via email + password."""
     permission_classes = [AllowAny]
 
     def post(self, request):
+        email = request.data.get('email', '')
+
+        # Check for inactive account first so we can return 403 (not 401)
+        try:
+            candidate = CustomUser.objects.get(email=email)
+            if not candidate.is_active:
+                return Response(
+                    {'error': 'Cuenta desactivada. Contacte al administrador.', 'code': 'ACCOUNT_INACTIVE'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        except CustomUser.DoesNotExist:
+            pass
+
         serializer = LoginSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'Credenciales inválidas.', 'code': 'INVALID_CREDENTIALS'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
         user = serializer.validated_data['user']
         refresh = RefreshToken.for_user(user)
-
-        logger.info(f'User {user.username} logged in successfully.')
+        logger.info(f'User {user.email} logged in.')
 
         return Response({
-            'access': str(refresh.access_token),
+            'access':  str(refresh.access_token),
             'refresh': str(refresh),
-            'user': UserDataSerializer(user).data,
+            'user': {
+                'id':        str(user.id),
+                'email':     user.email,
+                'full_name': user.get_full_name(),
+                'role':      user.role,
+            },
         }, status=status.HTTP_200_OK)
 
 
@@ -48,20 +73,20 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response(
+                {'error': 'Refresh token requerido.', 'code': 'MISSING_REFRESH_TOKEN'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            refresh_token = request.data.get('refresh')
-            if not refresh_token:
-                return Response(
-                    {'detail': 'Refresh token requerido.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
             token = RefreshToken(refresh_token)
             token.blacklist()
-            logger.info(f'User {request.user.username} logged out.')
-            return Response({'detail': 'Sesión cerrada exitosamente.'}, status=status.HTTP_200_OK)
+            logger.info(f'User {request.user.email} logged out.')
+            return Response(status=status.HTTP_204_NO_CONTENT)
         except TokenError:
             return Response(
-                {'detail': 'Token inválido o ya expirado.'},
+                {'error': 'Token inválido o ya expirado.', 'code': 'INVALID_TOKEN'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -71,32 +96,31 @@ class RefreshView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response(
+                {'error': 'Refresh token requerido.', 'code': 'MISSING_REFRESH_TOKEN'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            refresh_token = request.data.get('refresh')
-            if not refresh_token:
-                return Response(
-                    {'detail': 'Refresh token requerido.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
             token = RefreshToken(refresh_token)
             return Response({
-                'access': str(token.access_token),
+                'access':  str(token.access_token),
                 'refresh': str(token),
             }, status=status.HTTP_200_OK)
         except TokenError:
             return Response(
-                {'detail': 'Token inválido o expirado.'},
+                {'error': 'Token inválido o expirado.', 'code': 'INVALID_TOKEN'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
 
 class MeView(APIView):
-    """Return the authenticated user's data."""
+    """Return or update the authenticated user's data."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = UserDataSerializer(request.user)
-        return Response(serializer.data)
+        return Response(UserDataSerializer(request.user).data)
 
     def patch(self, request):
         serializer = UserDataSerializer(
@@ -110,65 +134,69 @@ class MeView(APIView):
         return Response(serializer.data)
 
 
-class PasswordRecoveryRequestView(APIView):
-    """Send password recovery email."""
+class PasswordResetRequestView(APIView):
+    """Send password reset link via email. Always returns 200."""
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = PasswordRecoverySerializer(data=request.data)
+        serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         email = serializer.validated_data['email']
         try:
             user = CustomUser.objects.get(email=email, is_active=True)
-            token = default_token_generator.make_token(user)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = str(uuid.uuid4())
+            r = _get_redis()
+            r.setex(f'password_reset:{token}', 86400, str(user.pk))
 
-            reset_url = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}/"
-
+            reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
             send_mail(
                 subject='Recuperación de contraseña — Boot-Tracker',
-                message=f'Haga clic en el siguiente enlace para restablecer su contraseña: {reset_url}',
+                message=f'Haz clic en el siguiente enlace para restablecer tu contraseña:\n\n{reset_link}',
                 from_email=None,
                 recipient_list=[email],
                 fail_silently=True,
             )
-            logger.info(f'Password recovery email sent to {email}')
+            logger.info(f'Password reset email sent to {email}')
         except CustomUser.DoesNotExist:
-            pass  # Don't reveal if email exists
+            pass  # Don't reveal whether the email exists
 
-        return Response({
-            'detail': 'Si el correo existe, recibirá un enlace de recuperación.'
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {'detail': 'Si el correo existe, recibirás un enlace de recuperación.'},
+            status=status.HTTP_200_OK,
+        )
 
 
-class PasswordResetView(APIView):
-    """Reset password using token from email."""
+class PasswordResetConfirmView(APIView):
+    """Reset password using the UUID token from email."""
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = PasswordResetSerializer(data=request.data)
+        serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        try:
-            uid = request.data.get('uid', '')
-            user_pk = urlsafe_base64_decode(uid).decode()
-            user = CustomUser.objects.get(pk=user_pk)
-        except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
-            return Response(
-                {'detail': 'Enlace inválido o expirado.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         token = serializer.validated_data['token']
-        if not default_token_generator.check_token(user, token):
+        r = _get_redis()
+        user_pk = r.get(f'password_reset:{token}')
+
+        if not user_pk:
             return Response(
-                {'detail': 'Token inválido o expirado.'},
+                {'error': 'Token expirado o inválido.', 'code': 'TOKEN_EXPIRED'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user.set_password(serializer.validated_data['new_password'])
+        try:
+            user_pk = user_pk.decode() if isinstance(user_pk, bytes) else user_pk
+            user = CustomUser.objects.get(pk=user_pk)
+        except (CustomUser.DoesNotExist, ValueError):
+            return Response(
+                {'error': 'Token inválido.', 'code': 'TOKEN_INVALID'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(serializer.validated_data['password'])
         user.save()
-        logger.info(f'Password reset successful for {user.username}')
+        r.delete(f'password_reset:{token}')
+        logger.info(f'Password reset successful for {user.email}')
 
         return Response({'detail': 'Contraseña actualizada exitosamente.'}, status=status.HTTP_200_OK)
