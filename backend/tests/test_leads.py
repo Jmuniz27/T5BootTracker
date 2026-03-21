@@ -1,7 +1,6 @@
 """Tests for leads API endpoints."""
 import threading
 import pytest
-from django.utils.timezone import now
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -27,8 +26,8 @@ class TestLeadList:
         assert 'my_leads' in data
         assert 'available_leads' in data
         # sample_lead is unassigned → available; assigned_lead belongs to salesperson_user → my
-        my_ids        = [l['id'] for l in data['my_leads']]
-        available_ids = [l['id'] for l in data['available_leads']]
+        my_ids        = [lead['id'] for lead in data['my_leads']]
+        available_ids = [lead['id'] for lead in data['available_leads']]
         assert str(assigned_lead.id) in my_ids
         assert str(sample_lead.id) in available_ids
 
@@ -94,8 +93,10 @@ class TestLeadAssign:
 
         t1 = threading.Thread(target=do_assign, args=(client1,))
         t2 = threading.Thread(target=do_assign, args=(client2,))
-        t1.start(); t2.start()
-        t1.join(); t2.join()
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
 
         assert sorted(results) == [200, 409]
         lead.refresh_from_db()
@@ -144,7 +145,7 @@ class TestLeadFilters:
         assert resp.status_code == 200
         data = resp.json()
         all_leads = data['my_leads'] + data['available_leads']
-        assert all(l['status'] == 'INTERESTED' for l in all_leads)
+        assert all(lead['status'] == 'INTERESTED' for lead in all_leads)
 
     def test_lead_search(self, db, salesperson_user):
         Lead.objects.create(name='Unicorn Corp', phone='555000001', email='uni@corp.com')
