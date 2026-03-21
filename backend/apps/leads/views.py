@@ -4,7 +4,8 @@ import logging
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils.timezone import now
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
+from rest_framework import status, serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -34,6 +35,20 @@ class LeadListCreateView(APIView):
     def _annotated_qs(self):
         return Lead.objects.annotate(interaction_count=Count('interactions'))
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter('status', str, description='Filtrar por estado (NEW, CONTACTED, INTERESTED, ...)'),
+            OpenApiParameter('source', str, description='Filtrar por fuente (INSTAGRAM, WHATSAPP, ...)'),
+            OpenApiParameter('search', str, description='Buscar por nombre, email o teléfono'),
+        ],
+        responses={200: inline_serializer('LeadListResponse', fields={
+            'my_leads':        LeadListSerializer(many=True),
+            'available_leads': LeadListSerializer(many=True),
+        })},
+        summary='Listar leads',
+        description='Devuelve my_leads (asignados al usuario) y available_leads (sin asignar).',
+        tags=['Leads'],
+    )
     def get(self, request):
         qs = self._annotated_qs()
 
@@ -61,6 +76,12 @@ class LeadListCreateView(APIView):
             'available_leads': LeadListSerializer(available_leads, many=True).data,
         })
 
+    @extend_schema(
+        request=LeadWriteSerializer,
+        responses={201: LeadListSerializer},
+        summary='Crear lead',
+        tags=['Leads'],
+    )
     def post(self, request):
         serializer = LeadWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -72,6 +93,12 @@ class LeadAssignView(APIView):
     """PATCH /leads/{id}/assign/ — self-assignment with optimistic locking."""
     permission_classes = [IsSalesperson]
 
+    @extend_schema(
+        responses={200: LeadListSerializer, 409: OpenApiResponse(description='Lead ya asignado')},
+        summary='Asignar lead',
+        description='El vendedor autenticado se auto-asigna el lead. 409 si ya tiene dueño.',
+        tags=['Leads'],
+    )
     def patch(self, request, pk):
         with transaction.atomic():
             try:
@@ -98,6 +125,11 @@ class LeadReleaseView(APIView):
     """PATCH /leads/{id}/release/ — release ownership."""
     permission_classes = [IsSalesperson]
 
+    @extend_schema(
+        responses={200: LeadListSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
+        summary='Liberar lead',
+        tags=['Leads'],
+    )
     def patch(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
         if lead.owner != request.user:
@@ -115,6 +147,12 @@ class LeadUpdateView(APIView):
     """PATCH /leads/{id}/ — partial update."""
     permission_classes = [IsSalespersonOrAdmin]
 
+    @extend_schema(
+        request=LeadWriteSerializer,
+        responses={200: LeadListSerializer},
+        summary='Actualizar lead',
+        tags=['Leads'],
+    )
     def patch(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
         serializer = LeadWriteSerializer(lead, data=request.data, partial=True)
@@ -127,6 +165,11 @@ class InteractionListCreateView(APIView):
     """GET/POST /leads/{id}/interactions/"""
     permission_classes = [IsSalespersonOrAdmin]
 
+    @extend_schema(
+        responses={200: InteractionSerializer(many=True)},
+        summary='Listar interacciones',
+        tags=['Leads'],
+    )
     def get(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
         # Owner or admin can view
@@ -138,6 +181,13 @@ class InteractionListCreateView(APIView):
         interactions = lead.interactions.select_related('salesperson').all()
         return Response(InteractionSerializer(interactions, many=True).data)
 
+    @extend_schema(
+        request=InteractionSerializer,
+        responses={201: InteractionSerializer},
+        summary='Registrar interacción',
+        description='Crea una interacción y actualiza el estado del lead según el outcome.',
+        tags=['Leads'],
+    )
     def post(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
         if lead.owner != request.user:
@@ -163,6 +213,27 @@ class ConvertLeadView(APIView):
     """POST /api/leads/{id}/convert/ — convert a lead to a bootcamper."""
     permission_classes = [IsSalesperson]
 
+    @extend_schema(
+        request=ConvertLeadSerializer,
+        responses={
+            201: inline_serializer('ConversionResponse', fields={
+                'bootcamper_id':      drf_serializers.UUIDField(),
+                'email':              drf_serializers.EmailField(),
+                'temporary_password': drf_serializers.CharField(allow_null=True),
+                'is_returning':       drf_serializers.BooleanField(),
+                'lead_status':        drf_serializers.CharField(),
+            }),
+            400: OpenApiResponse(description='Estado inválido o cédula inválida'),
+            404: OpenApiResponse(description='Lead o programa no encontrado'),
+            409: OpenApiResponse(description='Email ya asociado a otro rol'),
+        },
+        summary='Convertir lead a bootcamper',
+        description=(
+            'Valida la cédula ecuatoriana, crea o reutiliza un usuario BOOTCAMPER, '
+            'marca el lead como CONVERTED y dispara notificación a coordinadores.'
+        ),
+        tags=['Leads'],
+    )
     def post(self, request, pk):
         from apps.authentication.validators import validate_cedula_ecuatoriana
         from apps.notifications.tasks import send_conversion_notification
@@ -246,6 +317,17 @@ class ReturningBootcamperView(APIView):
     """POST /api/leads/returning-bootcamper/ — create a lead for an existing bootcamper."""
     permission_classes = [IsSalesperson]
 
+    @extend_schema(
+        request=ReturningBootcamperSerializer,
+        responses={
+            201: LeadListSerializer,
+            404: OpenApiResponse(description='Bootcamper o programa no encontrado'),
+            409: OpenApiResponse(description='Ya tiene un lead activo en este programa'),
+        },
+        summary='Crear lead para bootcamper recurrente',
+        description='Crea un nuevo lead para un bootcamper existente que se re-inscribe en otro programa.',
+        tags=['Leads'],
+    )
     def post(self, request):
         serializer = ReturningBootcamperSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

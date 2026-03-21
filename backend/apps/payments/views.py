@@ -1,7 +1,8 @@
 """Views for payments app."""
 import logging
 from django.utils.timezone import now
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
+from rest_framework import status, serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -36,6 +37,13 @@ class PaymentUploadView(APIView):
     """POST /api/payments/upload/ — bootcamper uploads a receipt."""
     permission_classes = [IsBootcamper]
 
+    @extend_schema(
+        request={'multipart/form-data': PaymentUploadSerializer},
+        responses={201: PaymentListSerializer, 400: OpenApiResponse(description='Archivo inválido o muy grande'), 404: OpenApiResponse(description='Programa no encontrado')},
+        summary='Subir comprobante de pago',
+        description='El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR asíncrono.',
+        tags=['Pagos — Bootcamper'],
+    )
     def post(self, request):
         from apps.programs.models import Program
         from .tasks import process_payment_ocr
@@ -72,6 +80,20 @@ class PaymentMyStatusView(APIView):
     """GET /api/payments/my-status/?program_id=... — bootcamper payment summary."""
     permission_classes = [IsBootcamper]
 
+    @extend_schema(
+        parameters=[OpenApiParameter('program_id', str, required=True, description='UUID del programa')],
+        responses={200: inline_serializer('PaymentSummary', fields={
+            'total_cost':              drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'total_paid':              drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'pending_payments':        drf_serializers.IntegerField(),
+            'deficit':                 drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'is_critical':             drf_serializers.BooleanField(),
+            'time_elapsed_percentage': drf_serializers.FloatField(),
+            'payment_count':           drf_serializers.IntegerField(),
+        })},
+        summary='Mi resumen de pagos',
+        tags=['Pagos — Bootcamper'],
+    )
     def get(self, request):
         program_id = request.query_params.get('program_id')
         if not program_id:
@@ -95,6 +117,11 @@ class PaymentMyHistoryView(APIView):
     """GET /api/payments/my-history/ — bootcamper's own payment history."""
     permission_classes = [IsBootcamper]
 
+    @extend_schema(
+        responses={200: PaymentListSerializer(many=True)},
+        summary='Mi historial de pagos',
+        tags=['Pagos — Bootcamper'],
+    )
     def get(self, request):
         payments = Payment.objects.filter(bootcamper=request.user).select_related('program')
         return Response(PaymentListSerializer(payments, many=True).data)
@@ -104,6 +131,12 @@ class PaymentOCRStatusView(APIView):
     """GET /api/payments/my-payments/{id}/ocr-status/ — bootcamper polls OCR results."""
     permission_classes = [IsBootcamper]
 
+    @extend_schema(
+        responses={200: PaymentOCRStatusSerializer},
+        summary='Estado OCR de mi pago',
+        description='El bootcamper consulta los campos extraídos por OCR de su comprobante.',
+        tags=['Pagos — Bootcamper'],
+    )
     def get(self, request, pk):
         payment = get_object_or_404(Payment, pk=pk, bootcamper=request.user)
         return Response(PaymentOCRStatusSerializer(payment).data)
@@ -117,6 +150,16 @@ class PaymentQueueView(APIView):
     """GET /api/payments/queue/ — pending payments for review."""
     permission_classes = [IsSalespersonOrAdmin]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter('program_id', str, required=False, description='Filtrar por UUID del programa'),
+            OpenApiParameter('search', str, required=False, description='Buscar por nombre o email del bootcamper'),
+        ],
+        responses={200: PaymentListSerializer(many=True)},
+        summary='Cola de pagos pendientes',
+        description='Lista pagos en estado PENDING para revisión del vendedor o administrador.',
+        tags=['Pagos — Vendedor/Admin'],
+    )
     def get(self, request):
         qs = Payment.objects.filter(status=Payment.Status.PENDING).select_related(
             'bootcamper', 'program'
@@ -136,6 +179,24 @@ class PaymentMonitoringView(APIView):
     """GET /api/payments/monitoring/ — payment summary for all bootcampers in a program."""
     permission_classes = [IsSalespersonOrAdmin]
 
+    @extend_schema(
+        parameters=[OpenApiParameter('program_id', str, required=True, description='UUID del programa')],
+        responses={200: inline_serializer('BootcamperPaymentSummary', fields={
+            'bootcamper_id':           drf_serializers.UUIDField(),
+            'bootcamper_name':         drf_serializers.CharField(),
+            'email':                   drf_serializers.EmailField(),
+            'total_cost':              drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'total_paid':              drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'pending_payments':        drf_serializers.IntegerField(),
+            'deficit':                 drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'is_critical':             drf_serializers.BooleanField(),
+            'time_elapsed_percentage': drf_serializers.FloatField(),
+            'payment_count':           drf_serializers.IntegerField(),
+        }, many=True)},
+        summary='Monitoreo de pagos por programa',
+        description='Resumen de pagos de todos los bootcampers activos en un programa.',
+        tags=['Pagos — Vendedor/Admin'],
+    )
     def get(self, request):
         program_id = request.query_params.get('program_id')
         if not program_id:
@@ -171,6 +232,11 @@ class PaymentDetailView(APIView):
     """GET /api/payments/{id}/ — full payment details."""
     permission_classes = [IsSalespersonOrAdmin]
 
+    @extend_schema(
+        responses={200: PaymentListSerializer, 404: OpenApiResponse(description='Pago no encontrado')},
+        summary='Detalle de pago',
+        tags=['Pagos — Vendedor/Admin'],
+    )
     def get(self, request, pk):
         payment = get_object_or_404(Payment.objects.select_related('bootcamper', 'program', 'validated_by'), pk=pk)
         return Response(PaymentListSerializer(payment).data)
@@ -180,6 +246,17 @@ class PaymentApproveView(APIView):
     """PATCH /api/payments/{id}/approve/"""
     permission_classes = [IsSalespersonOrAdmin]
 
+    @extend_schema(
+        request=PaymentApproveSerializer,
+        responses={
+            200: PaymentListSerializer,
+            400: OpenApiResponse(description='El pago no está pendiente'),
+            404: OpenApiResponse(description='Pago no encontrado'),
+        },
+        summary='Aprobar pago',
+        description='Aprueba un pago pendiente con el monto confirmado. Notifica al bootcamper.',
+        tags=['Pagos — Vendedor/Admin'],
+    )
     def patch(self, request, pk):
         from .tasks import send_payment_status_notification
         payment = get_object_or_404(Payment, pk=pk)
@@ -211,6 +288,17 @@ class PaymentRejectView(APIView):
     """PATCH /api/payments/{id}/reject/"""
     permission_classes = [IsSalespersonOrAdmin]
 
+    @extend_schema(
+        request=PaymentRejectSerializer,
+        responses={
+            200: PaymentListSerializer,
+            400: OpenApiResponse(description='El pago no está pendiente'),
+            404: OpenApiResponse(description='Pago no encontrado'),
+        },
+        summary='Rechazar pago',
+        description='Rechaza un pago pendiente con un motivo. Notifica al bootcamper.',
+        tags=['Pagos — Vendedor/Admin'],
+    )
     def patch(self, request, pk):
         from .tasks import send_payment_status_notification
         payment = get_object_or_404(Payment, pk=pk)
@@ -239,6 +327,17 @@ class NotifyCoordinatorView(APIView):
     """POST /api/payments/notify-coordinator/{bootcamper_id}/?program_id=..."""
     permission_classes = [IsSalesperson]
 
+    @extend_schema(
+        parameters=[OpenApiParameter('program_id', str, required=True, description='UUID del programa')],
+        responses={
+            200: OpenApiResponse(description='Alerta enviada'),
+            400: OpenApiResponse(description='program_id requerido'),
+            404: OpenApiResponse(description='Bootcamper no encontrado'),
+        },
+        summary='Alertar coordinador por pago atrasado',
+        description='Dispara una notificación manual al coordinador del programa sobre pagos críticos.',
+        tags=['Pagos — Vendedor/Admin'],
+    )
     def post(self, request, bootcamper_id):
         from apps.notifications.tasks import send_late_payment_alert
         from apps.authentication.models import CustomUser

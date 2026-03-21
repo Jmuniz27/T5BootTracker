@@ -5,7 +5,8 @@ import uuid
 import redis
 from django.conf import settings
 from django.core.mail import send_mail
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
+from rest_framework import status, serializers as drf_serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -31,10 +32,29 @@ class LoginView(APIView):
     """JWT login endpoint — authenticates via email + password."""
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=LoginSerializer,
+        responses={
+            200: inline_serializer('LoginResponse', fields={
+                'access':  drf_serializers.CharField(),
+                'refresh': drf_serializers.CharField(),
+                'user': inline_serializer('LoginUserData', fields={
+                    'id':        drf_serializers.UUIDField(),
+                    'email':     drf_serializers.EmailField(),
+                    'full_name': drf_serializers.CharField(),
+                    'role':      drf_serializers.CharField(),
+                }),
+            }),
+            401: OpenApiResponse(description='Credenciales inválidas'),
+            403: OpenApiResponse(description='Cuenta inactiva'),
+        },
+        summary='Login',
+        description='Autentica con email y contraseña. Devuelve access + refresh JWT.',
+        tags=['Auth'],
+    )
     def post(self, request):
         email = request.data.get('email', '')
 
-        # Check for inactive account first so we can return 403 (not 401)
         try:
             candidate = CustomUser.objects.get(email=email)
             if not candidate.is_active:
@@ -72,6 +92,13 @@ class LogoutView(APIView):
     """JWT logout — blacklists the refresh token."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=inline_serializer('LogoutRequest', fields={'refresh': drf_serializers.CharField()}),
+        responses={204: OpenApiResponse(description='Sesión cerrada'), 400: OpenApiResponse(description='Token inválido')},
+        summary='Logout',
+        description='Invalida el refresh token en la blacklist.',
+        tags=['Auth'],
+    )
     def post(self, request):
         refresh_token = request.data.get('refresh')
         if not refresh_token:
@@ -95,6 +122,19 @@ class RefreshView(APIView):
     """Refresh access token using a valid refresh token."""
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=inline_serializer('RefreshRequest', fields={'refresh': drf_serializers.CharField()}),
+        responses={
+            200: inline_serializer('RefreshResponse', fields={
+                'access':  drf_serializers.CharField(),
+                'refresh': drf_serializers.CharField(),
+            }),
+            401: OpenApiResponse(description='Token inválido o expirado'),
+        },
+        summary='Refresh token',
+        description='Obtiene un nuevo access token con el refresh token.',
+        tags=['Auth'],
+    )
     def post(self, request):
         refresh_token = request.data.get('refresh')
         if not refresh_token:
@@ -119,9 +159,20 @@ class MeView(APIView):
     """Return or update the authenticated user's data."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: UserDataSerializer},
+        summary='Mi perfil',
+        tags=['Auth'],
+    )
     def get(self, request):
         return Response(UserDataSerializer(request.user).data)
 
+    @extend_schema(
+        request=UserDataSerializer,
+        responses={200: UserDataSerializer},
+        summary='Actualizar mi perfil',
+        tags=['Auth'],
+    )
     def patch(self, request):
         serializer = UserDataSerializer(
             request.user,
@@ -138,6 +189,13 @@ class PasswordResetRequestView(APIView):
     """Send password reset link via email. Always returns 200."""
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=PasswordResetRequestSerializer,
+        responses={200: OpenApiResponse(description='Email enviado (siempre 200 por seguridad)')},
+        summary='Solicitar reset de contraseña',
+        description='Envía un enlace de recuperación si el email existe. Siempre devuelve 200.',
+        tags=['Auth'],
+    )
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -159,7 +217,7 @@ class PasswordResetRequestView(APIView):
             )
             logger.info(f'Password reset email sent to {email}')
         except CustomUser.DoesNotExist:
-            pass  # Don't reveal whether the email exists
+            pass
 
         return Response(
             {'detail': 'Si el correo existe, recibirás un enlace de recuperación.'},
@@ -171,6 +229,15 @@ class PasswordResetConfirmView(APIView):
     """Reset password using the UUID token from email."""
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=PasswordResetConfirmSerializer,
+        responses={
+            200: OpenApiResponse(description='Contraseña actualizada'),
+            400: OpenApiResponse(description='Token expirado o contraseñas no coinciden'),
+        },
+        summary='Confirmar reset de contraseña',
+        tags=['Auth'],
+    )
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
