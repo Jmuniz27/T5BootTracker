@@ -45,6 +45,14 @@ class Lead(models.Model):
         related_name='leads',
         verbose_name='Vendedor asignado',
     )
+    program          = models.ForeignKey(
+        'programs.Program',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='leads',
+        verbose_name='Programa',
+    )
     assigned_at      = models.DateTimeField(null=True, blank=True)
     version          = models.PositiveIntegerField(default=0)
     created_at       = models.DateTimeField(auto_now_add=True)
