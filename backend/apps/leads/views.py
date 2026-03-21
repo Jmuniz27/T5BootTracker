@@ -9,9 +9,14 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.authentication.models import CustomUser
+from apps.programs.models import Program
 from .models import Lead, Interaction
 from .permissions import IsSalesperson, IsSalespersonOrAdmin
-from .serializers import LeadListSerializer, LeadWriteSerializer, InteractionSerializer
+from .serializers import (
+    LeadListSerializer, LeadWriteSerializer, InteractionSerializer,
+    ConvertLeadSerializer, ReturningBootcamperSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -152,3 +157,148 @@ class InteractionListCreateView(APIView):
             lead.save(update_fields=['status', 'updated_at'])
 
         return Response(InteractionSerializer(interaction).data, status=status.HTTP_201_CREATED)
+
+
+class ConvertLeadView(APIView):
+    """POST /api/leads/{id}/convert/ — convert a lead to a bootcamper."""
+    permission_classes = [IsSalesperson]
+
+    def post(self, request, pk):
+        from apps.authentication.validators import validate_cedula_ecuatoriana
+        from apps.notifications.tasks import send_conversion_notification
+
+        serializer = ConvertLeadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        temporary_password = None
+        is_returning = False
+        bootcamper = None
+
+        with transaction.atomic():
+            lead = get_object_or_404(Lead.objects.select_for_update(), pk=pk)
+
+            if lead.status != Lead.Status.INTERESTED:
+                return Response(
+                    {'error': 'Solo se puede convertir un lead con estado INTERESTED.', 'code': 'INVALID_STATUS'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not validate_cedula_ecuatoriana(data['cedula']):
+                return Response(
+                    {'error': 'La cédula ingresada no es válida.', 'code': 'INVALID_CEDULA'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                program = Program.objects.get(pk=data['program_id'])
+            except Program.DoesNotExist:
+                return Response(
+                    {'error': 'Programa no encontrado.', 'code': 'PROGRAM_NOT_FOUND'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            email = data.get('email') or lead.email
+            phone = data.get('phone') or lead.phone
+
+            if email:
+                try:
+                    existing = CustomUser.objects.get(email=email)
+                    if existing.role != CustomUser.Role.BOOTCAMPER:
+                        return Response(
+                            {'error': 'El email ya está asociado a otro rol.', 'code': 'EMAIL_CONFLICT'},
+                            status=status.HTTP_409_CONFLICT,
+                        )
+                    bootcamper = existing
+                    is_returning = True
+                except CustomUser.DoesNotExist:
+                    pass
+
+            if bootcamper is None:
+                import secrets
+                temporary_password = secrets.token_urlsafe(12)
+                bootcamper = CustomUser.objects.create_user(
+                    email=email or f'bootcamper_{data["cedula"]}@placeholder.com',
+                    password=temporary_password,
+                    first_name=lead.name.split()[0] if lead.name else 'Bootcamper',
+                    last_name=' '.join(lead.name.split()[1:]) if len(lead.name.split()) > 1 else 'N/A',
+                    role=CustomUser.Role.BOOTCAMPER,
+                    cedula=data['cedula'],
+                    phone=phone,
+                )
+
+            lead.status  = Lead.Status.CONVERTED
+            lead.program = program
+            lead.save()
+
+        send_conversion_notification.delay(str(lead.id), str(bootcamper.id))
+
+        return Response({
+            'bootcamper_id':       str(bootcamper.id),
+            'email':               bootcamper.email,
+            'temporary_password':  temporary_password,
+            'is_returning':        is_returning,
+            'lead_status':         lead.status,
+        }, status=status.HTTP_201_CREATED)
+
+
+class ReturningBootcamperView(APIView):
+    """POST /api/leads/returning-bootcamper/ — create a lead for an existing bootcamper."""
+    permission_classes = [IsSalesperson]
+
+    def post(self, request):
+        serializer = ReturningBootcamperSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            bootcamper = CustomUser.objects.get(
+                email=data['bootcamper_email'],
+                role=CustomUser.Role.BOOTCAMPER,
+            )
+        except CustomUser.DoesNotExist:
+            return Response(
+                {'error': 'Bootcamper no encontrado.', 'code': 'BOOTCAMPER_NOT_FOUND'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            program = Program.objects.get(pk=data['program_id'])
+        except Program.DoesNotExist:
+            return Response(
+                {'error': 'Programa no encontrado.', 'code': 'PROGRAM_NOT_FOUND'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if Lead.objects.filter(
+            program=program,
+            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.INTERESTED],
+            email=bootcamper.email,
+        ).exists():
+            return Response(
+                {'error': 'El bootcamper ya tiene un lead activo en este programa.', 'code': 'ACTIVE_LEAD_EXISTS'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        lead = Lead.objects.create(
+            name=bootcamper.get_full_name(),
+            phone=bootcamper.phone or '',
+            email=bootcamper.email,
+            source=data.get('source', Lead.Source.MANUAL),
+            status=Lead.Status.NEW,
+            program=program,
+            owner=request.user,
+            assigned_at=now(),
+        )
+
+        notes = data.get('notes', '')
+        if notes:
+            Interaction.objects.create(
+                lead=lead,
+                salesperson=request.user,
+                interaction_type=Interaction.InteractionType.NOTE,
+                outcome=Interaction.Outcome.CALLBACK,
+                notes=notes,
+            )
+
+        return Response(LeadListSerializer(lead).data, status=status.HTTP_201_CREATED)

@@ -66,3 +66,19 @@ class LeadWriteSerializer(serializers.ModelSerializer):
         if not value or not value.strip():
             raise serializers.ValidationError('El teléfono no puede estar vacío.')
         return value
+
+
+class ConvertLeadSerializer(serializers.Serializer):
+    """Validate lead-to-bootcamper conversion input."""
+    cedula     = serializers.CharField(max_length=10)
+    program_id = serializers.UUIDField()
+    email      = serializers.EmailField(required=False, allow_blank=True)
+    phone      = serializers.CharField(required=False, allow_blank=True)
+
+
+class ReturningBootcamperSerializer(serializers.Serializer):
+    """Create a new lead for a returning bootcamper."""
+    bootcamper_email = serializers.EmailField()
+    program_id       = serializers.UUIDField()
+    source           = serializers.ChoiceField(choices=Lead.Source.choices, default=Lead.Source.MANUAL)
+    notes            = serializers.CharField(required=False, allow_blank=True)
