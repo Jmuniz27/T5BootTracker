@@ -1,0 +1,52 @@
+"""Program and CoordinatorEmailConfig models."""
+import uuid
+from django.db import models
+
+
+class Program(models.Model):
+    """A bootcamp program offering."""
+
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name       = models.CharField(max_length=200, verbose_name='Nombre')
+    start_date = models.DateField(verbose_name='Fecha de inicio')
+    end_date   = models.DateField(verbose_name='Fecha de fin')
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Costo total')
+    is_active  = models.BooleanField(default=True, verbose_name='Activo')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Programa'
+        verbose_name_plural = 'Programas'
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return self.name
+
+
+class CoordinatorEmailConfig(models.Model):
+    """Email recipients for coordinator notifications per program."""
+
+    RECIPIENT_TYPE = [
+        ('TO', 'Principal'),
+        ('CC', 'Copia'),
+    ]
+
+    id             = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    program        = models.ForeignKey(
+        Program,
+        on_delete=models.CASCADE,
+        related_name='coordinator_emails',
+    )
+    email          = models.EmailField(verbose_name='Correo')
+    name           = models.CharField(max_length=200, verbose_name='Nombre')
+    recipient_type = models.CharField(max_length=2, choices=RECIPIENT_TYPE, default='TO')
+    is_active      = models.BooleanField(default=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Configuración de coordinador'
+        verbose_name_plural = 'Configuraciones de coordinadores'
+        unique_together = ['program', 'email']
+
+    def __str__(self):
+        return f'{self.name} <{self.email}> ({self.program.name})'
