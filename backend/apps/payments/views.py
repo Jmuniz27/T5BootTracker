@@ -87,9 +87,17 @@ class PaymentMyStatusView(APIView):
             'total_paid':              drf_serializers.DecimalField(max_digits=12, decimal_places=2),
             'pending_payments':        drf_serializers.IntegerField(),
             'deficit':                 drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'deficit_amount':          drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'pending_balance':         drf_serializers.DecimalField(max_digits=12, decimal_places=2),
             'is_critical':             drf_serializers.BooleanField(),
             'time_elapsed_percentage': drf_serializers.FloatField(),
             'payment_count':           drf_serializers.IntegerField(),
+            'payment_percentage':      drf_serializers.FloatField(),
+            'payment_status':          drf_serializers.CharField(),
+            'expected_payment_by_now': drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'surplus_amount':          drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+            'program_start':           drf_serializers.CharField(),
+            'program_end':             drf_serializers.CharField(),
         })},
         summary='Mi resumen de pagos',
         tags=['Pagos — Bootcamper'],
@@ -180,51 +188,63 @@ class PaymentMonitoringView(APIView):
     permission_classes = [IsSalespersonOrAdmin]
 
     @extend_schema(
-        parameters=[OpenApiParameter('program_id', str, required=True, description='UUID del programa')],
+        parameters=[
+            OpenApiParameter('program_id', str, required=False, description='UUID del programa (omitir para todos los programas activos)'),
+            OpenApiParameter('status', str, required=False, description='Filtrar por estado: CRITICAL'),
+        ],
         responses={200: inline_serializer('BootcamperPaymentSummary', fields={
             'bootcamper_id':           drf_serializers.UUIDField(),
             'bootcamper_name':         drf_serializers.CharField(),
             'email':                   drf_serializers.EmailField(),
+            'program_id':              drf_serializers.UUIDField(),
+            'program_name':            drf_serializers.CharField(),
             'total_cost':              drf_serializers.DecimalField(max_digits=12, decimal_places=2),
             'total_paid':              drf_serializers.DecimalField(max_digits=12, decimal_places=2),
             'pending_payments':        drf_serializers.IntegerField(),
             'deficit':                 drf_serializers.DecimalField(max_digits=12, decimal_places=2),
             'is_critical':             drf_serializers.BooleanField(),
+            'payment_status':          drf_serializers.CharField(),
             'time_elapsed_percentage': drf_serializers.FloatField(),
             'payment_count':           drf_serializers.IntegerField(),
         }, many=True)},
         summary='Monitoreo de pagos por programa',
-        description='Resumen de pagos de todos los bootcampers activos en un programa.',
+        description='Resumen de pagos de todos los bootcampers activos. Sin program_id retorna todos los programas activos.',
         tags=['Pagos — Vendedor/Admin'],
     )
     def get(self, request):
-        program_id = request.query_params.get('program_id')
-        if not program_id:
-            return Response({'error': 'program_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
-
         from apps.authentication.models import CustomUser
         from apps.programs.models import Program
 
-        try:
-            program = Program.objects.get(pk=program_id)
-        except Program.DoesNotExist:
-            return Response({'error': 'Programa no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        program_id    = request.query_params.get('program_id')
+        status_filter = request.query_params.get('status')
 
-        bootcampers = CustomUser.objects.filter(
-            role=CustomUser.Role.BOOTCAMPER,
-            payments__program=program,
-        ).distinct()
+        if program_id:
+            try:
+                programs = [Program.objects.get(pk=program_id)]
+            except Program.DoesNotExist:
+                return Response({'error': 'Programa no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            programs = list(Program.objects.filter(is_active=True))
 
         svc  = PaymentProgressService()
         data = []
-        for bc in bootcampers:
-            summary = svc.get_payment_summary(str(bc.id), str(program.id))
-            data.append({
-                'bootcamper_id':   str(bc.id),
-                'bootcamper_name': bc.get_full_name(),
-                'email':           bc.email,
-                **summary,
-            })
+        for program in programs:
+            bootcampers = CustomUser.objects.filter(
+                role=CustomUser.Role.BOOTCAMPER,
+                payments__program=program,
+            ).distinct()
+            for bc in bootcampers:
+                summary = svc.get_payment_summary(str(bc.id), str(program.id))
+                if status_filter == 'CRITICAL' and not summary['is_critical']:
+                    continue
+                data.append({
+                    'bootcamper_id':   str(bc.id),
+                    'bootcamper_name': bc.get_full_name(),
+                    'email':           bc.email,
+                    'program_id':      str(program.id),
+                    'program_name':    program.name,
+                    **summary,
+                })
         return Response(data)
 
 

@@ -186,6 +186,28 @@ class Command(BaseCommand):
                 status=Payment.Status.PENDING,
             )
 
+        # Payments for regular bootcamper
+        if not Payment.objects.filter(bootcamper=bootcamper, program=program1).exists():
+            Payment.objects.create(
+                bootcamper=bootcamper,
+                program=program1,
+                receipt_file='receipts/seed_boot_receipt.jpg',
+                receipt_file_type='image',
+                status=Payment.Status.APPROVED,
+                confirmed_amount=Decimal('300.00'),
+                confirmed_bank_name='Banco Guayaquil',
+                confirmed_transaction_id='TXN000010',
+                validated_by=admin,
+                validated_at=now(),
+            )
+            Payment.objects.create(
+                bootcamper=bootcamper,
+                program=program1,
+                receipt_file='receipts/seed_boot_receipt2.jpg',
+                receipt_file_type='image',
+                status=Payment.Status.PENDING,
+            )
+
         self.stdout.write(self.style.SUCCESS('  Payments created.'))
         self.stdout.write(self.style.SUCCESS('\nDev seed complete!'))
         self.stdout.write('  admin@boottracker.com            / admin1234')

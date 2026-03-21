@@ -193,10 +193,11 @@ class TestPaymentOCRStatus:
 
 
 class TestPaymentMonitoring:
-    def test_monitoring_requires_program_id(self, db, salesperson_user):
+    def test_monitoring_without_program_id_returns_all(self, db, salesperson_user, approved_payment):
         client = make_client(salesperson_user)
         resp = client.get(MONITORING_URL)
-        assert resp.status_code == 400
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
 
     def test_monitoring_returns_bootcamper_summaries(self, db, salesperson_user, program, approved_payment):
         client = make_client(salesperson_user)

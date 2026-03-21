@@ -1,7 +1,7 @@
 """Views for leads app."""
 import logging
 
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Count, Q
 from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
@@ -288,15 +288,21 @@ class ConvertLeadView(APIView):
             if bootcamper is None:
                 import secrets
                 temporary_password = secrets.token_urlsafe(12)
-                bootcamper = CustomUser.objects.create_user(
-                    email=email or f'bootcamper_{data["cedula"]}@placeholder.com',
-                    password=temporary_password,
-                    first_name=lead.name.split()[0] if lead.name else 'Bootcamper',
-                    last_name=' '.join(lead.name.split()[1:]) if len(lead.name.split()) > 1 else 'N/A',
-                    role=CustomUser.Role.BOOTCAMPER,
-                    cedula=data['cedula'],
-                    phone=phone,
-                )
+                try:
+                    bootcamper = CustomUser.objects.create_user(
+                        email=email or f'bootcamper_{data["cedula"]}@placeholder.com',
+                        password=temporary_password,
+                        first_name=lead.name.split()[0] if lead.name else 'Bootcamper',
+                        last_name=' '.join(lead.name.split()[1:]) if len(lead.name.split()) > 1 else 'N/A',
+                        role=CustomUser.Role.BOOTCAMPER,
+                        cedula=data['cedula'],
+                        phone=phone,
+                    )
+                except IntegrityError:
+                    return Response(
+                        {'error': 'Esta cédula ya está registrada en el sistema.', 'code': 'CEDULA_ALREADY_EXISTS'},
+                        status=status.HTTP_409_CONFLICT,
+                    )
 
             lead.status  = Lead.Status.CONVERTED
             lead.program = program
