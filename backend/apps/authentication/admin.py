@@ -6,19 +6,21 @@ from .models import CustomUser
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name', 'role', 'is_active')
-    list_filter = ('role', 'is_active', 'is_staff')
-    search_fields = ('username', 'email', 'first_name', 'last_name')
-    ordering = ('-date_joined',)
+    list_display  = ('email', 'first_name', 'last_name', 'role', 'is_active')
+    list_filter   = ('role', 'is_active', 'is_staff')
+    search_fields = ('email', 'first_name', 'last_name')
+    ordering      = ('-created_at',)
 
-    fieldsets = UserAdmin.fieldsets + (
-        ('Información adicional', {
-            'fields': ('role', 'phone'),
-        }),
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Información personal', {'fields': ('first_name', 'last_name', 'phone')}),
+        ('Rol y permisos', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Fechas', {'fields': ('last_login',)}),
     )
 
-    add_fieldsets = UserAdmin.add_fieldsets + (
-        ('Información adicional', {
-            'fields': ('role', 'phone', 'email', 'first_name', 'last_name'),
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'first_name', 'last_name', 'role', 'phone', 'password1', 'password2'),
         }),
     )
