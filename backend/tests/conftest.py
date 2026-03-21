@@ -1,5 +1,7 @@
 """Shared pytest fixtures for Boot-Tracker backend tests."""
 import pytest
+from decimal import Decimal
+from datetime import date, timedelta
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -75,4 +77,71 @@ def assigned_lead(db, salesperson_user):
         status=Lead.Status.CONTACTED,
         owner=salesperson_user,
         assigned_at=now(),
+    )
+
+
+@pytest.fixture
+def program(db):
+    from apps.programs.models import Program
+    return Program.objects.create(
+        name='Python Full Stack Abril 2026',
+        start_date=date.today() - timedelta(days=30),
+        end_date=date.today() + timedelta(days=60),
+        total_cost=Decimal('1200.00'),
+    )
+
+
+@pytest.fixture
+def coordinator_config(db, program):
+    from apps.programs.models import CoordinatorEmailConfig
+    CoordinatorEmailConfig.objects.create(
+        program=program,
+        email='coord.to@espol.edu.ec',
+        name='Coordinador Principal',
+        recipient_type='TO',
+    )
+    CoordinatorEmailConfig.objects.create(
+        program=program,
+        email='coord.cc@espol.edu.ec',
+        name='Coordinador Copia',
+        recipient_type='CC',
+    )
+    return program
+
+
+@pytest.fixture
+def converted_bootcamper(db):
+    return CustomUser.objects.create_user(
+        email='bootcamper.conv@test.com',
+        password='testpass123',
+        first_name='Boot',
+        last_name='Camper',
+        role=CustomUser.Role.BOOTCAMPER,
+        cedula='1713175071',
+    )
+
+
+@pytest.fixture
+def pending_payment(db, converted_bootcamper, program):
+    from apps.payments.models import Payment
+    return Payment.objects.create(
+        bootcamper=converted_bootcamper,
+        program=program,
+        receipt_file='receipts/test.jpg',
+        receipt_file_type='image',
+        status=Payment.Status.PENDING,
+    )
+
+
+@pytest.fixture
+def approved_payment(db, converted_bootcamper, program):
+    from apps.payments.models import Payment
+    return Payment.objects.create(
+        bootcamper=converted_bootcamper,
+        program=program,
+        receipt_file='receipts/test2.jpg',
+        receipt_file_type='image',
+        status=Payment.Status.APPROVED,
+        confirmed_amount=Decimal('400.00'),
+        confirmed_bank_name='Banco Pichincha',
     )
