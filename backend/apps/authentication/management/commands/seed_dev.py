@@ -1,5 +1,7 @@
 """Management command to populate dev database with sample data."""
 import random
+from decimal import Decimal
+from datetime import date, timedelta as dt_timedelta
 from django.core.management.base import BaseCommand
 from django.utils.timezone import now, timedelta
 from apps.authentication.models import CustomUser
@@ -120,8 +122,74 @@ class Command(BaseCommand):
                 )
 
         self.stdout.write(self.style.SUCCESS('  Interactions created.'))
+
+        # Programs
+        from apps.programs.models import Program, CoordinatorEmailConfig
+        today = date.today()
+        program1, _ = Program.objects.get_or_create(
+            name='Python Full Stack Abril 2026',
+            defaults={
+                'start_date': today - dt_timedelta(days=30),
+                'end_date':   today + dt_timedelta(days=60),
+                'total_cost': Decimal('1200.00'),
+            },
+        )
+        program2, _ = Program.objects.get_or_create(
+            name='Data Science Junio 2026',
+            defaults={
+                'start_date': today + dt_timedelta(days=30),
+                'end_date':   today + dt_timedelta(days=120),
+                'total_cost': Decimal('1500.00'),
+            },
+        )
+
+        CoordinatorEmailConfig.objects.get_or_create(
+            program=program1,
+            email='coord@espol.edu.ec',
+            defaults={'name': 'Coordinador ESPOL', 'recipient_type': 'TO'},
+        )
+
+        self.stdout.write(self.style.SUCCESS('  Programs created/updated.'))
+
+        # Converted bootcamper with payments
+        conv_boot, _ = CustomUser.objects.get_or_create(
+            email='bootcamper.conv@boottracker.com',
+            defaults={
+                'first_name': 'Convertido',
+                'last_name':  'Bootcamper',
+                'role':       CustomUser.Role.BOOTCAMPER,
+                'cedula':     '1713175071',
+            },
+        )
+        conv_boot.set_password('boot1234')
+        conv_boot.save()
+
+        from apps.payments.models import Payment
+        if not Payment.objects.filter(bootcamper=conv_boot, program=program1).exists():
+            Payment.objects.create(
+                bootcamper=conv_boot,
+                program=program1,
+                receipt_file='receipts/seed_receipt.jpg',
+                receipt_file_type='image',
+                status=Payment.Status.APPROVED,
+                confirmed_amount=Decimal('400.00'),
+                confirmed_bank_name='Banco Pichincha',
+                confirmed_transaction_id='TXN000001',
+                validated_by=admin,
+                validated_at=now(),
+            )
+            Payment.objects.create(
+                bootcamper=conv_boot,
+                program=program1,
+                receipt_file='receipts/seed_receipt2.jpg',
+                receipt_file_type='image',
+                status=Payment.Status.PENDING,
+            )
+
+        self.stdout.write(self.style.SUCCESS('  Payments created.'))
         self.stdout.write(self.style.SUCCESS('\nDev seed complete!'))
-        self.stdout.write('  admin@boottracker.com       / admin1234')
-        self.stdout.write('  vendedor1@boottracker.com   / vendedor1234')
-        self.stdout.write('  vendedor2@boottracker.com   / vendedor1234')
-        self.stdout.write('  bootcamper@boottracker.com  / boot1234')
+        self.stdout.write('  admin@boottracker.com            / admin1234')
+        self.stdout.write('  vendedor1@boottracker.com        / vendedor1234')
+        self.stdout.write('  vendedor2@boottracker.com        / vendedor1234')
+        self.stdout.write('  bootcamper@boottracker.com       / boot1234')
+        self.stdout.write('  bootcamper.conv@boottracker.com  / boot1234')

@@ -30,6 +30,7 @@ THIRD_PARTY_APPS = [
     'corsheaders',
     'django_filters',
     'celery',
+    'drf_spectacular',
 ]
 
 LOCAL_APPS = [
@@ -38,6 +39,7 @@ LOCAL_APPS = [
     'apps.payments',
     'apps.notifications',
     'apps.analytics',
+    'apps.programs',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -130,6 +132,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # JWT Settings
@@ -196,4 +199,12 @@ LOGGING = {
             'propagate': False,
         },
     },
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Boot-Tracker API',
+    'DESCRIPTION': 'API para gestión de leads y pagos de Coding Bootcamps ESPOL',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
 }
