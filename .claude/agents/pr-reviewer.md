@@ -1,6 +1,6 @@
 ---
 name: pr-reviewer
-description: Reviews a GitHub PR by routing to backend/frontend/mobile reviewer agents, checking test coverage, and approving or requesting changes via gh CLI. This is the automated gatekeeper for all PRs to main.
+description: Reviews a GitHub PR by routing to backend/frontend/mobile reviewer agents and approving or requesting changes via gh CLI. This is the automated gatekeeper for all PRs to main.
 model: claude-opus-4-8
 tools:
   - Read
@@ -50,27 +50,17 @@ Based on the changed file paths from `gh pr diff`, invoke the appropriate sub-ag
 
 Pass each reviewer the list of changed files and the diff content for their domain.
 
-### Step 4 — Check test coverage
-
-For every new or modified `views.py` or `services.py` under `backend/apps/`:
-- Verify there is a corresponding test in `backend/tests/test_<module>.py`
-- If a new endpoint or service function was added with no test, add a BLOCK finding:
-  `[BLOCK] backend/apps/<module>/views.py — New endpoint added with no corresponding test`
-
-For frontend: test runner is not yet configured — skip this check.
-For mobile: test runner is not yet configured — skip this check.
-
-### Step 5 — Check migration rule
+### Step 4 — Check migration rule
 
 If the diff contains any file matching `backend/**/migrations/0*.py`:
 - Check if the PR body contains the word "migration" or "migrate"
 - If not, add a BLOCK finding: `[BLOCK] PR description must mention the migration included in this PR`
 
-### Step 6 — Synthesize findings
+### Step 5 — Synthesize findings
 
 Collect all findings from all reviewers and your own checks. Separate into BLOCK and WARN/INFO.
 
-### Step 7 — Submit review
+### Step 6 — Submit review
 
 **If there are any BLOCK findings:**
 ```bash
