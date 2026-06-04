@@ -42,7 +42,7 @@ jobs:
         run: docker compose exec -T backend pytest --tb=short -q
 
       - name: Run linter
-        run: docker compose exec -T backend ruff check .
+        run: docker compose exec -T backend python -m ruff check .
 
       - name: Tear down
         if: always()
