@@ -144,3 +144,32 @@ boot-tracker/
 - Modificar archivos shadcn/ui directamente → crear wrappers
 - Hardcodear credenciales → siempre `.env`
 - Mencionar herramientas de IA en commits
+
+---
+
+## Reglas de Negocio Críticas
+
+Estas reglas no se pueden romper. Si una PR las viola, Claude la rechaza automáticamente.
+
+| Regla | Dónde vive | Consecuencia de violarla |
+|---|---|---|
+| Validación de cédula ecuatoriana | `backend/apps/authentication/validators.py` → `validate_cedula()` | Datos inválidos en DB, problema legal |
+| Umbral 10% déficit en pagos | `backend/apps/payments/services.py` | No se dispara la alerta al coordinador |
+| RBAC obligatorio en cada endpoint | Todo `APIView`/`ViewSet` debe declarar `permission_classes` | Cualquier usuario accede a datos ajenos |
+| OCR de comprobantes es async | `backend/apps/payments/tasks.py` via Celery — nunca inline en views | Timeout en requests, mala UX |
+| No push directo a `main` | Todas las modificaciones van por PR | Se saltea CI + revisión de Claude |
+
+### Flujo Git obligatorio
+
+```
+feature branch → PR targeting main → CI verde + Claude review aprueba → merge
+```
+
+- Claude puede **rechazar** un PR y debe comentar razones específicas con `file:line`
+- Claude aprueba con `gh pr review --approve` solo si CI pasa y no hay BLOCK issues
+- No se requiere aprobación humana si Claude aprueba y CI es verde
+
+### Secrets y configuración
+
+Nunca hardcodear. Siempre usar variables de entorno del `.env` (local) o los secrets de GitHub Actions (CI/prod).
+Variables requeridas: ver `.env.example` en la raíz del repo.

@@ -38,10 +38,46 @@
     "deny": [
       "Bash(rm -rf /)",
       "Bash(DROP DATABASE*)",
-      "Bash(DELETE FROM*)"
+      "Bash(DELETE FROM*)",
+      "Bash(git push origin main*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)"
     ]
   },
   "env": {
     "DJANGO_SETTINGS_MODULE": "config.settings.dev"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/boot-tracker/.claude/hooks/pre-bash.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/boot-tracker/.claude/hooks/post-file.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/boot-tracker/.claude/hooks/post-file.sh"
+          }
+        ]
+      }
+    ]
   }
 }
