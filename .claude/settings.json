@@ -61,6 +61,15 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/boot-tracker/.claude/hooks/post-pr.sh"
+          }
+        ]
+      },
+      {
         "matcher": "Write",
         "hooks": [
           {
