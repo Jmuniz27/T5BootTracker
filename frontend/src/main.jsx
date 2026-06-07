@@ -8,6 +8,10 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1 } },
 });
 
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: 1 } },
+});
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
