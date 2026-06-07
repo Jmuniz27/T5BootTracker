@@ -11,7 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Link } from 'expo-router';
 import { colors } from '../../src/theme/colors';
 import { useAuth } from '../../src/context/AuthContext';
 
@@ -77,7 +77,7 @@ export default function LoginScreen() {
       await login(email, password);
       router.replace('/(app)/home');
     } catch {
-      setError('Correo o contraseña incorrectos.');
+      setError('No pudimos iniciar tu sesión. Verifica tus datos e intenta de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -110,6 +110,9 @@ export default function LoginScreen() {
             secureTextEntry
           />
           {error && <Text style={styles.errorText}>{error}</Text>}
+          <Link href="/(auth)/forgot-password" style={styles.forgotLink}>
+            ¿Olvidaste tu contraseña?
+          </Link>
           <TouchableOpacity
             style={[styles.button, !canSubmit && styles.buttonDisabled]}
             disabled={!canSubmit}
@@ -221,6 +224,12 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 13,
     textAlign: 'center',
+  },
+  forgotLink: {
+    color: colors.navy,
+    fontSize: 13,
+    textAlign: 'right',
+    fontWeight: '500',
   },
   buttonLabel: {
     color: colors.white,
