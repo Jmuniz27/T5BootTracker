@@ -9,8 +9,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { colors } from '../../src/theme/colors';
+import { useAuth } from '../../src/context/AuthContext';
 
 const LOGO_SIZE = 46;
 
@@ -62,6 +65,25 @@ function Field({ label, value, onChangeText, secureTextEntry, keyboardType }: Fi
 export default function LoginScreen() {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const { login } = useAuth();
+  const router = useRouter();
+
+  async function handleLogin() {
+    setError(null);
+    setLoading(true);
+    try {
+      await login(email, password);
+      router.replace('/(app)/home');
+    } catch {
+      setError('Correo o contraseña incorrectos.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const canSubmit = email.trim() !== '' && password !== '' && !loading;
 
   return (
     <KeyboardAvoidingView
@@ -87,12 +109,17 @@ export default function LoginScreen() {
             onChangeText={setPassword}
             secureTextEntry
           />
+          {error && <Text style={styles.errorText}>{error}</Text>}
           <TouchableOpacity
-            style={[styles.button, (!email || !password) && styles.buttonDisabled]}
-            disabled={!email || !password}
+            style={[styles.button, !canSubmit && styles.buttonDisabled]}
+            disabled={!canSubmit}
+            onPress={handleLogin}
             activeOpacity={0.85}
           >
-            <Text style={styles.buttonLabel}>Iniciar sesión</Text>
+            {loading
+              ? <ActivityIndicator color={colors.white} />
+              : <Text style={styles.buttonLabel}>Iniciar sesión</Text>
+            }
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -189,6 +216,11 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: 13,
+    textAlign: 'center',
   },
   buttonLabel: {
     color: colors.white,
