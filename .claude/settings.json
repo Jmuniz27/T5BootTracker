@@ -1,0 +1,92 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker-compose*)",
+      "Bash(docker compose*)",
+      "Bash(python manage.py*)",
+      "Bash(pytest*)",
+      "Bash(ruff*)",
+      "Bash(npm run*)",
+      "Bash(npm install*)",
+      "Bash(npx expo*)",
+      "Bash(npx jest*)",
+      "Bash(git status)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git checkout*)",
+      "Bash(git branch*)",
+      "Bash(git pull*)",
+      "Bash(gh issue*)",
+      "Bash(gh api*)",
+      "Bash(gh pr*)",
+      "Bash(cat*)",
+      "Bash(ls*)",
+      "Bash(find*)",
+      "Bash(grep*)",
+      "Bash(mkdir*)",
+      "Bash(cp*)",
+      "Bash(mv*)",
+      "WebFetch(domain:docs.djangoproject.com)",
+      "WebFetch(domain:reactjs.org)",
+      "WebFetch(domain:expo.dev)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "WebFetch(domain:tanstack.com)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(DROP DATABASE*)",
+      "Bash(DELETE FROM*)",
+      "Bash(git push origin main*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)"
+    ]
+  },
+  "env": {
+    "DJANGO_SETTINGS_MODULE": "config.settings.dev"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/boot-tracker/.claude/hooks/pre-bash.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/boot-tracker/.claude/hooks/post-pr.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/boot-tracker/.claude/hooks/post-file.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/boot-tracker/.claude/hooks/post-file.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
