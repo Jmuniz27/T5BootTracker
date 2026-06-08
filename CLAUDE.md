@@ -133,6 +133,24 @@ boot-tracker/
 - JWT: expo-secure-store — nunca AsyncStorage
 - Notificaciones: Expo Notifications
 
+### Linear auto-sync (`/linear-sync`)
+- **Uso:** después de mergear un PR a `main`, corre `/linear-sync CB-<N>`
+  (ej. `/linear-sync CB-40`). Verifica el issue antes de cerrarlo.
+- **Cómo funciona:** lanza el agente `linear-sync` (modelo `claude-opus-4-8`,
+  tarea de criterio). Lee el issue en Linear (criterios, sub-tareas, labels),
+  resuelve el PR y el estado de CI con `python .claude/scripts/pr_context.py CB-<N>`,
+  inspecciona el código y los tests del diff, y decide.
+- **Matching:** el id sale del nombre de rama `<user>/cb-<N>-<slug>` → `CB-<N>`.
+  Si el argumento no es `CB-<N>`, no toca Linear. **Sólo modifica ese issue.**
+- **La barra:** Done = todos los criterios de aceptación implementados + tests
+  presentes y **no-skippeados** + **build verde**. Si falta algo → **In Review**
+  con la lista de faltantes (por requisito). **Build rojo → no se toca el estado**
+  ("Build is failing — fix CI before this can be closed").
+- **Trigger:** sólo por slash command (no hay hook automático — política de costo).
+- **Credenciales:** la sync usa el **Linear MCP** ya autenticado; no se necesita
+  token. Opcional `LINEAR_API_TOKEN` para el fallback REST del script
+  (`.env.example`). Nunca hardcodear tokens.
+
 ---
 
 ## Lo que NO hacer
