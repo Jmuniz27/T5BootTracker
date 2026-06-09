@@ -8,7 +8,7 @@ export default function App() {
       <Route element={<AppLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<LeadsDashboard />} />
-        <Route path="/my-leads" element={<LeadsDashboard />} />
+        <Route path="/my-leads" element={<div className="p-8 text-gray-400">My leads — coming soon</div>} />
         <Route path="/schedule" element={<div className="p-8 text-gray-400">Schedule — coming soon</div>} />
       </Route>
     </Routes>
