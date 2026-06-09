@@ -1,9 +1,16 @@
-function App() {
+import { Routes, Route, Navigate } from 'react-router-dom'
+import AppLayout from './components/layout/AppLayout'
+import LeadsDashboard from './pages/LeadsDashboard'
+
+export default function App() {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <h1 className="text-3xl font-bold text-primary">Boot-Tracker</h1>
-    </div>
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<LeadsDashboard />} />
+        <Route path="/my-leads" element={<LeadsDashboard />} />
+        <Route path="/schedule" element={<div className="p-8 text-gray-400">Schedule — coming soon</div>} />
+      </Route>
+    </Routes>
   )
 }
-
-export default App
