@@ -13,9 +13,16 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
-import { useAuth } from '../../../src/context/AuthContext';
 import { fetchLeads, assignLead } from '../../../src/api/leads.api';
+import { api } from '../../../src/lib/api';
 import type { Lead, LeadStatus } from '../../../src/types/leads';
+
+interface MeData {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+}
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -131,9 +138,9 @@ function LeadCard({ lead, isAvailable, onAssign, onViewHistory, onLogInteraction
 type Tab = 'my' | 'available';
 
 export default function LeadsScreen() {
-  const { user } = useAuth();
   const router = useRouter();
 
+  const [me, setMe]                 = useState<MeData | null>(null);
   const [tab, setTab]               = useState<Tab>('my');
   const [search, setSearch]         = useState('');
   const [myLeads, setMyLeads]       = useState<Lead[]>([]);
@@ -156,6 +163,7 @@ export default function LeadsScreen() {
   }
 
   useEffect(() => {
+    api.get<MeData>('/auth/me/').then(({ data }) => setMe(data)).catch(() => {});
     loadLeads().finally(() => setLoading(false));
   }, []);
 
@@ -214,16 +222,16 @@ export default function LeadsScreen() {
               </TouchableOpacity>
               <View style={styles.headerRight}>
                 <View style={styles.headerNameCol}>
-                  <Text style={styles.headerName}>{user?.full_name ?? '—'}</Text>
+                  <Text style={styles.headerName}>{me?.full_name ?? '—'}</Text>
                   <View style={styles.rolePill}>
                     <Text style={styles.roleText}>
-                      {ROLE_LABEL[user?.role ?? ''] ?? user?.role}
+                      {ROLE_LABEL[me?.role ?? ''] ?? me?.role}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.userAvatar}>
                   <Text style={styles.userAvatarText}>
-                    {user ? getInitials(user.full_name) : '?'}
+                    {me ? getInitials(me.full_name) : '?'}
                   </Text>
                 </View>
               </View>
