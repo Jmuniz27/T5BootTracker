@@ -14,7 +14,8 @@ class InteractionSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'lead', 'salesperson', 'salesperson_name',
             'interaction_type', 'outcome', 'interest_level',
-            'notes', 'campaign', 'days_as_lead', 'created_at',
+            'notes', 'campaign', 'duration_minutes', 'next_action',
+            'next_action_date', 'days_as_lead', 'created_at',
         )
         read_only_fields = ('id', 'lead', 'salesperson', 'salesperson_name', 'created_at', 'days_as_lead')
 
