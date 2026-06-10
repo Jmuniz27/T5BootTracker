@@ -93,7 +93,7 @@ def test_admin_can_create_user(api_client, admin_user):
     api_client.force_authenticate(user=admin_user)
     data = {
         'email': 'nuevo@boottracker.com',
-        'cedula': '0923456789', # Ajusta a una cédula mod-10 válida si tu validador es estricto
+        'cedula': '1713175071',
         'first_name': 'Juan',
         'last_name': 'Perez',
         'role': CustomUser.Role.SALESPERSON,
@@ -185,7 +185,7 @@ def test_reset_password_generates_new_password(api_client, admin_user, target_us
     assert 'new_password' in response.data
 
     new_password = response.data['new_password']
-    assert len(new_password) == 12 # Verificamos la longitud generada por secrets
+    assert len(new_password) == 16 # Verificamos la longitud generada por secrets
 
     target_user.refresh_from_db()
     assert target_user.password != old_password_hash
