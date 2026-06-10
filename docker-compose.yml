@@ -68,6 +68,10 @@ services:
       - "5173:5173"
     env_file:
       - .env
+    environment:
+      # Dentro del contenedor, el proxy de Vite debe alcanzar el backend por su
+      # alias de red Docker, no por localhost (que sería el propio contenedor frontend).
+      - VITE_PROXY_TARGET=http://backend:8000
     networks:
       - boottracker-network
 
