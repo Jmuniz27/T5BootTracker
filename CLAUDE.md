@@ -112,7 +112,8 @@ boot-tracker/
 
 ### Git
 - Rama: `feat/<numero-issue>-descripcion` (ej. `feat/9-lead-dashboard`)
-- Commit: `feat(leads): add self-assignment endpoint` — sin mencionar herramientas de IA
+- Commit: `feat(leads): add self-assignment endpoint` — sin mencionar herramientas de IA. IMPORTANTE, no incluir "Co-Authored-By".
+
 - PR: título + número de issue + cómo probar
 
 ### Django / Python
@@ -132,6 +133,52 @@ boot-tracker/
 - Navegación: Expo Router (file-based)
 - JWT: expo-secure-store — nunca AsyncStorage
 - Notificaciones: Expo Notifications
+
+### Linear auto-sync (`/linear-sync`)
+- **Uso:** después de mergear un PR a `main`, corre `/linear-sync CB-<N>`
+  (ej. `/linear-sync CB-40`). Verifica el issue antes de cerrarlo.
+- **Cómo funciona:** lanza el agente `linear-sync` (modelo `claude-opus-4-8`,
+  tarea de criterio). Lee el issue en Linear (criterios, sub-tareas, labels),
+  resuelve el PR y el estado de CI con `python .claude/scripts/pr_context.py CB-<N>`,
+  inspecciona el código y los tests del diff, y decide.
+- **Matching:** el id sale del nombre de rama `<user>/cb-<N>-<slug>` → `CB-<N>`.
+  Si el argumento no es `CB-<N>`, no toca Linear. **Sólo modifica ese issue.**
+- **La barra:** Done = todos los criterios de aceptación implementados + tests
+  presentes y **no-skippeados** + **build verde**. Si falta algo → **In Review**
+  con la lista de faltantes (por requisito). **Build rojo → no se toca el estado**
+  ("Build is failing — fix CI before this can be closed").
+- **Trigger:** sólo por slash command (no hay hook automático — política de costo).
+- **Credenciales:** la sync usa el **Linear MCP** ya autenticado; no se necesita
+  token. Opcional `LINEAR_API_TOKEN` para el fallback REST del script
+  (`.env.example`). Nunca hardcodear tokens.
+
+---
+
+## Convención de PRs (1 issue = 1 PR)
+
+Cada issue de GitHub debe tener exactamente un PR asociado.
+
+### Reglas
+- El body del PR DEBE incluir `Closes #N` (N = número de issue en GitHub)
+- Nombre de rama: `<type>/<CB-XX>-short-description` (ej. `feat/CB-44-leads-dashboard`)
+- El título del PR debe referenciar el título del issue
+
+### Asignación de revisores
+| Escenario | PR Author | Reviewer | Quién mergea |
+|---|---|---|---|
+| Codeas tu propio issue | Assignee del issue | Cualquier compañero (preferir experto del dominio) | Reviewer tras aprobar |
+| Codeas el issue de otro | Quien codea | Assignee del issue (revisa su propia spec) | Assignee tras aprobar |
+
+### Ejemplo real: CB-56 (S4-3 Monitoreo pagos)
+Issue asignado a: JL Chong — Codeado por: Juan Munizaga
+→ Juan abre PR con `Closes #21` → Asigna a Zahid como reviewer → Zahid revisa y mergea
+
+### Labels en PRs
+- `feature` — nueva funcionalidad
+- `fix` — bug fix
+- `devops` — infra/CI
+- `docs` — solo documentación
+- `test` — solo tests
 
 ---
 

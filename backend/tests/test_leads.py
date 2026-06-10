@@ -135,6 +135,79 @@ class TestInteractions:
         assert 'days_as_lead' in resp.json()
         assert isinstance(resp.json()['days_as_lead'], int)
 
+    def test_interaction_updates_last_contact(self, db, salesperson_user, assigned_lead):
+        assert assigned_lead.last_contact is None
+        client = make_client(salesperson_user)
+        resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
+            'interaction_type': Interaction.InteractionType.CALL,
+            'outcome':          Interaction.Outcome.CALLBACK,
+        }, format='json')
+        assert resp.status_code == 201
+        assigned_lead.refresh_from_db()
+        assert assigned_lead.last_contact is not None
+
+    def test_visit_interaction_with_duration_and_next_action(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+        resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
+            'interaction_type': Interaction.InteractionType.VISIT,
+            'outcome':          Interaction.Outcome.INTERESTED,
+            'duration_minutes': 45,
+            'next_action':      'Enviar propuesta',
+            'next_action_date': '2026-06-20',
+        }, format='json')
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body['interaction_type'] == Interaction.InteractionType.VISIT
+        assert body['duration_minutes'] == 45
+        assert body['next_action'] == 'Enviar propuesta'
+
+    def test_interest_level_out_of_range_rejected(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+        resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
+            'interaction_type': Interaction.InteractionType.CALL,
+            'outcome':          Interaction.Outcome.INTERESTED,
+            'interest_level':   9,
+        }, format='json')
+        assert resp.status_code == 400
+
+    def test_interaction_list_ordered_desc(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+        for outcome in (Interaction.Outcome.NO_ANSWER, Interaction.Outcome.CALLBACK, Interaction.Outcome.INTERESTED):
+            resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
+                'interaction_type': Interaction.InteractionType.CALL,
+                'outcome':          outcome,
+            }, format='json')
+            assert resp.status_code == 201
+
+        resp = client.get(f'{LEADS_URL}{assigned_lead.id}/interactions/')
+        assert resp.status_code == 200
+        timestamps = [row['created_at'] for row in resp.json()]
+        assert timestamps == sorted(timestamps, reverse=True)
+
+    def test_non_owner_cannot_create_interaction(self, db, assigned_lead):
+        other = CustomUser.objects.create_user(
+            email='other@test.com', password='testpass123',
+            first_name='Other', last_name='Seller',
+            role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(other)
+        resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
+            'interaction_type': Interaction.InteractionType.CALL,
+            'outcome':          Interaction.Outcome.INTERESTED,
+        }, format='json')
+        assert resp.status_code == 403
+        assert resp.json()['code'] == 'NOT_OWNER'
+
+    def test_non_owner_cannot_view_interactions(self, db, assigned_lead):
+        other = CustomUser.objects.create_user(
+            email='viewer@test.com', password='testpass123',
+            first_name='View', last_name='Er',
+            role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(other)
+        resp = client.get(f'{LEADS_URL}{assigned_lead.id}/interactions/')
+        assert resp.status_code == 403
+
 
 class TestLeadFilters:
     def test_lead_filter_by_status(self, db, salesperson_user):
