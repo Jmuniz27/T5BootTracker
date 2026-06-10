@@ -16,7 +16,7 @@ captación de leads → seguimiento comercial → conversión a bootcamper → p
 |---|---|
 | Backend Django | ✅ Auth, Leads, Payments, Conversions, Notifications. Analytics: stub vacío. |
 | Frontend React | ❌ Solo placeholder `<h1>`. Dependencias instaladas, cero pantallas. |
-| Mobile Expo | ❌ Sin `mobile/app/`. Solo config files. |
+| Mobile Expo | ⚠️ Auth screens implementadas (login, forgot-password). App screens pendientes. |
 | DevOps | ⚠️ CI verde. Deploy a producción pendiente. |
 
 ---
@@ -43,11 +43,11 @@ captación de leads → seguimiento comercial → conversión a bootcamper → p
 | Backend | Django 5.1 + DRF + djangorestframework-simplejwt |
 | Base de datos | PostgreSQL 16 (Docker) |
 | Cola / cache | Redis 7 + Celery (email, OCR) |
-| Frontend | React 18 + Vite + shadcn/ui + Tailwind |
-| Estado | Zustand (no Redux) |
+| Frontend | React 18 + Vite + Tailwind — shadcn/ui, Zustand, React Hook Form, Zod pendientes de instalar |
+| Estado | Zustand (no Redux) — pendiente instalar |
 | Fetching | TanStack Query v5 (no useEffect para datos remotos) |
-| Formularios | React Hook Form + Zod |
-| Mobile | Expo SDK 52 + Expo Router (file-based en `app/`) |
+| Formularios | React Hook Form + Zod — pendientes de instalar |
+| Mobile | Expo SDK 54 + Expo Router (file-based en `app/`) |
 | Auth mobile | expo-secure-store (nunca AsyncStorage para JWT) |
 | Storage | MinIO local → S3 prod |
 | Emails | Resend via Celery |
@@ -97,13 +97,15 @@ boot-tracker/
 │       └── analytics/   ← stub vacío, pendiente
 ├── frontend/
 │   └── src/
-│       ├── api/         ← clientes por módulo (auth.api.ts, leads.api.ts…)
-│       ├── components/  ← wrappers shadcn/ui + propios
-│       ├── pages/
-│       ├── hooks/
-│       └── store/       ← Zustand stores
+│       ├── api/         ← (objetivo) clientes por módulo (auth.api.ts, leads.api.ts…)
+│       ├── components/  ← (objetivo) wrappers shadcn/ui + propios
+│       ├── pages/       ← (objetivo)
+│       ├── hooks/       ← (objetivo)
+│       └── store/       ← (objetivo) Zustand stores
 └── mobile/
-    └── app/             ← crear con Expo Router
+    └── app/
+        ├── (auth)/      ← login.tsx, forgot-password.tsx ✅
+        └── (app)/       ← screens principales pendientes
 ```
 
 ---
@@ -124,9 +126,9 @@ boot-tracker/
 
 ### React
 - Fetching: `useQuery` / `useMutation` de TanStack Query
-- Estado global: Zustand
-- Formularios: React Hook Form + Zod
-- Componentes shadcn/ui: no modificar el original — crear wrappers en `components/`
+- Estado global: Zustand — instalar con `npm install zustand` antes de usar
+- Formularios: React Hook Form + Zod — instalar con `npm install react-hook-form zod` antes de usar
+- Componentes shadcn/ui: instalar con `npx shadcn@latest init` antes de usar — no modificar el original, crear wrappers en `components/`
 - Archivos: PascalCase para componentes, `use-nombre.ts` para hooks, `nombre.service.ts` para servicios
 
 ### Mobile
