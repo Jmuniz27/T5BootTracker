@@ -11,3 +11,6 @@ export const releaseLead = (id) =>
 
 export const getInteractions = (leadId) =>
   client.get(`/leads/${leadId}/interactions/`).then((r) => r.data)
+
+export const createLead = (data) =>
+  client.post('/leads/', data).then((r) => r.data)
