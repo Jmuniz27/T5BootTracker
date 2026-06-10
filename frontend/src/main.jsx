@@ -19,4 +19,4 @@ createRoot(document.getElementById('root')).render(
       <App />
     </QueryClientProvider>
   </StrictMode>,
-)
+);
