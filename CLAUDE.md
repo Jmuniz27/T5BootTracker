@@ -112,7 +112,8 @@ boot-tracker/
 
 ### Git
 - Rama: `feat/<numero-issue>-descripcion` (ej. `feat/9-lead-dashboard`)
-- Commit: `feat(leads): add self-assignment endpoint` — sin mencionar herramientas de IA
+- Commit: `feat(leads): add self-assignment endpoint` — sin mencionar herramientas de IA. IMPORTANTE, no incluir "Co-Authored-By".
+
 - PR: título + número de issue + cómo probar
 
 ### Django / Python
@@ -150,6 +151,34 @@ boot-tracker/
 - **Credenciales:** la sync usa el **Linear MCP** ya autenticado; no se necesita
   token. Opcional `LINEAR_API_TOKEN` para el fallback REST del script
   (`.env.example`). Nunca hardcodear tokens.
+
+---
+
+## Convención de PRs (1 issue = 1 PR)
+
+Cada issue de GitHub debe tener exactamente un PR asociado.
+
+### Reglas
+- El body del PR DEBE incluir `Closes #N` (N = número de issue en GitHub)
+- Nombre de rama: `<type>/<CB-XX>-short-description` (ej. `feat/CB-44-leads-dashboard`)
+- El título del PR debe referenciar el título del issue
+
+### Asignación de revisores
+| Escenario | PR Author | Reviewer | Quién mergea |
+|---|---|---|---|
+| Codeas tu propio issue | Assignee del issue | Cualquier compañero (preferir experto del dominio) | Reviewer tras aprobar |
+| Codeas el issue de otro | Quien codea | Assignee del issue (revisa su propia spec) | Assignee tras aprobar |
+
+### Ejemplo real: CB-56 (S4-3 Monitoreo pagos)
+Issue asignado a: JL Chong — Codeado por: Juan Munizaga
+→ Juan abre PR con `Closes #21` → Asigna a Zahid como reviewer → Zahid revisa y mergea
+
+### Labels en PRs
+- `feature` — nueva funcionalidad
+- `fix` — bug fix
+- `devops` — infra/CI
+- `docs` — solo documentación
+- `test` — solo tests
 
 ---
 
