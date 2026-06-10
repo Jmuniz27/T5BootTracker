@@ -7,8 +7,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#1e3a5f',
+        primary: '#1D3176',
         secondary: '#2563eb',
+        'auth-bg': '#1D3176',
       },
     },
   },
