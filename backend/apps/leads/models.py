@@ -1,6 +1,7 @@
 """Lead and Interaction models for Boot-Tracker."""
 import uuid
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -54,6 +55,7 @@ class Lead(models.Model):
         verbose_name='Programa',
     )
     assigned_at      = models.DateTimeField(null=True, blank=True)
+    last_contact     = models.DateTimeField(null=True, blank=True, verbose_name='Último contacto')
     version          = models.PositiveIntegerField(default=0)
     created_at       = models.DateTimeField(auto_now_add=True)
     updated_at       = models.DateTimeField(auto_now=True)
@@ -72,6 +74,7 @@ class Interaction(models.Model):
         CALL      = 'CALL',      'Llamada'
         WHATSAPP  = 'WHATSAPP',  'WhatsApp'
         EMAIL     = 'EMAIL',     'Email'
+        VISIT     = 'VISIT',     'Visita'
         NOTE      = 'NOTE',      'Nota'
 
     class Outcome(models.TextChoices):
@@ -94,9 +97,16 @@ class Interaction(models.Model):
     )
     interaction_type = models.CharField(max_length=20, choices=InteractionType.choices)
     outcome          = models.CharField(max_length=30, choices=Outcome.choices)
-    interest_level   = models.IntegerField(null=True, blank=True)  # 1-5
+    interest_level   = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )  # 1-5
     notes            = models.TextField(blank=True)
     campaign         = models.CharField(max_length=100, blank=True)
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    next_action      = models.TextField(blank=True)
+    next_action_date = models.DateField(null=True, blank=True)
     created_at       = models.DateTimeField(auto_now_add=True)
 
     class Meta:

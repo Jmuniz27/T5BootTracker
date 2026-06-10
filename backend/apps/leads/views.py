@@ -18,14 +18,9 @@ from .serializers import (
     LeadListSerializer, LeadWriteSerializer, InteractionSerializer,
     ConvertLeadSerializer, ReturningBootcamperSerializer,
 )
+from .services import register_interaction
 
 logger = logging.getLogger(__name__)
-
-OUTCOME_TO_STATUS = {
-    Interaction.Outcome.INTERESTED:        Lead.Status.INTERESTED,
-    Interaction.Outcome.NOT_INTERESTED:    Lead.Status.NOT_INTERESTED,
-    Interaction.Outcome.SPEAK_COORDINATOR: Lead.Status.SPEAK_COORDINATOR,
-}
 
 
 class LeadListCreateView(APIView):
@@ -173,23 +168,25 @@ class InteractionListCreateView(APIView):
     def get(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
         # Owner or admin can view
-        if request.user.role != 'ADMINISTRATOR' and lead.owner != request.user:
+        if not request.user.is_administrator and lead.owner != request.user:
             return Response(
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        interactions = lead.interactions.select_related('salesperson').all()
+        interactions = lead.interactions.select_related('salesperson').order_by('-created_at')
         return Response(InteractionSerializer(interactions, many=True).data)
 
     @extend_schema(
         request=InteractionSerializer,
         responses={201: InteractionSerializer},
         summary='Registrar interacción',
-        description='Crea una interacción y actualiza el estado del lead según el outcome.',
+        description='Crea una interacción y actualiza estado y last_contact del lead. '
+                    'Solo el vendedor asignado puede registrar (admins no, aunque puedan ver).',
         tags=['Leads'],
     )
     def post(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
+        # Only the assigned salesperson may create — admins can view (GET) but not register.
         if lead.owner != request.user:
             return Response(
                 {'error': 'Solo el vendedor asignado puede registrar interacciones.', 'code': 'NOT_OWNER'},
@@ -198,13 +195,7 @@ class InteractionListCreateView(APIView):
 
         serializer = InteractionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        interaction = serializer.save(lead=lead, salesperson=request.user)
-
-        # Update lead status based on outcome
-        new_status = OUTCOME_TO_STATUS.get(interaction.outcome)
-        if new_status:
-            lead.status = new_status
-            lead.save(update_fields=['status', 'updated_at'])
+        interaction = register_interaction(lead, request.user, serializer.validated_data)
 
         return Response(InteractionSerializer(interaction).data, status=status.HTTP_201_CREATED)
 

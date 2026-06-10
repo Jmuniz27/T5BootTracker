@@ -1,6 +1,12 @@
 # Boot-Tracker
 
-Sistema de seguimiento de leads y pagos para bootcamps de programación. Gestiona el proceso desde la captación de candidatos hasta el cobro de cuotas, con notificaciones automáticas y reportes analíticos.
+Sistema de seguimiento de leads y pagos para bootcamps de programación (ESPOL).
+Gestiona el proceso desde la captación de candidatos hasta el cobro de cuotas,
+con notificaciones automáticas y reportes analíticos.
+
+- **Cliente:** PhD. Carmen Vaca (cvaca@espol.edu.ec)
+- **Entrega parcial:** 15 jun 2026 — flujo end-to-end (login → leads → interacciones)
+- **Entrega final:** 17 ago 2026 — producción + docs + handoff
 
 ## Stack
 
@@ -10,25 +16,28 @@ Sistema de seguimiento de leads y pagos para bootcamps de programación. Gestion
 | Autenticación | JWT (djangorestframework-simplejwt 5.3.1) |
 | Base de datos | PostgreSQL 16 |
 | Cache / Queue | Redis 7 + Celery 5.4.0 |
-| Frontend | React + Vite (Node 20) |
+| Frontend | React 18 + Vite + TanStack Query v5 + Tailwind |
+| Mobile | Expo SDK 54 + Expo Router (file-based) |
 | Contenedores | Docker + Docker Compose |
+| Docs API | drf-spectacular → `/api/schema/swagger-ui/` |
 
 ## Equipo
 
-| Nombre | Rol |
-|---|---|
-| Integrante 1 | Tech Lead / Backend |
-| Integrante 2 | Backend |
-| Integrante 3 | Frontend |
-| Integrante 4 | Frontend |
-| Integrante 5 | DevOps / QA |
-| Integrante 6 | Diseño / UX |
+| Nombre | GitHub | Área |
+|---|---|---|
+| Juan Munizaga | `Jmuniz27` | Orquestación, DevOps, revisiones de backend y mobile |
+| JL Chong | `Jlchong3` | Backend — nuevos endpoints |
+| Zahid Díaz | `LockHurb` | Integraciones — Google Calendar, Analytics |
+| Gabriela Jiménez | `gabsjimz` | Frontend — UI/UX lead, vistas principales |
+| Annabella Sánchez | `manzannita` | Frontend — formularios, pagos, admin |
+| Isabella Martín | `isabellaim` | Mobile Expo — todas las screens |
 
 ## Requisitos previos
 
 - Docker >= 24
 - Docker Compose >= 2.20
 - Git
+- Node 20 (para frontend/mobile fuera de Docker)
 
 ## Setup
 
@@ -45,10 +54,13 @@ cp .env.example .env
 docker-compose up --build
 
 # 4. Aplicar migraciones (primera vez)
-docker-compose run backend python manage.py migrate
+docker-compose exec backend python manage.py migrate
 
 # 5. Crear superusuario (opcional)
-docker-compose run backend python manage.py createsuperuser
+docker-compose exec backend python manage.py createsuperuser
+
+# 6. Mobile (fuera de Docker)
+cd mobile && npx expo start
 ```
 
 ## URLs de desarrollo
@@ -57,25 +69,23 @@ docker-compose run backend python manage.py createsuperuser
 |---|---|
 | API Django | http://localhost:8000/api/ |
 | Django Admin | http://localhost:8000/admin/ |
+| Swagger UI | http://localhost:8000/api/schema/swagger-ui/ |
 | Frontend Vite | http://localhost:5173 |
 
-## Milestones
+## Estado del código
 
-| Milestone | Descripción | Fecha |
-|---|---|---|
-| M1 | Configuración del entorno y arquitectura base | Semana 1 |
-| M2 | Módulo de autenticación y gestión de usuarios | Semana 2-3 |
-| M3 | Módulo de leads y pipeline de ventas | Semana 4-5 |
-| M4 | Módulo de pagos y notificaciones | Semana 6-7 |
-| M5 | Analytics, reportes y despliegue en producción | Semana 8 |
+| Área | Estado |
+|---|---|
+| Backend Django | ✅ Auth, Leads, Payments, Programs, Notifications. Analytics: stub vacío. |
+| Frontend React | ❌ Solo placeholder. Dependencias base instaladas, cero pantallas. |
+| Mobile Expo | ⚠️ Auth screens (login, forgot-password) implementadas. App screens pendientes. |
+| DevOps | ⚠️ CI verde. Deploy a producción pendiente. |
 
 ## Convenciones
 
 ### Commits
 
 ```
-<tipo>(<alcance>): <descripción corta>
-
 feat(leads): agregar filtro por estado de lead
 fix(auth): corregir expiración de token JWT
 docs(readme): actualizar instrucciones de setup
@@ -86,8 +96,10 @@ Tipos: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 ### Branches
 
 ```
-main          — producción estable
-develop       — integración continua
-feature/<nombre>   — nuevas funcionalidades
-fix/<nombre>       — corrección de bugs
+main                        — producción estable
+feat/<numero-issue>-slug    — nuevas funcionalidades  (ej. feat/9-lead-dashboard)
+fix/<numero-issue>-slug     — corrección de bugs      (ej. fix/12-token-expiry)
+chore/<descripcion>         — tareas técnicas
 ```
+
+Ver [CONTRIBUTING.md](CONTRIBUTING.md) para el flujo completo de PRs.

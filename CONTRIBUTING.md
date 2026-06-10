@@ -1,8 +1,9 @@
 # Contribución — Boot-Tracker
 
 ## Branches
-- `feature/nombre` — feature nueva
-- `fix/nombre` — bug fix
+- `feat/<numero-issue>-descripcion` — feature nueva (ej. `feat/9-lead-dashboard`)
+- `fix/<numero-issue>-descripcion` — bug fix (ej. `fix/12-token-expiry`)
+- `chore/<descripcion>` — tareas técnicas sin issue
 - Nunca pushear directo a `main`
 
 ## Commits
