@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useAuthStore } from '../../store/auth.store'
 
 const NAV_ITEMS = [
   {
@@ -31,6 +32,14 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar() {
+  const navigate = useNavigate()
+  const logout = useAuthStore((s) => s.logout)
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
   return (
     <aside className="w-56 min-h-screen bg-[#1e3164] flex flex-col">
       <div className="px-6 py-6">
@@ -58,11 +67,7 @@ export default function Sidebar() {
 
       <div className="px-3 pb-6">
         <button
-          onClick={() => {
-            localStorage.removeItem('access_token')
-            localStorage.removeItem('refresh_token')
-            window.location.href = '/login'
-          }}
+          onClick={handleLogout}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium bg-white text-[#1e3164] hover:bg-blue-50 transition-colors"
         >
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
