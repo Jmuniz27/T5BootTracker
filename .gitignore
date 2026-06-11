@@ -38,6 +38,7 @@ Thumbs.db
 
 # Environment locals
 frontend/.env*
+mobile/.env
 
 # Pytest
 .pytest_cache/
