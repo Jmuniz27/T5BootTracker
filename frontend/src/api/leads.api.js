@@ -14,3 +14,6 @@ export const getInteractions = (leadId) =>
 
 export const createLead = (data) =>
   client.post('/leads/', data).then((r) => r.data)
+
+export const createInteraction = (leadId, data) =>
+  client.post(`/leads/${leadId}/interactions/`, data).then((r) => r.data)
