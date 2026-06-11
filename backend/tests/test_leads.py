@@ -284,8 +284,8 @@ class TestInteractions:
 
 class TestConvertLead:
 
-    @patch('apps.notifications.tasks.send_conversion_notification.delay')
     @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=True)
+    @patch('apps.notifications.tasks.send_conversion_notification.delay')
     def test_convert_lead_success_new_bootcamper(self, mock_notify, mock_validator, db, salesperson_user, interested_lead, program):
         client = make_client(salesperson_user)
         payload = {
@@ -313,8 +313,8 @@ class TestConvertLead:
 
         mock_notify.assert_called_once_with(str(interested_lead.id), str(new_user.id))
 
+    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=True)
     @patch('apps.notifications.tasks.send_conversion_notification.delay')
-    @patch('apps.leads.views.validate_cedula_ecuatoriana', return_value=True)
     def test_convert_lead_success_returning_bootcamper(self, mock_notify, mock_validator, db, salesperson_user, interested_lead, program):
         existing_bootcamper = CustomUser.objects.create_user(
             email=interested_lead.email,
