@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction } from '../api/leads.api'
 
 const PAGE_SIZE = 10
@@ -345,17 +346,6 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
                 <option value="SPEAK_COORDINATOR">Speak with coordinator</option>
               </select>
               {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-              <input type="date" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-              <input type="time" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200" />
             </div>
           </div>
 
@@ -888,6 +878,13 @@ export default function LeadsDashboard() {
 
   return (
     <div className="p-8 min-h-screen">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-sm text-gray-400 mb-6">
+        <Link to="/dashboard" className="hover:text-gray-600 transition-colors">Home</Link>
+        <span>/</span>
+        <span className="text-gray-700 font-medium">Leads</span>
+      </nav>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
