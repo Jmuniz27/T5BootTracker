@@ -285,7 +285,7 @@ class TestInteractions:
 class TestConvertLead:
 
     @patch('apps.notifications.tasks.send_conversion_notification.delay')
-    @patch('apps.leads.views.validate_cedula_ecuatoriana', return_value=True)
+    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=True)
     def test_convert_lead_success_new_bootcamper(self, mock_notify, mock_validator, db, salesperson_user, interested_lead, program):
         client = make_client(salesperson_user)
         payload = {
@@ -357,7 +357,7 @@ class TestConvertLead:
         assert resp.status_code == 400
         assert resp.json()['code'] == 'INVALID_STATUS'
 
-    @patch('apps.leads.views.validate_cedula_ecuatoriana', return_value=False)
+    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=False)
     def test_convert_lead_fails_invalid_cedula(self, mock_validator, db, salesperson_user, interested_lead, program):
         client = make_client(salesperson_user)
         payload = {'cedula': '123', 'program_id': str(program.id)}
@@ -367,7 +367,7 @@ class TestConvertLead:
         assert resp.status_code == 400
         assert resp.json()['code'] == 'INVALID_CEDULA'
 
-    @patch('apps.leads.views.validate_cedula_ecuatoriana', return_value=True)
+    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=True)
     def test_convert_lead_fails_email_conflict_with_staff(self, mock_validator, db, salesperson_user, interested_lead, program):
         CustomUser.objects.create_user(
             email=interested_lead.email,
@@ -383,7 +383,7 @@ class TestConvertLead:
         assert resp.status_code == 409
         assert resp.json()['code'] == 'EMAIL_CONFLICT'
 
-    @patch('apps.leads.views.validate_cedula_ecuatoriana', return_value=True)
+    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=True)
     def test_convert_lead_fails_duplicate_cedula(self, mock_validator, db, salesperson_user, interested_lead, program):
         CustomUser.objects.create_user(
             email='otro.correo@test.com',
