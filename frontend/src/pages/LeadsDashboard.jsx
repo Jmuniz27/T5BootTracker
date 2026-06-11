@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction } from '../api/leads.api'
 
 const PAGE_SIZE = 10
@@ -877,6 +878,13 @@ export default function LeadsDashboard() {
 
   return (
     <div className="p-8 min-h-screen">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-sm text-gray-400 mb-6">
+        <Link to="/dashboard" className="hover:text-gray-600 transition-colors">Home</Link>
+        <span>/</span>
+        <span className="text-gray-700 font-medium">Leads</span>
+      </nav>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
