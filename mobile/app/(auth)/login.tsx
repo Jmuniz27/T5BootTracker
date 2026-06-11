@@ -75,7 +75,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email, password);
-      router.replace('/(app)/home');
+      router.replace('/(app)/leads');
     } catch {
       setError('No pudimos iniciar tu sesión. Verifica tus datos e intenta de nuevo.');
     } finally {
