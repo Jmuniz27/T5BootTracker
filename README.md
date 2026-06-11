@@ -56,11 +56,42 @@ docker-compose up --build
 # 4. Aplicar migraciones (primera vez)
 docker-compose exec backend python manage.py migrate
 
-# 5. Crear superusuario (opcional)
+# 5. Sembrar usuarios y datos de prueba (recomendado para back/front/mobile)
+docker-compose exec backend python manage.py seed_dev
+
+# (opcional) crear un superusuario adicional a mano
 docker-compose exec backend python manage.py createsuperuser
 
 # 6. Mobile (fuera de Docker)
 cd mobile && npx expo start
+```
+
+## Usuarios de prueba
+
+El comando `seed_dev` crea usuarios listos para login en backend, frontend y mobile.
+Es **idempotente** (`get_or_create`), así que se puede correr varias veces sin duplicar.
+
+```bash
+docker-compose exec backend python manage.py seed_dev
+```
+
+| Email | Password | Rol | Para qué sirve |
+|---|---|---|---|
+| `admin@boottracker.com` | `admin1234` | ADMINISTRATOR | Acceso total + Django admin; valida pagos |
+| `vendedor1@boottracker.com` | `vendedor1234` | SALESPERSON | Tiene leads asignados; valida pagos |
+| `vendedor2@boottracker.com` | `vendedor1234` | SALESPERSON | Segundo vendedor (probar reasignación) |
+| `bootcamper@boottracker.com` | `boot1234` | BOOTCAMPER | App móvil / pagos propios |
+| `bootcamper.conv@boottracker.com` | `boot1234` | BOOTCAMPER | Bootcamper con pagos y cédula válida |
+
+> **No existe rol "finance".** La validación de pagos la realiza el **SALESPERSON**
+> (y el ADMINISTRATOR). Estas credenciales son **solo para desarrollo local**.
+
+Probar el login contra la API:
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@boottracker.com","password":"admin1234"}'
 ```
 
 ## URLs de desarrollo

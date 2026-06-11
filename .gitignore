@@ -1,4 +1,7 @@
 # Environment
+.direnv
+.envrc
+flake.*
 .env
 
 # Python
