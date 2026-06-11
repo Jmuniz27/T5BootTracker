@@ -210,8 +210,13 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('  Payments created.'))
         self.stdout.write(self.style.SUCCESS('\nDev seed complete!'))
-        self.stdout.write('  admin@boottracker.com            / admin1234')
-        self.stdout.write('  vendedor1@boottracker.com        / vendedor1234')
-        self.stdout.write('  vendedor2@boottracker.com        / vendedor1234')
-        self.stdout.write('  bootcamper@boottracker.com       / boot1234')
-        self.stdout.write('  bootcamper.conv@boottracker.com  / boot1234')
+        self.stdout.write('  Usuario                           Password        Rol')
+        self.stdout.write('  admin@boottracker.com            / admin1234     ADMINISTRATOR')
+        self.stdout.write('  vendedor1@boottracker.com        / vendedor1234  SALESPERSON')
+        self.stdout.write('  vendedor2@boottracker.com        / vendedor1234  SALESPERSON')
+        self.stdout.write('  bootcamper@boottracker.com       / boot1234      BOOTCAMPER')
+        self.stdout.write('  bootcamper.conv@boottracker.com  / boot1234      BOOTCAMPER')
+        self.stdout.write(
+            '\n  Nota: no existe rol "finance". La validacion de pagos la realiza el '
+            'SALESPERSON (y el ADMINISTRATOR). El ADMINISTRATOR tiene acceso total + Django admin.'
+        )
