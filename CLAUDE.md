@@ -113,9 +113,9 @@ boot-tracker/
 ## Convenciones
 
 ### Git
+- **Antes de crear cualquier rama de feature:** hacer `git checkout main && git pull origin main` para partir del HEAD actualizado.
 - Rama: `feat/<numero-issue>-descripcion` (ej. `feat/9-lead-dashboard`)
 - Commit: `feat(leads): add self-assignment endpoint` — sin mencionar herramientas de IA. IMPORTANTE, no incluir "Co-Authored-By".
-
 - PR: título + número de issue + cómo probar
 
 ### Django / Python
