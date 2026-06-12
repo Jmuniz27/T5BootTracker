@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, Link } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../src/theme/colors';
 import { useAuth } from '../../src/context/AuthContext';
 
@@ -46,18 +47,26 @@ interface FieldProps {
 }
 
 function Field({ label, value, onChangeText, secureTextEntry, keyboardType }: FieldProps) {
+  const [visible, setVisible] = useState(false);
   return (
     <View style={styles.fieldWrapper}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry={secureTextEntry}
-        keyboardType={keyboardType ?? 'default'}
-        autoCapitalize={secureTextEntry ? 'none' : keyboardType === 'email-address' ? 'none' : 'sentences'}
-        style={styles.input}
-        placeholderTextColor="#aaa"
-      />
+      <View style={styles.inputRow}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={secureTextEntry && !visible}
+          keyboardType={keyboardType ?? 'default'}
+          autoCapitalize={secureTextEntry ? 'none' : keyboardType === 'email-address' ? 'none' : 'sentences'}
+          style={styles.inputFlex}
+          placeholderTextColor="#aaa"
+        />
+        {secureTextEntry && (
+          <TouchableOpacity onPress={() => setVisible(v => !v)} hitSlop={8} style={styles.eyeBtn}>
+            <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color="#aaa" />
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -200,15 +209,23 @@ const styles = StyleSheet.create({
     color: colors.textLabel,
     fontWeight: '500',
   },
-  input: {
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
+    backgroundColor: colors.white,
+  },
+  inputFlex: {
+    flex: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
     color: colors.textPrimary,
-    backgroundColor: colors.white,
+  },
+  eyeBtn: {
+    paddingHorizontal: 12,
   },
   button: {
     backgroundColor: colors.navy,

@@ -13,7 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
-import { fetchLeads, assignLead } from '../../../src/api/leads.api';
+import { fetchLeads, assignLead, releaseLead } from '../../../src/api/leads.api';
 import { api } from '../../../src/lib/api';
 import type { Lead, LeadStatus } from '../../../src/types/leads';
 
@@ -80,11 +80,12 @@ interface CardProps {
   lead: Lead;
   isAvailable: boolean;
   onAssign: (id: string) => void;
+  onRelease: (id: string) => void;
   onViewHistory: (lead: Lead) => void;
   onLogInteraction: (lead: Lead) => void;
 }
 
-function LeadCard({ lead, isAvailable, onAssign, onViewHistory, onLogInteraction }: CardProps) {
+function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction }: CardProps) {
   return (
     <View style={styles.card}>
       <View style={styles.cardBody}>
@@ -124,6 +125,9 @@ function LeadCard({ lead, isAvailable, onAssign, onViewHistory, onLogInteraction
               </TouchableOpacity>
               <TouchableOpacity style={styles.btnPrimary} onPress={() => onLogInteraction(lead)}>
                 <Text style={styles.btnPrimaryText}>Registrar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnDanger} onPress={() => onRelease(lead.id)}>
+                <Text style={styles.btnDangerText}>Desasignarme</Text>
               </TouchableOpacity>
             </>
           )}
@@ -185,6 +189,15 @@ export default function LeadsScreen() {
       await loadLeads(search);
     } catch {
       setError('No pudimos asignar el lead. Puede que ya haya sido tomado.');
+    }
+  }
+
+  async function handleRelease(leadId: string) {
+    try {
+      await releaseLead(leadId);
+      await loadLeads(search);
+    } catch {
+      setError('No pudimos desasignar el lead. Intenta de nuevo.');
     }
   }
 
@@ -292,6 +305,7 @@ export default function LeadsScreen() {
             lead={item}
             isAvailable={tab === 'available'}
             onAssign={handleAssign}
+            onRelease={handleRelease}
             onViewHistory={handleViewHistory}
             onLogInteraction={handleLogInteraction}
           />
@@ -554,6 +568,20 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 12,
     fontWeight: '700',
+  },
+  btnDanger: {
+    borderWidth: 1.5,
+    borderColor: '#dc2626',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnDangerText: {
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: '600',
   },
   // Feedback
   errorText: {
