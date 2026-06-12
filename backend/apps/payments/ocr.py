@@ -26,6 +26,7 @@ BANK_ALIASES = {
 }
 
 MONTHS_ES = {
+    # Full names
     "enero": 1,
     "febrero": 2,
     "marzo": 3,
@@ -38,7 +39,31 @@ MONTHS_ES = {
     "octubre": 10,
     "noviembre": 11,
     "diciembre": 12,
+    # Abbreviated (e.g. "26 may 2026" from DeUna / Banco del Pacífico notifications)
+    "ene": 1,
+    "feb": 2,
+    "mar": 3,
+    "abr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "ago": 8,
+    "sep": 9,
+    "set": 9,
+    "oct": 10,
+    "nov": 11,
+    "dic": 12,
 }
+
+# ESPOL-TECH E.P. official destination account tails (last 4 digits of each account).
+# These are public beneficiary account numbers — not secrets.
+# Any masked account ending in one of these is the bootcamp's account (destination),
+# not the payer's account (origin).
+#   Pichincha   2100300388 → 0388
+#   Produbanco  72006000126 → 0126
+#   Pacífico    7427786    → 7786
+#   Guayaquil   11138640   → 8640
+ESPOLTECH_DESTINATION_TAILS = frozenset({"0388", "0126", "7786", "8640"})
 
 # Lines that contain a fee / deduction rather than the transfer amount.
 # We exclude any candidate whose line matches these keywords.
@@ -225,45 +250,61 @@ class OCRService:
         """
         Extract the last 2–4 digits of the ORIGIN (sender) account.
 
-        Mask patterns seen in real EC receipts:
-          ******3912, XXXX325, 10XXXXXX47, 095XXXX838, 001XXX7911, 004XXX1806, 1XXX8640
-        Generalised: optional leading digits + 2+ mask chars + 2–4 trailing digits.
-
-        Strategy:
-          1. If there's an "origin" label in the text, take the masked account
-             that appears within the next 3 lines of that label.
-          2. Otherwise take the FIRST masked account found (receipts put the
-             sender's account before the recipient's in the Guayaquil app layout).
+        Improvements vs v1:
+        - Mask class includes 'O'/'o' (Tesseract confusion with zero: 003→0O3).
+        - Allows spaces between mask chars and trailing digits (*** 8220).
+        - Discards ESPOLTECH_DESTINATION_TAILS — fixed bootcamp accounts so we
+          never return the bootcamp's own account as the payer.
+        - Label-based fallback for 'Cuenta origen' lines where the mask is fully
+          garbled (e.g. Tesseract reads '****8890' as 'OAEeea. 8890').
+        - Collects ALL candidates; prefers origin-labelled, else first by position
+          (sender always appears before recipient in the Guayaquil app layout).
         """
-        # Pattern: optional leading digits, mask run (*, X, x, •, ·), 2-4 digit tail.
-        # \b before \d{0,4} handles word boundary when leading digits present;
-        # for pure-mask starts (e.g. ******3912) we also allow start of token.
+        dest_tails = ESPOLTECH_DESTINATION_TAILS
+
+        # Extended mask: leading digits/Os, 2+ mask chars (including O as zero),
+        # optional spaces, then 2-4 trailing digits.
         mask_pat = re.compile(
-            r"(?<!\w)\d{0,4}[\*xX•·]{2,}(\d{2,4})(?!\d)",
+            r"(?<!\w)[\doO]{0,4}[\*xXoO•·]{2,}[\s]*(\d{2,4})(?!\d)",
             re.IGNORECASE,
         )
 
-        # --- Strategy 1: find an "origin" section and grab the closest match ---
-        origin_label = re.search(
-            r"(de\b|desde|origen|cuenta\s+origen|ahorros\s*-?\s*\d)",
-            text,
-            re.IGNORECASE,
-        )
-        if origin_label:
-            # Search in a window of ~200 chars after the label
-            window = text[origin_label.start() : origin_label.start() + 250]
-            m = mask_pat.search(window)
-            if m:
-                val = m.group(1)
-                return val, self._confidence(val, words_conf, strong_match=True)
+        lines = text.splitlines()
 
-        # --- Strategy 2: first masked account in document ---
-        m = mask_pat.search(text)
-        if m:
-            val = m.group(1)
-            return val, self._confidence(val, words_conf, strong_match=False)
+        # Collect all candidates: (tail_digits, line_index, is_origin_labeled)
+        candidates: list[tuple[str, int, bool]] = []
 
-        return "", _CONF_ZERO
+        for i, line in enumerate(lines):
+            is_origin = bool(
+                re.search(r"cuenta\s+(?:de\s+)?origen", line, re.IGNORECASE)
+            )
+
+            matched_on_line = False
+            for m in mask_pat.finditer(line):
+                tail = m.group(1)
+                if tail not in dest_tails:
+                    candidates.append((tail, i, is_origin))
+                    matched_on_line = True
+
+            # Fallback for "Cuenta origen" lines where the mask was garbled by OCR.
+            # Grab the last digit sequence on the line (trailing account digits).
+            if is_origin and not matched_on_line:
+                digits = re.findall(r"\d{2,}", line)
+                if digits:
+                    tail = digits[-1][-4:]  # last up to 4 digits
+                    if tail not in dest_tails:
+                        candidates.append((tail, i, True))
+
+        if not candidates:
+            return "", _CONF_ZERO
+
+        # Prefer origin-labelled candidates, else use document order (sender first)
+        origin_candidates = [c for c in candidates if c[2]]
+        pool = origin_candidates if origin_candidates else candidates
+
+        val = pool[0][0]
+        strong = bool(origin_candidates)
+        return val, self._confidence(val, words_conf, strong_match=strong)
 
     def _parse_decimal(self, raw: str) -> float | None:
         """
@@ -450,10 +491,12 @@ class OCRService:
             except ValueError:
                 pass
 
-        # Prose Spanish: "12 de junio de 2026"
+        # Prose Spanish: "12 de junio de 2026" OR abbreviated "26 may 2026".
+        # Sort month keys longest-first so 'septiembre' matches before 'sep'.
+        month_alternation = "|".join(sorted(MONTHS_ES, key=len, reverse=True))
         m = re.search(
-            r"\b(\d{1,2})\s+de\s+("
-            + "|".join(MONTHS_ES)
+            r"\b(\d{1,2})\s+(?:de\s+)?("
+            + month_alternation
             + r")\s+(?:de\s+)?(20\d{2})\b",
             text,
             re.IGNORECASE,

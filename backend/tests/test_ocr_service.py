@@ -147,6 +147,112 @@ Comisión                $0.00
 Valor debitado          $600.00
 """
 
+# ---------------------------------------------------------------------------
+# Fase 4: raw OCR text from the blind test corpus (test/ folder)
+# ---------------------------------------------------------------------------
+
+# WhatsApp 10:51 — Pichincha $20 (label + mask fully garbled by OCR)
+TEXT_TEST_PICHINCHA20 = """
+7 BANCO PICHINCHA
+
+¡Transferencia exitosa!
+
+$ 20.00
+
+A Torres Rangel Andrea...
+El 27 de abril de 2026
+De Andrade Veloz Mariu |...
+
+Cuenta destino AA 27D4
+Banco destino Banco Pichincha
+CUORE OAEeea. 8890
+N* de comprobante 900718118
+Motivo Transferencia
+
+Verificar la transacción con este QR.
+"""
+
+# WhatsApp 10:54 — Guayaquil $40 (OCR reads leading 0 as O → 0O3XXX4662)
+TEXT_TEST_GUAYAQUIL40 = """
+Banco
+Guayaquil No.0004485746
+
+$40.00
+
+Playa 2026
+
+30/04/2026 40/4897
+
+Tu transferencia llegará de forma inmediata
+
+Diaz Tapia Zahid Alejandro
+Ahorros - 0O3XXX4662
+
+Munizaga Torres Juan Andres
+Banco Guayaquil Ahorros - 001XXX7911
+
+Comisión $0.00
+
+Valor debitado $40.00
+"""
+
+# WhatsApp 10:54 (1) — Pichincha $37.99 ("Cuenta origen" label + full account digits)
+TEXT_TEST_PICHINCHA3799 = """
+* BANCO PICHINCHA
+
+¡Transferencia exitosa!
+
+S 37.99
+
+A Junaid Hadeel Ammar Ahmed
+El 15 de abril de 2026
+
+De Munizaga Torres Juan Andres
+
+Cuenta destino ***** 8220
+Banco destino Banco Pichincha
+Cuenta origen 221336 2942
+N* de comprobante 3759105
+Motivo Pedido Hoodie Ts
+"""
+
+# WhatsApp 10:54 (2) — DeUna / BdP notification (abbreviated month "may")
+TEXT_TEST_DEUNA = """
+Envío realizado
+
+Isabella ha enviado $8.61 a tu cuenta 001...7911
+de Banco Guayaquil
+
+Martes, 26 may 2026 - 19:16
+Número de comprobante: 19122026052619161225
+
+La transferencia se acreditará de
+forma inmediata.
+"""
+
+# WhatsApp 10:54 (3) — Guayaquil $13 (OCR reads leading 0 as O → 0O4XXX8860)
+TEXT_TEST_GUAYAQUIL13 = """
+Cua quil No.0012054960
+
+$13.00
+
+Zapatera saltamonte
+
+22/05/2026/13/05:49
+
+Tu transferencia llegará de forma inmediata
+
+Munizaga Torres Jose Daniel
+Ahorros - 0O4XXX8860
+
+Munizaga Torres Juan Andres
+Banco Guayaquil Ahorros - 1xXXX7911
+
+Comisión $0.00
+
+Valor debitado $13.00
+"""
+
 EMPTY_WORDS: list[float] = []  # no Tesseract word-level conf (forces heuristic)
 
 
@@ -284,6 +390,33 @@ class TestExtractAccountLastDigits:
     def test_no_mask_returns_empty(self):
         assert self._digits("No hay cuenta aquí.") == ""
 
+    # --- Fase 4: O/0 confusion + spaces + destination discard ---
+
+    def test_o_as_zero_guayaquil40(self):
+        """0O3XXX4662: Tesseract reads leading 0 as O — must still capture 4662."""
+        assert self._digits(TEXT_TEST_GUAYAQUIL40) == "4662"
+
+    def test_o_as_zero_guayaquil13(self):
+        """0O4XXX8860: same O/0 confusion — must capture 8860, not the destination 7911."""
+        assert self._digits(TEXT_TEST_GUAYAQUIL13) == "8860"
+
+    def test_spaces_in_mask_pichincha3799(self):
+        """'Cuenta origen 221336 2942': label-based fallback extracts 2942."""
+        assert self._digits(TEXT_TEST_PICHINCHA3799) == "2942"
+
+    def test_destination_tail_discarded_espoltech(self):
+        """8640 is an ESPOL-TECH destination tail; 7911 must be returned as origin."""
+        assert self._digits(TEXT_ESPOLTECH_JUAN) == "7911"
+
+    def test_destination_tail_discarded_inline(self):
+        """When the only masked account is a known destination tail, return empty."""
+        text = "Banco Guayaquil Corriente - 1XXX8640\n"
+        assert self._digits(text) == ""
+
+    def test_star_mask_with_space(self):
+        """'***** 8220' (space between mask and digits) must match."""
+        assert self._digits("Cuenta destino ***** 8220") == "8220"
+
 
 # ===========================================================================
 # 4. _extract_bank_name  (by position)
@@ -387,6 +520,18 @@ class TestExtractPaymentDate:
     def test_no_date_returns_none(self):
         assert self._date("No hay fecha aqui") is None
 
+    # --- Fase 4: abbreviated Spanish month names ---
+
+    def test_abbreviated_month_may(self):
+        """'26 may 2026' (DeUna notification format) must parse correctly."""
+        assert self._date("Martes, 26 may 2026 - 19:16") == date(2026, 5, 26)
+
+    def test_abbreviated_month_abr(self):
+        assert self._date("El 27 de abr de 2026") == date(2026, 4, 27)
+
+    def test_abbreviated_month_dic(self):
+        assert self._date("3 dic 2025") == date(2025, 12, 3)
+
 
 # ===========================================================================
 # 7. Confidence heuristic (no images)
@@ -452,6 +597,84 @@ def test_real_image_bank_and_amount(img_path, expected_bank, expected_amount):
         f"{img_path.name}: amount expected={expected_amount} got={result['amount']}\n"
         f"Raw text: {result['raw_text'][:300]}"
     )
+
+
+TEST_DIR = RECEIPTS_DIR / "test"
+
+# (img_path, expected_bank, expected_amount, expected_origin, expected_date)
+# expected_origin=None  → field not visible in that receipt, skip assert
+# expected_date=None    → unreliable (garbled OCR in banner), skip assert
+BLIND_TEST_IMAGES = [
+    (
+        TEST_DIR / "WhatsApp Image 2026-06-12 at 10.51.52 AM.jpeg",
+        "Banco Pichincha",
+        20.0,
+        None,  # mask fully garbled by OCR — not assertable
+        date(2026, 4, 27),
+    ),
+    (
+        TEST_DIR / "WhatsApp Image 2026-06-12 at 10.54.40 AM.jpeg",
+        "Banco Guayaquil",
+        40.0,
+        "4662",  # 0O3XXX4662 → O/0 fix gives 4662
+        None,  # year misread as 2020 by OCR — banner low contrast
+    ),
+    (
+        TEST_DIR / "WhatsApp Image 2026-06-12 at 10.54.40 AM (1).jpeg",
+        "Banco Pichincha",
+        37.99,
+        "2942",  # Cuenta origen 221336 2942 → label fallback
+        date(2026, 4, 15),
+    ),
+    (
+        TEST_DIR / "WhatsApp Image 2026-06-12 at 10.54.40 AM (2).jpeg",
+        "Banco Guayaquil",
+        8.61,
+        None,  # notification format: sender not shown
+        date(2026, 5, 26),  # "26 may 2026" — now parsed with abbreviated months
+    ),
+    (
+        TEST_DIR / "WhatsApp Image 2026-06-12 at 10.54.40 AM (3).jpeg",
+        "Banco Guayaquil",
+        13.0,
+        "8860",  # 0O4XXX8860 → O/0 fix gives 8860
+        date(2026, 5, 22),
+    ),
+]
+
+
+@NEED_TESSERACT
+@pytest.mark.parametrize(
+    "img_path,expected_bank,expected_amount,expected_origin,expected_date",
+    BLIND_TEST_IMAGES,
+)
+def test_blind_corpus_bank_amount_origin_date(
+    img_path, expected_bank, expected_amount, expected_origin, expected_date
+):
+    """
+    Fase 4 integration: blind test corpus with account-origin and date assertions.
+    Fields marked None are skipped (OCR limitation, not a code bug).
+    """
+    if not img_path.exists():
+        pytest.skip(f"Receipt not found: {img_path}")
+
+    result = _svc().extract_from_file(str(img_path), "image/jpeg")
+
+    assert result["bank_name"] == expected_bank, (
+        f"{img_path.name}: bank expected={expected_bank!r} got={result['bank_name']!r}"
+    )
+    assert (
+        result["amount"] is not None and abs(result["amount"] - expected_amount) < 1.0
+    ), f"{img_path.name}: amount expected={expected_amount} got={result['amount']}"
+    if expected_origin is not None:
+        assert result["account_last_digits"] == expected_origin, (
+            f"{img_path.name}: origin expected={expected_origin!r} "
+            f"got={result['account_last_digits']!r}\nRaw: {result['raw_text'][:400]}"
+        )
+    if expected_date is not None:
+        assert result["payment_date"] == expected_date, (
+            f"{img_path.name}: date expected={expected_date} got={result['payment_date']}"
+        )
 
 
 @NEED_TESSERACT
