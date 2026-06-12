@@ -5,6 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
+  ScrollView,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
@@ -42,6 +43,17 @@ const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: stri
   CONVERTED:         { bg: '#dcfce7', color: '#16a34a', label: 'Convertido' },
 };
 
+// Status filter options, in display order. `null` = "Todos".
+const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
+  { value: null,                label: 'Todos' },
+  { value: 'NEW',               label: 'Nuevo' },
+  { value: 'CONTACTED',         label: 'Contactado' },
+  { value: 'INTERESTED',        label: 'Interesado' },
+  { value: 'NOT_INTERESTED',    label: 'No interesado' },
+  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+  { value: 'CONVERTED',         label: 'Convertido' },
+];
+
 const AVATAR_PALETTE = ['#bfdbfe', '#fef08a', '#bbf7d0', '#fecaca', '#e9d5ff', '#fed7aa'];
 
 function avatarColor(name: string): string {
@@ -73,6 +85,35 @@ function StatusBadge({ status }: { status: LeadStatus }) {
     <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
       <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
     </View>
+  );
+}
+
+function StatusChips({
+  value,
+  onChange,
+}: {
+  value: LeadStatus | null;
+  onChange: (status: LeadStatus | null) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.chipsRow}
+    >
+      {STATUS_FILTERS.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <TouchableOpacity
+            key={opt.label}
+            style={[styles.chip, active && styles.chipActive]}
+            onPress={() => onChange(opt.value)}
+          >
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -147,6 +188,8 @@ export default function LeadsScreen() {
   const [me, setMe]                 = useState<MeData | null>(null);
   const [tab, setTab]               = useState<Tab>('my');
   const [search, setSearch]         = useState('');
+  const [statusFilter, setStatusFilter] = useState<LeadStatus | null>(null);
+  const [showFilters, setShowFilters]   = useState(false);
   const [myLeads, setMyLeads]       = useState<Lead[]>([]);
   const [available, setAvailable]   = useState<Lead[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -209,7 +252,10 @@ export default function LeadsScreen() {
     router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id } });
   }
 
-  const displayed = tab === 'my' ? myLeads : available;
+  const base = tab === 'my' ? myLeads : available;
+  const displayed = statusFilter
+    ? base.filter((l) => l.status === statusFilter)
+    : base;
 
   if (loading) {
     return (
@@ -256,6 +302,7 @@ export default function LeadsScreen() {
                 <Text style={styles.titleIcon}>💬</Text>
                 <Text style={styles.title}>Mis leads</Text>
               </View>
+              <Text style={styles.subtitle}>Gestiona y da seguimiento a tus leads</Text>
             </View>
 
             {/* Search */}
@@ -272,10 +319,20 @@ export default function LeadsScreen() {
                   returnKeyType="search"
                 />
               </View>
-              <TouchableOpacity style={styles.filterBtn}>
-                <Ionicons name="funnel-outline" size={20} color={colors.textPrimary} />
+              <TouchableOpacity
+                style={[styles.filterBtn, (showFilters || statusFilter) && styles.filterBtnActive]}
+                onPress={() => setShowFilters((v) => !v)}
+              >
+                <Ionicons
+                  name="funnel"
+                  size={20}
+                  color={showFilters || statusFilter ? colors.white : colors.textPrimary}
+                />
               </TouchableOpacity>
             </View>
+
+            {/* Status filter chips */}
+            {showFilters && <StatusChips value={statusFilter} onChange={setStatusFilter} />}
 
             {/* Tabs */}
             <View style={styles.tabs}>
@@ -438,6 +495,36 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  filterBtnActive: {
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
+  },
+  // Status chips
+  chipsRow: {
+    gap: 8,
+    paddingBottom: 14,
+    paddingRight: 4,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActive: {
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  chipTextActive: {
+    color: colors.white,
   },
   // Tabs
   tabs: {
