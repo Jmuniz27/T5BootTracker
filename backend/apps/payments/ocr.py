@@ -1,4 +1,5 @@
 """OCR service for extracting payment data from receipt images and PDFs."""
+
 import logging
 import re
 from datetime import date
@@ -7,41 +8,50 @@ logger = logging.getLogger(__name__)
 
 # Ecuadorian banks that appear in payment receipts
 BANK_ALIASES = {
-    'pichincha':           'Banco Pichincha',
-    'pacifico':            'Banco del Pacífico',
-    'pacífico':            'Banco del Pacífico',
-    'guayaquil':           'Banco Guayaquil',
-    'internacional':       'Banco Internacional',
-    'bolivariano':         'Banco Bolivariano',
-    'produbanco':          'Banco Produbanco',
-    'loja':                'Banco de Loja',
-    'austro':              'Banco del Austro',
-    'solidario':           'Banco Solidario',
-    'capital':             'Banco Capital',
-    'banecuador':          'Banecuador',
-    'jep':                 'Cooperativa JEP',
-    'juventud ecuatoriana':'Cooperativa JEP',
-    'mutualista':          'Mutualista Pichincha',
+    "pichincha": "Banco Pichincha",
+    "pacifico": "Banco del Pacífico",
+    "pacífico": "Banco del Pacífico",
+    "guayaquil": "Banco Guayaquil",
+    "internacional": "Banco Internacional",
+    "bolivariano": "Banco Bolivariano",
+    "produbanco": "Banco Produbanco",
+    "loja": "Banco de Loja",
+    "austro": "Banco del Austro",
+    "solidario": "Banco Solidario",
+    "capital": "Banco Capital",
+    "banecuador": "Banecuador",
+    "jep": "Cooperativa JEP",
+    "juventud ecuatoriana": "Cooperativa JEP",
+    "mutualista": "Mutualista Pichincha",
 }
 
 MONTHS_ES = {
-    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
-    'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
-    'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
 }
 
 # Lines that contain a fee / deduction rather than the transfer amount.
 # We exclude any candidate whose line matches these keywords.
 _EXCLUSION_RE = re.compile(
-    r'costo|cargo|iva|comisi[oó]n|servicio|financier|impuesto'
-    r'|valor debitado|total debitado|d[eé]bito',
+    r"costo|cargo|iva|comisi[oó]n|servicio|financier|impuesto"
+    r"|valor debitado|total debitado|d[eé]bito",
     re.IGNORECASE,
 )
 
 # Heuristic confidence levels for pattern match strength
-_CONF_HIGH   = 0.80   # strong labeled pattern
-_CONF_MEDIUM = 0.50   # weak / unlabeled pattern
-_CONF_ZERO   = 0.00   # not found
+_CONF_HIGH = 0.80  # strong labeled pattern
+_CONF_MEDIUM = 0.50  # weak / unlabeled pattern
+_CONF_ZERO = 0.00  # not found
 
 
 class OCRService:
@@ -53,47 +63,49 @@ class OCRService:
         Never raises — returns empty / None / 0.0 on failure.
         """
         result = {
-            'bank_name':           '',
-            'account_last_digits': '',
-            'amount':              None,
-            'transaction_id':      '',
-            'payment_date':        None,
-            'raw_text':            '',
-            'confidence':          {},
+            "bank_name": "",
+            "account_last_digits": "",
+            "amount": None,
+            "transaction_id": "",
+            "payment_date": None,
+            "raw_text": "",
+            "confidence": {},
         }
         try:
-            if mime_type == 'application/pdf':
+            if mime_type == "application/pdf":
                 text, words_conf = self._extract_from_pdf(file_path)
             else:
                 text, words_conf = self._extract_from_image(file_path)
 
-            result['raw_text'] = text
+            result["raw_text"] = text
 
-            bank_name, bank_conf            = self._extract_bank_name(text, words_conf)
-            account,   account_conf         = self._extract_account_last_digits(text, words_conf)
-            amount,    amount_conf          = self._extract_amount(text, words_conf)
-            tx_id,     tx_conf              = self._extract_transaction_id(text, words_conf)
-            pay_date,  date_conf            = self._extract_payment_date(text, words_conf)
+            bank_name, bank_conf = self._extract_bank_name(text, words_conf)
+            account, account_conf = self._extract_account_last_digits(text, words_conf)
+            amount, amount_conf = self._extract_amount(text, words_conf)
+            tx_id, tx_conf = self._extract_transaction_id(text, words_conf)
+            pay_date, date_conf = self._extract_payment_date(text, words_conf)
 
-            result['bank_name']           = bank_name
-            result['account_last_digits'] = account
-            result['amount']              = amount
-            result['transaction_id']      = tx_id
-            result['payment_date']        = pay_date
+            result["bank_name"] = bank_name
+            result["account_last_digits"] = account
+            result["amount"] = amount
+            result["transaction_id"] = tx_id
+            result["payment_date"] = pay_date
 
             field_scores = {
-                'bank_name':           bank_conf,
-                'account_last_digits': account_conf,
-                'amount':              amount_conf,
-                'transaction_id':      tx_conf,
-                'payment_date':        date_conf,
+                "bank_name": bank_conf,
+                "account_last_digits": account_conf,
+                "amount": amount_conf,
+                "transaction_id": tx_conf,
+                "payment_date": date_conf,
             }
             non_zero = [v for v in field_scores.values() if v > 0]
-            field_scores['overall'] = round(sum(non_zero) / len(non_zero), 4) if non_zero else 0.0
-            result['confidence'] = field_scores
+            field_scores["overall"] = (
+                round(sum(non_zero) / len(non_zero), 4) if non_zero else 0.0
+            )
+            result["confidence"] = field_scores
 
         except Exception:
-            logger.exception('OCR extraction failed for %s', file_path)
+            logger.exception("OCR extraction failed for %s", file_path)
         return result
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -105,14 +117,12 @@ class OCRService:
         Improve OCR accuracy: grayscale → auto-invert dark backgrounds →
         upscale small images → autocontrast.
         """
-        from PIL import Image, ImageOps
-        import numpy as np
+        from PIL import Image, ImageOps, ImageStat
 
-        img = img.convert('L')
+        img = img.convert("L")
 
         # Auto-invert: dark background (white-on-black app screenshots)
-        arr = np.array(img)
-        if arr.mean() < 128:
+        if ImageStat.Stat(img).mean[0] < 128:  # img ya es 'L' (1 canal)
             img = ImageOps.invert(img)
 
         # Upscale tiny captures so Tesseract has enough resolution
@@ -131,12 +141,12 @@ class OCRService:
         from pytesseract import Output
 
         img = self._preprocess(Image.open(file_path))
-        text = pytesseract.image_to_string(img, lang='spa')
-        data = pytesseract.image_to_data(img, lang='spa', output_type=Output.DICT)
+        text = pytesseract.image_to_string(img, lang="spa")
+        data = pytesseract.image_to_data(img, lang="spa", output_type=Output.DICT)
         word_conf = [
             int(c) / 100
-            for c, w in zip(data['conf'], data['text'])
-            if str(c).lstrip('-').isdigit() and int(c) >= 0 and w.strip()
+            for c, w in zip(data["conf"], data["text"])
+            if str(c).lstrip("-").isdigit() and int(c) >= 0 and w.strip()
         ]
         return text, word_conf
 
@@ -148,6 +158,7 @@ class OCRService:
 
         try:
             import pdf2image
+
             pages = pdf2image.convert_from_path(file_path)
         except ImportError:
             pages = [Image.open(file_path)]
@@ -155,20 +166,22 @@ class OCRService:
         texts, all_conf = [], []
         for page in pages:
             page = self._preprocess(page)
-            texts.append(pytesseract.image_to_string(page, lang='spa'))
-            data = pytesseract.image_to_data(page, lang='spa', output_type=Output.DICT)
+            texts.append(pytesseract.image_to_string(page, lang="spa"))
+            data = pytesseract.image_to_data(page, lang="spa", output_type=Output.DICT)
             all_conf.extend(
                 int(c) / 100
-                for c, w in zip(data['conf'], data['text'])
-                if str(c).lstrip('-').isdigit() and int(c) >= 0 and w.strip()
+                for c, w in zip(data["conf"], data["text"])
+                if str(c).lstrip("-").isdigit() and int(c) >= 0 and w.strip()
             )
-        return '\n'.join(texts), all_conf
+        return "\n".join(texts), all_conf
 
     # ──────────────────────────────────────────────────────────────────────────
     # Confidence helpers
     # ──────────────────────────────────────────────────────────────────────────
 
-    def _word_level_confidence(self, value: str, words_conf: list[float]) -> float | None:
+    def _word_level_confidence(
+        self, value: str, words_conf: list[float]
+    ) -> float | None:
         """Average Tesseract word confidence; None when unavailable."""
         if not words_conf or not value:
             return None
@@ -196,7 +209,7 @@ class OCRService:
         logo/header is always first; the destination bank appears later.
         """
         lower = text.lower()
-        best_pos, best_canonical = len(lower) + 1, ''
+        best_pos, best_canonical = len(lower) + 1, ""
         for alias, canonical in BANK_ALIASES.items():
             pos = lower.find(alias)
             if pos != -1 and pos < best_pos:
@@ -204,7 +217,7 @@ class OCRService:
                 best_canonical = canonical
         if best_canonical:
             return best_canonical, self._confidence(best_canonical, words_conf, True)
-        return '', _CONF_ZERO
+        return "", _CONF_ZERO
 
     def _extract_account_last_digits(
         self, text: str, words_conf: list[float]
@@ -226,18 +239,19 @@ class OCRService:
         # \b before \d{0,4} handles word boundary when leading digits present;
         # for pure-mask starts (e.g. ******3912) we also allow start of token.
         mask_pat = re.compile(
-            r'(?<!\w)\d{0,4}[\*xX•·]{2,}(\d{2,4})(?!\d)',
+            r"(?<!\w)\d{0,4}[\*xX•·]{2,}(\d{2,4})(?!\d)",
             re.IGNORECASE,
         )
 
         # --- Strategy 1: find an "origin" section and grab the closest match ---
         origin_label = re.search(
-            r'(de\b|desde|origen|cuenta\s+origen|ahorros\s*-?\s*\d)',
-            text, re.IGNORECASE,
+            r"(de\b|desde|origen|cuenta\s+origen|ahorros\s*-?\s*\d)",
+            text,
+            re.IGNORECASE,
         )
         if origin_label:
             # Search in a window of ~200 chars after the label
-            window = text[origin_label.start(): origin_label.start() + 250]
+            window = text[origin_label.start() : origin_label.start() + 250]
             m = mask_pat.search(window)
             if m:
                 val = m.group(1)
@@ -249,7 +263,7 @@ class OCRService:
             val = m.group(1)
             return val, self._confidence(val, words_conf, strong_match=False)
 
-        return '', _CONF_ZERO
+        return "", _CONF_ZERO
 
     def _parse_decimal(self, raw: str) -> float | None:
         """
@@ -264,36 +278,42 @@ class OCRService:
         """
         raw = raw.strip()
         # Remove currency symbols and whitespace
-        raw = re.sub(r'[\$\s]', '', raw)
+        raw = re.sub(r"[\$\s]", "", raw)
 
         # If no separator at all
-        if '.' not in raw and ',' not in raw:
+        if "." not in raw and "," not in raw:
             try:
                 return float(raw)
             except ValueError:
                 return None
 
-        last_comma = raw.rfind(',')
-        last_dot   = raw.rfind('.')
+        last_comma = raw.rfind(",")
+        last_dot = raw.rfind(".")
 
         if last_comma > last_dot:
             # Last separator is a comma → decimal separator
-            after_comma = raw[last_comma + 1:]
+            after_comma = raw[last_comma + 1 :]
             if len(after_comma) <= 2:
                 # 50,00 or 1.234,56
-                normalized = raw[:last_comma].replace('.', '').replace(',', '') + '.' + after_comma
+                normalized = (
+                    raw[:last_comma].replace(".", "").replace(",", "")
+                    + "."
+                    + after_comma
+                )
             else:
                 # e.g. 1,234 (no decimal part) — treat comma as thousands
-                normalized = raw.replace(',', '')
+                normalized = raw.replace(",", "")
         else:
             # Last separator is a dot → decimal separator
-            after_dot = raw[last_dot + 1:]
+            after_dot = raw[last_dot + 1 :]
             if len(after_dot) <= 2:
                 # 5.00 or 1,600.00
-                normalized = raw[:last_dot].replace(',', '').replace('.', '') + '.' + after_dot
+                normalized = (
+                    raw[:last_dot].replace(",", "").replace(".", "") + "." + after_dot
+                )
             else:
                 # e.g. 1.234 (no decimal part) — treat dot as thousands
-                normalized = raw.replace('.', '')
+                normalized = raw.replace(".", "")
 
         try:
             return float(normalized)
@@ -318,14 +338,14 @@ class OCRService:
 
         # Pattern: optional label, optional $, number (handles coma/period separators)
         amount_re = re.compile(
-            r'(?:(?P<label>monto|valor|total)[:\s]+)?'
-            r'\$?\s*(?P<num>[\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+[.,]\d{1,2}|\d+)'
-            r'(?:\s*(?:USD|US\$))?',
+            r"(?:(?P<label>monto|valor|total)[:\s]+)?"
+            r"\$?\s*(?P<num>[\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+[.,]\d{1,2}|\d+)"
+            r"(?:\s*(?:USD|US\$))?",
             re.IGNORECASE,
         )
 
         # --- Pass 1: labeled strong matches (monto/valor, not debitado) ---
-        labeled: list[tuple[float, bool]] = []   # (value, has_dollar)
+        labeled: list[tuple[float, bool]] = []  # (value, has_dollar)
         unlabeled_first: float | None = None
         all_valid: list[float] = []
 
@@ -333,12 +353,17 @@ class OCRService:
             if _is_excluded(line):
                 continue
             for m in amount_re.finditer(line):
-                raw = m.group('num')
+                raw = m.group("num")
                 val = self._parse_decimal(raw)
                 if val is None or val <= 0:
                     continue
-                has_dollar = '$' in line or 'USD' in line.upper()
-                has_label  = bool(m.group('label'))
+                has_dollar = "$" in line or "USD" in line.upper()
+                has_decimal = "." in raw or "," in raw
+                has_label = bool(m.group("label"))
+                # Require currency signal OR decimal point for unlabeled candidates.
+                # Pure integers without any signal are likely account numbers / codes.
+                if not (has_dollar or has_decimal or has_label):
+                    continue
                 all_valid.append(val)
                 if has_label:
                     labeled.append((val, has_dollar))
@@ -352,7 +377,9 @@ class OCRService:
             return chosen, self._confidence(str(chosen), words_conf, strong_match=True)
 
         if unlabeled_first is not None:
-            return unlabeled_first, self._confidence(str(unlabeled_first), words_conf, False)
+            return unlabeled_first, self._confidence(
+                str(unlabeled_first), words_conf, False
+            )
 
         if all_valid:
             chosen = max(all_valid)
@@ -374,21 +401,21 @@ class OCRService:
         """
         patterns = [
             # No. prefix (Banco Guayaquil app)
-            (r'n[o°º][\.\s]*[:\s]*(\d{5,20})',                       True),
-            (r'comprobante[:\s#]*(\d{5,20})',                         True),
-            (r'transacci[oó]n[:\s#]*([A-Z0-9]{5,20})',               True),
-            (r'n[uú]mero[:\s#]*([A-Z0-9]{5,20})',                    True),
-            (r'referencia[:\s#]*([A-Z0-9]{5,20})',                   True),
-            (r'\bref[:\s#]*([A-Z0-9]{5,20})',                        True),
+            (r"n[o°º][\.\s]*[:\s]*(\d{5,20})", True),
+            (r"comprobante[:\s#]*(\d{5,20})", True),
+            (r"transacci[oó]n[:\s#]*([A-Z0-9]{5,20})", True),
+            (r"n[uú]mero[:\s#]*([A-Z0-9]{5,20})", True),
+            (r"referencia[:\s#]*([A-Z0-9]{5,20})", True),
+            (r"\bref[:\s#]*([A-Z0-9]{5,20})", True),
         ]
         for pattern, strong in patterns:
             m = re.search(pattern, text, re.IGNORECASE)
             if m:
                 val = m.group(1)
                 # Must contain at least one digit (guards against free-text references)
-                if re.search(r'\d', val):
+                if re.search(r"\d", val):
                     return val, self._confidence(val, words_conf, strong_match=strong)
-        return '', _CONF_ZERO
+        return "", _CONF_ZERO
 
     def _extract_payment_date(
         self, text: str, words_conf: list[float]
@@ -401,8 +428,8 @@ class OCRService:
         """
         # dd/mm/yyyy or dd-mm-yyyy (+ optional time)
         m = re.search(
-            r'\b(0[1-9]|[12]\d|3[01])[/-](0[1-9]|1[0-2])[/-](20\d{2})'
-            r'(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?',
+            r"\b(0[1-9]|[12]\d|3[01])[/-](0[1-9]|1[0-2])[/-](20\d{2})"
+            r"(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?",
             text,
         )
         if m:
@@ -413,7 +440,9 @@ class OCRService:
                 pass
 
         # ISO: yyyy-mm-dd
-        m = re.search(r'\b(20\d{2})[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b', text)
+        m = re.search(
+            r"\b(20\d{2})[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b", text
+        )
         if m:
             try:
                 d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
@@ -423,12 +452,17 @@ class OCRService:
 
         # Prose Spanish: "12 de junio de 2026"
         m = re.search(
-            r'\b(\d{1,2})\s+de\s+(' + '|'.join(MONTHS_ES) + r')\s+(?:de\s+)?(20\d{2})\b',
-            text, re.IGNORECASE,
+            r"\b(\d{1,2})\s+de\s+("
+            + "|".join(MONTHS_ES)
+            + r")\s+(?:de\s+)?(20\d{2})\b",
+            text,
+            re.IGNORECASE,
         )
         if m:
             try:
-                d = date(int(m.group(3)), MONTHS_ES[m.group(2).lower()], int(m.group(1)))
+                d = date(
+                    int(m.group(3)), MONTHS_ES[m.group(2).lower()], int(m.group(1))
+                )
                 return d, self._confidence(str(d), words_conf, strong_match=True)
             except ValueError:
                 pass
