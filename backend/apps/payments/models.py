@@ -30,6 +30,8 @@ class Payment(models.Model):
     ocr_account_last_digits  = models.CharField(max_length=10, blank=True)
     ocr_amount               = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     ocr_transaction_id       = models.CharField(max_length=100, blank=True)
+    ocr_payment_date         = models.DateField(null=True, blank=True)
+    ocr_confidence           = models.JSONField(default=dict, blank=True)
     ocr_raw_text             = models.TextField(blank=True)
     confirmed_amount         = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     confirmed_bank_name      = models.CharField(max_length=200, blank=True)

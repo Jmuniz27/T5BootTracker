@@ -40,6 +40,7 @@ class PaymentListSerializer(serializers.ModelSerializer):
             'id', 'bootcamper', 'bootcamper_name', 'program', 'program_name',
             'receipt_file', 'receipt_file_type',
             'ocr_bank_name', 'ocr_account_last_digits', 'ocr_amount', 'ocr_transaction_id',
+            'ocr_payment_date', 'ocr_confidence',
             'confirmed_amount', 'confirmed_bank_name', 'confirmed_transaction_id',
             'status', 'rejection_reason',
             'validated_by', 'validated_by_name', 'validated_at',
@@ -81,5 +82,6 @@ class PaymentOCRStatusSerializer(serializers.ModelSerializer):
         model = Payment
         fields = (
             'id', 'ocr_bank_name', 'ocr_account_last_digits',
-            'ocr_amount', 'ocr_transaction_id', 'status',
+            'ocr_amount', 'ocr_transaction_id', 'ocr_payment_date',
+            'ocr_confidence', 'status',
         )

@@ -28,10 +28,13 @@ def process_payment_ocr(self, payment_id):
         payment.ocr_account_last_digits = result['account_last_digits']
         payment.ocr_amount              = result['amount']
         payment.ocr_transaction_id      = result['transaction_id']
+        payment.ocr_payment_date        = result['payment_date']
+        payment.ocr_confidence          = result['confidence']
         payment.ocr_raw_text            = result['raw_text']
         payment.save(update_fields=[
             'ocr_bank_name', 'ocr_account_last_digits',
-            'ocr_amount', 'ocr_transaction_id', 'ocr_raw_text',
+            'ocr_amount', 'ocr_transaction_id', 'ocr_payment_date',
+            'ocr_confidence', 'ocr_raw_text',
         ])
         logger.info('OCR completed for payment %s.', payment_id)
 

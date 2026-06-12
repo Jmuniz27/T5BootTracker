@@ -124,6 +124,17 @@ class TestPaymentQueue:
         assert resp.status_code == 200
         assert len(resp.json()) == 1
 
+    def test_queue_response_includes_new_ocr_fields(self, db, salesperson_user, pending_payment):
+        """ocr_payment_date and ocr_confidence must be present in queue list items."""
+        client = make_client(salesperson_user)
+        resp = client.get(QUEUE_URL)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) >= 1
+        item = data[0]
+        assert 'ocr_payment_date' in item
+        assert 'ocr_confidence' in item
+
     def test_queue_bootcamper_forbidden(self, db, converted_bootcamper):
         client = make_client(converted_bootcamper)
         resp = client.get(QUEUE_URL)
@@ -185,6 +196,28 @@ class TestPaymentOCRStatus:
         data = resp.json()
         assert data['ocr_bank_name'] == 'Banco Pichincha'
         assert data['ocr_amount'] == '300.00'
+
+    def test_ocr_status_includes_date_and_confidence(self, db, converted_bootcamper, pending_payment):
+        """New fields ocr_payment_date and ocr_confidence must appear in ocr-status response."""
+        from datetime import date
+        pending_payment.ocr_payment_date = date(2026, 6, 12)
+        pending_payment.ocr_confidence   = {'bank_name': 0.85, 'amount': 0.75, 'overall': 0.80}
+        pending_payment.save()
+        client = make_client(converted_bootcamper)
+        resp = client.get(OCR_STATUS_URL.format(id=pending_payment.id))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['ocr_payment_date'] == '2026-06-12'
+        assert data['ocr_confidence']['overall'] == 0.80
+
+    def test_ocr_status_confidence_empty_dict_when_not_set(self, db, converted_bootcamper, pending_payment):
+        """ocr_confidence defaults to {} — serializer must not blow up."""
+        client = make_client(converted_bootcamper)
+        resp = client.get(OCR_STATUS_URL.format(id=pending_payment.id))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert 'ocr_confidence' in data
+        assert data['ocr_confidence'] == {}
 
     def test_ocr_status_other_bootcamper_forbidden(self, db, bootcamper_user, pending_payment):
         client = make_client(bootcamper_user)
