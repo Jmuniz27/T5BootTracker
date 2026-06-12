@@ -17,6 +17,7 @@ PAYMENT_URL = "/api/payments/{id}/"
 APPROVE_URL = "/api/payments/{id}/approve/"
 REJECT_URL = "/api/payments/{id}/reject/"
 OCR_STATUS_URL = "/api/payments/my-payments/{id}/ocr-status/"
+CONFIRM_URL = "/api/payments/my-payments/{id}/confirm/"
 NOTIFY_COORD_URL = "/api/payments/notify-coordinator/{bootcamper_id}/"
 
 
@@ -43,9 +44,11 @@ class TestPaymentUpload:
                 format="multipart",
             )
         assert resp.status_code == 201
-        assert Payment.objects.filter(
+        payment = Payment.objects.filter(
             bootcamper=converted_bootcamper, program=program
-        ).exists()
+        ).first()
+        assert payment is not None
+        assert payment.status == Payment.Status.DRAFT, "Upload must create payment in DRAFT status"
 
     def test_payment_upload_invalid_file_type(self, db, converted_bootcamper, program):
         client = make_client(converted_bootcamper)
@@ -316,6 +319,118 @@ class TestPaymentMonitoring:
         assert len(data) >= 1
         assert "total_paid" in data[0]
         assert "is_critical" in data[0]
+
+
+class TestPaymentConfirm:
+    def test_confirm_draft_transitions_to_pending(self, db, converted_bootcamper, draft_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            CONFIRM_URL.format(id=draft_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 200
+        draft_payment.refresh_from_db()
+        assert draft_payment.status == Payment.Status.PENDING
+
+    def test_confirm_with_corrections_overwrites_ocr_fields(
+        self, db, converted_bootcamper, draft_payment
+    ):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            CONFIRM_URL.format(id=draft_payment.id),
+            {
+                "ocr_amount": "200.00",
+                "ocr_bank_name": "Banco Guayaquil",
+            },
+            format="json",
+        )
+        assert resp.status_code == 200
+        draft_payment.refresh_from_db()
+        assert draft_payment.status == Payment.Status.PENDING
+        assert draft_payment.ocr_amount == Decimal("200.00")
+        assert draft_payment.ocr_bank_name == "Banco Guayaquil"
+
+    def test_confirm_already_pending_fails(self, db, converted_bootcamper, pending_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            CONFIRM_URL.format(id=pending_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_DRAFT"
+
+    def test_confirm_other_bootcampers_payment_forbidden(
+        self, db, bootcamper_user, draft_payment
+    ):
+        """A different bootcamper must get 404, not 403 (no information leakage)."""
+        client = make_client(bootcamper_user)
+        resp = client.patch(
+            CONFIRM_URL.format(id=draft_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 404
+
+    def test_confirm_salesperson_forbidden(self, db, salesperson_user, draft_payment):
+        client = make_client(salesperson_user)
+        resp = client.patch(
+            CONFIRM_URL.format(id=draft_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 403
+
+
+class TestPaymentQueueExcludesDraft:
+    def test_queue_does_not_include_draft_payments(
+        self, db, salesperson_user, draft_payment, pending_payment
+    ):
+        """DRAFT payments must not appear in the vendor review queue."""
+        client = make_client(salesperson_user)
+        resp = client.get(QUEUE_URL)
+        assert resp.status_code == 200
+        ids = [item["id"] for item in resp.json()]
+        assert str(pending_payment.id) in ids
+        assert str(draft_payment.id) not in ids
+
+
+class TestPaymentDraftCannotBeApproved:
+    def test_approve_draft_payment_fails(self, db, salesperson_user, draft_payment):
+        client = make_client(salesperson_user)
+        resp = client.patch(
+            APPROVE_URL.format(id=draft_payment.id),
+            {"confirmed_amount": "150.00"},
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_PENDING"
+
+
+class TestPaymentDetailIncludesRawText:
+    def test_detail_includes_ocr_raw_text(
+        self, db, salesperson_user, pending_payment
+    ):
+        """GET /payments/{id}/ must include ocr_raw_text for copy-paste by vendor."""
+        pending_payment.ocr_raw_text = "Banco Pichincha\nTransferencia\nMonto: $350.00"
+        pending_payment.save()
+        client = make_client(salesperson_user)
+        resp = client.get(PAYMENT_URL.format(id=pending_payment.id))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "ocr_raw_text" in data
+        assert "Banco Pichincha" in data["ocr_raw_text"]
+
+    def test_queue_list_does_not_include_raw_text(
+        self, db, salesperson_user, pending_payment
+    ):
+        """The queue list endpoint must NOT include ocr_raw_text to keep payloads slim."""
+        client = make_client(salesperson_user)
+        resp = client.get(QUEUE_URL)
+        assert resp.status_code == 200
+        for item in resp.json():
+            assert "ocr_raw_text" not in item
 
 
 class TestNotifyCoordinator:

@@ -9,7 +9,8 @@ class Payment(models.Model):
     """A payment receipt submitted by a bootcamper for review."""
 
     class Status(models.TextChoices):
-        PENDING = "PENDING", "Pendiente"
+        DRAFT    = "DRAFT",    "En revisión"
+        PENDING  = "PENDING",  "Pendiente"
         APPROVED = "APPROVED", "Aprobado"
         REJECTED = "REJECTED", "Rechazado"
 

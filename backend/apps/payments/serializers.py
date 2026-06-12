@@ -116,3 +116,25 @@ class PaymentOCRStatusSerializer(serializers.ModelSerializer):
             "ocr_confidence",
             "status",
         )
+
+
+class PaymentConfirmSerializer(serializers.Serializer):
+    """Fields the bootcamper can correct before confirming (all optional).
+
+    The bootcamper overwrites only the fields they need to fix; the rest stay
+    as extracted by OCR.  ocr_raw_text and ocr_confidence are never changed
+    here — they serve as the original OCR reference.
+    """
+
+    ocr_bank_name           = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    ocr_account_last_digits = serializers.CharField(max_length=10,  required=False, allow_blank=True)
+    ocr_amount              = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    ocr_transaction_id      = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    ocr_payment_date        = serializers.DateField(required=False, allow_null=True)
+
+
+class PaymentDetailSerializer(PaymentListSerializer):
+    """Full payment detail for vendor/admin — adds ocr_raw_text for copy-paste."""
+
+    class Meta(PaymentListSerializer.Meta):
+        fields = PaymentListSerializer.Meta.fields + ("ocr_raw_text",)
