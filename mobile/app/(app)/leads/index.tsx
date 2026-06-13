@@ -606,8 +606,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   btnGhost: {
     flexDirection: 'row',
