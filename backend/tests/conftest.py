@@ -122,6 +122,21 @@ def converted_bootcamper(db):
 
 
 @pytest.fixture
+def draft_payment(db, converted_bootcamper, program):
+    from apps.payments.models import Payment
+    return Payment.objects.create(
+        bootcamper=converted_bootcamper,
+        program=program,
+        receipt_file='receipts/test_draft.jpg',
+        receipt_file_type='image',
+        status=Payment.Status.DRAFT,
+        ocr_bank_name='Banco Pichincha',
+        ocr_amount=Decimal('150.00'),
+        ocr_raw_text='Banco Pichincha\nTransferencia exitosa\nMonto: $150.00',
+    )
+
+
+@pytest.fixture
 def pending_payment(db, converted_bootcamper, program):
     from apps.payments.models import Payment
     return Payment.objects.create(
