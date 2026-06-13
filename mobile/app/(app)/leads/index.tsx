@@ -296,7 +296,7 @@ export default function LeadsScreen() {
 
             {/* Title */}
             <View style={styles.titleSection}>
-              <Text style={styles.title}>Mis leads</Text>
+              <Text style={styles.title}>Leads</Text>
             </View>
 
             {/* Search */}
