@@ -1,6 +1,7 @@
 """Views for leads app."""
 import logging
 
+from django.core.paginator import Paginator
 from django.db import transaction, IntegrityError
 from django.db.models import Count, Q
 from django.utils.timezone import now
@@ -23,25 +24,57 @@ from .services import register_interaction
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE     = 100
+
+
 class LeadListCreateView(APIView):
-    """GET returns my_leads + available_leads. POST creates a new lead."""
+    """GET returns paginated my_leads + available_leads. POST creates a new lead."""
     permission_classes = [IsSalespersonOrAdmin]
 
     def _annotated_qs(self):
-        return Lead.objects.annotate(interaction_count=Count('interactions'))
+        # Explicit ordering: the Count() annotation adds a GROUP BY that drops the
+        # model's Meta.ordering, which would make pagination non-deterministic.
+        return Lead.objects.annotate(interaction_count=Count('interactions')).order_by('-created_at')
+
+    def _page_params(self, request):
+        """Read and clamp ``page`` / ``page_size`` query params."""
+        try:
+            page_size = int(request.query_params.get('page_size', DEFAULT_PAGE_SIZE))
+        except (TypeError, ValueError):
+            page_size = DEFAULT_PAGE_SIZE
+        page_size = max(1, min(page_size, MAX_PAGE_SIZE))
+
+        try:
+            page_number = int(request.query_params.get('page', 1))
+        except (TypeError, ValueError):
+            page_number = 1
+
+        return page_number, page_size
 
     @extend_schema(
         parameters=[
             OpenApiParameter('status', str, description='Filtrar por estado (NEW, CONTACTED, INTERESTED, ...)'),
             OpenApiParameter('source', str, description='Filtrar por fuente (INSTAGRAM, WHATSAPP, ...)'),
             OpenApiParameter('search', str, description='Buscar por nombre, email o teléfono'),
+            OpenApiParameter('page', int, description='Número de página (default 1)'),
+            OpenApiParameter('page_size', int, description=f'Tamaño de página (default {DEFAULT_PAGE_SIZE}, máx {MAX_PAGE_SIZE})'),
         ],
         responses={200: inline_serializer('LeadListResponse', fields={
             'my_leads':        LeadListSerializer(many=True),
             'available_leads': LeadListSerializer(many=True),
+            'pagination':      inline_serializer('LeadListPagination', fields={
+                'page':                        drf_serializers.IntegerField(),
+                'page_size':                   drf_serializers.IntegerField(),
+                'my_leads_count':              drf_serializers.IntegerField(),
+                'available_leads_count':       drf_serializers.IntegerField(),
+                'my_leads_total_pages':        drf_serializers.IntegerField(),
+                'available_leads_total_pages': drf_serializers.IntegerField(),
+            }),
         })},
         summary='Listar leads',
-        description='Devuelve my_leads (asignados al usuario) y available_leads (sin asignar).',
+        description='Devuelve my_leads (asignados al usuario) y available_leads (sin asignar), '
+                    'paginados de forma independiente. Usa ?page y ?page_size para paginar.',
         tags=['Leads'],
     )
     def get(self, request):
@@ -63,12 +96,28 @@ class LeadListCreateView(APIView):
                 Q(phone__icontains=search)
             )
 
-        my_leads        = qs.filter(owner=request.user)
-        available_leads = qs.filter(owner__isnull=True)
+        my_leads_qs        = qs.filter(owner=request.user)
+        available_leads_qs = qs.filter(owner__isnull=True)
+
+        page_number, page_size = self._page_params(request)
+
+        my_paginator        = Paginator(my_leads_qs, page_size)
+        available_paginator = Paginator(available_leads_qs, page_size)
+        # get_page() clamps out-of-range numbers and never raises.
+        my_page        = my_paginator.get_page(page_number)
+        available_page = available_paginator.get_page(page_number)
 
         return Response({
-            'my_leads':        LeadListSerializer(my_leads, many=True).data,
-            'available_leads': LeadListSerializer(available_leads, many=True).data,
+            'my_leads':        LeadListSerializer(my_page.object_list, many=True).data,
+            'available_leads': LeadListSerializer(available_page.object_list, many=True).data,
+            'pagination': {
+                'page':                        page_number,
+                'page_size':                   page_size,
+                'my_leads_count':              my_paginator.count,
+                'available_leads_count':       available_paginator.count,
+                'my_leads_total_pages':        my_paginator.num_pages,
+                'available_leads_total_pages': available_paginator.num_pages,
+            },
         })
 
     @extend_schema(

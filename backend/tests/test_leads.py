@@ -111,6 +111,50 @@ class TestLeadFilters:
         assert all_leads[0]['name'] == 'Unicorn Corp'
 
 
+class TestLeadPagination:
+    def test_lead_list_includes_pagination_metadata(self, db, salesperson_user, sample_lead):
+        client = make_client(salesperson_user)
+        resp = client.get(LEADS_URL)
+        assert resp.status_code == 200
+        pagination = resp.json()['pagination']
+        assert pagination['page'] == 1
+        assert pagination['page_size'] == 20
+        assert pagination['available_leads_count'] == 1
+
+    def test_lead_list_respects_page_size(self, db, salesperson_user):
+        for i in range(25):
+            Lead.objects.create(name=f'Lead {i}', phone=f'09900{i:05d}')
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=10')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data['available_leads']) == 10
+        assert data['pagination']['available_leads_count'] == 25
+        assert data['pagination']['available_leads_total_pages'] == 3
+
+    def test_lead_list_second_page_returns_remainder(self, db, salesperson_user):
+        for i in range(25):
+            Lead.objects.create(name=f'Lead {i}', phone=f'09900{i:05d}')
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=10&page=3')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data['available_leads']) == 5
+        assert data['pagination']['page'] == 3
+
+    def test_lead_list_page_size_is_capped(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=99999')
+        assert resp.status_code == 200
+        assert resp.json()['pagination']['page_size'] == 100
+
+    def test_lead_list_invalid_page_size_falls_back_to_default(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=abc')
+        assert resp.status_code == 200
+        assert resp.json()['pagination']['page_size'] == 20
+
+
 # ==========================================
 # ASSIGNMENT & RELEASE TESTS
 # ==========================================
