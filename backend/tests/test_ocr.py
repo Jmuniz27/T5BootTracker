@@ -7,34 +7,34 @@ from apps.payments.ocr import OCRService
 class TestOCRExtractBankName:
     def test_extract_pichincha(self):
         text = 'Comprobante Banco Pichincha\nFecha: 2026-03-01'
-        result = OCRService()._extract_bank_name(text)
+        result, _conf = OCRService()._extract_bank_name(text, [])
         assert result == 'Banco Pichincha'
 
     def test_extract_pacífico(self):
         text = 'Transferencia exitosa\nbanco del pacifico\ncuenta: ****1234'
-        result = OCRService()._extract_bank_name(text)
+        result, _conf = OCRService()._extract_bank_name(text, [])
         assert result == 'Banco del Pacífico'
 
     def test_no_bank_found(self):
         text = 'Este texto no contiene nombre de banco conocido.'
-        result = OCRService()._extract_bank_name(text)
+        result, _conf = OCRService()._extract_bank_name(text, [])
         assert result == ''
 
 
 class TestOCRExtractAmount:
     def test_extract_amount_valor_label(self):
         text = 'Valor: $250.00\nFecha: 01/03/2026'
-        result = OCRService()._extract_amount(text)
+        result, _conf = OCRService()._extract_amount(text, [])
         assert result == 250.0
 
     def test_extract_amount_monto_label(self):
         text = 'Monto: 400.50'
-        result = OCRService()._extract_amount(text)
+        result, _conf = OCRService()._extract_amount(text, [])
         assert result == 400.5
 
     def test_no_amount_found(self):
         text = 'Este comprobante no tiene monto reconocible.'
-        result = OCRService()._extract_amount(text)
+        result, _conf = OCRService()._extract_amount(text, [])
         assert result is None
 
 
