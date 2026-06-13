@@ -7,6 +7,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
+    tesseract-ocr-spa \
+    poppler-utils \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/*

@@ -5,7 +5,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.leads.permissions import IsAdministrator
+from apps.leads.permissions import IsAdministrator, IsSalespersonOrAdmin
 from .models import Program, CoordinatorEmailConfig
 from .serializers import (
     ProgramSerializer, ProgramWriteSerializer,
@@ -14,12 +14,18 @@ from .serializers import (
 
 
 class ProgramListCreateView(APIView):
-    """GET /api/programs/ — list; POST — create."""
-    permission_classes = [IsAdministrator]
+    """GET /api/programs/ — list (vendedor/admin); POST — create (admin only)."""
+
+    def get_permissions(self):
+        """GET is readable by salesperson and admin; POST is admin-only."""
+        if self.request.method == 'GET':
+            return [IsSalespersonOrAdmin()]
+        return [IsAdministrator()]
 
     @extend_schema(
         responses={200: ProgramSerializer(many=True)},
         summary='Listar programas',
+        description='Lista todos los programas. Accesible por Vendedor y Administrador.',
         tags=['Programas'],
     )
     def get(self, request):
@@ -30,7 +36,7 @@ class ProgramListCreateView(APIView):
         request=ProgramWriteSerializer,
         responses={201: ProgramSerializer, 400: OpenApiResponse(description='Datos inválidos')},
         summary='Crear programa',
-        description='Crea un nuevo programa de bootcamp. end_date debe ser posterior a start_date.',
+        description='Crea un nuevo programa de bootcamp. end_date debe ser posterior a start_date. Solo Administrador.',
         tags=['Programas'],
     )
     def post(self, request):

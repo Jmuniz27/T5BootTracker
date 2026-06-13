@@ -6,28 +6,28 @@ from .models import CustomUser
 class IsAdmin(BasePermission):
     """Only admin users."""
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role == CustomUser.Role.ADMIN
+        return request.user.is_authenticated and request.user.role == CustomUser.Role.ADMINISTRATOR
 
 
 class IsSalesOrAdmin(BasePermission):
     """Sales or admin users."""
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in [
-            CustomUser.Role.ADMIN, CustomUser.Role.SALES
-        ]
+    def has_permission(self, request, view) -> bool:
+        return request.user.is_authenticated and request.user.role in (
+            CustomUser.Role.ADMINISTRATOR, CustomUser.Role.SALESPERSON
+        )
 
 
 class IsCoordinatorOrAdmin(BasePermission):
     """Coordinator or admin users."""
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in [
-            CustomUser.Role.ADMIN, CustomUser.Role.COORDINATOR
-        ]
+        return request.user.is_authenticated and request.user.role in (
+            CustomUser.Role.ADMINISTRATOR, CustomUser.Role.COORDINATOR
+        )
 
 
 class IsFinanceOrAdmin(BasePermission):
     """Finance or admin users."""
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in [
-            CustomUser.Role.ADMIN, CustomUser.Role.FINANCE
-        ]
+        return request.user.is_authenticated and request.user.role in (
+            CustomUser.Role.ADMINISTRATOR, CustomUser.Role.FINANCE
+        )

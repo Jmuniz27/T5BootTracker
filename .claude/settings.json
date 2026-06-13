@@ -22,6 +22,14 @@
       "Bash(gh issue*)",
       "Bash(gh api*)",
       "Bash(gh pr*)",
+      "Bash(gh run*)",
+      "Bash(git rev-parse*)",
+      "Bash(python .claude/scripts/pr_context.py*)",
+      "mcp__claude_ai_Linear__get_issue",
+      "mcp__claude_ai_Linear__list_comments",
+      "mcp__claude_ai_Linear__list_issue_statuses",
+      "mcp__claude_ai_Linear__save_comment",
+      "mcp__claude_ai_Linear__save_issue",
       "Bash(cat*)",
       "Bash(ls*)",
       "Bash(find*)",
@@ -53,8 +61,26 @@
         "matcher": "Bash",
         "hooks": [
           {
+            "type": "prompt",
+            "if": "Bash(git commit*)",
+            "prompt": "Before committing, re-read the Git conventions in CLAUDE.md and verify:\n1. The commit message follows `type(scope): description` format (e.g. `feat(leads): add filter`)\n2. The type is one of: feat, fix, docs, style, refactor, test, chore\n3. The description does NOT mention AI tools (no 'Claude', 'Copilot', 'AI-generated', etc.)\n4. The staged changes logically belong to a single scope\nIf any rule is violated, block the commit and explain what needs to be corrected.\nTool input: $ARGUMENTS",
+            "statusMessage": "Verificando convenciones de commit..."
+          },
+          {
+            "type": "prompt",
+            "if": "Bash(gh pr create*)",
+            "prompt": "Before creating the PR, re-read the PR conventions in CLAUDE.md and verify:\n1. The PR title includes the issue number and a short description\n2. The PR body explains what the change does and how to test it\n3. The branch targets `main` (not develop or any other base)\n4. CI must be green before merging (remind the author if it's not confirmed yet)\nIf any required field is missing, block and list exactly what needs to be added.\nTool input: $ARGUMENTS",
+            "statusMessage": "Verificando convenciones del PR..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
             "type": "command",
-            "command": "bash /workspaces/boot-tracker/.claude/hooks/pre-bash.sh"
+            "command": "REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) && bash \"$REPO_ROOT/.claude/hooks/pre-bash.sh\"",
+            "shell": "bash"
           }
         ]
       }
@@ -65,7 +91,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /workspaces/boot-tracker/.claude/hooks/post-pr.sh"
+            "command": "REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) && bash \"$REPO_ROOT/.claude/hooks/post-pr.sh\"",
+            "shell": "bash"
           }
         ]
       },
@@ -74,7 +101,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /workspaces/boot-tracker/.claude/hooks/post-file.sh"
+            "command": "REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) && bash \"$REPO_ROOT/.claude/hooks/post-file.sh\"",
+            "shell": "bash"
           }
         ]
       },
@@ -83,7 +111,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /workspaces/boot-tracker/.claude/hooks/post-file.sh"
+            "command": "REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) && bash \"$REPO_ROOT/.claude/hooks/post-file.sh\"",
+            "shell": "bash"
           }
         ]
       }

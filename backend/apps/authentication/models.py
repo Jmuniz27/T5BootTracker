@@ -28,6 +28,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         SALESPERSON   = 'SALESPERSON',   'Vendedor'
         BOOTCAMPER    = 'BOOTCAMPER',    'Bootcamper'
         ADMINISTRATOR = 'ADMINISTRATOR', 'Administrador'
+        COORDINATOR   = 'COORDINATOR',   'Coordinador'
+        FINANCE       = 'FINANCE',       'Finanzas'
 
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email      = models.EmailField(unique=True, verbose_name='Correo electrónico')
