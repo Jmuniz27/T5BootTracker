@@ -128,50 +128,49 @@ interface CardProps {
 function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction }: CardProps) {
   return (
     <View style={styles.card}>
-      <View style={styles.cardBody}>
-        <View style={styles.cardLeft}>
-          <Avatar name={lead.name} />
-          <View style={styles.cardInfo}>
-            <Text style={styles.cardName}>{lead.name}</Text>
-            {lead.email ? (
-              <View style={styles.cardRow}>
-                <Ionicons name="mail-outline" size={12} color={colors.textMuted} />
-                <Text style={styles.cardDetail} numberOfLines={1}>{lead.email}</Text>
-              </View>
-            ) : null}
+      {/* Top: avatar + info */}
+      <View style={styles.cardTop}>
+        <Avatar name={lead.name} />
+        <View style={styles.cardInfo}>
+          <View style={styles.cardNameRow}>
+            <Text style={styles.cardName} numberOfLines={1}>{lead.name}</Text>
+            <StatusBadge status={lead.status} />
+          </View>
+          {lead.email ? (
             <View style={styles.cardRow}>
-              <Ionicons name="call-outline" size={12} color={colors.textMuted} />
-              <Text style={styles.cardDetail}>{lead.phone}</Text>
+              <Ionicons name="mail-outline" size={12} color={colors.textMuted} />
+              <Text style={styles.cardDetail} numberOfLines={1}>{lead.email}</Text>
             </View>
-            <View style={styles.cardMeta}>
-              <StatusBadge status={lead.status} />
-              <Text style={styles.interactionCount}>
-                {lead.interaction_count} interacciones
-              </Text>
-            </View>
+          ) : null}
+          <View style={styles.cardRow}>
+            <Ionicons name="call-outline" size={12} color={colors.textMuted} />
+            <Text style={styles.cardDetail}>{lead.phone}</Text>
+            <Text style={styles.cardDot}>·</Text>
+            <Text style={styles.cardDetail}>{lead.interaction_count} interacciones</Text>
           </View>
         </View>
+      </View>
 
-        <View style={styles.cardActions}>
-          {isAvailable ? (
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => onAssign(lead.id)}>
-              <Text style={styles.btnPrimaryText}>Asignarme</Text>
+      {/* Bottom: action buttons */}
+      <View style={styles.cardFooter}>
+        {isAvailable ? (
+          <TouchableOpacity style={[styles.btnPrimary, styles.btnFull]} onPress={() => onAssign(lead.id)}>
+            <Text style={styles.btnPrimaryText}>Asignarme</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.btnGhost} onPress={() => onViewHistory(lead)}>
+              <Ionicons name="time-outline" size={13} color={colors.navy} />
+              <Text style={styles.btnGhostText}>Historial</Text>
             </TouchableOpacity>
-          ) : (
-            <>
-              <TouchableOpacity style={styles.btnGhost} onPress={() => onViewHistory(lead)}>
-                <Ionicons name="time-outline" size={14} color={colors.navy} />
-                <Text style={styles.btnGhostText}>Ver historial</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnPrimary} onPress={() => onLogInteraction(lead)}>
-                <Text style={styles.btnPrimaryText}>Registrar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnDanger} onPress={() => onRelease(lead.id)}>
-                <Text style={styles.btnDangerText}>Desasignarme</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+            <TouchableOpacity style={[styles.btnPrimary, { flex: 1 }]} onPress={() => onLogInteraction(lead)}>
+              <Text style={styles.btnPrimaryText}>Registrar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnDanger} onPress={() => onRelease(lead.id)}>
+              <Text style={styles.btnDangerText}>Desasignar</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
@@ -297,10 +296,7 @@ export default function LeadsScreen() {
 
             {/* Title */}
             <View style={styles.titleSection}>
-              <View style={styles.titleRow}>
-                <Text style={styles.titleIcon}>💬</Text>
-                <Text style={styles.title}>Mis leads</Text>
-              </View>
+              <Text style={styles.title}>Mis leads</Text>
             </View>
 
             {/* Search */}
@@ -443,14 +439,6 @@ const styles = StyleSheet.create({
   titleSection: {
     marginBottom: 18,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  titleIcon: {
-    fontSize: 28,
-  },
   title: {
     fontSize: 30,
     fontWeight: '800',
@@ -554,26 +542,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  cardBody: {
-    flexDirection: 'row',
     gap: 12,
   },
-  cardLeft: {
-    flex: 1,
+  cardTop: {
     flexDirection: 'row',
     gap: 12,
+    alignItems: 'flex-start',
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
   },
   avatarText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: colors.navy,
   },
@@ -581,10 +566,17 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 3,
   },
+  cardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   cardName: {
     fontSize: 15,
     fontWeight: '700',
     color: colors.textPrimary,
+    flex: 1,
   },
   cardRow: {
     flexDirection: 'row',
@@ -596,30 +588,26 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     flexShrink: 1,
   },
-  cardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
+  cardDot: {
+    fontSize: 12,
+    color: colors.textMuted,
   },
   badge: {
     borderRadius: 20,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 3,
   },
   badgeText: {
     fontSize: 11,
     fontWeight: '600',
   },
-  interactionCount: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  // Card buttons
-  cardActions: {
+  // Card footer buttons
+  cardFooter: {
+    flexDirection: 'row',
     gap: 8,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   btnGhost: {
     flexDirection: 'row',
@@ -629,7 +617,7 @@ const styles = StyleSheet.create({
     borderColor: colors.navy,
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 8,
   },
   btnGhostText: {
     fontSize: 12,
@@ -640,9 +628,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  btnFull: {
+    flex: 1,
   },
   btnPrimaryText: {
     color: colors.white,
@@ -654,7 +645,7 @@ const styles = StyleSheet.create({
     borderColor: '#dc2626',
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
