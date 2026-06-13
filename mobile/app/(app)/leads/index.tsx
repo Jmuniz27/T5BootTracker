@@ -250,10 +250,9 @@ export default function LeadsScreen() {
     router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id } });
   }
 
-  const base = tab === 'my' ? myLeads : available;
-  const displayed = statusFilter
-    ? base.filter((l) => l.status === statusFilter)
-    : base;
+  const myFiltered        = statusFilter ? myLeads.filter((l) => l.status === statusFilter) : myLeads;
+  const availableFiltered = statusFilter ? available.filter((l) => l.status === statusFilter) : available;
+  const displayed         = tab === 'my' ? myFiltered : availableFiltered;
 
   if (loading) {
     return (
@@ -335,7 +334,7 @@ export default function LeadsScreen() {
                 onPress={() => setTab('my')}
               >
                 <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]}>
-                  Mis leads ({myLeads.length})
+                  Mis leads ({myFiltered.length})
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -343,7 +342,7 @@ export default function LeadsScreen() {
                 onPress={() => setTab('available')}
               >
                 <Text style={[styles.tabText, tab === 'available' && styles.tabTextActive]}>
-                  Disponibles ({available.length})
+                  Disponibles ({availableFiltered.length})
                 </Text>
               </TouchableOpacity>
             </View>
