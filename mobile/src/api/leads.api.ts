@@ -21,3 +21,16 @@ export async function releaseLead(leadId: string) {
   const { data } = await api.patch(`/leads/${leadId}/release/`);
   return data;
 }
+
+export interface InteractionPayload {
+  interaction_type: string;
+  outcome: string;
+  interest_level?: number | null;
+  notes?: string;
+  duration_minutes?: number | null;
+}
+
+export async function logInteraction(leadId: string, payload: InteractionPayload) {
+  const { data } = await api.post(`/leads/${leadId}/interactions/`, payload);
+  return data;
+}
