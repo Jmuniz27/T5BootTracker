@@ -137,6 +137,30 @@ class TestLeadDetail:
         assert resp.status_code == 404
 
 
+class TestLeadUpdatePermissions:
+    def test_salesperson_can_update_own_lead(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+        resp = client.patch(f'{LEADS_URL}{assigned_lead.id}/', {'status': Lead.Status.CONTACTED}, format='json')
+        assert resp.status_code == 200
+
+    def test_salesperson_can_update_unassigned_lead(self, db, salesperson_user, sample_lead):
+        client = make_client(salesperson_user)
+        resp = client.patch(f'{LEADS_URL}{sample_lead.id}/', {'status': Lead.Status.CONTACTED}, format='json')
+        assert resp.status_code == 200
+
+    def test_salesperson_cannot_update_another_sellers_lead(self, db, assigned_lead):
+        other = CustomUser.objects.create_user(
+            email='intruder@test.com', password='testpass123',
+            first_name='Intru', last_name='Der', role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(other)
+        resp = client.patch(f'{LEADS_URL}{assigned_lead.id}/', {'status': Lead.Status.NOT_INTERESTED}, format='json')
+        assert resp.status_code == 403
+        assert resp.json()['code'] == 'NOT_OWNER'
+        assigned_lead.refresh_from_db()
+        assert assigned_lead.status == Lead.Status.CONTACTED
+
+
 class TestLeadSoftDelete:
     def test_admin_can_soft_delete(self, db, admin_user, sample_lead):
         client = make_client(admin_user)

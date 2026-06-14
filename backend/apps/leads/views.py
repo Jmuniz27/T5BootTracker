@@ -236,12 +236,19 @@ class LeadDetailView(APIView):
 
     @extend_schema(
         request=LeadWriteSerializer,
-        responses={200: LeadDetailSerializer},
+        responses={200: LeadDetailSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
         summary='Actualizar lead',
+        description='Actualiza un lead. El vendedor solo puede gestionar los suyos o los disponibles; '
+                    'el admin puede gestionar cualquiera.',
         tags=['Leads'],
     )
     def patch(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
+        if not request.user.is_administrator and lead.owner is not None and lead.owner != request.user:
+            return Response(
+                {'error': 'No puedes gestionar un lead asignado a otro vendedor.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = LeadWriteSerializer(lead, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         lead = serializer.save()
