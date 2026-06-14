@@ -16,3 +16,8 @@ export async function assignLead(leadId: string) {
   const { data } = await api.patch(`/leads/${leadId}/assign/`);
   return data;
 }
+
+export async function releaseLead(leadId: string) {
+  const { data } = await api.patch(`/leads/${leadId}/release/`);
+  return data;
+}

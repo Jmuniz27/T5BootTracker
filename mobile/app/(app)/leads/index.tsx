@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
-import { fetchLeads, assignLead } from '../../../src/api/leads.api';
+import { fetchLeads, assignLead, releaseLead } from '../../../src/api/leads.api';
 import { api } from '../../../src/lib/api';
 import type { Lead, LeadStatus } from '../../../src/types/leads';
 
@@ -28,30 +28,29 @@ interface MeData {
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 const ROLE_LABEL: Record<string, string> = {
-  SALESPERSON:   'Salesperson',
-  ADMINISTRATOR: 'Administrator',
-  COORDINATOR:   'Coordinator',
+  SALESPERSON:   'Vendedor',
+  ADMINISTRATOR: 'Administrador',
+  COORDINATOR:   'Coordinador',
   BOOTCAMPER:    'Bootcamper',
 };
 
 const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: string }> = {
-  NEW:               { bg: '#f3f4f6', color: '#6b7280', label: 'New' },
-  CONTACTED:         { bg: '#fef3c7', color: '#d97706', label: 'Contacted' },
-  INTERESTED:        { bg: '#dbeafe', color: '#1d4ed8', label: 'Interested' },
-  NOT_INTERESTED:    { bg: '#fee2e2', color: '#dc2626', label: 'Not Interested' },
-  SPEAK_COORDINATOR: { bg: '#ede9fe', color: '#7c3aed', label: 'Speak Coordinator' },
-  CONVERTED:         { bg: '#dcfce7', color: '#16a34a', label: 'Converted' },
+  NEW:               { bg: '#f3f4f6', color: '#6b7280', label: 'Nuevo' },
+  CONTACTED:         { bg: '#fef3c7', color: '#d97706', label: 'Contactado' },
+  INTERESTED:        { bg: '#dbeafe', color: '#1d4ed8', label: 'Interesado' },
+  NOT_INTERESTED:    { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
+  SPEAK_COORDINATOR: { bg: '#ede9fe', color: '#7c3aed', label: 'Hablar coordinador' },
+  CONVERTED:         { bg: '#dcfce7', color: '#16a34a', label: 'Convertido' },
 };
 
-// Status filter options, in display order. `null` = "All".
 const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
-  { value: null,                label: 'All' },
-  { value: 'NEW',               label: 'New' },
-  { value: 'CONTACTED',         label: 'Contacted' },
-  { value: 'INTERESTED',        label: 'Interested' },
-  { value: 'NOT_INTERESTED',    label: 'Not Interested' },
-  { value: 'SPEAK_COORDINATOR', label: 'Speak Coordinator' },
-  { value: 'CONVERTED',         label: 'Converted' },
+  { value: null,                label: 'Todos' },
+  { value: 'NEW',               label: 'Nuevo' },
+  { value: 'CONTACTED',         label: 'Contactado' },
+  { value: 'INTERESTED',        label: 'Interesado' },
+  { value: 'NOT_INTERESTED',    label: 'No interesado' },
+  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+  { value: 'CONVERTED',         label: 'Convertido' },
 ];
 
 const AVATAR_PALETTE = ['#bfdbfe', '#fef08a', '#bbf7d0', '#fecaca', '#e9d5ff', '#fed7aa'];
@@ -121,54 +120,57 @@ interface CardProps {
   lead: Lead;
   isAvailable: boolean;
   onAssign: (id: string) => void;
+  onRelease: (id: string) => void;
   onViewHistory: (lead: Lead) => void;
   onLogInteraction: (lead: Lead) => void;
 }
 
-function LeadCard({ lead, isAvailable, onAssign, onViewHistory, onLogInteraction }: CardProps) {
+function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction }: CardProps) {
   return (
     <View style={styles.card}>
-      <View style={styles.cardBody}>
-        <View style={styles.cardLeft}>
-          <Avatar name={lead.name} />
-          <View style={styles.cardInfo}>
-            <Text style={styles.cardName}>{lead.name}</Text>
-            {lead.email ? (
-              <View style={styles.cardRow}>
-                <Ionicons name="mail-outline" size={12} color={colors.textMuted} />
-                <Text style={styles.cardDetail} numberOfLines={1}>{lead.email}</Text>
-              </View>
-            ) : null}
+      {/* Top: avatar + info */}
+      <View style={styles.cardTop}>
+        <Avatar name={lead.name} />
+        <View style={styles.cardInfo}>
+          <View style={styles.cardNameRow}>
+            <Text style={styles.cardName} numberOfLines={1}>{lead.name}</Text>
+            <StatusBadge status={lead.status} />
+          </View>
+          {lead.email ? (
             <View style={styles.cardRow}>
-              <Ionicons name="call-outline" size={12} color={colors.textMuted} />
-              <Text style={styles.cardDetail}>{lead.phone}</Text>
+              <Ionicons name="mail-outline" size={12} color={colors.textMuted} />
+              <Text style={styles.cardDetail} numberOfLines={1}>{lead.email}</Text>
             </View>
-            <View style={styles.cardMeta}>
-              <StatusBadge status={lead.status} />
-              <Text style={styles.interactionCount}>
-                {lead.interaction_count} interactions
-              </Text>
-            </View>
+          ) : null}
+          <View style={styles.cardRow}>
+            <Ionicons name="call-outline" size={12} color={colors.textMuted} />
+            <Text style={styles.cardDetail}>{lead.phone}</Text>
+            <Text style={styles.cardDot}>·</Text>
+            <Text style={styles.cardDetail}>{lead.interaction_count} interacciones</Text>
           </View>
         </View>
+      </View>
 
-        <View style={styles.cardActions}>
-          {isAvailable ? (
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => onAssign(lead.id)}>
-              <Text style={styles.btnPrimaryText}>Claim Lead</Text>
+      {/* Bottom: action buttons */}
+      <View style={styles.cardFooter}>
+        {isAvailable ? (
+          <TouchableOpacity style={[styles.btnPrimary, styles.btnFull]} onPress={() => onAssign(lead.id)}>
+            <Text style={styles.btnPrimaryText}>Asignarme</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.btnGhost} onPress={() => onViewHistory(lead)}>
+              <Ionicons name="time-outline" size={13} color={colors.navy} />
+              <Text style={styles.btnGhostText}>Historial</Text>
             </TouchableOpacity>
-          ) : (
-            <>
-              <TouchableOpacity style={styles.btnGhost} onPress={() => onViewHistory(lead)}>
-                <Ionicons name="time-outline" size={14} color={colors.navy} />
-                <Text style={styles.btnGhostText}>View history</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnPrimary} onPress={() => onLogInteraction(lead)}>
-                <Text style={styles.btnPrimaryText}>Log Interaction</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+            <TouchableOpacity style={[styles.btnPrimary, { flex: 1 }]} onPress={() => onLogInteraction(lead)}>
+              <Text style={styles.btnPrimaryText}>Registrar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnDanger} onPress={() => onRelease(lead.id)}>
+              <Text style={styles.btnDangerText}>Desasignar</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
@@ -181,16 +183,16 @@ type Tab = 'my' | 'available';
 export default function LeadsScreen() {
   const router = useRouter();
 
-  const [me, setMe]                 = useState<MeData | null>(null);
-  const [tab, setTab]               = useState<Tab>('my');
-  const [search, setSearch]         = useState('');
+  const [me, setMe]                     = useState<MeData | null>(null);
+  const [tab, setTab]                   = useState<Tab>('my');
+  const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | null>(null);
   const [showFilters, setShowFilters]   = useState(false);
-  const [myLeads, setMyLeads]       = useState<Lead[]>([]);
-  const [available, setAvailable]   = useState<Lead[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const [myLeads, setMyLeads]           = useState<Lead[]>([]);
+  const [available, setAvailable]       = useState<Lead[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [refreshing, setRefreshing]     = useState(false);
+  const [error, setError]               = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -201,7 +203,7 @@ export default function LeadsScreen() {
       setAvailable(data.available_leads);
       setError(null);
     } catch {
-      setError('Could not load leads. Please try again.');
+      setError('No pudimos cargar los leads. Intenta de nuevo.');
     }
   }
 
@@ -227,7 +229,16 @@ export default function LeadsScreen() {
       await assignLead(leadId);
       await loadLeads(search);
     } catch {
-      setError('Could not claim lead. It may have been taken already.');
+      setError('No pudimos asignar el lead. Puede que ya haya sido tomado.');
+    }
+  }
+
+  async function handleRelease(leadId: string) {
+    try {
+      await releaseLead(leadId);
+      await loadLeads(search);
+    } catch {
+      setError('No pudimos desasignar el lead. Intenta de nuevo.');
     }
   }
 
@@ -239,10 +250,9 @@ export default function LeadsScreen() {
     router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id } });
   }
 
-  const base = tab === 'my' ? myLeads : available;
-  const displayed = statusFilter
-    ? base.filter((l) => l.status === statusFilter)
-    : base;
+  const myFiltered        = statusFilter ? myLeads.filter((l) => l.status === statusFilter) : myLeads;
+  const availableFiltered = statusFilter ? available.filter((l) => l.status === statusFilter) : available;
+  const displayed         = tab === 'my' ? myFiltered : availableFiltered;
 
   if (loading) {
     return (
@@ -285,11 +295,7 @@ export default function LeadsScreen() {
 
             {/* Title */}
             <View style={styles.titleSection}>
-              <View style={styles.titleRow}>
-                <Text style={styles.titleIcon}>💬</Text>
-                <Text style={styles.title}>My leads</Text>
-              </View>
-              <Text style={styles.subtitle}>Manage and track your leads</Text>
+              <Text style={styles.title}>Leads</Text>
             </View>
 
             {/* Search */}
@@ -300,7 +306,7 @@ export default function LeadsScreen() {
                   style={styles.searchInput}
                   value={search}
                   onChangeText={handleSearchChange}
-                  placeholder="Search by name, email or phone"
+                  placeholder="Buscar por nombre, email o teléfono"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   returnKeyType="search"
@@ -328,7 +334,7 @@ export default function LeadsScreen() {
                 onPress={() => setTab('my')}
               >
                 <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]}>
-                  My Leads ({myLeads.length})
+                  Mis leads ({myFiltered.length})
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -336,7 +342,7 @@ export default function LeadsScreen() {
                 onPress={() => setTab('available')}
               >
                 <Text style={[styles.tabText, tab === 'available' && styles.tabTextActive]}>
-                  Available ({available.length})
+                  Disponibles ({availableFiltered.length})
                 </Text>
               </TouchableOpacity>
             </View>
@@ -349,6 +355,7 @@ export default function LeadsScreen() {
             lead={item}
             isAvailable={tab === 'available'}
             onAssign={handleAssign}
+            onRelease={handleRelease}
             onViewHistory={handleViewHistory}
             onLogInteraction={handleLogInteraction}
           />
@@ -357,8 +364,8 @@ export default function LeadsScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>
               {tab === 'my'
-                ? 'You have no assigned leads.'
-                : 'No leads available to claim.'}
+                ? 'No tienes leads asignados.'
+                : 'No hay leads disponibles para asignarte.'}
             </Text>
           </View>
         }
@@ -431,23 +438,10 @@ const styles = StyleSheet.create({
   titleSection: {
     marginBottom: 18,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  titleIcon: {
-    fontSize: 28,
-  },
   title: {
     fontSize: 30,
     fontWeight: '800',
     color: colors.textPrimary,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 2,
   },
   // Search
   searchRow: {
@@ -547,26 +541,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  cardBody: {
-    flexDirection: 'row',
     gap: 12,
   },
-  cardLeft: {
-    flex: 1,
+  cardTop: {
     flexDirection: 'row',
     gap: 12,
+    alignItems: 'flex-start',
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
   },
   avatarText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: colors.navy,
   },
@@ -574,10 +565,17 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 3,
   },
+  cardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   cardName: {
     fontSize: 15,
     fontWeight: '700',
     color: colors.textPrimary,
+    flex: 1,
   },
   cardRow: {
     flexDirection: 'row',
@@ -589,30 +587,24 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     flexShrink: 1,
   },
-  cardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
+  cardDot: {
+    fontSize: 12,
+    color: colors.textMuted,
   },
   badge: {
     borderRadius: 20,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 3,
   },
   badgeText: {
     fontSize: 11,
     fontWeight: '600',
   },
-  interactionCount: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  // Card buttons
-  cardActions: {
+  // Card footer buttons
+  cardFooter: {
+    flexDirection: 'row',
     gap: 8,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
+    paddingTop: 4,
   },
   btnGhost: {
     flexDirection: 'row',
@@ -622,7 +614,7 @@ const styles = StyleSheet.create({
     borderColor: colors.navy,
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 8,
   },
   btnGhostText: {
     fontSize: 12,
@@ -633,14 +625,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  btnFull: {
+    flex: 1,
   },
   btnPrimaryText: {
     color: colors.white,
     fontSize: 12,
     fontWeight: '700',
+  },
+  btnDanger: {
+    borderWidth: 1.5,
+    borderColor: '#dc2626',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnDangerText: {
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: '600',
   },
   // Feedback
   errorText: {

@@ -10,9 +10,9 @@ from rest_framework.views import APIView
 from apps.leads.permissions import IsSalesperson, IsSalespersonOrAdmin
 from .models import Payment
 from .serializers import (
-    PaymentUploadSerializer, PaymentListSerializer,
+    PaymentUploadSerializer, PaymentListSerializer, PaymentDetailSerializer,
     PaymentApproveSerializer, PaymentRejectSerializer,
-    PaymentOCRStatusSerializer,
+    PaymentOCRStatusSerializer, PaymentConfirmSerializer,
 )
 from .services import PaymentProgressService
 
@@ -69,6 +69,7 @@ class PaymentUploadView(APIView):
             program=program,
             receipt_file=file,
             receipt_file_type=file_type,
+            status=Payment.Status.DRAFT,
         )
 
         process_payment_ocr.delay(str(payment.id))
@@ -147,6 +148,60 @@ class PaymentOCRStatusView(APIView):
     )
     def get(self, request, pk):
         payment = get_object_or_404(Payment, pk=pk, bootcamper=request.user)
+        return Response(PaymentOCRStatusSerializer(payment).data)
+
+
+class PaymentConfirmView(APIView):
+    """PATCH /api/payments/my-payments/{id}/confirm/ — bootcamper corrects OCR and confirms.
+
+    Transitions the payment from DRAFT → PENDING, making it visible in the vendor queue.
+    The bootcamper may send any subset of editable OCR fields to overwrite only what needs
+    fixing; omitted fields keep the value originally extracted by OCR.
+    ocr_raw_text and ocr_confidence are never modified here.
+    """
+    permission_classes = [IsBootcamper]
+
+    @extend_schema(
+        request=PaymentConfirmSerializer,
+        responses={
+            200: PaymentOCRStatusSerializer,
+            400: OpenApiResponse(description='El pago ya fue confirmado o no está en borrador'),
+            404: OpenApiResponse(description='Pago no encontrado'),
+        },
+        summary='Confirmar pago (DRAFT → PENDING)',
+        description=(
+            'El bootcamper revisa los datos extraídos por OCR, corrige los que sean incorrectos '
+            'y confirma el envío. El pago pasa de En revisión (DRAFT) a Pendiente (PENDING) '
+            'y entra en la cola del vendedor. Solo se puede confirmar una vez.'
+        ),
+        tags=['Pagos — Bootcamper'],
+    )
+    def patch(self, request, pk):
+        payment = get_object_or_404(Payment, pk=pk, bootcamper=request.user)
+
+        if payment.status != Payment.Status.DRAFT:
+            return Response(
+                {'error': 'Solo se pueden confirmar pagos en borrador.', 'code': 'NOT_DRAFT'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = PaymentConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # Overwrite only the fields the bootcamper explicitly sent
+        editable = (
+            'ocr_bank_name', 'ocr_account_last_digits',
+            'ocr_amount', 'ocr_transaction_id', 'ocr_payment_date',
+        )
+        for field in editable:
+            if field in data:
+                setattr(payment, field, data[field])
+
+        payment.status = Payment.Status.PENDING
+        payment.save()
+
+        logger.info("Payment %s confirmed by bootcamper %s.", payment.id, request.user.id)
         return Response(PaymentOCRStatusSerializer(payment).data)
 
 
@@ -249,17 +304,18 @@ class PaymentMonitoringView(APIView):
 
 
 class PaymentDetailView(APIView):
-    """GET /api/payments/{id}/ — full payment details."""
+    """GET /api/payments/{id}/ — full payment details including ocr_raw_text."""
     permission_classes = [IsSalespersonOrAdmin]
 
     @extend_schema(
-        responses={200: PaymentListSerializer, 404: OpenApiResponse(description='Pago no encontrado')},
+        responses={200: PaymentDetailSerializer, 404: OpenApiResponse(description='Pago no encontrado')},
         summary='Detalle de pago',
+        description='Retorna todos los campos del pago incluyendo ocr_raw_text (texto crudo del OCR para copiar/pegar).',
         tags=['Pagos — Vendedor/Admin'],
     )
     def get(self, request, pk):
         payment = get_object_or_404(Payment.objects.select_related('bootcamper', 'program', 'validated_by'), pk=pk)
-        return Response(PaymentListSerializer(payment).data)
+        return Response(PaymentDetailSerializer(payment).data)
 
 
 class PaymentApproveView(APIView):
