@@ -111,6 +111,199 @@ class TestLeadFilters:
         assert all_leads[0]['name'] == 'Unicorn Corp'
 
 
+class TestLeadDetail:
+    def test_get_lead_detail(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}{assigned_lead.id}/')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['id'] == str(assigned_lead.id)
+        assert 'interaction_count' in data
+        assert 'last_contact' in data
+
+    def test_salesperson_can_view_another_sellers_lead(self, db, assigned_lead):
+        other = CustomUser.objects.create_user(
+            email='peek@test.com', password='testpass123',
+            first_name='Peek', last_name='Er', role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(other)
+        resp = client.get(f'{LEADS_URL}{assigned_lead.id}/')
+        assert resp.status_code == 200
+
+    def test_get_lead_detail_404(self, db, salesperson_user):
+        import uuid as _uuid
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}{_uuid.uuid4()}/')
+        assert resp.status_code == 404
+
+
+class TestLeadUpdatePermissions:
+    def test_salesperson_can_update_own_lead(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+        resp = client.patch(f'{LEADS_URL}{assigned_lead.id}/', {'status': Lead.Status.CONTACTED}, format='json')
+        assert resp.status_code == 200
+
+    def test_salesperson_can_update_unassigned_lead(self, db, salesperson_user, sample_lead):
+        client = make_client(salesperson_user)
+        resp = client.patch(f'{LEADS_URL}{sample_lead.id}/', {'status': Lead.Status.CONTACTED}, format='json')
+        assert resp.status_code == 200
+
+    def test_salesperson_cannot_update_another_sellers_lead(self, db, assigned_lead):
+        other = CustomUser.objects.create_user(
+            email='intruder@test.com', password='testpass123',
+            first_name='Intru', last_name='Der', role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(other)
+        resp = client.patch(f'{LEADS_URL}{assigned_lead.id}/', {'status': Lead.Status.NOT_INTERESTED}, format='json')
+        assert resp.status_code == 403
+        assert resp.json()['code'] == 'NOT_OWNER'
+        assigned_lead.refresh_from_db()
+        assert assigned_lead.status == Lead.Status.CONTACTED
+
+
+class TestLeadSoftDelete:
+    def test_admin_can_soft_delete(self, db, admin_user, sample_lead):
+        client = make_client(admin_user)
+        resp = client.delete(f'{LEADS_URL}{sample_lead.id}/')
+        assert resp.status_code == 204
+        sample_lead.refresh_from_db()
+        assert sample_lead.deleted_at is not None
+
+    def test_soft_deleted_lead_hidden_from_default_manager(self, db, admin_user, sample_lead):
+        client = make_client(admin_user)
+        client.delete(f'{LEADS_URL}{sample_lead.id}/')
+        assert not Lead.objects.filter(id=sample_lead.id).exists()
+        assert Lead.all_objects.filter(id=sample_lead.id).exists()
+
+    def test_soft_deleted_lead_not_in_list(self, db, admin_user, sample_lead):
+        client = make_client(admin_user)
+        client.delete(f'{LEADS_URL}{sample_lead.id}/')
+        resp = client.get(LEADS_URL)
+        data = resp.json()
+        all_ids = [lead['id'] for lead in data['my_leads']] + [lead['id'] for lead in data['available_leads']]
+        assert str(sample_lead.id) not in all_ids
+
+    def test_soft_deleted_lead_detail_404(self, db, admin_user, sample_lead):
+        client = make_client(admin_user)
+        client.delete(f'{LEADS_URL}{sample_lead.id}/')
+        resp = client.get(f'{LEADS_URL}{sample_lead.id}/')
+        assert resp.status_code == 404
+
+    def test_salesperson_cannot_delete(self, db, salesperson_user, sample_lead):
+        client = make_client(salesperson_user)
+        resp = client.delete(f'{LEADS_URL}{sample_lead.id}/')
+        assert resp.status_code == 403
+        sample_lead.refresh_from_db()
+        assert sample_lead.deleted_at is None
+
+
+class TestLeadExtraFilters:
+    def test_my_leads_filter_returns_only_owned(self, db, salesperson_user, sample_lead, assigned_lead):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?my_leads=true')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['available_leads'] == []
+        my_ids = [lead['id'] for lead in data['my_leads']]
+        assert str(assigned_lead.id) in my_ids
+        assert str(sample_lead.id) not in my_ids
+
+    def test_is_company_filter(self, db, salesperson_user):
+        Lead.objects.create(name='ACME', phone='111', is_company=True)
+        Lead.objects.create(name='Persona', phone='222', is_company=False)
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?is_company=true')
+        all_leads = resp.json()['my_leads'] + resp.json()['available_leads']
+        assert len(all_leads) == 1
+        assert all_leads[0]['is_company'] is True
+
+    def test_vendedor_filter_admin_only(self, db, admin_user, salesperson_user, assigned_lead, sample_lead):
+        client = make_client(admin_user)
+        resp = client.get(f'{LEADS_URL}?vendedor={salesperson_user.id}')
+        assert resp.status_code == 200
+        data = resp.json()
+        ids = [lead['id'] for lead in data['my_leads']] + [lead['id'] for lead in data['available_leads']]
+        assert str(assigned_lead.id) in ids
+        assert str(sample_lead.id) not in ids
+
+    def test_estado_alias_filter(self, db, salesperson_user):
+        Lead.objects.create(name='A', phone='111', status=Lead.Status.INTERESTED)
+        Lead.objects.create(name='B', phone='222', status=Lead.Status.NEW)
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?estado=INTERESTED')
+        all_leads = resp.json()['my_leads'] + resp.json()['available_leads']
+        assert len(all_leads) == 1
+        assert all(lead['status'] == 'INTERESTED' for lead in all_leads)
+
+    def test_fecha_desde_future_excludes_all(self, db, salesperson_user, sample_lead):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?fecha_desde=2999-01-01')
+        all_leads = resp.json()['my_leads'] + resp.json()['available_leads']
+        assert all_leads == []
+
+    def test_fecha_hasta_past_excludes_all(self, db, salesperson_user, sample_lead):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?fecha_hasta=2000-01-01')
+        all_leads = resp.json()['my_leads'] + resp.json()['available_leads']
+        assert all_leads == []
+
+
+class TestLeadPagination:
+    def test_lead_list_includes_pagination_metadata(self, db, salesperson_user, sample_lead):
+        client = make_client(salesperson_user)
+        resp = client.get(LEADS_URL)
+        assert resp.status_code == 200
+        pagination = resp.json()['pagination']
+        assert pagination['page'] == 1
+        assert pagination['page_size'] == 20
+        assert pagination['available_leads_count'] == 1
+
+    def test_lead_list_respects_page_size(self, db, salesperson_user):
+        for i in range(25):
+            Lead.objects.create(name=f'Lead {i}', phone=f'09900{i:05d}')
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=10')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data['available_leads']) == 10
+        assert data['pagination']['available_leads_count'] == 25
+        assert data['pagination']['available_leads_total_pages'] == 3
+
+    def test_lead_list_second_page_returns_remainder(self, db, salesperson_user):
+        for i in range(25):
+            Lead.objects.create(name=f'Lead {i}', phone=f'09900{i:05d}')
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=10&page=3')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data['available_leads']) == 5
+        assert data['pagination']['page'] == 3
+
+    def test_lead_list_page_size_is_capped(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=99999')
+        assert resp.status_code == 200
+        assert resp.json()['pagination']['page_size'] == 100
+
+    def test_lead_list_invalid_page_size_falls_back_to_default(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=abc')
+        assert resp.status_code == 200
+        assert resp.json()['pagination']['page_size'] == 20
+
+    def test_lead_list_page_size_zero_falls_back_to_default(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=0')
+        assert resp.status_code == 200
+        assert resp.json()['pagination']['page_size'] == 20
+
+    def test_lead_list_negative_page_clamped_to_one(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page=-5')
+        assert resp.status_code == 200
+        assert resp.json()['pagination']['page'] == 1
+
+
 # ==========================================
 # ASSIGNMENT & RELEASE TESTS
 # ==========================================
@@ -409,6 +602,18 @@ class TestConvertLead:
 # ==========================================
 
 class TestAdminPrivileges:
+
+    def test_admin_sees_all_leads(self, db, admin_user, sample_lead, assigned_lead):
+        client = make_client(admin_user)
+        resp = client.get(LEADS_URL)
+        assert resp.status_code == 200
+        data = resp.json()
+        all_ids = (
+            [lead['id'] for lead in data['my_leads']] +
+            [lead['id'] for lead in data['available_leads']]
+        )
+        assert str(sample_lead.id) in all_ids
+        assert str(assigned_lead.id) in all_ids
 
     def test_admin_can_view_any_leads_interactions(self, db, admin_user, assigned_lead):
         client = make_client(admin_user)
