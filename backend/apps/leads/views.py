@@ -33,8 +33,6 @@ class LeadListCreateView(APIView):
     permission_classes = [IsSalespersonOrAdmin]
 
     def _annotated_qs(self):
-        # Explicit ordering: the Count() annotation adds a GROUP BY that drops the
-        # model's Meta.ordering, which would make pagination non-deterministic.
         return Lead.objects.annotate(interaction_count=Count('interactions')).order_by('-created_at')
 
     def _page_params(self, request):
@@ -43,12 +41,15 @@ class LeadListCreateView(APIView):
             page_size = int(request.query_params.get('page_size', DEFAULT_PAGE_SIZE))
         except (TypeError, ValueError):
             page_size = DEFAULT_PAGE_SIZE
-        page_size = max(1, min(page_size, MAX_PAGE_SIZE))
+        if page_size <= 0:
+            page_size = DEFAULT_PAGE_SIZE
+        page_size = min(page_size, MAX_PAGE_SIZE)
 
         try:
             page_number = int(request.query_params.get('page', 1))
         except (TypeError, ValueError):
             page_number = 1
+        page_number = max(1, page_number)
 
         return page_number, page_size
 
@@ -96,14 +97,17 @@ class LeadListCreateView(APIView):
                 Q(phone__icontains=search)
             )
 
-        my_leads_qs        = qs.filter(owner=request.user)
-        available_leads_qs = qs.filter(owner__isnull=True)
+        if request.user.is_administrator:
+            my_leads_qs        = qs
+            available_leads_qs = qs.none()
+        else:
+            my_leads_qs        = qs.filter(owner=request.user)
+            available_leads_qs = qs.filter(owner__isnull=True)
 
         page_number, page_size = self._page_params(request)
 
         my_paginator        = Paginator(my_leads_qs, page_size)
         available_paginator = Paginator(available_leads_qs, page_size)
-        # get_page() clamps out-of-range numbers and never raises.
         my_page        = my_paginator.get_page(page_number)
         available_page = available_paginator.get_page(page_number)
 

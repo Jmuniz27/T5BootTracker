@@ -154,6 +154,18 @@ class TestLeadPagination:
         assert resp.status_code == 200
         assert resp.json()['pagination']['page_size'] == 20
 
+    def test_lead_list_page_size_zero_falls_back_to_default(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page_size=0')
+        assert resp.status_code == 200
+        assert resp.json()['pagination']['page_size'] == 20
+
+    def test_lead_list_negative_page_clamped_to_one(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?page=-5')
+        assert resp.status_code == 200
+        assert resp.json()['pagination']['page'] == 1
+
 
 # ==========================================
 # ASSIGNMENT & RELEASE TESTS
@@ -453,6 +465,18 @@ class TestConvertLead:
 # ==========================================
 
 class TestAdminPrivileges:
+
+    def test_admin_sees_all_leads(self, db, admin_user, sample_lead, assigned_lead):
+        client = make_client(admin_user)
+        resp = client.get(LEADS_URL)
+        assert resp.status_code == 200
+        data = resp.json()
+        all_ids = (
+            [lead['id'] for lead in data['my_leads']] +
+            [lead['id'] for lead in data['available_leads']]
+        )
+        assert str(sample_lead.id) in all_ids
+        assert str(assigned_lead.id) in all_ids
 
     def test_admin_can_view_any_leads_interactions(self, db, admin_user, assigned_lead):
         client = make_client(admin_user)
