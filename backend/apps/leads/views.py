@@ -1,9 +1,11 @@
 """Views for leads app."""
 import logging
+import uuid
 
 from django.core.paginator import Paginator
 from django.db import transaction, IntegrityError
 from django.db.models import Count, Q
+from django.utils.dateparse import parse_date
 from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
 from rest_framework import status, serializers as drf_serializers
@@ -16,7 +18,7 @@ from apps.programs.models import Program
 from .models import Lead, Interaction
 from .permissions import IsSalesperson, IsSalespersonOrAdmin
 from .serializers import (
-    LeadListSerializer, LeadWriteSerializer, InteractionSerializer,
+    LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, InteractionSerializer,
     ConvertLeadSerializer, ReturningBootcamperSerializer,
 )
 from .services import register_interaction
@@ -26,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE     = 100
+TRUTHY            = {'true', '1', 'yes', 'on'}
 
 
 class LeadListCreateView(APIView):
@@ -55,8 +58,13 @@ class LeadListCreateView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter('status', str, description='Filtrar por estado (NEW, CONTACTED, INTERESTED, ...)'),
+            OpenApiParameter('estado', str, description='Filtrar por estado (NEW, CONTACTED, INTERESTED, ...). Alias: status'),
             OpenApiParameter('source', str, description='Filtrar por fuente (INSTAGRAM, WHATSAPP, ...)'),
+            OpenApiParameter('vendedor', str, description='Filtrar por vendedor asignado (UUID). Solo Admin'),
+            OpenApiParameter('fecha_desde', str, description='Creados desde (YYYY-MM-DD)'),
+            OpenApiParameter('fecha_hasta', str, description='Creados hasta (YYYY-MM-DD)'),
+            OpenApiParameter('my_leads', bool, description='true -> solo los leads del usuario autenticado'),
+            OpenApiParameter('is_company', bool, description='Filtrar leads de empresa (CR-001)'),
             OpenApiParameter('search', str, description='Buscar por nombre, email o teléfono'),
             OpenApiParameter('page', int, description='Número de página (default 1)'),
             OpenApiParameter('page_size', int, description=f'Tamaño de página (default {DEFAULT_PAGE_SIZE}, máx {MAX_PAGE_SIZE})'),
@@ -80,16 +88,25 @@ class LeadListCreateView(APIView):
     )
     def get(self, request):
         qs = self._annotated_qs()
+        params = request.query_params
 
-        # Filters
-        status_filter = request.query_params.get('status')
-        source_filter = request.query_params.get('source')
-        search        = request.query_params.get('search')
+        status_filter = params.get('estado') or params.get('status')
+        source_filter = params.get('source')
+        search        = params.get('search')
+        is_company    = params.get('is_company')
+        fecha_desde   = parse_date(params.get('fecha_desde', '') or '')
+        fecha_hasta   = parse_date(params.get('fecha_hasta', '') or '')
 
         if status_filter:
             qs = qs.filter(status=status_filter)
         if source_filter:
             qs = qs.filter(source=source_filter)
+        if is_company is not None:
+            qs = qs.filter(is_company=is_company.lower() in TRUTHY)
+        if fecha_desde:
+            qs = qs.filter(created_at__date__gte=fecha_desde)
+        if fecha_hasta:
+            qs = qs.filter(created_at__date__lte=fecha_hasta)
         if search:
             qs = qs.filter(
                 Q(name__icontains=search) |
@@ -97,8 +114,20 @@ class LeadListCreateView(APIView):
                 Q(phone__icontains=search)
             )
 
+        vendedor = params.get('vendedor')
+        if vendedor and request.user.is_administrator:
+            try:
+                qs = qs.filter(owner_id=uuid.UUID(str(vendedor)))
+            except ValueError:
+                pass
+
+        only_mine = (params.get('my_leads', '').lower() in TRUTHY)
+
         if request.user.is_administrator:
             my_leads_qs        = qs
+            available_leads_qs = qs.none()
+        elif only_mine:
+            my_leads_qs        = qs.filter(owner=request.user)
             available_leads_qs = qs.none()
         else:
             my_leads_qs        = qs.filter(owner=request.user)
@@ -191,13 +220,23 @@ class LeadReleaseView(APIView):
         return Response(LeadListSerializer(lead).data)
 
 
-class LeadUpdateView(APIView):
-    """PATCH /leads/{id}/ — partial update."""
+class LeadDetailView(APIView):
+    """GET/PATCH/DELETE /leads/{id}/ — detail, partial update, soft delete."""
     permission_classes = [IsSalespersonOrAdmin]
 
     @extend_schema(
+        responses={200: LeadDetailSerializer, 404: OpenApiResponse(description='Lead no encontrado')},
+        summary='Detalle de lead',
+        description='Devuelve el detalle de un lead. Cualquier vendedor o admin puede verlo.',
+        tags=['Leads'],
+    )
+    def get(self, request, pk):
+        lead = get_object_or_404(Lead.objects.annotate(interaction_count=Count('interactions')), pk=pk)
+        return Response(LeadDetailSerializer(lead).data)
+
+    @extend_schema(
         request=LeadWriteSerializer,
-        responses={200: LeadListSerializer},
+        responses={200: LeadDetailSerializer},
         summary='Actualizar lead',
         tags=['Leads'],
     )
@@ -206,7 +245,27 @@ class LeadUpdateView(APIView):
         serializer = LeadWriteSerializer(lead, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         lead = serializer.save()
-        return Response(LeadListSerializer(lead).data)
+        return Response(LeadDetailSerializer(lead).data)
+
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description='Lead eliminado (soft delete)'),
+            403: OpenApiResponse(description='Solo un administrador puede eliminar leads'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Eliminar lead (soft delete)',
+        description='Marca el lead como eliminado. Solo Admin.',
+        tags=['Leads'],
+    )
+    def delete(self, request, pk):
+        if not request.user.is_administrator:
+            return Response(
+                {'error': 'Solo un administrador puede eliminar leads.', 'code': 'FORBIDDEN'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        lead = get_object_or_404(Lead, pk=pk)
+        lead.soft_delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class InteractionListCreateView(APIView):

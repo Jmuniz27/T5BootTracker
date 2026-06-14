@@ -3,6 +3,12 @@ import uuid
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils.timezone import now
+
+
+class LeadManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
 
 
 class Lead(models.Model):
@@ -57,8 +63,12 @@ class Lead(models.Model):
     assigned_at      = models.DateTimeField(null=True, blank=True)
     last_contact     = models.DateTimeField(null=True, blank=True, verbose_name='Último contacto')
     version          = models.PositiveIntegerField(default=0)
+    deleted_at       = models.DateTimeField(null=True, blank=True, verbose_name='Eliminado')
     created_at       = models.DateTimeField(auto_now_add=True)
     updated_at       = models.DateTimeField(auto_now=True)
+
+    objects     = LeadManager()
+    all_objects = models.Manager()
 
     class Meta:
         verbose_name = 'Lead'
@@ -67,6 +77,10 @@ class Lead(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.get_status_display()})'
+
+    def soft_delete(self):
+        self.deleted_at = now()
+        self.save(update_fields=['deleted_at', 'updated_at'])
 
 
 class Interaction(models.Model):

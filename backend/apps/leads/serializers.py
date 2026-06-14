@@ -50,6 +50,31 @@ class LeadListSerializer(serializers.ModelSerializer):
         return None
 
 
+class LeadDetailSerializer(serializers.ModelSerializer):
+    interaction_count = serializers.IntegerField(read_only=True)
+    days_assigned = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Lead
+        fields = (
+            'id', 'name', 'phone', 'email', 'source', 'status',
+            'is_company', 'program_interest', 'program', 'interaction_count',
+            'owner', 'owner_name', 'assigned_at', 'days_assigned',
+            'last_contact', 'created_at', 'updated_at',
+        )
+
+    def get_days_assigned(self, obj):
+        if obj.assigned_at:
+            return (now().date() - obj.assigned_at.date()).days
+        return None
+
+    def get_owner_name(self, obj):
+        if obj.owner:
+            return obj.owner.get_full_name()
+        return None
+
+
 class LeadWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
