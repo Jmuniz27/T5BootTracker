@@ -106,6 +106,12 @@ class LeadAdminWriteSerializer(LeadWriteSerializer):
     class Meta(LeadWriteSerializer.Meta):
         fields = LeadWriteSerializer.Meta.fields + ('owner',)
 
+    def update(self, instance, validated_data):
+        if 'owner' in validated_data and validated_data['owner'] != instance.owner:
+            validated_data['assigned_at'] = now() if validated_data['owner'] is not None else None
+            validated_data['version'] = instance.version + 1
+        return super().update(instance, validated_data)
+
 
 class ConvertLeadSerializer(serializers.Serializer):
     """Validate lead-to-bootcamper conversion input."""
