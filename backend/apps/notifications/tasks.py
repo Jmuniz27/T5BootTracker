@@ -8,6 +8,36 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_password_reset_email(self, email, reset_link):
+    """Send password reset link to the user asynchronously."""
+    try:
+        subject = 'Recuperación de contraseña — Boot-Tracker'
+        text_body = (
+            f'Haz clic en el siguiente enlace para restablecer tu contraseña:\n\n'
+            f'{reset_link}\n\n'
+            f'El enlace expira en 24 horas. Si no solicitaste este cambio, ignora este mensaje.'
+        )
+        html_body = f"""
+        <p>Haz clic en el siguiente enlace para restablecer tu contraseña:</p>
+        <p><a href="{reset_link}">{reset_link}</a></p>
+        <p>El enlace expira en <strong>24 horas</strong>.</p>
+        <p>Si no solicitaste este cambio, puedes ignorar este mensaje.</p>
+        """
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[email],
+        )
+        msg.attach_alternative(html_body, 'text/html')
+        msg.send()
+        logger.info('Password reset email sent to %s.', email)
+    except Exception as exc:
+        logger.exception('Error sending password reset email to %s.', email)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def send_conversion_notification(self, lead_id, bootcamper_id):
     """Notify program coordinators when a lead is converted to a bootcamper."""
     try:
