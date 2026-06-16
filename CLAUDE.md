@@ -162,6 +162,7 @@ Cada issue de GitHub debe tener exactamente un PR asociado.
 
 ### Reglas
 - El body del PR DEBE incluir `Closes #N` (N = número de issue en GitHub)
+- **Excepción — PRs sin issue (tooling/chore):** incluir `No-Issue: <razón>` en el body en lugar de `Closes #N`. El gate lo reconoce y no bloquea.
 - Nombre de rama: `<type>/<CB-XX>-short-description` (ej. `feat/CB-44-leads-dashboard`)
 - El título del PR debe referenciar el título del issue
 
@@ -181,6 +182,18 @@ Issue asignado a: JL Chong — Codeado por: Juan Munizaga
 - `devops` — infra/CI
 - `docs` — solo documentación
 - `test` — solo tests
+
+### Gate automatico pre-PR
+
+Al correr `gh pr create`, Claude ejecuta un gate de dos capas antes de crear el PR:
+
+1. **Capa inteligente (hook prompt):** trae el issue de GitHub (`Closes #N`) y la tarjeta de Linear (CB-key), compara el diff contra los criterios de aceptacion y el checklist. Si algún criterio verificable no se cumple, lista los huecos y pregunta "seguro que queres crear el PR igual?" antes de proceder.
+2. **Piso determinista (`pre-pr.sh`):** bloquea con confirmacion si falta el minimo estructural: no estar en `main`, body con referencia al issue (o `No-Issue:`), body con instrucciones de prueba. Si no pasa, indica qué corregir en el body.
+
+**Ciclo de vida completo de un PR:**
+```
+gh pr create  →  gate pre-PR  →  PR creado  →  recordatorio pr-reviewer  →  Claude aprueba  →  merge  →  /linear-sync CB-N
+```
 
 ---
 
