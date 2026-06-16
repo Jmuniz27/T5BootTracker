@@ -18,8 +18,8 @@ from apps.programs.models import Program
 from .models import Lead, Interaction
 from .permissions import IsSalesperson, IsSalespersonOrAdmin
 from .serializers import (
-    LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, InteractionSerializer,
-    ConvertLeadSerializer, ReturningBootcamperSerializer,
+    LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
+    InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
 )
 from .services import register_interaction
 
@@ -235,11 +235,12 @@ class LeadDetailView(APIView):
         return Response(LeadDetailSerializer(lead).data)
 
     @extend_schema(
-        request=LeadWriteSerializer,
+        request=LeadAdminWriteSerializer,
         responses={200: LeadDetailSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
         summary='Actualizar lead',
-        description='Actualiza un lead. El vendedor solo puede gestionar los suyos o los disponibles; '
-                    'el admin puede gestionar cualquiera.',
+        description='Actualiza un lead. El vendedor solo puede gestionar los suyos o los disponibles. '
+                    'El admin puede gestionar cualquiera y además reasignar el campo `owner` a otro vendedor '
+                    '(o dejarlo en null para liberar el lead).',
         tags=['Leads'],
     )
     def patch(self, request, pk):
@@ -249,7 +250,8 @@ class LeadDetailView(APIView):
                 {'error': 'No puedes gestionar un lead asignado a otro vendedor.', 'code': 'NOT_OWNER'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        serializer = LeadWriteSerializer(lead, data=request.data, partial=True)
+        serializer_class = LeadAdminWriteSerializer if request.user.is_administrator else LeadWriteSerializer
+        serializer = serializer_class(lead, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         lead = serializer.save()
         return Response(LeadDetailSerializer(lead).data)
