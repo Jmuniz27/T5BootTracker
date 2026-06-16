@@ -28,9 +28,9 @@ if [ "$current_branch" = "main" ]; then
     missing+=("- La rama actual es 'main'. Crear una rama de feature primero.")
 fi
 
-# Verificar que el body referencia un issue (#N o CB-N)
-if ! echo "$cmd" | grep -qE '#[0-9]+|CB-[0-9]+'; then
-    missing+=("- El body del PR no referencia ningun issue (falta 'Closes #N' o 'CB-N').")
+# Verificar que el body referencia un issue (#N o CB-N) o declara explicitamente que no hay issue
+if ! echo "$cmd" | grep -qiE '#[0-9]+|CB-[0-9]+|no[ -]?issue|sin issue'; then
+    missing+=("- El body del PR no referencia ningun issue. Agrega 'Closes #N' si hay un issue asociado, o 'No-Issue: <razon>' si este PR de tooling/chore no tiene issue.")
 fi
 
 # Verificar que el body menciona como probar
@@ -46,7 +46,7 @@ reason="El PR no cumple el piso estructural minimo:"$'\n'
 for item in "${missing[@]}"; do
     reason+="$item"$'\n'
 done
-reason+="Usa el agente pr-author para generar un PR conforme: 'Use the pr-author agent to create this PR'."
+reason+="Corrige el body del PR segun los puntos de arriba y reintenta. Para PRs de tooling/chore sin issue, agrega 'No-Issue: <razon>' en el body."
 
 python3 -c "
 import json, sys
