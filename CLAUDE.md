@@ -182,6 +182,18 @@ Issue asignado a: JL Chong — Codeado por: Juan Munizaga
 - `docs` — solo documentación
 - `test` — solo tests
 
+### Gate automatico pre-PR
+
+Al correr `gh pr create`, Claude ejecuta un gate de dos capas antes de crear el PR:
+
+1. **Capa inteligente (hook prompt):** trae el issue de GitHub (`Closes #N`) y la tarjeta de Linear (CB-key), compara el diff contra los criterios de aceptacion y el checklist. Si algún criterio verificable no se cumple, lista los huecos y pregunta "seguro que queres crear el PR igual?" antes de proceder.
+2. **Piso determinista (`pre-pr.sh`):** bloquea con confirmacion si falta el minimo estructural: no estar en `main`, body con referencia al issue, body con instrucciones de prueba. Si no pasa, sugiere usar el agente `pr-author`.
+
+**Ciclo de vida completo de un PR:**
+```
+gh pr create  →  gate pre-PR  →  PR creado  →  recordatorio pr-reviewer  →  Claude aprueba  →  merge  →  /linear-sync CB-N
+```
+
 ---
 
 ## Lo que NO hacer
