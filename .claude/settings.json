@@ -69,8 +69,8 @@
           {
             "type": "prompt",
             "if": "Bash(gh pr create*)",
-            "prompt": "Before creating the PR, re-read the PR conventions in CLAUDE.md and verify:\n1. The PR title includes the issue number and a short description\n2. The PR body explains what the change does and how to test it\n3. The branch targets `main` (not develop or any other base)\n4. CI must be green before merging (remind the author if it's not confirmed yet)\nIf any required field is missing, block and list exactly what needs to be added.\nTool input: $ARGUMENTS",
-            "statusMessage": "Verificando convenciones del PR..."
+            "prompt": "Before creating the PR, run this full gate — do NOT skip any step:\n\n**Step 1 — PR structure (pr-author standard)**\nVerify the PR command includes:\n- Title in conventional-commit format: `type(scope): description` under 72 chars\n- Body with: what the PR does, changes by module, tests added/modified, how to test, `Closes #N`\nIf the body is missing or poor, invoke the `pr-author` agent to regenerate it before proceeding.\n\n**Step 2 — Fetch the linked issue and acceptance criteria**\n- Extract issue number from `Closes #N` in the body, and/or the `CB-N` token from the current branch name\n- Run: `gh issue view <N> --json number,title,body,state` to get the acceptance criteria and checklist\n- Extract the Linear key (regex `(?:**)?Linear:?(?:**)?\\s*(CB-\\d+)` in the issue body, or `(CB-N)` in the title)\n- If a Linear key exists, read the Linear issue via the `mcp__claude_ai_Linear__get_issue` tool (id = \"CB-N\"); use `mcp__claude_ai_Linear__list_issues` as fallback\n- Consolidate criteria from both sources\n\n**Step 3 — Compare diff against criteria**\n- Run: `git diff main...HEAD` and `git diff main...HEAD --name-only`\n- For each acceptance criterion / checklist item, classify:\n  - MET: clearly implemented in the diff\n  - NOT MET: clearly missing (e.g. issue requires unit tests and PR adds none, or a functional criterion is contradicted by the code)\n  - UNVERIFIABLE: UI appearance, runtime behavior, end-to-end flows — list as caveat, do NOT block\n\n**Step 4 — Gate decision**\n- If all verifiable criteria are MET → proceed with `gh pr create`\n- If any criterion is NOT MET → DO NOT run `gh pr create` yet. Instead:\n  1. Print a clear list of the missing criteria with evidence (file:line where possible)\n  2. Ask the developer: \"Faltan estos criterios de aceptacion. Seguro que queres crear el PR igual? (s/n)\"\n  3. Only run `gh pr create` if they explicitly confirm\n\nIf no issue or Linear card is found, add a note \"[INFO] No linked issue found — acceptance-criteria check skipped\" and proceed.\nAll output must be in Spanish. No emojis.\nTool input: $ARGUMENTS",
+            "statusMessage": "Verificando PR contra criterios de aceptacion..."
           }
         ]
       },
@@ -80,6 +80,11 @@
           {
             "type": "command",
             "command": "REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) && bash \"$REPO_ROOT/.claude/hooks/pre-bash.sh\"",
+            "shell": "bash"
+          },
+          {
+            "type": "command",
+            "command": "REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) && bash \"$REPO_ROOT/.claude/hooks/pre-pr.sh\"",
             "shell": "bash"
           }
         ]
