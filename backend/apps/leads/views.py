@@ -18,8 +18,8 @@ from apps.programs.models import Program
 from .models import Lead, Interaction
 from .permissions import IsSalesperson, IsSalespersonOrAdmin
 from .serializers import (
-    LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, InteractionSerializer,
-    ConvertLeadSerializer, ReturningBootcamperSerializer,
+    LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
+    InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
 )
 from .services import register_interaction
 
@@ -238,8 +238,13 @@ class LeadDetailView(APIView):
         request=LeadWriteSerializer,
         responses={200: LeadDetailSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
         summary='Actualizar lead',
-        description='Actualiza un lead. El vendedor solo puede gestionar los suyos o los disponibles; '
-                    'el admin puede gestionar cualquiera.',
+        description=(
+            'Actualiza un lead. El vendedor solo puede gestionar los suyos o los disponibles. '
+            'El admin puede gestionar cualquiera.\n\n'
+            '**Admin only:** enviar `owner` (UUID de un vendedor) reasigna el lead y actualiza '
+            '`assigned_at` y `version`. Enviar `owner: null` lo libera. '
+            'Este campo es ignorado silenciosamente para tokens de vendedor.'
+        ),
         tags=['Leads'],
     )
     def patch(self, request, pk):
@@ -249,7 +254,8 @@ class LeadDetailView(APIView):
                 {'error': 'No puedes gestionar un lead asignado a otro vendedor.', 'code': 'NOT_OWNER'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        serializer = LeadWriteSerializer(lead, data=request.data, partial=True)
+        serializer_class = LeadAdminWriteSerializer if request.user.is_administrator else LeadWriteSerializer
+        serializer = serializer_class(lead, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         lead = serializer.save()
         return Response(LeadDetailSerializer(lead).data)
