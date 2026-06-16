@@ -2,6 +2,7 @@
 from django.utils.timezone import now
 from rest_framework import serializers
 
+from apps.authentication.models import CustomUser
 from .models import Lead, Interaction
 
 
@@ -92,6 +93,24 @@ class LeadWriteSerializer(serializers.ModelSerializer):
         if not value or not value.strip():
             raise serializers.ValidationError('El teléfono no puede estar vacío.')
         return value
+
+
+class LeadAdminWriteSerializer(LeadWriteSerializer):
+    """Like LeadWriteSerializer but exposes `owner` so admins can reassign leads."""
+    owner = serializers.PrimaryKeyRelatedField(
+        queryset=CustomUser.objects.filter(role=CustomUser.Role.SALESPERSON),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta(LeadWriteSerializer.Meta):
+        fields = LeadWriteSerializer.Meta.fields + ('owner',)
+
+    def update(self, instance, validated_data):
+        if 'owner' in validated_data and validated_data['owner'] != instance.owner:
+            validated_data['assigned_at'] = now() if validated_data['owner'] is not None else None
+            validated_data['version'] = instance.version + 1
+        return super().update(instance, validated_data)
 
 
 class ConvertLeadSerializer(serializers.Serializer):
