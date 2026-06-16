@@ -235,12 +235,16 @@ class LeadDetailView(APIView):
         return Response(LeadDetailSerializer(lead).data)
 
     @extend_schema(
-        request=LeadAdminWriteSerializer,
+        request=LeadWriteSerializer,
         responses={200: LeadDetailSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
         summary='Actualizar lead',
-        description='Actualiza un lead. El vendedor solo puede gestionar los suyos o los disponibles. '
-                    'El admin puede gestionar cualquiera y además reasignar el campo `owner` a otro vendedor '
-                    '(o dejarlo en null para liberar el lead).',
+        description=(
+            'Actualiza un lead. El vendedor solo puede gestionar los suyos o los disponibles. '
+            'El admin puede gestionar cualquiera.\n\n'
+            '**Admin only:** enviar `owner` (UUID de un vendedor) reasigna el lead y actualiza '
+            '`assigned_at` y `version`. Enviar `owner: null` lo libera. '
+            'Este campo es ignorado silenciosamente para tokens de vendedor.'
+        ),
         tags=['Leads'],
     )
     def patch(self, request, pk):
