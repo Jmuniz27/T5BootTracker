@@ -3,6 +3,12 @@ import client from './client'
 export const getLeads = (params = {}) =>
   client.get('/leads/', { params }).then((r) => r.data)
 
+export const convertLead = (id, data) =>
+  client.post(`/leads/${id}/convert/`, data).then((r) => r.data)
+
+export const getPrograms = () =>
+  client.get('/programs/').then((r) => r.data)
+
 export const assignLead = (id) =>
   client.patch(`/leads/${id}/assign/`).then((r) => r.data)
 
