@@ -32,46 +32,64 @@ const AVATAR_COLORS = [
 ]
 
 const STATUS_LABELS = {
-  NEW: 'New',
-  CONTACTED: 'Contacted',
-  INTERESTED: 'Interested',
-  NOT_INTERESTED: 'Not interested',
-  SPEAK_COORDINATOR: 'Speak coordinator',
-  WANTS_NEXT_CALL: 'Wants next call',
-  CONVERTED: 'Converted',
+  NEW: 'Nuevo',
+  CONTACTED: 'Contactado',
+  INTERESTED: 'Interesado',
+  NOT_INTERESTED: 'No interesado',
+  SPEAK_COORDINATOR: 'Hablar coordinador',
+  WANTS_NEXT_CALL: 'Próxima llamada',
+  CONVERTED: 'Convertido',
 }
 
 const STATUS_COLORS = {
-  NEW: 'bg-yellow-50 text-yellow-700',
-  CONTACTED: 'bg-blue-100 text-blue-700',
-  INTERESTED: 'bg-green-100 text-green-700',
+  NEW: 'bg-gray-100 text-gray-500',
+  CONTACTED: 'bg-yellow-100 text-yellow-700',
+  INTERESTED: 'bg-blue-100 text-blue-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
-  SPEAK_COORDINATOR: 'bg-yellow-100 text-yellow-700',
+  SPEAK_COORDINATOR: 'bg-purple-100 text-purple-700',
   WANTS_NEXT_CALL: 'bg-orange-100 text-orange-700',
-  CONVERTED: 'bg-purple-100 text-purple-700',
+  CONVERTED: 'bg-green-100 text-green-700',
 }
 
 const INTERACTION_TYPE_LABELS = {
-  CALL: 'Call',
+  CALL: 'Llamada',
   WHATSAPP: 'WhatsApp',
-  EMAIL: 'Mail',
-  NOTE: 'Note',
+  EMAIL: 'Email',
+  VISIT: 'Visita',
+  NOTE: 'Nota',
 }
 
 const OUTCOME_LABELS = {
-  INTERESTED: 'Interested',
-  NOT_INTERESTED: 'Not interested',
-  NO_ANSWER: 'No answer',
-  CALLBACK: 'Callback',
-  SPEAK_COORDINATOR: 'Speak with coordinator',
+  INTERESTED: 'Interesado',
+  NOT_INTERESTED: 'No interesado',
+  NO_ANSWER: 'No contestó',
+  CALLBACK: 'Llamar después',
+  SPEAK_COORDINATOR: 'Hablar coordinador',
 }
 
 const OUTCOME_COLORS = {
-  INTERESTED: 'bg-green-100 text-green-700',
+  INTERESTED: 'bg-blue-100 text-blue-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
-  NO_ANSWER: 'bg-gray-100 text-gray-600',
-  CALLBACK: 'bg-yellow-100 text-yellow-700',
+  NO_ANSWER: 'bg-yellow-100 text-yellow-700',
+  CALLBACK: 'bg-sky-100 text-sky-700',
   SPEAK_COORDINATOR: 'bg-purple-100 text-purple-700',
+}
+
+// Badge que usa last_outcome igual que mobile
+function LeadStatusBadge({ status, lastOutcome }) {
+  if (status === 'CONVERTED') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+        Convertido
+      </span>
+    )
+  }
+  const key = lastOutcome ?? status
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[key] ?? OUTCOME_COLORS[key] ?? 'bg-gray-100 text-gray-500'}`}>
+      {OUTCOME_LABELS[key] ?? STATUS_LABELS[key] ?? key}
+    </span>
+  )
 }
 
 // ─── Interaction Type Icon ────────────────────────────────────────────────────
@@ -224,9 +242,9 @@ function ViewHistoryModal({ lead, onClose }) {
   })
 
   const formatDate = (iso) =>
-    new Date(iso).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: '2-digit' })
+    new Date(iso).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: '2-digit' })
   const formatTime = (iso) =>
-    new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+    new Date(iso).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', hour12: true })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -237,7 +255,7 @@ function ViewHistoryModal({ lead, onClose }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-6">View history</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">Historial de interacciones</h2>
 
         <div className="overflow-y-auto space-y-3 flex-1 pr-1">
           {isLoading && [1, 2, 3].map((i) => (
@@ -251,7 +269,7 @@ function ViewHistoryModal({ lead, onClose }) {
           ))}
 
           {!isLoading && interactions.length === 0 && (
-            <p className="text-center text-gray-400 py-10 text-sm">No interactions yet.</p>
+            <p className="text-center text-gray-400 py-10 text-sm">Aún no hay interacciones.</p>
           )}
 
           {!isLoading && interactions.map((interaction) => (
@@ -289,7 +307,15 @@ function ViewHistoryModal({ lead, onClose }) {
 
 // ─── Log Interaction Modal ────────────────────────────────────────────────────
 
-const LOG_EMPTY = { interaction_type: '', outcome: '', notes: '', interest_level: 0 }
+const LOG_EMPTY = { interaction_type: '', outcome: '', notes: '', interest_level: 0, duration_minutes: '', next_action: '' }
+
+const NEXT_ACTION_OPTIONS = [
+  'Llamar de nuevo',
+  'Enviar información',
+  'Agendar visita',
+  'Esperar respuesta',
+  'Hablar con coordinador',
+]
 
 function LogInteractionModal({ lead, onClose, onSuccess }) {
   const queryClient = useQueryClient()
@@ -300,8 +326,8 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
   const validate = () => {
     const errs = {}
-    if (!form.interaction_type) errs.interaction_type = 'Select a type.'
-    if (!form.outcome) errs.outcome = 'Select a result.'
+    if (!form.interaction_type) errs.interaction_type = 'Selecciona un tipo.'
+    if (!form.outcome) errs.outcome = 'Selecciona un resultado.'
     return errs
   }
 
@@ -319,8 +345,11 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     e.preventDefault()
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
-    const payload = { interaction_type: form.interaction_type, outcome: form.outcome, notes: form.notes }
+    const payload = { interaction_type: form.interaction_type, outcome: form.outcome }
+    if (form.notes) payload.notes = form.notes
     if (form.interest_level) payload.interest_level = form.interest_level
+    if (form.duration_minutes) payload.duration_minutes = parseInt(form.duration_minutes, 10)
+    if (form.next_action) payload.next_action = form.next_action
     mutation.mutate(payload)
   }
 
@@ -329,63 +358,124 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-2xl p-8 w-[480px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl p-8 w-[520px] max-h-[90vh] overflow-y-auto shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Log Interaction</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">Registrar interacción</h2>
 
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4 mb-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Tipo + Resultado */}
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Interaction type</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tipo de interacción <span className="text-red-500">*</span>
+              </label>
               <select value={form.interaction_type} onChange={set('interaction_type')} className={selectClass(errors.interaction_type)}>
-                <option value="">Select type</option>
-                <option value="CALL">Call</option>
+                <option value="">Seleccionar</option>
+                <option value="CALL">Llamada</option>
                 <option value="WHATSAPP">WhatsApp</option>
-                <option value="EMAIL">Mail</option>
-                <option value="NOTE">Note</option>
+                <option value="EMAIL">Email</option>
+                <option value="VISIT">Visita</option>
+                <option value="NOTE">Nota</option>
               </select>
               {errors.interaction_type && <p className="text-xs text-red-500 mt-1">{errors.interaction_type}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Result</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Resultado <span className="text-red-500">*</span>
+              </label>
               <select value={form.outcome} onChange={set('outcome')} className={selectClass(errors.outcome)}>
-                <option value="">Select status</option>
-                <option value="INTERESTED">Interested</option>
-                <option value="NOT_INTERESTED">Not interested</option>
-                <option value="NO_ANSWER">No answer</option>
-                <option value="CALLBACK">Callback</option>
-                <option value="SPEAK_COORDINATOR">Speak with coordinator</option>
+                <option value="">Seleccionar</option>
+                <option value="INTERESTED">Interesado</option>
+                <option value="NOT_INTERESTED">No interesado</option>
+                <option value="NO_ANSWER">No contestó</option>
+                <option value="CALLBACK">Llamar después</option>
+                <option value="SPEAK_COORDINATOR">Hablar coordinador</option>
               </select>
               {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
             </div>
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea
-              value={form.notes}
-              onChange={set('notes')}
-              placeholder="Enter detailed notes about the interaction..."
-              rows={3}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"
-            />
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Interest level</label>
+          {/* Nivel de interés */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nivel de interés <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+            </label>
             <InteractiveStarRating
               value={form.interest_level}
               onChange={(v) => setForm((prev) => ({ ...prev, interest_level: v }))}
             />
           </div>
 
+          {/* Duración */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Duración <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value={form.duration_minutes}
+                onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/[^0-9]/g, '') }))}
+                placeholder="ej. 5"
+                className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
+              />
+              <span className="text-sm text-gray-500">min</span>
+            </div>
+          </div>
+
+          {/* Notas */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notas <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <textarea
+              value={form.notes}
+              onChange={set('notes')}
+              placeholder="¿Cómo fue la interacción?"
+              rows={3}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"
+            />
+          </div>
+
+          {/* Próxima acción */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Próxima acción <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {NEXT_ACTION_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, next_action: prev.next_action === opt ? '' : opt }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    form.next_action === opt
+                      ? 'bg-[#213A8E] text-white border-[#213A8E]'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-[#213A8E]'
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={form.next_action}
+              onChange={set('next_action')}
+              placeholder="O escribe una acción personalizada..."
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+          </div>
+
           {mutation.isError && (
-            <p className="text-xs text-red-500 mb-4 text-center">
-              {mutation.error?.response?.data?.error ?? 'Could not save interaction.'}
+            <p className="text-xs text-red-500 text-center">
+              {mutation.error?.response?.data?.error ?? 'No se pudo guardar la interacción.'}
             </p>
           )}
 
@@ -394,7 +484,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
             disabled={mutation.isPending}
             className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
           >
-            {mutation.isPending ? 'Saving...' : 'Save Interaction'}
+            {mutation.isPending ? 'Guardando...' : 'Guardar interacción'}
           </button>
         </form>
       </div>
@@ -429,13 +519,13 @@ function ViewLeadModal({ lead, onClose }) {
           <div>
             {rating !== null ? (
               <>
-                <p className="text-xs text-gray-400 mb-0.5">Last rating:</p>
+                <p className="text-xs text-gray-400 mb-0.5">Última calificación:</p>
                 <p className="text-3xl font-bold text-gray-900 leading-none mb-1">{rating.toFixed(1)}</p>
                 <StarRating value={rating} />
-                <p className="text-xs text-gray-400 mt-1">Based on last interaction</p>
+                <p className="text-xs text-gray-400 mt-1">Basado en última interacción</p>
               </>
             ) : (
-              <p className="text-sm text-gray-400 mt-4">No interactions yet</p>
+              <p className="text-sm text-gray-400 mt-4">Sin interacciones aún</p>
             )}
           </div>
         </div>
@@ -444,22 +534,22 @@ function ViewLeadModal({ lead, onClose }) {
 
         <div className="space-y-3 text-sm">
           <div>
-            <p className="font-semibold text-gray-700 mb-0.5">Contact:</p>
+            <p className="font-semibold text-gray-700 mb-0.5">Contacto:</p>
             <p className="text-gray-600">{lead.email || '—'}&nbsp;|&nbsp;{lead.phone}</p>
           </div>
           <div>
-            <p className="font-semibold text-gray-700 mb-0.5">Source:</p>
+            <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
             <p className="text-gray-600">{SOURCE_ICON[lead.source]} {SOURCE_LABELS[lead.source] || lead.source}</p>
           </div>
           {lastInteraction?.notes && (
             <div>
-              <p className="font-semibold text-gray-700 mb-0.5">Last note:</p>
+              <p className="font-semibold text-gray-700 mb-0.5">Última nota:</p>
               <p className="text-gray-600">{lastInteraction.notes}</p>
             </div>
           )}
           {lead.program_interest && (
             <div>
-              <p className="font-semibold text-gray-700 mb-0.5">Program interest:</p>
+              <p className="font-semibold text-gray-700 mb-0.5">Interés en programa:</p>
               <p className="text-gray-600">{lead.program_interest}</p>
             </div>
           )}
@@ -476,25 +566,25 @@ function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-2xl p-8 w-[420px] shadow-xl text-center">
         <h2 className="text-lg font-bold text-gray-900 mb-3">
-          Are you sure you want to proceed with releasing this lead?
+          ¿Seguro que quieres desasignar este lead?
         </h2>
         <p className="text-sm text-gray-500 mb-8">
-          This lead will become available for other salespersons to pick up.
-          You will lose access to their interaction history.
+          El lead quedará disponible para otros vendedores.
+          Perderás acceso al historial de interacciones.
         </p>
         <button
           onClick={onKeep}
           disabled={isLoading}
           className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold mb-3 hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
         >
-          Keep lead
+          Conservar lead
         </button>
         <button
           onClick={onRelease}
           disabled={isLoading}
           className="w-full py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
         >
-          {isLoading ? 'Releasing…' : 'Release lead'}
+          {isLoading ? 'Desasignando…' : 'Desasignar lead'}
         </button>
       </div>
     </div>
@@ -513,8 +603,8 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
 
   const validate = () => {
     const errs = {}
-    if (!form.name.trim()) errs.name = 'Name is required.'
-    if (!form.phone.trim()) errs.phone = 'Phone is required.'
+    if (!form.name.trim()) errs.name = 'El nombre es requerido.'
+    if (!form.phone.trim()) errs.phone = 'El teléfono es requerido.'
     return errs
   }
 
@@ -559,19 +649,19 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-6">New Lead</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">Nuevo lead</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full name<span className="text-red-500 ml-0.5">*</span>
+              Nombre completo<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="text" value={form.name} onChange={set('name')} className={inputClass('name')} />
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Phone<span className="text-red-500 ml-0.5">*</span>
+              Teléfono<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="tel" value={form.phone} onChange={set('phone')} className={inputClass('phone')} />
             {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
@@ -582,7 +672,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fuente</label>
             <select
               value={form.source}
               onChange={set('source')}
@@ -596,7 +686,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Program interest</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
             <input type="text" value={form.program_interest} onChange={set('program_interest')} className={inputClass('program_interest')} />
           </div>
 
@@ -607,7 +697,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
               onChange={(e) => setForm((prev) => ({ ...prev, is_company: e.target.checked }))}
               className="w-4 h-4 accent-[#1e3164] rounded"
             />
-            <span className="text-sm font-medium text-gray-700">Company lead</span>
+            <span className="text-sm font-medium text-gray-700">Lead empresarial</span>
           </label>
 
           <div className="flex gap-3 pt-2">
@@ -616,14 +706,14 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              Cancelar
             </button>
             <button
               type="submit"
               disabled={isLoading}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
-              {isLoading ? 'Creating…' : 'Create lead'}
+              {isLoading ? 'Creando…' : 'Crear lead'}
             </button>
           </div>
         </form>
@@ -661,7 +751,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Change status</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Cambiar estado</h2>
         <p className="text-sm text-gray-500 mb-6">{lead.name}</p>
 
         <form onSubmit={handleSubmit}>
@@ -689,7 +779,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
 
           {mutation.isError && (
             <p className="text-xs text-red-500 mb-4 text-center">
-              {mutation.error?.response?.data?.error ?? 'Could not update status.'}
+              {mutation.error?.response?.data?.error ?? 'No se pudo actualizar el estado.'}
             </p>
           )}
 
@@ -698,7 +788,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
             disabled={mutation.isPending || status === lead.status}
             className="w-full py-3 rounded-xl bg-[#1e3164] text-white font-semibold hover:bg-[#162550] transition-colors disabled:opacity-60"
           >
-            {mutation.isPending ? 'Saving…' : 'Save'}
+            {mutation.isPending ? 'Guardando…' : 'Guardar'}
           </button>
         </form>
       </div>
@@ -719,7 +809,7 @@ function FilterDropdown({ value, onChange }) {
   }, [])
 
   const options = [
-    { value: '', label: 'All statuses' },
+    { value: '', label: 'Todos los estados' },
     ...Object.entries(STATUS_LABELS).map(([v, label]) => ({ value: v, label })),
   ]
 
@@ -734,7 +824,7 @@ function FilterDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 010 2H4a1 1 0 01-1-1zM6 10a1 1 0 011-1h10a1 1 0 010 2H7a1 1 0 01-1-1zM9 16a1 1 0 011-1h4a1 1 0 010 2h-4a1 1 0 01-1-1z" />
         </svg>
-        {value ? STATUS_LABELS[value] : 'Filter'}
+        {value ? STATUS_LABELS[value] : 'Filtrar'}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
@@ -768,11 +858,11 @@ function SortDropdown({ value, onChange }) {
   }, [])
 
   const options = [
-    { value: 'default', label: 'Default' },
-    { value: 'name_asc', label: 'Name A→Z' },
-    { value: 'name_desc', label: 'Name Z→A' },
-    { value: 'newest', label: 'Newest first' },
-    { value: 'oldest', label: 'Oldest first' },
+    { value: 'default', label: 'Por defecto' },
+    { value: 'name_asc', label: 'Nombre A→Z' },
+    { value: 'name_desc', label: 'Nombre Z→A' },
+    { value: 'newest', label: 'Más reciente' },
+    { value: 'oldest', label: 'Más antiguo' },
   ]
 
   const active = options.find((o) => o.value === value)
@@ -788,7 +878,7 @@ function SortDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
         </svg>
-        {active?.label ?? 'Sort by'}
+        {active?.label ?? 'Ordenar'}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
@@ -853,16 +943,16 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
       setResult(data)
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'Conversion failed. Please try again.'
+      const msg = err.response?.data?.error ?? 'Error al convertir. Intenta de nuevo.'
       setErrors((prev) => ({ ...prev, server: msg }))
     },
   })
 
   const validate = () => {
     const errs = {}
-    if (!cedula.trim()) errs.cedula = 'Cédula is required.'
-    else if (!validateCedulaEcuatoriana(cedula)) errs.cedula = 'Invalid Ecuadorian cédula.'
-    if (!programId) errs.programId = 'Please select a program.'
+    if (!cedula.trim()) errs.cedula = 'La cédula es requerida.'
+    else if (!validateCedulaEcuatoriana(cedula)) errs.cedula = 'Cédula ecuatoriana inválida.'
+    if (!programId) errs.programId = 'Selecciona un programa.'
     return errs
   }
 
@@ -887,9 +977,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Lead converted!</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">¡Lead convertido!</h2>
           <p className="text-sm text-gray-500 mb-6">
-            <span className="font-semibold text-gray-800">{lead.name}</span> is now a Bootcamper.
+            <span className="font-semibold text-gray-800">{lead.name}</span> ahora es Bootcamper.
           </p>
 
           <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-2 mb-6">
@@ -899,14 +989,14 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             </div>
             {result.temporary_password && (
               <div className="flex justify-between items-center">
-                <span className="text-gray-500">Temporary password</span>
+                <span className="text-gray-500">Contraseña temporal</span>
                 <span className="font-mono font-bold text-[#213A8E] bg-blue-50 px-2 py-0.5 rounded">
                   {result.temporary_password}
                 </span>
               </div>
             )}
             {result.is_returning && (
-              <p className="text-xs text-amber-600 mt-1">⚠ Returning bootcamper — existing account was reused.</p>
+              <p className="text-xs text-amber-600 mt-1">⚠ Bootcamper recurrente — se reutilizó la cuenta existente.</p>
             )}
           </div>
 
@@ -914,7 +1004,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             onClick={() => { onSuccess(); onClose() }}
             className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
           >
-            Done
+            Listo
           </button>
         </div>
       </div>
@@ -931,9 +1021,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Convert Lead</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">Convertir lead</h2>
         <p className="text-sm text-gray-500 mb-6">
-          Converting <span className="font-semibold text-gray-800">{lead.name}</span> to a Bootcamper.
+          Convirtiendo a <span className="font-semibold text-gray-800">{lead.name}</span> en Bootcamper.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -947,21 +1037,21 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               maxLength={10}
               value={cedula}
               onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
-              placeholder="10 digits"
+              placeholder="10 dígitos"
               className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
                 errors.cedula ? 'border-red-400' : cedula.length === 10 && validateCedulaEcuatoriana(cedula) ? 'border-green-400' : 'border-gray-200'
               }`}
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
             {cedula.length === 10 && validateCedulaEcuatoriana(cedula) && (
-              <p className="text-xs text-green-600 mt-1">✓ Valid cédula</p>
+              <p className="text-xs text-green-600 mt-1">✓ Cédula válida</p>
             )}
           </div>
 
           {/* Program */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Program <span className="text-red-500">*</span>
+              Programa <span className="text-red-500">*</span>
             </label>
             <select
               value={programId}
@@ -971,7 +1061,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
                 errors.programId ? 'border-red-400' : 'border-gray-200'
               }`}
             >
-              <option value="">{loadingPrograms ? 'Loading programs…' : 'Select a program'}</option>
+              <option value="">{loadingPrograms ? 'Cargando programas…' : 'Selecciona un programa'}</option>
               {programs.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} — starts {p.start_date} · ${p.total_cost}
@@ -994,7 +1084,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
           {/* Phone */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
             <input
               type="tel"
               value={phone}
@@ -1013,14 +1103,14 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              Cancelar
             </button>
             <button
               type="submit"
               disabled={convertMutation.isPending}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
-              {convertMutation.isPending ? 'Converting…' : 'Convert to Bootcamper'}
+              {convertMutation.isPending ? 'Convirtiendo…' : 'Convertir a Bootcamper'}
             </button>
           </div>
         </form>
@@ -1058,20 +1148,20 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
             onClick={() => { onView(); setOpen(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            View lead
+            Ver lead
           </button>
           <button
             onClick={() => { onViewHistory(); setOpen(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            View history
+            Ver historial
           </button>
           {isOwned && (
             <button
               onClick={() => { onLogInteraction(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Log interaction
+              Registrar interacción
             </button>
           )}
           {isOwned && (
@@ -1079,7 +1169,7 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               onClick={() => { onChangeStatus(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Change status
+              Cambiar estado
             </button>
           )}
           {isOwned && lead.status === 'INTERESTED' && (
@@ -1087,7 +1177,7 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               onClick={() => { onConvert(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
             >
-              Convert lead
+              Convertir lead
             </button>
           )}
           {isOwned ? (
@@ -1095,14 +1185,14 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               onClick={() => { onRelease(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Release lead
+              Desasignar lead
             </button>
           ) : (
             <button
               onClick={() => { onAssign(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Assign lead
+              Asignarme
             </button>
           )}
         </div>
@@ -1118,7 +1208,7 @@ function Pagination({ page, totalPages, onPrev, onNext }) {
   return (
     <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
       <p className="text-sm text-gray-500">
-        Page {page} of {totalPages}
+        Página {page} de {totalPages}
       </p>
       <div className="flex items-center gap-2">
         <button
@@ -1126,14 +1216,14 @@ function Pagination({ page, totalPages, onPrev, onNext }) {
           disabled={page === 1}
           className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          ← Prev
+          ← Anterior
         </button>
         <button
           onClick={onNext}
           disabled={page === totalPages}
           className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          Next →
+          Siguiente →
         </button>
       </div>
     </div>
@@ -1215,10 +1305,10 @@ export default function LeadsDashboard() {
     mutationFn: assignLead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
-      showToast('Lead assigned to you successfully!')
+      showToast('Lead asignado correctamente.')
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'Could not assign lead.'
+      const msg = err.response?.data?.error ?? 'No se pudo asignar el lead.'
       showToast(msg, 'error')
     },
   })
@@ -1228,10 +1318,10 @@ export default function LeadsDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       setReleaseTarget(null)
-      showToast('Lead released successfully.')
+      showToast('Lead desasignado correctamente.')
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'Could not release lead.'
+      const msg = err.response?.data?.error ?? 'No se pudo desasignar el lead.'
       showToast(msg, 'error')
     },
   })
@@ -1241,10 +1331,10 @@ export default function LeadsDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       setShowCreate(false)
-      showToast('Lead created successfully!')
+      showToast('Lead creado correctamente.')
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'Could not create lead.'
+      const msg = err.response?.data?.error ?? 'No se pudo crear el lead.'
       showToast(msg, 'error')
     },
   })
@@ -1254,7 +1344,7 @@ export default function LeadsDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-gray-900">
-          Lead's Dashboard
+          Dashboard de Leads
         </h1>
         <button
           onClick={() => setShowCreate(true)}
@@ -1263,21 +1353,21 @@ export default function LeadsDashboard() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          New Lead
+          Nuevo lead
         </button>
       </div>
 
       {/* Stat Cards */}
       <div className="flex gap-4 mb-8">
-        <StatCard label="Total leads"    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
-        <StatCard label="Assigned to me" value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
-        <StatCard label="Conversions"    value={conversions} loading={isLoading} />
-        <StatCard label="Not interested" value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
+        <StatCard label="Total leads"      value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
+        <StatCard label="Asignados a mí"   value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
+        <StatCard label="Conversiones"     value={conversions} loading={isLoading} />
+        <StatCard label="No interesados"   value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
       </div>
 
       {/* Leads Table */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">Available Leads</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Leads</h2>
 
         {/* Search + controls */}
         <div className="flex items-center gap-3 mb-5">
@@ -1287,7 +1377,7 @@ export default function LeadsDashboard() {
             </svg>
             <input
               type="text"
-              placeholder="Search by name, email or phone"
+              placeholder="Buscar por nombre, email o teléfono"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -1313,14 +1403,14 @@ export default function LeadsDashboard() {
         {/* Table */}
         {isError && (
           <p className="text-center text-red-500 py-8 text-sm">
-            Could not load leads. Make sure you are logged in.
+            No se pudieron cargar los leads. Verifica que estés autenticado.
           </p>
         )}
 
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
-              {['Name', 'Mail', 'Phone', 'Source', 'Status', 'Assigned To', 'Actions'].map((h) => (
+              {['Nombre', 'Email', 'Teléfono', 'Fuente', 'Estado', 'Asignado a', 'Acciones'].map((h) => (
                 <th key={h} className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide">
                   {h}
                 </th>
@@ -1333,7 +1423,7 @@ export default function LeadsDashboard() {
             {!isLoading && !isError && pageLeads.length === 0 && (
               <tr>
                 <td colSpan={7} className="text-center text-gray-400 py-10">
-                  No leads found.
+                  No se encontraron leads.
                 </td>
               </tr>
             )}
@@ -1357,9 +1447,7 @@ export default function LeadsDashboard() {
                 <td className="py-3.5 px-3 text-gray-500">{lead.phone}</td>
                 <td className="py-3.5 px-3 text-gray-500">{SOURCE_LABELS[lead.source] || lead.source}</td>
                 <td className="py-3.5 px-3">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[lead.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {STATUS_LABELS[lead.status] ?? lead.status}
-                  </span>
+                  <LeadStatusBadge status={lead.status} lastOutcome={lead.last_outcome} />
                 </td>
                 <td className="py-3.5 px-3">
                   {lead._isOwned ? (
@@ -1367,11 +1455,11 @@ export default function LeadsDashboard() {
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
                         {lead.owner_name?.charAt(0) ?? 'Y'}
                       </div>
-                      <span className="text-gray-700 text-sm">You</span>
+                      <span className="text-gray-700 text-sm">Tú</span>
                     </div>
                   ) : (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                      Unassigned
+                      Sin asignar
                     </span>
                   )}
                 </td>
@@ -1412,7 +1500,7 @@ export default function LeadsDashboard() {
         <LogInteractionModal
           lead={logLead}
           onClose={() => setLogLead(null)}
-          onSuccess={() => showToast('Interaction logged successfully!')}
+          onSuccess={() => showToast('Interacción registrada correctamente.')}
         />
       )}
 
@@ -1420,7 +1508,7 @@ export default function LeadsDashboard() {
         <ConvertLeadModal
           lead={convertTarget}
           onClose={() => setConvertTarget(null)}
-          onSuccess={() => showToast(`${convertTarget.name} converted successfully!`)}
+          onSuccess={() => showToast(`${convertTarget.name} convertido correctamente.`)}
         />
       )}
 
@@ -1428,7 +1516,7 @@ export default function LeadsDashboard() {
         <UpdateStatusModal
           lead={statusLead}
           onClose={() => setStatusLead(null)}
-          onSuccess={() => showToast('Status updated successfully!')}
+          onSuccess={() => showToast('Estado actualizado correctamente.')}
         />
       )}
 
