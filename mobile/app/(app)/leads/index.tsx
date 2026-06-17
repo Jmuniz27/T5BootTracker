@@ -35,20 +35,20 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: string }> = {
-  NEW:               { bg: '#f3f4f6', color: '#6b7280', label: 'Nuevo' },
-  CONTACTED:         { bg: '#fef3c7', color: '#d97706', label: 'Contactado' },
-  INTERESTED:        { bg: '#dbeafe', color: '#1d4ed8', label: 'Interesado' },
+  NEW:               { bg: '#fefce8', color: '#a16207', label: 'Nuevo' },
+  CONTACTED:         { bg: '#dbeafe', color: '#1d4ed8', label: 'Contactado' },
+  INTERESTED:        { bg: '#dcfce7', color: '#15803d', label: 'Interesado' },
   NOT_INTERESTED:    { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
-  SPEAK_COORDINATOR: { bg: '#ede9fe', color: '#7c3aed', label: 'Hablar coordinador' },
-  CONVERTED:         { bg: '#dcfce7', color: '#16a34a', label: 'Convertido' },
+  SPEAK_COORDINATOR: { bg: '#fef9c3', color: '#a16207', label: 'Hablar coordinador' },
+  CONVERTED:         { bg: '#f3e8ff', color: '#7e22ce', label: 'Convertido' },
 };
 
 const OUTCOME_CONFIG: Record<string, { bg: string; color: string; label: string }> = {
-  INTERESTED:        { bg: '#dbeafe', color: '#1d4ed8', label: 'Interesado' },
+  INTERESTED:        { bg: '#dcfce7', color: '#15803d', label: 'Interesado' },
   NOT_INTERESTED:    { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
-  SPEAK_COORDINATOR: { bg: '#ede9fe', color: '#7c3aed', label: 'Hablar coordinador' },
-  NO_ANSWER:         { bg: '#fef3c7', color: '#d97706', label: 'No contestó' },
-  CALLBACK:          { bg: '#e0f2fe', color: '#0369a1', label: 'Llamar después' },
+  SPEAK_COORDINATOR: { bg: '#f3e8ff', color: '#7e22ce', label: 'Hablar coordinador' },
+  NO_ANSWER:         { bg: '#f3f4f6', color: '#4b5563', label: 'No contestó' },
+  CALLBACK:          { bg: '#fef9c3', color: '#a16207', label: 'Llamar después' },
 };
 
 const DISPLAY_FILTERS: { value: string | null; label: string }[] = [
@@ -67,7 +67,7 @@ function getDisplayKey(lead: Lead): string {
   return lead.last_outcome ?? 'NEW';
 }
 
-const AVATAR_PALETTE = ['#bfdbfe', '#fef08a', '#bbf7d0', '#fecaca', '#e9d5ff', '#fed7aa'];
+const AVATAR_PALETTE = ['#213A8E', '#8b5cf6', '#14b8a6', '#f43f5e', '#f59e0b', '#0891b2', '#ec4899', '#6366f1'];
 
 function avatarColor(name: string): string {
   let h = 0;
@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.navy,
+    color: '#ffffff',
   },
   cardInfo: {
     flex: 1,
