@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, updateLeadStatus } from '../api/leads.api'
 
 const PAGE_SIZE = 10
 
@@ -27,6 +27,7 @@ const STATUS_LABELS = {
   INTERESTED: 'Interested',
   NOT_INTERESTED: 'Not interested',
   SPEAK_COORDINATOR: 'Speak coordinator',
+  WANTS_NEXT_CALL: 'Wants next call',
   CONVERTED: 'Converted',
 }
 
@@ -36,6 +37,7 @@ const STATUS_COLORS = {
   INTERESTED: 'bg-green-100 text-green-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
   SPEAK_COORDINATOR: 'bg-yellow-100 text-yellow-700',
+  WANTS_NEXT_CALL: 'bg-orange-100 text-orange-700',
   CONVERTED: 'bg-purple-100 text-purple-700',
 }
 
@@ -594,6 +596,80 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
   )
 }
 
+// ─── Update Status Modal ──────────────────────────────────────────────────────
+
+function UpdateStatusModal({ lead, onClose, onSuccess }) {
+  const queryClient = useQueryClient()
+  const [status, setStatus] = useState(lead.status)
+
+  const mutation = useMutation({
+    mutationFn: (newStatus) => updateLeadStatus(lead.id, { status: newStatus }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      onSuccess?.()
+      onClose()
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (status !== lead.status) mutation.mutate(status)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-2xl p-8 w-[400px] shadow-xl relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Change status</h2>
+        <p className="text-sm text-gray-500 mb-6">{lead.name}</p>
+
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-2 mb-6">
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setStatus(value)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                  status === value
+                    ? 'border-[#1e3164] bg-blue-50 text-[#1e3164]'
+                    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+                {status === value && (
+                  <svg className="w-4 h-4 text-[#1e3164]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {mutation.isError && (
+            <p className="text-xs text-red-500 mb-4 text-center">
+              {mutation.error?.response?.data?.error ?? 'Could not update status.'}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={mutation.isPending || status === lead.status}
+            className="w-full py-3 rounded-xl bg-[#1e3164] text-white font-semibold hover:bg-[#162550] transition-colors disabled:opacity-60"
+          >
+            {mutation.isPending ? 'Saving…' : 'Save'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ─── Filter Dropdown ──────────────────────────────────────────────────────────
 
 function FilterDropdown({ value, onChange }) {
@@ -699,7 +775,7 @@ function SortDropdown({ value, onChange }) {
 
 // ─── Row Actions Dropdown ─────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHistory, onLogInteraction }) {
+function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onChangeStatus }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -740,6 +816,14 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
               Log interaction
+            </button>
+          )}
+          {isOwned && (
+            <button
+              onClick={() => { onChangeStatus(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Change status
             </button>
           )}
           {isOwned ? (
@@ -817,6 +901,7 @@ export default function LeadsDashboard() {
   const [viewLead, setViewLead]           = useState(null)
   const [historyLead, setHistoryLead]     = useState(null)
   const [logLead, setLogLead]             = useState(null)
+  const [statusLead, setStatusLead]       = useState(null)
   const [releaseTarget, setReleaseTarget] = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [toast, setToast]                 = useState(null) // { message, type }
@@ -1043,6 +1128,7 @@ export default function LeadsDashboard() {
                     onView={() => setViewLead(lead)}
                     onViewHistory={() => setHistoryLead(lead)}
                     onLogInteraction={() => setLogLead(lead)}
+                    onChangeStatus={() => setStatusLead(lead)}
                     onRelease={() => setReleaseTarget(lead)}
                     onAssign={() => assignMutation.mutate(lead.id)}
                   />
@@ -1072,6 +1158,14 @@ export default function LeadsDashboard() {
           lead={logLead}
           onClose={() => setLogLead(null)}
           onSuccess={() => showToast('Interaction logged successfully!')}
+        />
+      )}
+
+      {statusLead && (
+        <UpdateStatusModal
+          lead={statusLead}
+          onClose={() => setStatusLead(null)}
+          onSuccess={() => showToast('Status updated successfully!')}
         />
       )}
 
