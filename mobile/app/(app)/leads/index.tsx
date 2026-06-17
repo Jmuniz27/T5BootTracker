@@ -449,14 +449,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#c7d2fe',
+    backgroundColor: colors.navy,
     justifyContent: 'center',
     alignItems: 'center',
   },
   userAvatarText: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.navy,
+    color: '#ffffff',
   },
   // Title
   titleSection: {
@@ -566,6 +566,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   cardTop: {
     flexDirection: 'row',
