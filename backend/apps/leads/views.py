@@ -4,7 +4,7 @@ import uuid
 
 from django.core.paginator import Paginator
 from django.db import transaction, IntegrityError
-from django.db.models import Count, Q
+from django.db.models import Count, Q, OuterRef, Subquery
 from django.utils.dateparse import parse_date
 from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
@@ -36,7 +36,13 @@ class LeadListCreateView(APIView):
     permission_classes = [IsSalespersonOrAdmin]
 
     def _annotated_qs(self):
-        return Lead.objects.annotate(interaction_count=Count('interactions')).order_by('-created_at')
+        latest_outcome = Interaction.objects.filter(
+            lead=OuterRef('pk')
+        ).order_by('-created_at').values('outcome')[:1]
+        return Lead.objects.annotate(
+            interaction_count=Count('interactions'),
+            last_outcome=Subquery(latest_outcome),
+        ).order_by('-created_at')
 
     def _page_params(self, request):
         """Read and clamp ``page`` / ``page_size`` query params."""
@@ -323,6 +329,35 @@ class InteractionListCreateView(APIView):
         interaction = register_interaction(lead, request.user, serializer.validated_data)
 
         return Response(InteractionSerializer(interaction).data, status=status.HTTP_201_CREATED)
+
+
+class InteractionDetailView(APIView):
+    """PATCH /leads/{pk}/interactions/{interaction_pk}/ — edit an existing interaction."""
+    permission_classes = [IsSalespersonOrAdmin]
+
+    @extend_schema(
+        request=InteractionSerializer,
+        responses={
+            200: InteractionSerializer,
+            403: OpenApiResponse(description='Solo el vendedor que registró la interacción puede editarla'),
+            404: OpenApiResponse(description='Lead o interacción no encontrada'),
+        },
+        summary='Editar interacción',
+        description='Actualiza una interacción existente. Solo el vendedor que la registró o un admin.',
+        tags=['Leads'],
+    )
+    def patch(self, request, pk, interaction_pk):
+        lead = get_object_or_404(Lead, pk=pk)
+        interaction = get_object_or_404(Interaction, pk=interaction_pk, lead=lead)
+        if not request.user.is_administrator and interaction.salesperson != request.user:
+            return Response(
+                {'error': 'Solo el vendedor que registró esta interacción puede editarla.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = InteractionSerializer(interaction, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(InteractionSerializer(interaction).data)
 
 
 class ConvertLeadView(APIView):

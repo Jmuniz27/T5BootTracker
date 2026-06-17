@@ -29,6 +29,7 @@ class InteractionSerializer(serializers.ModelSerializer):
 
 class LeadListSerializer(serializers.ModelSerializer):
     interaction_count = serializers.IntegerField(read_only=True)
+    last_outcome = serializers.CharField(read_only=True, allow_null=True, default=None)
     days_assigned = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
 
@@ -37,7 +38,7 @@ class LeadListSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'phone', 'email', 'source', 'status',
             'is_company', 'program_interest', 'interaction_count',
-            'days_assigned', 'owner', 'owner_name', 'created_at',
+            'last_outcome', 'days_assigned', 'owner', 'owner_name', 'created_at',
         )
 
     def get_days_assigned(self, obj):

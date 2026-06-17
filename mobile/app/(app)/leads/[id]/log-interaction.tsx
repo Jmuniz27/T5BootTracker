@@ -20,11 +20,11 @@ import { logInteraction } from '../../../../src/api/leads.api';
 // ─── config ──────────────────────────────────────────────────────────────────
 
 const TYPES = [
-  { value: 'CALL',      label: 'Llamada',   icon: 'call-outline' },
-  { value: 'WHATSAPP',  label: 'WhatsApp',  icon: 'logo-whatsapp' },
-  { value: 'EMAIL',     label: 'Email',     icon: 'mail-outline' },
-  { value: 'VISIT',     label: 'Visita',    icon: 'location-outline' },
-  { value: 'NOTE',      label: 'Nota',      icon: 'create-outline' },
+  { value: 'CALL',      label: 'Llamada',  icon: 'call-outline' },
+  { value: 'WHATSAPP',  label: 'WhatsApp', icon: 'logo-whatsapp' },
+  { value: 'EMAIL',     label: 'Email',    icon: 'mail-outline' },
+  { value: 'VISIT',     label: 'Visita',   icon: 'location-outline' },
+  { value: 'NOTE',      label: 'Nota',     icon: 'create-outline' },
 ] as const;
 
 const OUTCOMES = [
@@ -33,6 +33,14 @@ const OUTCOMES = [
   { value: 'NO_ANSWER',         label: 'No contestó' },
   { value: 'CALLBACK',          label: 'Llamar después' },
   { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+] as const;
+
+export const NEXT_ACTION_OPTIONS = [
+  'Llamar de nuevo',
+  'Enviar información',
+  'Agendar visita',
+  'Esperar respuesta',
+  'Hablar con coordinador',
 ] as const;
 
 // ─── screen ──────────────────────────────────────────────────────────────────
@@ -50,7 +58,7 @@ export default function LogInteractionScreen() {
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
-  const notesRef    = useRef<TextInput>(null);
+  const notesRef     = useRef<TextInput>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
 
   const canSubmit = type !== null && outcome !== null && !loading;
@@ -85,28 +93,28 @@ export default function LogInteractionScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      {/* Header fijo fuera del KAV para que no suba con el teclado */}
+      <View style={styles.header}>
+        <TouchableOpacity hitSlop={8} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Registrar interacción</Text>
+        <TouchableOpacity
+          style={[styles.saveBtn, !canSubmit && styles.saveBtnDisabled]}
+          onPress={handleSubmit}
+          disabled={!canSubmit}
+        >
+          {loading
+            ? <ActivityIndicator size="small" color={colors.white} />
+            : <Text style={styles.saveBtnText}>Guardar</Text>
+          }
+        </TouchableOpacity>
+      </View>
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity hitSlop={8} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Registrar interacción</Text>
-          <TouchableOpacity
-            style={[styles.saveBtn, !canSubmit && styles.saveBtnDisabled]}
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-          >
-            {loading
-              ? <ActivityIndicator size="small" color={colors.white} />
-              : <Text style={styles.saveBtnText}>Guardar</Text>
-            }
-          </TouchableOpacity>
-        </View>
-
         <ScrollView
           contentContainerStyle={styles.body}
           keyboardShouldPersistTaps="handled"
@@ -188,7 +196,7 @@ export default function LogInteractionScreen() {
           {/* Duración */}
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>
-              Duración <Text style={styles.optional}>(min, opcional)</Text>
+              Duración <Text style={styles.optional}>(opcional)</Text>
             </Text>
             <View style={styles.durationRow}>
               <TextInput
@@ -206,18 +214,9 @@ export default function LogInteractionScreen() {
 
           {/* Notas */}
           <View style={styles.section}>
-            <View style={styles.notesLabelRow}>
-              <Text style={styles.sectionLabel}>
-                Notas <Text style={styles.optional}>(opcional)</Text>
-              </Text>
-              <TouchableOpacity
-                hitSlop={8}
-                onPress={() => notesRef.current?.focus()}
-                style={styles.micBtn}
-              >
-                <Ionicons name="mic-outline" size={20} color={colors.navy} />
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.sectionLabel}>
+              Notas <Text style={styles.optional}>(opcional)</Text>
+            </Text>
             <TextInput
               ref={notesRef}
               style={styles.notesInput}
@@ -236,11 +235,25 @@ export default function LogInteractionScreen() {
             <Text style={styles.sectionLabel}>
               Próxima acción <Text style={styles.optional}>(opcional)</Text>
             </Text>
+            <View style={styles.chipRow}>
+              {NEXT_ACTION_OPTIONS.map((opt) => {
+                const active = nextAction === opt;
+                return (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[styles.chip, active && styles.chipActive]}
+                    onPress={() => setNextAction(active ? '' : opt)}
+                  >
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             <TextInput
               style={styles.nextActionInput}
               value={nextAction}
               onChangeText={setNextAction}
-              placeholder="ej. Llamar el lunes, enviar propuesta..."
+              placeholder="O escribe una acción personalizada..."
               placeholderTextColor={colors.textMuted}
             />
           </View>
@@ -249,7 +262,6 @@ export default function LogInteractionScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Toast */}
       <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
         <Ionicons name="checkmark-circle" size={18} color={colors.white} />
         <Text style={styles.toastText}>Interacción guardada</Text>
@@ -261,10 +273,7 @@ export default function LogInteractionScreen() {
 // ─── styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  screen: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -275,11 +284,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
   saveBtn: {
     backgroundColor: colors.navy,
     borderRadius: 8,
@@ -288,181 +293,81 @@ const styles = StyleSheet.create({
     minWidth: 72,
     alignItems: 'center',
   },
-  saveBtnDisabled: {
-    opacity: 0.4,
-  },
-  saveBtnText: {
-    color: colors.white,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  body: {
-    padding: 16,
-    gap: 24,
-    paddingBottom: 40,
-  },
-  section: {
-    gap: 10,
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  required: {
-    color: '#dc2626',
-  },
-  optional: {
-    fontWeight: '400',
-    color: colors.textMuted,
-    fontSize: 13,
-  },
+  saveBtnDisabled: { opacity: 0.4 },
+  saveBtnText: { color: colors.white, fontWeight: '700', fontSize: 14 },
+  body: { padding: 16, gap: 24, paddingBottom: 40 },
+  section: { gap: 10 },
+  sectionLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  required: { color: '#dc2626' },
+  optional: { fontWeight: '400', color: colors.textMuted, fontSize: 13 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  micBtn: { padding: 4 },
   // Type grid
-  typeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   typeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 10, borderWidth: 1.5, borderColor: colors.border,
     backgroundColor: colors.white,
   },
-  typeBtnActive: {
-    backgroundColor: colors.navy,
-    borderColor: colors.navy,
-  },
-  typeBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  typeBtnTextActive: {
-    color: colors.white,
-  },
-  // Outcome list
-  outcomeList: {
-    gap: 8,
-  },
+  typeBtnActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  typeBtnText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  typeBtnTextActive: { color: colors.white },
+  // Outcome
+  outcomeList: { gap: 8 },
   outcomeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: colors.white, borderRadius: 10,
+    borderWidth: 1.5, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 12,
   },
-  outcomeBtnActive: {
-    borderColor: colors.navy,
-    backgroundColor: '#f0f4ff',
-  },
+  outcomeBtnActive: { borderColor: colors.navy, backgroundColor: '#f0f4ff' },
   radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 20, height: 20, borderRadius: 10,
+    borderWidth: 2, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
   },
-  radioActive: {
-    borderColor: colors.navy,
-  },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.navy,
-  },
-  outcomeBtnText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
-  outcomeBtnTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
+  radioActive: { borderColor: colors.navy },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.navy },
+  outcomeBtnText: { fontSize: 14, color: colors.textMuted, fontWeight: '500' },
+  outcomeBtnTextActive: { color: colors.textPrimary, fontWeight: '600' },
   // Stars
-  starsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  starsLabel: {
-    marginLeft: 4,
-    fontSize: 13,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
+  starsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  starsLabel: { marginLeft: 4, fontSize: 13, color: colors.textMuted, fontWeight: '600' },
   // Duration
-  durationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   durationInput: {
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
-    width: 90,
-    textAlign: 'center',
+    backgroundColor: colors.white, borderRadius: 10,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: colors.textPrimary,
+    width: 90, textAlign: 'center',
   },
-  durationUnit: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
+  durationUnit: { fontSize: 14, color: colors.textMuted, fontWeight: '500' },
   // Notes
-  notesLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  micBtn: {
-    padding: 4,
-  },
   notesInput: {
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
-    minHeight: 100,
+    backgroundColor: colors.white, borderRadius: 10,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: colors.textPrimary, minHeight: 100,
   },
-  // Next action
+  // Next action chips
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  chipText: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
+  chipTextActive: { color: colors.white, fontWeight: '600' },
   nextActionInput: {
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
+    backgroundColor: colors.white, borderRadius: 10,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: colors.textPrimary,
   },
-  errorText: {
-    color: '#dc2626',
-    fontSize: 13,
-    textAlign: 'center',
-  },
+  errorText: { color: '#dc2626', fontSize: 13, textAlign: 'center' },
   // Toast
   toast: {
     position: 'absolute',
@@ -481,9 +386,5 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  toastText: {
-    color: colors.white,
-    fontWeight: '600',
-    fontSize: 14,
-  },
+  toastText: { color: colors.white, fontWeight: '600', fontSize: 14 },
 });

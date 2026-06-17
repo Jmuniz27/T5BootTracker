@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -53,6 +53,14 @@ const OUTCOMES = [
   { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
 ] as const;
 
+const NEXT_ACTION_OPTIONS = [
+  'Llamar de nuevo',
+  'Enviar información',
+  'Agendar visita',
+  'Esperar respuesta',
+  'Hablar con coordinador',
+] as const;
+
 function formatDate(iso: string) {
   const d = new Date(iso);
   return d.toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -68,14 +76,17 @@ interface EditModalProps {
 }
 
 function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
-  const [type, setType]       = useState(interaction?.interaction_type ?? '');
-  const [outcome, setOutcome] = useState(interaction?.outcome ?? '');
-  const [stars, setStars]     = useState<number | null>(interaction?.interest_level ?? null);
-  const [notes, setNotes]     = useState(interaction?.notes ?? '');
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [type, setType]             = useState(interaction?.interaction_type ?? '');
+  const [outcome, setOutcome]       = useState(interaction?.outcome ?? '');
+  const [stars, setStars]           = useState<number | null>(interaction?.interest_level ?? null);
+  const [notes, setNotes]           = useState(interaction?.notes ?? '');
+  const [duration, setDuration]     = useState(interaction?.duration_minutes?.toString() ?? '');
+  const [nextAction, setNextAction] = useState(interaction?.next_action ?? '');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
 
-  const canSave = type !== '' && outcome !== '' && !loading;
+  const notesRef = useRef<TextInput>(null);
+  const canSave  = type !== '' && outcome !== '' && !loading;
 
   async function handleSave() {
     if (!interaction || !canSave) return;
@@ -87,6 +98,8 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
         outcome,
         interest_level: stars,
         notes: notes.trim() || undefined,
+        duration_minutes: duration ? parseInt(duration, 10) : null,
+        next_action: nextAction.trim() || undefined,
       });
       onSaved();
     } catch {
@@ -98,26 +111,26 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
   return (
     <Modal visible={interaction !== null} animationType="slide" presentationStyle="pageSheet">
       <SafeAreaView style={modal.screen}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          {/* Header */}
-          <View style={modal.header}>
-            <TouchableOpacity hitSlop={8} onPress={onClose}>
-              <Text style={modal.cancelText}>Cancelar</Text>
-            </TouchableOpacity>
-            <Text style={modal.headerTitle}>Editar interacción</Text>
-            <TouchableOpacity
-              style={[modal.saveBtn, !canSave && modal.saveBtnDisabled]}
-              onPress={handleSave}
-              disabled={!canSave}
-            >
-              {loading
-                ? <ActivityIndicator size="small" color={colors.white} />
-                : <Text style={modal.saveBtnText}>Guardar</Text>
-              }
-            </TouchableOpacity>
-          </View>
+        {/* Header fijo fuera del KAV */}
+        <View style={modal.header}>
+          <TouchableOpacity hitSlop={8} onPress={onClose}>
+            <Text style={modal.cancelText}>Cancelar</Text>
+          </TouchableOpacity>
+          <Text style={modal.headerTitle}>Editar interacción</Text>
+          <TouchableOpacity
+            style={[modal.saveBtn, !canSave && modal.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={!canSave}
+          >
+            {loading
+              ? <ActivityIndicator size="small" color={colors.white} />
+              : <Text style={modal.saveBtnText}>Guardar</Text>
+            }
+          </TouchableOpacity>
+        </View>
 
-          <ScrollView contentContainerStyle={modal.body} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView contentContainerStyle={modal.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {/* Tipo */}
             <View style={modal.section}>
               <Text style={modal.sectionLabel}>Tipo <Text style={modal.required}>*</Text></Text>
@@ -160,7 +173,7 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
               </View>
             </View>
 
-            {/* Estrellas */}
+            {/* Nivel de interés */}
             <View style={modal.section}>
               <Text style={modal.sectionLabel}>Nivel de interés <Text style={modal.optional}>(opcional)</Text></Text>
               <View style={modal.starsRow}>
@@ -176,10 +189,28 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
               </View>
             </View>
 
+            {/* Duración */}
+            <View style={modal.section}>
+              <Text style={modal.sectionLabel}>Duración <Text style={modal.optional}>(opcional)</Text></Text>
+              <View style={modal.durationRow}>
+                <TextInput
+                  style={modal.durationInput}
+                  value={duration}
+                  onChangeText={(v) => setDuration(v.replace(/[^0-9]/g, ''))}
+                  placeholder="ej. 5"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="numeric"
+                  maxLength={3}
+                />
+                <Text style={modal.durationUnit}>min</Text>
+              </View>
+            </View>
+
             {/* Notas */}
             <View style={modal.section}>
               <Text style={modal.sectionLabel}>Notas <Text style={modal.optional}>(opcional)</Text></Text>
               <TextInput
+                ref={notesRef}
                 style={modal.notesInput}
                 value={notes}
                 onChangeText={setNotes}
@@ -188,6 +219,32 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
+              />
+            </View>
+
+            {/* Próxima acción */}
+            <View style={modal.section}>
+              <Text style={modal.sectionLabel}>Próxima acción <Text style={modal.optional}>(opcional)</Text></Text>
+              <View style={modal.chipRow}>
+                {NEXT_ACTION_OPTIONS.map((opt) => {
+                  const active = nextAction === opt;
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[modal.chip, active && modal.chipActive]}
+                      onPress={() => setNextAction(active ? '' : opt)}
+                    >
+                      <Text style={[modal.chipText, active && modal.chipTextActive]}>{opt}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TextInput
+                style={modal.nextActionInput}
+                value={nextAction}
+                onChangeText={setNextAction}
+                placeholder="O escribe una acción personalizada..."
+                placeholderTextColor={colors.textMuted}
               />
             </View>
 
@@ -236,6 +293,20 @@ function InteractionCard({ item, onEdit }: { item: Interaction; onEdit: () => vo
         )}
 
         {item.notes ? <Text style={styles.notes}>{item.notes}</Text> : null}
+
+        {item.duration_minutes ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+            <Text style={styles.metaText}>{item.duration_minutes} min</Text>
+          </View>
+        ) : null}
+
+        {item.next_action ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="arrow-forward-circle-outline" size={13} color={colors.navy} />
+            <Text style={styles.nextActionText}>{item.next_action}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.cardFooter}>
           <Text style={styles.salesperson}>{item.salesperson_name}</Text>
@@ -304,16 +375,15 @@ export default function LeadHistoryScreen() {
               <Text style={styles.emptyText}>Sin interacciones registradas.</Text>
             </View>
           }
-          renderItem={({ item, index }) => (
-            <InteractionCard
-              item={item}
-              onEdit={() => setEditing(item)}
-            />
+          renderItem={({ item }) => (
+            <InteractionCard item={item} onEdit={() => setEditing(item)} />
           )}
         />
       )}
 
+      {/* key prop garantiza que el modal remonta con datos frescos al abrir otro registro */}
       <EditModal
+        key={editing?.id ?? 'none'}
         leadId={id}
         interaction={editing}
         onClose={() => setEditing(null)}
@@ -349,73 +419,43 @@ const styles = StyleSheet.create({
   retryText: { color: colors.navy, fontWeight: '600', fontSize: 13 },
   emptyText: { fontSize: 14, color: colors.textMuted },
   // Card
-  card: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 4,
-  },
-  cardLeft: {
-    alignItems: 'center',
-    width: 36,
-  },
+  card: { flexDirection: 'row', gap: 12, marginBottom: 4 },
+  cardLeft: { alignItems: 'center', width: 36 },
   typeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
   },
   timeline: {
-    flex: 1,
-    width: 2,
-    backgroundColor: colors.border,
-    marginTop: 4,
-    marginBottom: -4,
-    minHeight: 16,
+    flex: 1, width: 2, backgroundColor: colors.border,
+    marginTop: 4, marginBottom: -4, minHeight: 16,
   },
   cardContent: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 6,
+    flex: 1, backgroundColor: colors.white, borderRadius: 12,
+    padding: 14, marginBottom: 12,
+    borderWidth: 1, borderColor: colors.border, gap: 6,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   typeLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   cardDate: { fontSize: 12, color: colors.textMuted },
   outcomePill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    alignSelf: 'flex-start', backgroundColor: '#f3f4f6',
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3,
   },
   outcomeText: { fontSize: 12, color: '#6b7280', fontWeight: '600' },
   starsRow: { flexDirection: 'row', gap: 2 },
   notes: { fontSize: 13, color: colors.textMuted, lineHeight: 18 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  metaText: { fontSize: 12, color: colors.textMuted },
+  nextActionText: { fontSize: 12, color: colors.navy, fontWeight: '500', flex: 1 },
   cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 2,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginTop: 2,
   },
   salesperson: { fontSize: 12, color: colors.textMuted },
   editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    borderColor: colors.navy,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderWidth: 1, borderColor: colors.navy, borderRadius: 6,
+    paddingHorizontal: 8, paddingVertical: 4,
   },
   editBtnText: { fontSize: 12, color: colors.navy, fontWeight: '600' },
 });
@@ -435,12 +475,9 @@ const modal = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
   cancelText: { color: colors.navy, fontSize: 15 },
   saveBtn: {
-    backgroundColor: colors.navy,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    minWidth: 72,
-    alignItems: 'center',
+    backgroundColor: colors.navy, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 7,
+    minWidth: 72, alignItems: 'center',
   },
   saveBtnDisabled: { opacity: 0.4 },
   saveBtnText: { color: colors.white, fontWeight: '700', fontSize: 14 },
@@ -449,6 +486,9 @@ const modal = StyleSheet.create({
   sectionLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   required: { color: '#dc2626' },
   optional: { fontWeight: '400', color: colors.textMuted, fontSize: 13 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  micBtn: { padding: 4 },
+  // Type
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   typeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -459,6 +499,7 @@ const modal = StyleSheet.create({
   typeBtnActive: { backgroundColor: colors.navy, borderColor: colors.navy },
   typeBtnText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   typeBtnTextActive: { color: colors.white },
+  // Outcome
   outcomeList: { gap: 8 },
   outcomeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -476,12 +517,40 @@ const modal = StyleSheet.create({
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.navy },
   outcomeBtnText: { fontSize: 14, color: colors.textMuted, fontWeight: '500' },
   outcomeBtnTextActive: { color: colors.textPrimary, fontWeight: '600' },
+  // Stars
   starsRow: { flexDirection: 'row', gap: 6 },
+  // Duration
+  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  durationInput: {
+    backgroundColor: colors.white, borderRadius: 10,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: colors.textPrimary,
+    width: 90, textAlign: 'center',
+  },
+  durationUnit: { fontSize: 14, color: colors.textMuted, fontWeight: '500' },
+  // Notes
   notesInput: {
     backgroundColor: colors.white, borderRadius: 10,
     borderWidth: 1, borderColor: colors.border,
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 14, color: colors.textPrimary, minHeight: 100,
+  },
+  // Next action chips
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  chipText: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
+  chipTextActive: { color: colors.white, fontWeight: '600' },
+  nextActionInput: {
+    backgroundColor: colors.white, borderRadius: 10,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: colors.textPrimary,
   },
   errorText: { color: '#dc2626', fontSize: 13, textAlign: 'center' },
 });

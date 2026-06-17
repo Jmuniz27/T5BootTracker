@@ -43,6 +43,14 @@ const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: stri
   CONVERTED:         { bg: '#dcfce7', color: '#16a34a', label: 'Convertido' },
 };
 
+const OUTCOME_CONFIG: Record<string, { bg: string; color: string; label: string }> = {
+  INTERESTED:        { bg: '#dbeafe', color: '#1d4ed8', label: 'Interesado' },
+  NOT_INTERESTED:    { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
+  SPEAK_COORDINATOR: { bg: '#ede9fe', color: '#7c3aed', label: 'Hablar coordinador' },
+  NO_ANSWER:         { bg: '#fef3c7', color: '#d97706', label: 'No contestó' },
+  CALLBACK:          { bg: '#e0f2fe', color: '#0369a1', label: 'Llamar después' },
+};
+
 const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
   { value: null,                label: 'Todos' },
   { value: 'NEW',               label: 'Nuevo' },
@@ -78,8 +86,12 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
-function StatusBadge({ status }: { status: LeadStatus }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.NEW;
+function StatusBadge({ status, lastOutcome }: { status: LeadStatus; lastOutcome: string | null }) {
+  const cfg = status === 'CONVERTED'
+    ? STATUS_CONFIG.CONVERTED
+    : lastOutcome
+      ? (OUTCOME_CONFIG[lastOutcome] ?? STATUS_CONFIG.NEW)
+      : STATUS_CONFIG.NEW;
   return (
     <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
       <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
@@ -134,7 +146,7 @@ function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLog
         <View style={styles.cardInfo}>
           <View style={styles.cardNameRow}>
             <Text style={styles.cardName} numberOfLines={1}>{lead.name}</Text>
-            <StatusBadge status={lead.status} />
+            <StatusBadge status={lead.status} lastOutcome={lead.last_outcome} />
           </View>
           {lead.email ? (
             <View style={styles.cardRow}>

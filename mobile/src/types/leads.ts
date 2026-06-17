@@ -16,6 +16,7 @@ export interface Lead {
   is_company: boolean;
   program_interest: string;
   interaction_count: number;
+  last_outcome: string | null;
   days_assigned: number | null;
   owner: string | null;
   owner_name: string | null;
