@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, updateLeadStatus } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, convertLead, getPrograms, updateLeadStatus } from '../api/leads.api'
 
 const PAGE_SIZE = 10
 
@@ -21,6 +20,17 @@ const SOURCE_ICON = {
   MANUAL: '✏️',
 }
 
+const AVATAR_COLORS = [
+  'bg-[#213A8E]',
+  'bg-violet-500',
+  'bg-teal-500',
+  'bg-rose-500',
+  'bg-amber-500',
+  'bg-cyan-600',
+  'bg-pink-500',
+  'bg-indigo-500',
+]
+
 const STATUS_LABELS = {
   NEW: 'New',
   CONTACTED: 'Contacted',
@@ -32,7 +42,7 @@ const STATUS_LABELS = {
 }
 
 const STATUS_COLORS = {
-  NEW: 'bg-gray-100 text-gray-600',
+  NEW: 'bg-yellow-50 text-yellow-700',
   CONTACTED: 'bg-blue-100 text-blue-700',
   INTERESTED: 'bg-green-100 text-green-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
@@ -135,21 +145,19 @@ function StarRating({ value }) {
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, trend, loading }) {
+function StatCard({ label, value, loading }) {
   if (loading) {
     return (
       <div className="bg-white rounded-2xl border border-gray-200 p-5 flex-1 min-w-0 animate-pulse">
         <div className="h-3 bg-gray-200 rounded w-24 mb-3" />
-        <div className="h-9 bg-gray-200 rounded w-16 mb-2" />
-        <div className="h-3 bg-gray-100 rounded w-32" />
+        <div className="h-9 bg-gray-200 rounded w-16" />
       </div>
     )
   }
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-5 flex-1 min-w-0">
       <p className="text-sm text-gray-500 mb-1">{label}</p>
-      <p className="text-4xl font-bold text-gray-900 mb-1">{value}</p>
-      <p className="text-sm text-green-500 font-medium">{trend}</p>
+      <p className="text-4xl font-bold text-gray-900">{value}</p>
     </div>
   )
 }
@@ -248,7 +256,7 @@ function ViewHistoryModal({ lead, onClose }) {
 
           {!isLoading && interactions.map((interaction) => (
             <div key={interaction.id} className="flex items-start gap-3 p-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-[#1e3164] shrink-0">
+              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-[#213A8E] shrink-0">
                 <InteractionTypeIcon type={interaction.interaction_type} />
               </div>
               <div className="flex-1 min-w-0">
@@ -320,8 +328,13 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     `w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${err ? 'border-red-400' : 'border-gray-200'}`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl p-8 w-[480px] shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-8 w-[480px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
         <h2 className="text-xl font-bold text-gray-900 mb-6">Log Interaction</h2>
 
         <form onSubmit={handleSubmit}>
@@ -379,7 +392,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
           <button
             type="submit"
             disabled={mutation.isPending}
-            className="w-full py-3 rounded-xl bg-[#1e3164] text-white font-semibold hover:bg-[#162550] transition-colors disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
           >
             {mutation.isPending ? 'Saving...' : 'Save Interaction'}
           </button>
@@ -472,7 +485,7 @@ function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
         <button
           onClick={onKeep}
           disabled={isLoading}
-          className="w-full py-3 rounded-xl bg-[#1e3164] text-white font-semibold mb-3 hover:bg-[#162550] transition-colors disabled:opacity-60"
+          className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold mb-3 hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
         >
           Keep lead
         </button>
@@ -532,6 +545,11 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
     </div>
   )
 
+  const inputClass = (key) =>
+    `w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+      errors[key] ? 'border-red-400' : 'border-gray-200'
+    }`
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-2xl p-8 w-[480px] shadow-xl relative">
@@ -544,9 +562,24 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
         <h2 className="text-xl font-bold text-gray-900 mb-6">New Lead</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {field('Full name', 'name', 'text', true)}
-          {field('Phone', 'phone', 'tel', true)}
-          {field('Email', 'email', 'email', false)}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Full name<span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <input type="text" value={form.name} onChange={set('name')} className={inputClass('name')} />
+            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Phone<span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <input type="tel" value={form.phone} onChange={set('phone')} className={inputClass('phone')} />
+            {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input type="email" value={form.email} onChange={set('email')} className={inputClass('email')} />
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
@@ -562,7 +595,10 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
             </select>
           </div>
 
-          {field('Program interest', 'program_interest')}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Program interest</label>
+            <input type="text" value={form.program_interest} onChange={set('program_interest')} className={inputClass('program_interest')} />
+          </div>
 
           <label className="flex items-center gap-3 cursor-pointer">
             <input
@@ -585,7 +621,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
             <button
               type="submit"
               disabled={isLoading}
-              className="flex-1 py-3 rounded-xl bg-[#1e3164] text-white font-semibold hover:bg-[#162550] transition-colors disabled:opacity-60"
+              className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
               {isLoading ? 'Creating…' : 'Create lead'}
             </button>
@@ -692,7 +728,7 @@ function FilterDropdown({ value, onChange }) {
       <button
         onClick={() => setOpen((v) => !v)}
         className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
-          value ? 'border-[#1e3164] text-[#1e3164] bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+          value ? 'border-[#213A8E] text-[#213A8E] bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
         }`}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -707,7 +743,7 @@ function FilterDropdown({ value, onChange }) {
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false) }}
               className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                value === opt.value ? 'text-[#1e3164] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+                value === opt.value ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
               {opt.label}
@@ -746,7 +782,7 @@ function SortDropdown({ value, onChange }) {
       <button
         onClick={() => setOpen((v) => !v)}
         className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
-          value !== 'default' ? 'border-[#1e3164] text-[#1e3164] bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+          value !== 'default' ? 'border-[#213A8E] text-[#213A8E] bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
         }`}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -761,7 +797,7 @@ function SortDropdown({ value, onChange }) {
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false) }}
               className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                value === opt.value ? 'text-[#1e3164] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+                value === opt.value ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
               {opt.label}
@@ -775,7 +811,227 @@ function SortDropdown({ value, onChange }) {
 
 // ─── Row Actions Dropdown ─────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onChangeStatus }) {
+// ─── Cédula Validator ─────────────────────────────────────────────────────────
+
+function validateCedulaEcuatoriana(cedula) {
+  if (!/^\d{10}$/.test(cedula)) return false
+  const digits = cedula.split('').map(Number)
+  const province = digits[0] * 10 + digits[1]
+  if (province < 1 || province > 24) return false
+  if (digits[2] >= 6) return false
+  const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2]
+  let sum = 0
+  for (let i = 0; i < 9; i++) {
+    let val = digits[i] * coefficients[i]
+    if (val >= 10) val -= 9
+    sum += val
+  }
+  const checkDigit = sum % 10 === 0 ? 0 : 10 - (sum % 10)
+  return checkDigit === digits[9]
+}
+
+// ─── Convert Lead Modal ───────────────────────────────────────────────────────
+
+function ConvertLeadModal({ lead, onClose, onSuccess }) {
+  const queryClient = useQueryClient()
+  const [cedula, setCedula]   = useState('')
+  const [programId, setProgramId] = useState('')
+  const [email, setEmail]     = useState(lead.email || '')
+  const [phone, setPhone]     = useState(lead.phone || '')
+  const [errors, setErrors]   = useState({})
+  const [result, setResult]   = useState(null) // conversion success data
+
+  const { data: programs = [], isLoading: loadingPrograms } = useQuery({
+    queryKey: ['programs'],
+    queryFn: getPrograms,
+  })
+
+  const convertMutation = useMutation({
+    mutationFn: ({ id, payload }) => convertLead(id, payload),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      setResult(data)
+    },
+    onError: (err) => {
+      const msg = err.response?.data?.error ?? 'Conversion failed. Please try again.'
+      setErrors((prev) => ({ ...prev, server: msg }))
+    },
+  })
+
+  const validate = () => {
+    const errs = {}
+    if (!cedula.trim()) errs.cedula = 'Cédula is required.'
+    else if (!validateCedulaEcuatoriana(cedula)) errs.cedula = 'Invalid Ecuadorian cédula.'
+    if (!programId) errs.programId = 'Please select a program.'
+    return errs
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    setErrors({})
+    const errs = validate()
+    if (Object.keys(errs).length) { setErrors(errs); return }
+    const payload = { cedula, program_id: programId }
+    if (email) payload.email = email
+    if (phone) payload.phone = phone
+    convertMutation.mutate({ id: lead.id, payload })
+  }
+
+  // ── Success screen ──
+  if (result) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="bg-white rounded-2xl p-8 w-[480px] shadow-xl text-center">
+          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Lead converted!</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            <span className="font-semibold text-gray-800">{lead.name}</span> is now a Bootcamper.
+          </p>
+
+          <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-2 mb-6">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Email</span>
+              <span className="font-medium text-gray-800">{result.email}</span>
+            </div>
+            {result.temporary_password && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Temporary password</span>
+                <span className="font-mono font-bold text-[#213A8E] bg-blue-50 px-2 py-0.5 rounded">
+                  {result.temporary_password}
+                </span>
+              </div>
+            )}
+            {result.is_returning && (
+              <p className="text-xs text-amber-600 mt-1">⚠ Returning bootcamper — existing account was reused.</p>
+            )}
+          </div>
+
+          <button
+            onClick={() => { onSuccess(); onClose() }}
+            className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Form screen ──
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-2xl p-8 w-[500px] shadow-xl relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <h2 className="text-xl font-bold text-gray-900 mb-1">Convert Lead</h2>
+        <p className="text-sm text-gray-500 mb-6">
+          Converting <span className="font-semibold text-gray-800">{lead.name}</span> to a Bootcamper.
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Cédula */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cédula <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              maxLength={10}
+              value={cedula}
+              onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
+              placeholder="10 digits"
+              className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+                errors.cedula ? 'border-red-400' : cedula.length === 10 && validateCedulaEcuatoriana(cedula) ? 'border-green-400' : 'border-gray-200'
+              }`}
+            />
+            {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
+            {cedula.length === 10 && validateCedulaEcuatoriana(cedula) && (
+              <p className="text-xs text-green-600 mt-1">✓ Valid cédula</p>
+            )}
+          </div>
+
+          {/* Program */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Program <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={programId}
+              onChange={(e) => setProgramId(e.target.value)}
+              disabled={loadingPrograms}
+              className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+                errors.programId ? 'border-red-400' : 'border-gray-200'
+              }`}
+            >
+              <option value="">{loadingPrograms ? 'Loading programs…' : 'Select a program'}</option>
+              {programs.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} — starts {p.start_date} · ${p.total_cost}
+                </option>
+              ))}
+            </select>
+            {errors.programId && <p className="text-xs text-red-500 mt-1">{errors.programId}</p>}
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+          </div>
+
+          {errors.server && (
+            <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{errors.server}</p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={convertMutation.isPending}
+              className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
+            >
+              {convertMutation.isPending ? 'Converting…' : 'Convert to Bootcamper'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── Actions Dropdown ─────────────────────────────────────────────────────────
+
+function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -789,7 +1045,7 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
+        className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -824,6 +1080,14 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
               Change status
+            </button>
+          )}
+          {isOwned && lead.status === 'INTERESTED' && (
+            <button
+              onClick={() => { onConvert(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
+            >
+              Convert lead
             </button>
           )}
           {isOwned ? (
@@ -903,6 +1167,7 @@ export default function LeadsDashboard() {
   const [logLead, setLogLead]             = useState(null)
   const [statusLead, setStatusLead]       = useState(null)
   const [releaseTarget, setReleaseTarget] = useState(null)
+  const [convertTarget, setConvertTarget] = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [toast, setToast]                 = useState(null) // { message, type }
 
@@ -911,13 +1176,20 @@ export default function LeadsDashboard() {
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey])
 
-  const queryParams = {}
+  const queryParams = { page, page_size: PAGE_SIZE }
   if (search) queryParams.search = search
   if (statusFilter) queryParams.status = statusFilter
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['leads', queryParams],
     queryFn: () => getLeads(queryParams),
+  })
+
+  // Query separada sin filtros para los stat cards
+  const { data: statsData } = useQuery({
+    queryKey: ['leads-stats'],
+    queryFn: () => getLeads({ page: 1, page_size: 1 }),
+    staleTime: 30000,
   })
 
   const myLeads        = data?.my_leads ?? []
@@ -930,9 +1202,14 @@ export default function LeadsDashboard() {
     sortKey,
   )
 
-  const conversions  = myLeads.filter((l) => l.status === 'CONVERTED').length
-  const totalPages   = Math.max(1, Math.ceil(allLeads.length / PAGE_SIZE))
-  const pageLeads    = allLeads.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pagination     = data?.pagination ?? {}
+  const statsPagination = statsData?.pagination ?? {}
+  const conversions    = myLeads.filter((l) => l.status === 'CONVERTED').length
+  const totalPages   = Math.max(
+    pagination.my_leads_total_pages ?? 1,
+    pagination.available_leads_total_pages ?? 1,
+  )
+  const pageLeads    = allLeads
 
   const assignMutation = useMutation({
     mutationFn: assignLead,
@@ -974,51 +1251,28 @@ export default function LeadsDashboard() {
 
   return (
     <div className="p-8 min-h-screen">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-gray-400 mb-6">
-        <Link to="/dashboard" className="hover:text-gray-600 transition-colors">Home</Link>
-        <span>/</span>
-        <span className="text-gray-700 font-medium">Leads</span>
-      </nav>
-
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <span>📊</span> Lead's Dashboard
+        <h1 className="text-2xl font-bold text-gray-900">
+          Lead's Dashboard
         </h1>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#1e3164] text-white text-sm font-semibold rounded-xl hover:bg-[#162550] transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            New Lead
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-sm font-semibold text-gray-900">Salesperson</p>
-              <span className="text-xs bg-[#1e3164] text-white px-2 py-0.5 rounded-full">Salesperson</span>
-            </div>
-            <div className="w-9 h-9 rounded-full bg-gray-300 flex items-center justify-center text-sm font-bold text-gray-600">
-              G
-            </div>
-          </div>
-        </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#213A8E] text-white text-sm font-semibold rounded-xl hover:bg-[#1a2f72] transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          New Lead
+        </button>
       </div>
 
       {/* Stat Cards */}
       <div className="flex gap-4 mb-8">
-        <StatCard label="Total leads"    value={allLeads.length}   trend="+12% from last month" loading={isLoading} />
-        <StatCard label="Assigned to me" value={myLeads.length}    trend="+20% from last month" loading={isLoading} />
-        <StatCard label="Conversions"    value={conversions}       trend="+8% from last month"  loading={isLoading} />
-        <StatCard
-          label="Not interested"
-          value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length}
-          trend="+8% from last month"
-          loading={isLoading}
-        />
+        <StatCard label="Total leads"    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
+        <StatCard label="Assigned to me" value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
+        <StatCard label="Conversions"    value={conversions} loading={isLoading} />
+        <StatCard label="Not interested" value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
       </div>
 
       {/* Leads Table */}
@@ -1110,13 +1364,13 @@ export default function LeadsDashboard() {
                 <td className="py-3.5 px-3">
                   {lead._isOwned ? (
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
                         {lead.owner_name?.charAt(0) ?? 'Y'}
                       </div>
                       <span className="text-gray-700 text-sm">You</span>
                     </div>
                   ) : (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
                       Unassigned
                     </span>
                   )}
@@ -1131,6 +1385,7 @@ export default function LeadsDashboard() {
                     onChangeStatus={() => setStatusLead(lead)}
                     onRelease={() => setReleaseTarget(lead)}
                     onAssign={() => assignMutation.mutate(lead.id)}
+                    onConvert={() => setConvertTarget(lead)}
                   />
                 </td>
               </tr>
@@ -1158,6 +1413,14 @@ export default function LeadsDashboard() {
           lead={logLead}
           onClose={() => setLogLead(null)}
           onSuccess={() => showToast('Interaction logged successfully!')}
+        />
+      )}
+
+      {convertTarget && (
+        <ConvertLeadModal
+          lead={convertTarget}
+          onClose={() => setConvertTarget(null)}
+          onSuccess={() => showToast(`${convertTarget.name} converted successfully!`)}
         />
       )}
 

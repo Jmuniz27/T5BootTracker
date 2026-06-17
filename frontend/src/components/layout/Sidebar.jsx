@@ -57,9 +57,9 @@ export default function Sidebar() {
     : NAV_ITEMS
 
   return (
-    <aside className="w-56 min-h-screen bg-[#1e3164] flex flex-col">
+    <aside className="w-56 min-h-screen bg-white border-r border-gray-200 flex flex-col">
       <div className="px-6 py-6">
-        <h1 className="text-white font-bold text-xl tracking-tight">Boot-Tracker</h1>
+        <h1 className="text-[#213A8E] font-bold text-xl tracking-tight">Boot-Tracker</h1>
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
@@ -70,8 +70,8 @@ export default function Sidebar() {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-[#2d4a8a] text-white'
-                  : 'text-blue-200 hover:bg-[#2d4a8a] hover:text-white'
+                  ? 'bg-[#213A8E] text-white'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-[#213A8E]'
               }`
             }
           >
@@ -84,7 +84,7 @@ export default function Sidebar() {
       <div className="px-3 pb-6">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium bg-white text-[#1e3164] hover:bg-blue-50 transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#213A8E] transition-colors"
         >
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
             <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v16a1 1 0 001 1h8a1 1 0 100-2H4V5h7a1 1 0 100-2H3zm14.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L18.586 12H9a1 1 0 110-2h9.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
