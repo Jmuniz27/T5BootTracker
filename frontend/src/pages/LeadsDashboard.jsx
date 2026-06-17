@@ -721,6 +721,7 @@ function validateCedulaEcuatoriana(cedula) {
   const digits = cedula.split('').map(Number)
   const province = digits[0] * 10 + digits[1]
   if (province < 1 || province > 24) return false
+  if (digits[2] >= 6) return false
   const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2]
   let sum = 0
   for (let i = 0; i < 9; i++) {
