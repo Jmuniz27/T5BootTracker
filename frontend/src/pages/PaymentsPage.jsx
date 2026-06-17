@@ -77,6 +77,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
   const [notes, setNotes] = useState('')
   const [file, setFile] = useState(null)
   const [errors, setErrors] = useState({})
+  const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef(null)
   const qc = useQueryClient()
 
@@ -183,20 +184,53 @@ function UploadModal({ programs, onClose, onSuccess }) {
             />
           </div>
 
-          {/* File upload */}
+          {/* File upload — drag & drop */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Payment proof</label>
-            <div className="flex items-center gap-3 border border-gray-300 rounded-lg px-3 py-2">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="flex-shrink-0 bg-[#1D3176] text-white text-xs font-medium px-3 py-1.5 rounded-md hover:bg-[#16265d] transition-colors"
-              >
-                Select file
-              </button>
-              <span className="text-sm text-gray-400 truncate">
-                {file ? file.name : 'Ningún archivo seleccionado'}
-              </span>
+            <div
+              onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragOver(false)
+                const f = e.dataTransfer.files[0]
+                if (f) validateAndSetFile(f)
+              }}
+              className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-6 transition-colors cursor-pointer ${
+                dragOver
+                  ? 'border-[#1D3176] bg-blue-50'
+                  : file
+                  ? 'border-green-400 bg-green-50'
+                  : 'border-gray-300 hover:border-[#1D3176] hover:bg-gray-50'
+              }`}
+              onClick={() => fileRef.current?.click()}
+            >
+              {file ? (
+                <>
+                  <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm font-medium text-green-700 truncate max-w-full px-2">{file.name}</p>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setFile(null) }}
+                    className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </>
+              ) : (
+                <>
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium text-[#1D3176]">Click to upload</span> or drag & drop
+                  </p>
+                  <p className="text-xs text-gray-400">PNG, JPG or PDF (max 10 MB)</p>
+                </>
+              )}
               <input
                 ref={fileRef}
                 type="file"
@@ -205,7 +239,6 @@ function UploadModal({ programs, onClose, onSuccess }) {
                 onChange={(e) => e.target.files[0] && validateAndSetFile(e.target.files[0])}
               />
             </div>
-            <p className="text-xs text-gray-400 mt-1">PNG, JPG or PDF (max: 10MB)</p>
             {errors.file && <p className="text-red-500 text-xs mt-1">{errors.file}</p>}
           </div>
 
@@ -382,17 +415,24 @@ function PaymentRow({ payment, onReview }) {
           <span className="text-xs text-gray-400">{date || '—'}</span>
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[payment.status]}`}>
-          {STATUS_LABELS[payment.status]}
-        </span>
-        {payment.status === 'DRAFT' && (
-          <button
-            onClick={() => onReview(payment)}
-            className="text-xs text-[#1D3176] font-medium hover:underline"
-          >
-            Revisar
-          </button>
+      <div className="flex flex-col items-end gap-1">
+        <div className="flex items-center gap-3">
+          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[payment.status]}`}>
+            {STATUS_LABELS[payment.status]}
+          </span>
+          {payment.status === 'DRAFT' && (
+            <button
+              onClick={() => onReview(payment)}
+              className="text-xs text-[#1D3176] font-medium hover:underline"
+            >
+              Revisar
+            </button>
+          )}
+        </div>
+        {payment.status === 'REJECTED' && payment.rejection_reason && (
+          <p className="text-xs text-red-500 max-w-[160px] text-right leading-snug">
+            {payment.rejection_reason}
+          </p>
         )}
       </div>
       <p className="text-sm font-semibold text-gray-900 w-20 text-right flex-shrink-0">
