@@ -4,7 +4,6 @@ import uuid
 
 import redis
 from django.conf import settings
-from django.core.mail import send_mail
 from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
 from rest_framework import status, serializers as drf_serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -197,6 +196,8 @@ class PasswordResetRequestView(APIView):
         tags=['Auth'],
     )
     def post(self, request):
+        from apps.notifications.tasks import send_password_reset_email
+
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -208,14 +209,8 @@ class PasswordResetRequestView(APIView):
             r.setex(f'password_reset:{token}', 86400, str(user.pk))
 
             reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
-            send_mail(
-                subject='Recuperación de contraseña — Boot-Tracker',
-                message=f'Haz clic en el siguiente enlace para restablecer tu contraseña:\n\n{reset_link}',
-                from_email=None,
-                recipient_list=[email],
-                fail_silently=True,
-            )
-            logger.info(f'Password reset email sent to {email}')
+            send_password_reset_email.delay(email, reset_link)
+            logger.info('Password reset email queued for %s.', email)
         except CustomUser.DoesNotExist:
             pass
 

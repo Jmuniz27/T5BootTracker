@@ -94,12 +94,17 @@ class TestPasswordReset:
 
     def test_password_reset_request_existing_email(self, active_user):
         client = APIClient()
-        with patch('apps.authentication.views._get_redis') as mock_redis_fn:
+        with patch('apps.authentication.views._get_redis') as mock_redis_fn, \
+             patch('apps.notifications.tasks.send_password_reset_email') as mock_task:
             mock_r = MagicMock()
             mock_redis_fn.return_value = mock_r
             resp = client.post(PASSWORD_RESET_URL, {'email': 'user@test.com'}, format='json')
         assert resp.status_code == 200
         mock_r.setex.assert_called_once()
+        mock_task.delay.assert_called_once()
+        email_arg, link_arg = mock_task.delay.call_args[0]
+        assert email_arg == 'user@test.com'
+        assert 'reset-password?token=' in link_arg
 
     def test_password_reset_confirm_success(self, active_user):
         client = APIClient()

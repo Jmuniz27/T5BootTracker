@@ -29,16 +29,32 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    to: '/payments',
+    label: 'Payment',
+    icon: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M4 4a2 2 0 00-2 2v1h20V6a2 2 0 00-2-2H4z" />
+        <path fillRule="evenodd" d="M18 9H2v9a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
+      </svg>
+    ),
+  },
 ]
 
 export default function Sidebar() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
+  const user = useAuthStore((s) => s.user)
+  const isBootcamper = user?.role === 'BOOTCAMPER'
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
+
+  const visibleItems = isBootcamper
+    ? NAV_ITEMS.filter((item) => item.to === '/payments')
+    : NAV_ITEMS
 
   return (
     <aside className="w-56 min-h-screen bg-white border-r border-gray-200 flex flex-col">
@@ -47,7 +63,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
-        {NAV_ITEMS.map(({ to, label, icon }) => (
+        {visibleItems.map(({ to, label, icon }) => (
           <NavLink
             key={to}
             to={to}
