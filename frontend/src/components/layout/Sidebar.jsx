@@ -44,11 +44,17 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
+  const user = useAuthStore((s) => s.user)
+  const isBootcamper = user?.role === 'BOOTCAMPER'
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
+
+  const visibleItems = isBootcamper
+    ? NAV_ITEMS.filter((item) => item.to === '/payments')
+    : NAV_ITEMS
 
   return (
     <aside className="w-56 min-h-screen bg-[#1e3164] flex flex-col">
@@ -57,7 +63,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
-        {NAV_ITEMS.map(({ to, label, icon }) => (
+        {visibleItems.map(({ to, label, icon }) => (
           <NavLink
             key={to}
             to={to}

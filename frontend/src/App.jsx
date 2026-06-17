@@ -13,8 +13,13 @@ import { useAuthStore } from './store/auth.store'
 
 function PaymentsRoute() {
   const user = useAuthStore((s) => s.user)
-  const isBootcamper = user?.role === 'BOOTCAMPER'
-  return isBootcamper ? <PaymentsPage /> : <PaymentQueuePage />
+  return user?.role === 'BOOTCAMPER' ? <PaymentsPage /> : <PaymentQueuePage />
+}
+
+function DashboardRoute() {
+  const user = useAuthStore((s) => s.user)
+  if (user?.role === 'BOOTCAMPER') return <Navigate to="/payments" replace />
+  return <LeadsDashboard />
 }
 
 export default function App() {
@@ -37,7 +42,7 @@ export default function App() {
           }
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<LeadsDashboard />} />
+          <Route path="/dashboard" element={<DashboardRoute />} />
           <Route path="/my-leads" element={<div className="p-8 text-gray-400">My leads — coming soon</div>} />
           <Route path="/schedule" element={<div className="p-8 text-gray-400">Schedule — coming soon</div>} />
           <Route path="/payments" element={<PaymentsRoute />} />

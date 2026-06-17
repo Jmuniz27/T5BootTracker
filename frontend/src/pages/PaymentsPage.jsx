@@ -71,9 +71,11 @@ function StatCard({ label, value, sub, loading }) {
 // ─── Upload Modal ─────────────────────────────────────────────────────────────
 
 function UploadModal({ programs, onClose, onSuccess }) {
+  const [amount, setAmount] = useState('')
+  const [date, setDate] = useState('')
   const [programId, setProgramId] = useState('')
+  const [notes, setNotes] = useState('')
   const [file, setFile] = useState(null)
-  const [dragging, setDragging] = useState(false)
   const [errors, setErrors] = useState({})
   const fileRef = useRef(null)
   const qc = useQueryClient()
@@ -85,13 +87,6 @@ function UploadModal({ programs, onClose, onSuccess }) {
       onSuccess(data)
     },
   })
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    setDragging(false)
-    const dropped = e.dataTransfer.files[0]
-    if (dropped) validateAndSetFile(dropped)
-  }
 
   const validateAndSetFile = (f) => {
     const allowed = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
@@ -123,7 +118,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4">
           <h2 className="text-lg font-semibold text-gray-900">📄 Upload payment</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,14 +127,39 @@ function UploadModal({ programs, onClose, onSuccess }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
+          {/* Amount + Date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent"
+              />
+            </div>
+          </div>
+
           {/* Program */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Program</label>
             <select
               value={programId}
               onChange={(e) => setProgramId(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent bg-white"
             >
               <option value="">Select program</option>
               {programs.map((p) => (
@@ -149,18 +169,34 @@ function UploadModal({ programs, onClose, onSuccess }) {
             {errors.program && <p className="text-red-500 text-xs mt-1">{errors.program}</p>}
           </div>
 
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes <span className="text-gray-400 font-normal">(Optional)</span>
+            </label>
+            <textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Enter detailed notes about the interaction..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent resize-none"
+            />
+          </div>
+
           {/* File upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Payment proof</label>
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={handleDrop}
-              onClick={() => fileRef.current?.click()}
-              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                dragging ? 'border-[#1D3176] bg-blue-50' : 'border-gray-300 hover:border-[#1D3176]'
-              }`}
-            >
+            <div className="flex items-center gap-3 border border-gray-300 rounded-lg px-3 py-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex-shrink-0 bg-[#1D3176] text-white text-xs font-medium px-3 py-1.5 rounded-md hover:bg-[#16265d] transition-colors"
+              >
+                Select file
+              </button>
+              <span className="text-sm text-gray-400 truncate">
+                {file ? file.name : 'Ningún archivo seleccionado'}
+              </span>
               <input
                 ref={fileRef}
                 type="file"
@@ -168,16 +204,6 @@ function UploadModal({ programs, onClose, onSuccess }) {
                 className="hidden"
                 onChange={(e) => e.target.files[0] && validateAndSetFile(e.target.files[0])}
               />
-              {file ? (
-                <p className="text-sm text-gray-700 font-medium">{file.name}</p>
-              ) : (
-                <>
-                  <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  <p className="text-sm text-gray-500">Drag & drop or click to select</p>
-                </>
-              )}
             </div>
             <p className="text-xs text-gray-400 mt-1">PNG, JPG or PDF (max: 10MB)</p>
             {errors.file && <p className="text-red-500 text-xs mt-1">{errors.file}</p>}
@@ -407,11 +433,16 @@ export default function PaymentsPage() {
     queryFn: getMyHistory,
   })
 
-  const { data: programs = [] } = useQuery({
+  const { data: apiPrograms = [] } = useQuery({
     queryKey: ['programs'],
     queryFn: getPrograms,
     retry: false,
   })
+
+  // Bootcampers get 403 on /programs/ — fall back to unique programs from their own history
+  const programs = apiPrograms.length > 0
+    ? apiPrograms
+    : [...new Map(payments.filter((p) => p.program).map((p) => [p.program, { id: p.program, name: p.program_name }])).values()]
 
   useEffect(() => {
     const handler = (e) => {
