@@ -110,9 +110,9 @@ function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Detalle del pago</h2>
             {payment && (
@@ -127,13 +127,13 @@ function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess }) {
         </div>
 
         {isLoading ? (
-          <div className="p-6 space-y-3 animate-pulse">
+          <div className="p-6 space-y-3 animate-pulse overflow-y-auto">
             {[...Array(6)].map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
           </div>
         ) : payment ? (
           <>
             {/* Tabs */}
-            <div className="flex border-b border-gray-100 px-6">
+            <div className="flex border-b border-gray-100 px-6 flex-shrink-0">
               {[
                 { id: 'details', label: 'Campos OCR' },
                 { id: 'raw', label: 'Texto crudo' },
@@ -153,7 +153,7 @@ function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess }) {
               ))}
             </div>
 
-            <div className="px-6 py-5">
+            <div className="px-6 py-5 overflow-y-auto flex-1">
               {/* OCR Fields tab */}
               {tab === 'details' && (
                 <div className="space-y-1">

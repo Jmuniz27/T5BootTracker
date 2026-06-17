@@ -488,7 +488,7 @@ function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
 
 // ─── Create Lead Modal ────────────────────────────────────────────────────────
 
-const EMPTY_FORM = { name: '', phone: '', email: '', source: 'MANUAL', program_interest: '' }
+const EMPTY_FORM = { name: '', phone: '', email: '', source: 'MANUAL', program_interest: '', is_company: false }
 
 function CreateLeadModal({ onClose, onSubmit, isLoading }) {
   const [form, setForm] = useState(EMPTY_FORM)
@@ -561,6 +561,16 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
           </div>
 
           {field('Program interest', 'program_interest')}
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.is_company}
+              onChange={(e) => setForm((prev) => ({ ...prev, is_company: e.target.checked }))}
+              className="w-4 h-4 accent-[#1e3164] rounded"
+            />
+            <span className="text-sm font-medium text-gray-700">Company lead</span>
+          </label>
 
           <div className="flex gap-3 pt-2">
             <button
@@ -801,6 +811,7 @@ export default function LeadsDashboard() {
   const queryClient = useQueryClient()
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [companyFilter, setCompanyFilter] = useState(false)
   const [sortKey, setSortKey]         = useState('default')
   const [page, setPage]               = useState(1)
   const [viewLead, setViewLead]           = useState(null)
@@ -813,7 +824,7 @@ export default function LeadsDashboard() {
   const showToast = (message, type = 'success') => setToast({ message, type })
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, sortKey])
+  useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey])
 
   const queryParams = {}
   if (search) queryParams.search = search
@@ -830,7 +841,7 @@ export default function LeadsDashboard() {
     [
       ...myLeads.map((l) => ({ ...l, _isOwned: true })),
       ...availableLeads.map((l) => ({ ...l, _isOwned: false })),
-    ],
+    ].filter((l) => !companyFilter || l.is_company),
     sortKey,
   )
 
@@ -943,6 +954,19 @@ export default function LeadsDashboard() {
               className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
+          <button
+            onClick={() => setCompanyFilter((v) => !v)}
+            className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
+              companyFilter
+                ? 'border-indigo-500 text-indigo-700 bg-indigo-50'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+            </svg>
+            Empresa
+          </button>
           <SortDropdown value={sortKey} onChange={setSortKey} />
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
         </div>
@@ -977,7 +1001,19 @@ export default function LeadsDashboard() {
 
             {!isLoading && !isError && pageLeads.map((lead) => (
               <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                <td className="py-3.5 px-3 font-medium text-gray-900">{lead.name}</td>
+                <td className="py-3.5 px-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">{lead.name}</span>
+                    {lead.is_company && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+                        </svg>
+                        Empresa
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="py-3.5 px-3 text-gray-500">{lead.email || '—'}</td>
                 <td className="py-3.5 px-3 text-gray-500">{lead.phone}</td>
                 <td className="py-3.5 px-3 text-gray-500">{SOURCE_LABELS[lead.source] || lead.source}</td>
