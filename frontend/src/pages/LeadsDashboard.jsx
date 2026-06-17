@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, convertLead, getPrograms, updateLeadStatus } from '../api/leads.api'
 
 const PAGE_SIZE = 10
@@ -354,7 +354,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
   }
 
   const selectClass = (err) =>
-    `w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${err ? 'border-red-400' : 'border-gray-200'}`
+    `w-full pl-3 pr-10 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white ${err ? 'border-red-400' : 'border-gray-200'}`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -373,59 +373,70 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Tipo de interacción <span className="text-red-500">*</span>
               </label>
-              <select value={form.interaction_type} onChange={set('interaction_type')} className={selectClass(errors.interaction_type)}>
-                <option value="">Seleccionar</option>
-                <option value="CALL">Llamada</option>
-                <option value="WHATSAPP">WhatsApp</option>
-                <option value="EMAIL">Email</option>
-                <option value="VISIT">Visita</option>
-                <option value="NOTE">Nota</option>
-              </select>
+              <div className="relative">
+                <select value={form.interaction_type} onChange={set('interaction_type')} className={selectClass(errors.interaction_type)}>
+                  <option value="">Seleccionar</option>
+                  <option value="CALL">Llamada</option>
+                  <option value="WHATSAPP">WhatsApp</option>
+                  <option value="EMAIL">Email</option>
+                  <option value="VISIT">Visita</option>
+                  <option value="NOTE">Nota</option>
+                </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
               {errors.interaction_type && <p className="text-xs text-red-500 mt-1">{errors.interaction_type}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Resultado <span className="text-red-500">*</span>
               </label>
-              <select value={form.outcome} onChange={set('outcome')} className={selectClass(errors.outcome)}>
-                <option value="">Seleccionar</option>
-                <option value="INTERESTED">Interesado</option>
-                <option value="NOT_INTERESTED">No interesado</option>
-                <option value="NO_ANSWER">No contestó</option>
-                <option value="CALLBACK">Llamar después</option>
-                <option value="SPEAK_COORDINATOR">Hablar coordinador</option>
-              </select>
+              <div className="relative">
+                <select value={form.outcome} onChange={set('outcome')} className={selectClass(errors.outcome)}>
+                  <option value="">Seleccionar</option>
+                  <option value="INTERESTED">Interesado</option>
+                  <option value="NOT_INTERESTED">No interesado</option>
+                  <option value="NO_ANSWER">No contestó</option>
+                  <option value="CALLBACK">Llamar después</option>
+                  <option value="SPEAK_COORDINATOR">Hablar coordinador</option>
+                </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
               {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
             </div>
           </div>
 
-          {/* Nivel de interés */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nivel de interés <span className="text-xs text-gray-400 font-normal">(opcional)</span>
-            </label>
-            <InteractiveStarRating
-              value={form.interest_level}
-              onChange={(v) => setForm((prev) => ({ ...prev, interest_level: v }))}
-            />
-          </div>
-
-          {/* Duración */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Duración <span className="text-xs text-gray-400 font-normal">(opcional)</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="0"
-                max="999"
-                value={form.duration_minutes}
-                onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/[^0-9]/g, '') }))}
-                placeholder="ej. 5"
-                className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
+          {/* Nivel de interés + Duración */}
+          <div className="grid grid-cols-2 gap-4 items-start">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nivel de interés <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <InteractiveStarRating
+                value={form.interest_level}
+                onChange={(v) => setForm((prev) => ({ ...prev, interest_level: v }))}
               />
-              <span className="text-sm text-gray-500">min</span>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Duración <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="999"
+                  value={form.duration_minutes}
+                  onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/[^0-9]/g, '') }))}
+                  placeholder="ej. 5"
+                  className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
+                />
+                <span className="text-sm text-gray-500">min</span>
+              </div>
             </div>
           </div>
 
@@ -1273,6 +1284,7 @@ export default function LeadsDashboard() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['leads', queryParams],
     queryFn: () => getLeads(queryParams),
+    placeholderData: keepPreviousData,
   })
 
   // Query separada sin filtros para los stat cards
