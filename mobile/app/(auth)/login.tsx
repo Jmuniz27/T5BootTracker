@@ -13,63 +13,73 @@ import {
 } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../src/theme/colors';
 import { useAuth } from '../../src/context/AuthContext';
 
-const LOGO_SIZE = 46;
+// ─── constants ───────────────────────────────────────────────────────────────
 
-function BrandLogo() {
+const BG         = '#111c42';
+const PRIMARY    = '#213A8E';
+const ACCENT     = '#5B9BD5';
+const INPUT_BG   = 'rgba(255,255,255,0.06)';
+const INPUT_BD   = 'rgba(255,255,255,0.12)';
+const INPUT_FOCUS= 'rgba(91,155,213,0.6)';
+
+// ─── sub-components ──────────────────────────────────────────────────────────
+
+function EmailIcon() {
   return (
-    <View style={styles.logoRow}>
-      <View style={styles.logoBox}>
-        <Image
-          source={require('../../assets/logo.png')}
-          style={styles.logoImage}
-          resizeMode="contain"
-        />
-      </View>
-      <View style={styles.brandTextCol}>
-        <View style={styles.brandPill}>
-          <Text style={styles.brandName}>BOOT-TRACKER</Text>
-        </View>
-        <Text style={styles.brandSub}>Coding Bootcamps ESPOL</Text>
-      </View>
-    </View>
+    <Ionicons name="mail-outline" size={18} color="rgba(255,255,255,0.35)" />
+  );
+}
+
+function LockIcon() {
+  return (
+    <Ionicons name="lock-closed-outline" size={18} color="rgba(255,255,255,0.35)" />
   );
 }
 
 interface FieldProps {
-  label: string;
+  icon: React.ReactNode;
+  placeholder: string;
   value: string;
   onChangeText: (v: string) => void;
   secureTextEntry?: boolean;
   keyboardType?: 'default' | 'email-address';
 }
 
-function Field({ label, value, onChangeText, secureTextEntry, keyboardType }: FieldProps) {
+function Field({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType }: FieldProps) {
+  const [focused, setFocused] = useState(false);
   const [visible, setVisible] = useState(false);
+
   return (
-    <View style={styles.fieldWrapper}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.inputRow}>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={secureTextEntry && !visible}
-          keyboardType={keyboardType ?? 'default'}
-          autoCapitalize={secureTextEntry ? 'none' : keyboardType === 'email-address' ? 'none' : 'sentences'}
-          style={styles.inputFlex}
-          placeholderTextColor="#aaa"
-        />
-        {secureTextEntry && (
-          <TouchableOpacity onPress={() => setVisible(v => !v)} hitSlop={8} style={styles.eyeBtn}>
-            <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color="#aaa" />
-          </TouchableOpacity>
-        )}
-      </View>
+    <View style={[styles.inputWrap, { borderColor: focused ? INPUT_FOCUS : INPUT_BD }]}>
+      <View style={styles.inputIcon}>{icon}</View>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="rgba(255,255,255,0.28)"
+        secureTextEntry={secureTextEntry && !visible}
+        keyboardType={keyboardType ?? 'default'}
+        autoCapitalize="none"
+        style={styles.inputText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      {secureTextEntry && (
+        <TouchableOpacity onPress={() => setVisible(v => !v)} hitSlop={8} style={styles.eyeBtn}>
+          <Ionicons
+            name={visible ? 'eye-off-outline' : 'eye-outline'}
+            size={18}
+            color="rgba(255,255,255,0.35)"
+          />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
+
+// ─── screen ──────────────────────────────────────────────────────────────────
 
 export default function LoginScreen() {
   const [email, setEmail]       = useState('');
@@ -86,7 +96,7 @@ export default function LoginScreen() {
       await login(email, password);
       router.replace('/(app)/leads');
     } catch {
-      setError('No pudimos iniciar tu sesión. Verifica tus datos e intenta de nuevo.');
+      setError('Credenciales inválidas. Verifica e intenta de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -102,34 +112,70 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.card}>
-          <BrandLogo />
-          <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
-          <Field
-            label="Correo electrónico"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
+        {/* Logo */}
+        <View style={styles.logoRow}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
           />
-          <Field
-            label="Contraseña"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <View>
+            <Text style={styles.logoTitle}>CODING</Text>
+            <Text style={styles.logoTitle}>BOOTCAMPS</Text>
+            <Text style={styles.logoSub}>espol</Text>
+          </View>
+        </View>
+
+        {/* Headline */}
+        <View style={styles.headlineWrap}>
+          <Text style={styles.headline}>
+            Inicia sesión para{' '}
+            <Text style={{ color: ACCENT }}>continuar</Text>
+          </Text>
+          <Text style={styles.subheadline}>¡Continúa donde lo dejaste!</Text>
+        </View>
+
+        {/* Form */}
+        <View style={styles.form}>
+          <View>
+            <Text style={styles.fieldLabel}>Correo electrónico</Text>
+            <Field
+              icon={<EmailIcon />}
+              placeholder="correo@ejemplo.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View>
+            <View style={styles.passwordLabelRow}>
+              <Text style={styles.fieldLabel}>Contraseña</Text>
+              <Link href="/(auth)/forgot-password" style={styles.forgotLink}>
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </View>
+            <Field
+              icon={<LockIcon />}
+              placeholder="••••••••••"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </View>
+
           {error && <Text style={styles.errorText}>{error}</Text>}
-          <Link href="/(auth)/forgot-password" style={styles.forgotLink}>
-            ¿Olvidaste tu contraseña?
-          </Link>
+
           <TouchableOpacity
             style={[styles.button, !canSubmit && styles.buttonDisabled]}
             disabled={!canSubmit}
             onPress={handleLogin}
-            activeOpacity={0.85}
+            activeOpacity={0.88}
           >
             {loading
-              ? <ActivityIndicator color={colors.white} />
+              ? <ActivityIndicator color="#fff" />
               : <Text style={styles.buttonLabel}>Iniciar sesión</Text>
             }
           </TouchableOpacity>
@@ -139,119 +185,119 @@ export default function LoginScreen() {
   );
 }
 
+// ─── styles ──────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.navy,
+    backgroundColor: BG,
   },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
     paddingVertical: 60,
+    gap: 32,
   },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    padding: 28,
-    gap: 16,
-  },
+  // Logo
   logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
     justifyContent: 'center',
-    gap: 12,
-    marginBottom: 4,
   },
-  brandTextCol: {
-    alignItems: 'center',
-    gap: 4,
+  logo: {
+    width: 44,
+    height: 44,
   },
-  logoBox: {
-    width: 59,
-    height: 57,
-    borderRadius: 5,
-    backgroundColor: colors.navy,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoImage: {
-    width: LOGO_SIZE,
-    height: LOGO_SIZE,
-  },
-  brandPill: {
-    backgroundColor: colors.navy,
-    borderRadius: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  brandName: {
-    color: colors.white,
-    fontWeight: '800',
-    fontSize: 14,
-    letterSpacing: 0.8,
-  },
-  brandSub: {
-    color: colors.navy,
+  logoTitle: {
+    color: 'rgba(255,255,255,0.82)',
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '700',
+    lineHeight: 15,
   },
-  subtitle: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    fontSize: 14,
+  logoSub: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 3,
   },
-  fieldWrapper: {
+  // Headline
+  headlineWrap: {
     gap: 6,
   },
-  label: {
-    fontSize: 14,
-    color: colors.textLabel,
-    fontWeight: '500',
+  headline: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#ffffff',
+    lineHeight: 34,
   },
-  inputRow: {
+  subheadline: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.45)',
+  },
+  // Form
+  form: {
+    gap: 18,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.65)',
+    marginBottom: 8,
+  },
+  passwordLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: colors.white,
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  inputFlex: {
+  forgotLink: {
+    fontSize: 13,
+    color: ACCENT,
+  },
+  // Input
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 50,
+    borderWidth: 1,
+    backgroundColor: INPUT_BG,
+    paddingHorizontal: 16,
+    paddingVertical: 2,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  inputText: {
     flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.textPrimary,
+    fontSize: 14,
+    color: '#ffffff',
+    paddingVertical: 13,
   },
   eyeBtn: {
-    paddingHorizontal: 12,
+    paddingLeft: 10,
   },
+  // Button
   button: {
-    backgroundColor: colors.navy,
-    borderRadius: 10,
+    borderRadius: 50,
     paddingVertical: 15,
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 6,
+    backgroundColor: PRIMARY,
   },
   buttonDisabled: {
     opacity: 0.5,
   },
+  buttonLabel: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   errorText: {
-    color: colors.error,
+    color: '#fca5a5',
     fontSize: 13,
     textAlign: 'center',
-  },
-  forgotLink: {
-    color: colors.navy,
-    fontSize: 13,
-    textAlign: 'right',
-    fontWeight: '500',
-  },
-  buttonLabel: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
   },
 });
