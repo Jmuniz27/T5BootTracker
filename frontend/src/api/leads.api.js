@@ -17,3 +17,6 @@ export const createLead = (data) =>
 
 export const createInteraction = (leadId, data) =>
   client.post(`/leads/${leadId}/interactions/`, data).then((r) => r.data)
+
+export const updateLeadStatus = (id, data) =>
+  client.patch(`/leads/${id}/`, data).then((r) => r.data)
