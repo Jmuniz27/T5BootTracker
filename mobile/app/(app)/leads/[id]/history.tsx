@@ -63,7 +63,9 @@ const NEXT_ACTION_OPTIONS = [
 
 function formatDate(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' });
+  const date = d.toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+  return `${date} · ${time}`;
 }
 
 // ─── edit modal ──────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   RefreshControl,
   SafeAreaView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
 import { fetchLeads, assignLead, releaseLead } from '../../../src/api/leads.api';
@@ -223,6 +223,12 @@ export default function LeadsScreen() {
     api.get<MeData>('/auth/me/').then(({ data }) => setMe(data)).catch(() => {});
     loadLeads().finally(() => setLoading(false));
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadLeads(search);
+    }, [search]),
+  );
 
   function handleSearchChange(text: string) {
     setSearch(text);
