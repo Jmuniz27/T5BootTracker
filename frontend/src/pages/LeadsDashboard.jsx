@@ -20,6 +20,17 @@ const SOURCE_ICON = {
   MANUAL: '✏️',
 }
 
+const AVATAR_COLORS = [
+  'bg-[#213A8E]',
+  'bg-violet-500',
+  'bg-teal-500',
+  'bg-rose-500',
+  'bg-amber-500',
+  'bg-cyan-600',
+  'bg-pink-500',
+  'bg-indigo-500',
+]
+
 const STATUS_LABELS = {
   NEW: 'New',
   CONTACTED: 'Contacted',
@@ -30,7 +41,7 @@ const STATUS_LABELS = {
 }
 
 const STATUS_COLORS = {
-  NEW: 'bg-gray-100 text-gray-600',
+  NEW: 'bg-yellow-50 text-yellow-700',
   CONTACTED: 'bg-blue-100 text-blue-700',
   INTERESTED: 'bg-green-100 text-green-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
@@ -1232,13 +1243,13 @@ export default function LeadsDashboard() {
                 <td className="py-3.5 px-3">
                   {lead._isOwned ? (
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
                         {lead.owner_name?.charAt(0) ?? 'Y'}
                       </div>
                       <span className="text-gray-700 text-sm">You</span>
                     </div>
                   ) : (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
                       Unassigned
                     </span>
                   )}

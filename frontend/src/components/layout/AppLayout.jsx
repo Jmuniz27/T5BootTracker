@@ -2,8 +2,21 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { useAuthStore } from '../../store/auth.store'
 
+const AVATAR_COLORS = [
+  'bg-[#213A8E]',
+  'bg-violet-500',
+  'bg-teal-500',
+  'bg-rose-500',
+  'bg-amber-500',
+  'bg-cyan-600',
+  'bg-pink-500',
+  'bg-indigo-500',
+]
+
 export default function AppLayout() {
   const user = useAuthStore((s) => s.user)
+  const name = user?.full_name || user?.email || '?'
+  const avatarColor = AVATAR_COLORS[(name.charCodeAt(0) ?? 0) % AVATAR_COLORS.length]
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -21,8 +34,8 @@ export default function AppLayout() {
               {user?.role?.toLowerCase().replace('_', ' ') ?? 'Salesperson'}
             </span>
           </div>
-          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold text-gray-600">
-            {user?.full_name?.charAt(0).toUpperCase() ?? user?.email?.charAt(0).toUpperCase() ?? '?'}
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white ${avatarColor}`}>
+            {name.charAt(0).toUpperCase()}
           </div>
         </header>
 
