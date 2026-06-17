@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,11 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   ActivityIndicator,
+  Animated,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,15 +28,11 @@ const INPUT_FOCUS= 'rgba(91,155,213,0.6)';
 // ─── sub-components ──────────────────────────────────────────────────────────
 
 function EmailIcon() {
-  return (
-    <Ionicons name="mail-outline" size={18} color="rgba(255,255,255,0.35)" />
-  );
+  return <Ionicons name="mail-outline" size={18} color="rgba(255,255,255,0.35)" />;
 }
 
 function LockIcon() {
-  return (
-    <Ionicons name="lock-closed-outline" size={18} color="rgba(255,255,255,0.35)" />
-  );
+  return <Ionicons name="lock-closed-outline" size={18} color="rgba(255,255,255,0.35)" />;
 }
 
 interface FieldProps {
@@ -87,7 +84,33 @@ export default function LoginScreen() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const { login } = useAuth();
-  const router = useRouter();
+  const router    = useRouter();
+
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        Animated.timing(slideAnim, {
+          toValue: -(e.endCoordinates.height / 2),
+          duration: e.duration || 250,
+          useNativeDriver: true,
+        }).start();
+      },
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      (e) => {
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: e.duration || 250,
+          useNativeDriver: true,
+        }).start();
+      },
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   async function handleLogin() {
     setError(null);
@@ -105,83 +128,79 @@ export default function LoginScreen() {
   const canSubmit = email.trim() !== '' && password !== '' && !loading;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Logo */}
-        <View style={styles.logoRow}>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <View>
-            <Text style={styles.logoTitle}>CODING</Text>
-            <Text style={styles.logoTitle}>BOOTCAMPS</Text>
-            <Text style={styles.logoSub}>espol</Text>
+    <View style={styles.screen}>
+      <Animated.View style={[styles.inner, { transform: [{ translateY: slideAnim }] }]}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Logo */}
+          <View style={styles.logoRow}>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <View>
+              <Text style={styles.logoTitle}>CODING</Text>
+              <Text style={styles.logoTitle}>BOOTCAMPS</Text>
+              <Text style={styles.logoSub}>espol</Text>
+            </View>
           </View>
-        </View>
 
-        {/* Headline */}
-        <View style={styles.headlineWrap}>
+          {/* Headline */}
           <Text style={styles.headline}>
             Inicia sesión para{' '}
             <Text style={{ color: ACCENT }}>continuar</Text>
           </Text>
-          <Text style={styles.subheadline}>¡Continúa donde lo dejaste!</Text>
-        </View>
 
-        {/* Form */}
-        <View style={styles.form}>
-          <View>
-            <Text style={styles.fieldLabel}>Correo electrónico</Text>
-            <Field
-              icon={<EmailIcon />}
-              placeholder="correo@ejemplo.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-            />
-          </View>
-
-          <View>
-            <View style={styles.passwordLabelRow}>
-              <Text style={styles.fieldLabel}>Contraseña</Text>
-              <Link href="/(auth)/forgot-password" style={styles.forgotLink}>
-                ¿Olvidaste tu contraseña?
-              </Link>
+          {/* Form */}
+          <View style={styles.form}>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Correo electrónico</Text>
+              <Field
+                icon={<EmailIcon />}
+                placeholder="correo@ejemplo.com"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+              />
             </View>
-            <Field
-              icon={<LockIcon />}
-              placeholder="••••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+
+            <View style={styles.fieldGroup}>
+              <View style={styles.passwordLabelRow}>
+                <Text style={styles.fieldLabel}>Contraseña</Text>
+                <Link href="/(auth)/forgot-password" style={styles.forgotLink}>
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </View>
+              <Field
+                icon={<LockIcon />}
+                placeholder="••••••••••"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+            </View>
+
+            {error && <Text style={styles.errorText}>{error}</Text>}
+
+            <TouchableOpacity
+              style={[styles.button, !canSubmit && styles.buttonDisabled]}
+              disabled={!canSubmit}
+              onPress={handleLogin}
+              activeOpacity={0.88}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.buttonLabel}>Iniciar sesión</Text>
+              }
+            </TouchableOpacity>
           </View>
-
-          {error && <Text style={styles.errorText}>{error}</Text>}
-
-          <TouchableOpacity
-            style={[styles.button, !canSubmit && styles.buttonDisabled]}
-            disabled={!canSubmit}
-            onPress={handleLogin}
-            activeOpacity={0.88}
-          >
-            {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.buttonLabel}>Iniciar sesión</Text>
-            }
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -192,11 +211,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
+  inner: {
+    flex: 1,
+  },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 28,
-    paddingVertical: 60,
+    paddingTop: 32,
+    paddingBottom: 56,
     gap: 32,
   },
   // Logo
@@ -223,34 +246,29 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
   },
   // Headline
-  headlineWrap: {
-    gap: 6,
-  },
   headline: {
     fontSize: 28,
     fontWeight: '800',
     color: '#ffffff',
     lineHeight: 34,
-  },
-  subheadline: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.45)',
+    textAlign: 'center',
   },
   // Form
   form: {
-    gap: 18,
+    gap: 26,
+  },
+  fieldGroup: {
+    gap: 8,
   },
   fieldLabel: {
     fontSize: 13,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.65)',
-    marginBottom: 8,
   },
   passwordLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
   },
   forgotLink: {
     fontSize: 13,

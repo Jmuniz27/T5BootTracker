@@ -10,12 +10,16 @@ import {
   ActivityIndicator,
   RefreshControl,
   SafeAreaView,
+  Modal,
+  Pressable,
+  Animated,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
 import { fetchLeads, assignLead, releaseLead } from '../../../src/api/leads.api';
 import { api } from '../../../src/lib/api';
+import { useAuth } from '../../../src/context/AuthContext';
 import type { Lead, LeadStatus } from '../../../src/types/leads';
 
 interface MeData {
@@ -118,15 +122,16 @@ function StatusChips({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.chipsRow}
     >
-      {DISPLAY_FILTERS.map((opt) => {
-        const active = value === opt.value;
+      {DISPLAY_FILTERS.map((f) => {
+        const active = value === f.value;
         return (
           <TouchableOpacity
-            key={opt.label}
+            key={String(f.value)}
             style={[styles.chip, active && styles.chipActive]}
-            onPress={() => onChange(opt.value)}
+            onPress={() => onChange(f.value)}
+            activeOpacity={0.7}
           >
-            <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
           </TouchableOpacity>
         );
       })}
@@ -164,28 +169,33 @@ function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLog
             <Ionicons name="call-outline" size={12} color={colors.textMuted} />
             <Text style={styles.cardDetail}>{lead.phone}</Text>
             <Text style={styles.cardDot}>·</Text>
-            <Text style={styles.cardDetail}>{lead.interaction_count} interacciones</Text>
+            <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} />
+            <Text style={styles.cardDetail}>{lead.interaction_count}</Text>
           </View>
         </View>
       </View>
 
+      {/* Divider */}
+      <View style={styles.cardDivider} />
+
       {/* Bottom: action buttons */}
       <View style={styles.cardFooter}>
         {isAvailable ? (
-          <TouchableOpacity style={[styles.btnPrimary, styles.btnFull]} onPress={() => onAssign(lead.id)}>
+          <TouchableOpacity style={[styles.btnPrimary, styles.btnFull]} onPress={() => onAssign(lead.id)} activeOpacity={0.85}>
+            <Ionicons name="add-outline" size={15} color="#fff" />
             <Text style={styles.btnPrimaryText}>Asignarme</Text>
           </TouchableOpacity>
         ) : (
           <>
-            <TouchableOpacity style={styles.btnGhost} onPress={() => onViewHistory(lead)}>
-              <Ionicons name="time-outline" size={13} color={colors.navy} />
+            <TouchableOpacity style={styles.btnGhost} onPress={() => onViewHistory(lead)} activeOpacity={0.7}>
+              <Ionicons name="time-outline" size={14} color={colors.navy} />
               <Text style={styles.btnGhostText}>Historial</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.btnPrimary, { flex: 1 }]} onPress={() => onLogInteraction(lead)}>
+            <TouchableOpacity style={[styles.btnPrimary, { flex: 1 }]} onPress={() => onLogInteraction(lead)} activeOpacity={0.85}>
               <Text style={styles.btnPrimaryText}>Registrar</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.btnDanger} onPress={() => onRelease(lead.id)}>
-              <Text style={styles.btnDangerText}>Desasignar</Text>
+            <TouchableOpacity style={styles.btnOutline} onPress={() => onRelease(lead.id)} activeOpacity={0.7}>
+              <Text style={styles.btnOutlineText}>Desasignar</Text>
             </TouchableOpacity>
           </>
         )}
@@ -200,6 +210,7 @@ type Tab = 'my' | 'available';
 
 export default function LeadsScreen() {
   const router = useRouter();
+  const { logout } = useAuth();
 
   const [me, setMe]                     = useState<MeData | null>(null);
   const [tab, setTab]                   = useState<Tab>('my');
@@ -211,8 +222,23 @@ export default function LeadsScreen() {
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
   const [error, setError]               = useState<string | null>(null);
+  const [menuOpen, setMenuOpen]         = useState(false);
+  const slideAnim                        = useRef(new Animated.Value(300)).current;
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function openMenu() {
+    slideAnim.setValue(300);
+    setMenuOpen(true);
+    Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
+  }
+
+  function closeMenu(cb?: () => void) {
+    Animated.timing(slideAnim, { toValue: 300, duration: 220, useNativeDriver: true }).start(() => {
+      setMenuOpen(false);
+      cb?.();
+    });
+  }
 
   async function loadLeads(q?: string) {
     try {
@@ -292,14 +318,15 @@ export default function LeadsScreen() {
         data={displayed}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.navy} />}
         ListHeaderComponent={
           <>
             {/* Header */}
             <View style={styles.header}>
-              <TouchableOpacity hitSlop={8}>
-                <Ionicons name="menu" size={26} color={colors.textPrimary} />
-              </TouchableOpacity>
+              <View>
+                <Text style={styles.headerTitle}>Leads</Text>
+                <Text style={styles.headerSub}>Dashboard</Text>
+              </View>
               <View style={styles.headerRight}>
                 <View style={styles.headerNameCol}>
                   <Text style={styles.headerName}>{me?.full_name ?? '—'}</Text>
@@ -309,17 +336,28 @@ export default function LeadsScreen() {
                     </Text>
                   </View>
                 </View>
-                <View style={styles.userAvatar}>
+                <TouchableOpacity style={styles.userAvatar} onPress={openMenu} activeOpacity={0.8}>
                   <Text style={styles.userAvatarText}>
                     {me ? getInitials(me.full_name) : '?'}
                   </Text>
-                </View>
+                </TouchableOpacity>
               </View>
             </View>
 
-            {/* Title */}
-            <View style={styles.titleSection}>
-              <Text style={styles.title}>Leads</Text>
+            {/* Stat cards */}
+            <View style={styles.statRow}>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{myLeads.length}</Text>
+                <Text style={styles.statLabel}>Mis leads</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{available.length}</Text>
+                <Text style={styles.statLabel}>Disponibles</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{myLeads.filter((l) => l.status === 'CONVERTED').length}</Text>
+                <Text style={styles.statLabel}>Convertidos</Text>
+              </View>
             </View>
 
             {/* Search */}
@@ -339,11 +377,12 @@ export default function LeadsScreen() {
               <TouchableOpacity
                 style={[styles.filterBtn, (showFilters || statusFilter) && styles.filterBtnActive]}
                 onPress={() => setShowFilters((v) => !v)}
+                activeOpacity={0.8}
               >
                 <Ionicons
                   name="funnel"
-                  size={20}
-                  color={showFilters || statusFilter ? colors.white : colors.textPrimary}
+                  size={18}
+                  color={showFilters || statusFilter ? colors.white : colors.textMuted}
                 />
               </TouchableOpacity>
             </View>
@@ -356,6 +395,7 @@ export default function LeadsScreen() {
               <TouchableOpacity
                 style={[styles.tab, tab === 'my' && styles.tabActive]}
                 onPress={() => setTab('my')}
+                activeOpacity={0.8}
               >
                 <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]}>
                   Mis leads ({myFiltered.length})
@@ -364,6 +404,7 @@ export default function LeadsScreen() {
               <TouchableOpacity
                 style={[styles.tab, tab === 'available' && styles.tabActive]}
                 onPress={() => setTab('available')}
+                activeOpacity={0.8}
               >
                 <Text style={[styles.tabText, tab === 'available' && styles.tabTextActive]}>
                   Disponibles ({availableFiltered.length})
@@ -386,6 +427,8 @@ export default function LeadsScreen() {
         )}
         ListEmptyComponent={
           <View style={styles.emptyState}>
+            <Ionicons name="people-outline" size={40} color={colors.border} />
+            <Text style={styles.emptyTitle}>Sin resultados</Text>
             <Text style={styles.emptyText}>
               {tab === 'my'
                 ? 'No tienes leads asignados.'
@@ -394,6 +437,47 @@ export default function LeadsScreen() {
           </View>
         }
       />
+
+      {/* User menu */}
+      <Modal
+        visible={menuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => closeMenu()}
+      >
+        <Pressable style={styles.menuOverlay} onPress={() => closeMenu()}>
+          <Animated.View style={[styles.menuSheet, { transform: [{ translateY: slideAnim }] }]}>
+            <View style={styles.menuHandle} />
+            {/* User info */}
+            <View style={styles.menuUser}>
+              <View style={[styles.userAvatar, styles.menuAvatar]}>
+                <Text style={[styles.userAvatarText, styles.menuAvatarText]}>
+                  {me ? getInitials(me.full_name) : '?'}
+                </Text>
+              </View>
+              <View style={styles.menuUserInfo}>
+                <Text style={styles.menuUserName}>{me?.full_name ?? '—'}</Text>
+                <Text style={styles.menuUserEmail}>{me?.email ?? ''}</Text>
+              </View>
+            </View>
+
+            <View style={styles.menuDivider} />
+
+            {/* Logout */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => closeMenu(async () => {
+                await logout();
+                router.replace('/(auth)/login');
+              })}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#dc2626" />
+              <Text style={styles.menuItemTextDanger}>Cerrar sesión</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -403,21 +487,34 @@ export default function LeadsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f8f9fb',
   },
   loader: {
     marginTop: 80,
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingTop: 20,
+    paddingBottom: 18,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '500',
+    marginTop: 1,
   },
   headerRight: {
     flexDirection: 'row',
@@ -429,7 +526,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   headerName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.textPrimary,
   },
@@ -458,32 +555,51 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
-  // Title
-  titleSection: {
+  // Stat cards
+  statRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginBottom: 18,
   },
-  title: {
-    fontSize: 30,
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    gap: 2,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 28,
     fontWeight: '800',
     color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   // Search
   searchRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.white,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     gap: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    height: 48,
+    height: 46,
   },
   searchInput: {
     flex: 1,
@@ -491,10 +607,10 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   filterBtn: {
-    width: 48,
-    height: 48,
+    width: 46,
+    height: 46,
     backgroundColor: colors.white,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     justifyContent: 'center',
@@ -507,12 +623,12 @@ const styles = StyleSheet.create({
   // Status chips
   chipsRow: {
     gap: 8,
-    paddingBottom: 14,
+    paddingBottom: 12,
     paddingRight: 4,
   },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 20,
     backgroundColor: colors.white,
     borderWidth: 1,
@@ -534,17 +650,17 @@ const styles = StyleSheet.create({
   tabs: {
     flexDirection: 'row',
     backgroundColor: colors.white,
-    borderRadius: 10,
-    padding: 4,
+    borderRadius: 12,
+    padding: 3,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 9,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 10,
   },
   tabActive: {
     backgroundColor: colors.navy,
@@ -562,20 +678,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
     elevation: 1,
   },
   cardTop: {
     flexDirection: 'row',
     gap: 12,
     alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+    marginBottom: 12,
   },
   avatar: {
     width: 44,
@@ -592,7 +713,7 @@ const styles = StyleSheet.create({
   },
   cardInfo: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
   cardNameRow: {
     flexDirection: 'row',
@@ -606,6 +727,16 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     flex: 1,
   },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    flexShrink: 0,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -614,85 +745,151 @@ const styles = StyleSheet.create({
   cardDetail: {
     fontSize: 12,
     color: colors.textMuted,
-    flexShrink: 1,
   },
   cardDot: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.border,
+    marginHorizontal: 2,
   },
-  badge: {
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  // Card footer buttons
   cardFooter: {
     flexDirection: 'row',
     gap: 8,
-    paddingTop: 4,
-  },
-  btnGhost: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1.5,
-    borderColor: colors.navy,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  btnGhostText: {
-    fontSize: 12,
-    color: colors.navy,
-    fontWeight: '600',
   },
   btnPrimary: {
-    backgroundColor: colors.navy,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
+    backgroundColor: colors.navy,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
   btnFull: {
     flex: 1,
   },
   btnPrimaryText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '700',
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
   },
-  btnDanger: {
-    borderWidth: 1.5,
-    borderColor: '#dc2626',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+  btnGhost: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff2fb',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  btnGhostText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.navy,
+  },
+  btnOutline: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnDangerText: {
-    fontSize: 12,
-    color: '#dc2626',
+  btnOutlineText: {
+    fontSize: 13,
     fontWeight: '600',
+    color: colors.textMuted,
   },
-  // Feedback
+  // Error / Empty
   errorText: {
     color: colors.error,
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 12,
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
   emptyState: {
-    paddingVertical: 48,
+    paddingVertical: 56,
     alignItems: 'center',
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textMuted,
+    textAlign: 'center',
+  },
+  // User menu modal
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+  },
+  menuSheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingBottom: 36,
+    paddingHorizontal: 20,
+  },
+  menuHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  menuUser: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+  },
+  menuAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  menuAvatarText: {
+    fontSize: 17,
+  },
+  menuUserInfo: {
+    gap: 2,
+  },
+  menuUserName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  menuUserEmail: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginBottom: 4,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 16,
+  },
+  menuItemTextDanger: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#dc2626',
   },
 });
