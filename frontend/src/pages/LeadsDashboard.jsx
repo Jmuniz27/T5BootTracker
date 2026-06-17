@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, updateLeadStatus } from '../api/leads.api'
 
 const PAGE_SIZE = 10
 
@@ -27,6 +27,7 @@ const STATUS_LABELS = {
   INTERESTED: 'Interested',
   NOT_INTERESTED: 'Not interested',
   SPEAK_COORDINATOR: 'Speak coordinator',
+  WANTS_NEXT_CALL: 'Wants next call',
   CONVERTED: 'Converted',
 }
 
@@ -36,6 +37,7 @@ const STATUS_COLORS = {
   INTERESTED: 'bg-green-100 text-green-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
   SPEAK_COORDINATOR: 'bg-yellow-100 text-yellow-700',
+  WANTS_NEXT_CALL: 'bg-orange-100 text-orange-700',
   CONVERTED: 'bg-purple-100 text-purple-700',
 }
 
@@ -488,7 +490,7 @@ function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
 
 // ─── Create Lead Modal ────────────────────────────────────────────────────────
 
-const EMPTY_FORM = { name: '', phone: '', email: '', source: 'MANUAL', program_interest: '' }
+const EMPTY_FORM = { name: '', phone: '', email: '', source: 'MANUAL', program_interest: '', is_company: false }
 
 function CreateLeadModal({ onClose, onSubmit, isLoading }) {
   const [form, setForm] = useState(EMPTY_FORM)
@@ -562,6 +564,16 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
 
           {field('Program interest', 'program_interest')}
 
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.is_company}
+              onChange={(e) => setForm((prev) => ({ ...prev, is_company: e.target.checked }))}
+              className="w-4 h-4 accent-[#1e3164] rounded"
+            />
+            <span className="text-sm font-medium text-gray-700">Company lead</span>
+          </label>
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -578,6 +590,80 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
               {isLoading ? 'Creating…' : 'Create lead'}
             </button>
           </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── Update Status Modal ──────────────────────────────────────────────────────
+
+function UpdateStatusModal({ lead, onClose, onSuccess }) {
+  const queryClient = useQueryClient()
+  const [status, setStatus] = useState(lead.status)
+
+  const mutation = useMutation({
+    mutationFn: (newStatus) => updateLeadStatus(lead.id, { status: newStatus }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      onSuccess?.()
+      onClose()
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (status !== lead.status) mutation.mutate(status)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-2xl p-8 w-[400px] shadow-xl relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Change status</h2>
+        <p className="text-sm text-gray-500 mb-6">{lead.name}</p>
+
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-2 mb-6">
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setStatus(value)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                  status === value
+                    ? 'border-[#1e3164] bg-blue-50 text-[#1e3164]'
+                    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+                {status === value && (
+                  <svg className="w-4 h-4 text-[#1e3164]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {mutation.isError && (
+            <p className="text-xs text-red-500 mb-4 text-center">
+              {mutation.error?.response?.data?.error ?? 'Could not update status.'}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={mutation.isPending || status === lead.status}
+            className="w-full py-3 rounded-xl bg-[#1e3164] text-white font-semibold hover:bg-[#162550] transition-colors disabled:opacity-60"
+          >
+            {mutation.isPending ? 'Saving…' : 'Save'}
+          </button>
         </form>
       </div>
     </div>
@@ -689,7 +775,7 @@ function SortDropdown({ value, onChange }) {
 
 // ─── Row Actions Dropdown ─────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHistory, onLogInteraction }) {
+function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onChangeStatus }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -730,6 +816,14 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
               Log interaction
+            </button>
+          )}
+          {isOwned && (
+            <button
+              onClick={() => { onChangeStatus(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Change status
             </button>
           )}
           {isOwned ? (
@@ -801,11 +895,13 @@ export default function LeadsDashboard() {
   const queryClient = useQueryClient()
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [companyFilter, setCompanyFilter] = useState(false)
   const [sortKey, setSortKey]         = useState('default')
   const [page, setPage]               = useState(1)
   const [viewLead, setViewLead]           = useState(null)
   const [historyLead, setHistoryLead]     = useState(null)
   const [logLead, setLogLead]             = useState(null)
+  const [statusLead, setStatusLead]       = useState(null)
   const [releaseTarget, setReleaseTarget] = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [toast, setToast]                 = useState(null) // { message, type }
@@ -813,7 +909,7 @@ export default function LeadsDashboard() {
   const showToast = (message, type = 'success') => setToast({ message, type })
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, sortKey])
+  useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey])
 
   const queryParams = {}
   if (search) queryParams.search = search
@@ -830,7 +926,7 @@ export default function LeadsDashboard() {
     [
       ...myLeads.map((l) => ({ ...l, _isOwned: true })),
       ...availableLeads.map((l) => ({ ...l, _isOwned: false })),
-    ],
+    ].filter((l) => !companyFilter || l.is_company),
     sortKey,
   )
 
@@ -943,6 +1039,19 @@ export default function LeadsDashboard() {
               className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
+          <button
+            onClick={() => setCompanyFilter((v) => !v)}
+            className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
+              companyFilter
+                ? 'border-indigo-500 text-indigo-700 bg-indigo-50'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+            </svg>
+            Empresa
+          </button>
           <SortDropdown value={sortKey} onChange={setSortKey} />
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
         </div>
@@ -977,7 +1086,19 @@ export default function LeadsDashboard() {
 
             {!isLoading && !isError && pageLeads.map((lead) => (
               <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                <td className="py-3.5 px-3 font-medium text-gray-900">{lead.name}</td>
+                <td className="py-3.5 px-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">{lead.name}</span>
+                    {lead.is_company && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+                        </svg>
+                        Empresa
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="py-3.5 px-3 text-gray-500">{lead.email || '—'}</td>
                 <td className="py-3.5 px-3 text-gray-500">{lead.phone}</td>
                 <td className="py-3.5 px-3 text-gray-500">{SOURCE_LABELS[lead.source] || lead.source}</td>
@@ -1007,6 +1128,7 @@ export default function LeadsDashboard() {
                     onView={() => setViewLead(lead)}
                     onViewHistory={() => setHistoryLead(lead)}
                     onLogInteraction={() => setLogLead(lead)}
+                    onChangeStatus={() => setStatusLead(lead)}
                     onRelease={() => setReleaseTarget(lead)}
                     onAssign={() => assignMutation.mutate(lead.id)}
                   />
@@ -1036,6 +1158,14 @@ export default function LeadsDashboard() {
           lead={logLead}
           onClose={() => setLogLead(null)}
           onSuccess={() => showToast('Interaction logged successfully!')}
+        />
+      )}
+
+      {statusLead && (
+        <UpdateStatusModal
+          lead={statusLead}
+          onClose={() => setStatusLead(null)}
+          onSuccess={() => showToast('Status updated successfully!')}
         />
       )}
 
