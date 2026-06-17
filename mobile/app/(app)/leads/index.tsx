@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   RefreshControl,
   SafeAreaView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
 import { fetchLeads, assignLead, releaseLead } from '../../../src/api/leads.api';
@@ -43,15 +43,29 @@ const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: stri
   CONVERTED:         { bg: '#dcfce7', color: '#16a34a', label: 'Convertido' },
 };
 
-const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
+const OUTCOME_CONFIG: Record<string, { bg: string; color: string; label: string }> = {
+  INTERESTED:        { bg: '#dbeafe', color: '#1d4ed8', label: 'Interesado' },
+  NOT_INTERESTED:    { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
+  SPEAK_COORDINATOR: { bg: '#ede9fe', color: '#7c3aed', label: 'Hablar coordinador' },
+  NO_ANSWER:         { bg: '#fef3c7', color: '#d97706', label: 'No contestó' },
+  CALLBACK:          { bg: '#e0f2fe', color: '#0369a1', label: 'Llamar después' },
+};
+
+const DISPLAY_FILTERS: { value: string | null; label: string }[] = [
   { value: null,                label: 'Todos' },
   { value: 'NEW',               label: 'Nuevo' },
-  { value: 'CONTACTED',         label: 'Contactado' },
   { value: 'INTERESTED',        label: 'Interesado' },
   { value: 'NOT_INTERESTED',    label: 'No interesado' },
+  { value: 'NO_ANSWER',         label: 'No contestó' },
+  { value: 'CALLBACK',          label: 'Llamar después' },
   { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
   { value: 'CONVERTED',         label: 'Convertido' },
 ];
+
+function getDisplayKey(lead: Lead): string {
+  if (lead.status === 'CONVERTED') return 'CONVERTED';
+  return lead.last_outcome ?? 'NEW';
+}
 
 const AVATAR_PALETTE = ['#bfdbfe', '#fef08a', '#bbf7d0', '#fecaca', '#e9d5ff', '#fed7aa'];
 
@@ -78,8 +92,12 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
-function StatusBadge({ status }: { status: LeadStatus }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.NEW;
+function StatusBadge({ status, lastOutcome }: { status: LeadStatus; lastOutcome: string | null }) {
+  const cfg = status === 'CONVERTED'
+    ? STATUS_CONFIG.CONVERTED
+    : lastOutcome
+      ? (OUTCOME_CONFIG[lastOutcome] ?? STATUS_CONFIG.NEW)
+      : STATUS_CONFIG.NEW;
   return (
     <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
       <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
@@ -91,8 +109,8 @@ function StatusChips({
   value,
   onChange,
 }: {
-  value: LeadStatus | null;
-  onChange: (status: LeadStatus | null) => void;
+  value: string | null;
+  onChange: (key: string | null) => void;
 }) {
   return (
     <ScrollView
@@ -100,7 +118,7 @@ function StatusChips({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.chipsRow}
     >
-      {STATUS_FILTERS.map((opt) => {
+      {DISPLAY_FILTERS.map((opt) => {
         const active = value === opt.value;
         return (
           <TouchableOpacity
@@ -134,7 +152,7 @@ function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLog
         <View style={styles.cardInfo}>
           <View style={styles.cardNameRow}>
             <Text style={styles.cardName} numberOfLines={1}>{lead.name}</Text>
-            <StatusBadge status={lead.status} />
+            <StatusBadge status={lead.status} lastOutcome={lead.last_outcome} />
           </View>
           {lead.email ? (
             <View style={styles.cardRow}>
@@ -186,7 +204,7 @@ export default function LeadsScreen() {
   const [me, setMe]                     = useState<MeData | null>(null);
   const [tab, setTab]                   = useState<Tab>('my');
   const [search, setSearch]             = useState('');
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters]   = useState(false);
   const [myLeads, setMyLeads]           = useState<Lead[]>([]);
   const [available, setAvailable]       = useState<Lead[]>([]);
@@ -211,6 +229,12 @@ export default function LeadsScreen() {
     api.get<MeData>('/auth/me/').then(({ data }) => setMe(data)).catch(() => {});
     loadLeads().finally(() => setLoading(false));
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadLeads(search);
+    }, [search]),
+  );
 
   function handleSearchChange(text: string) {
     setSearch(text);
@@ -250,8 +274,8 @@ export default function LeadsScreen() {
     router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id } });
   }
 
-  const myFiltered        = statusFilter ? myLeads.filter((l) => l.status === statusFilter) : myLeads;
-  const availableFiltered = statusFilter ? available.filter((l) => l.status === statusFilter) : available;
+  const myFiltered        = statusFilter ? myLeads.filter((l) => getDisplayKey(l) === statusFilter) : myLeads;
+  const availableFiltered = statusFilter ? available.filter((l) => getDisplayKey(l) === statusFilter) : available;
   const displayed         = tab === 'my' ? myFiltered : availableFiltered;
 
   if (loading) {
