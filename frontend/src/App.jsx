@@ -7,6 +7,20 @@ import CheckEmailPage from './pages/CheckEmailPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import ResetSuccessPage from './pages/ResetSuccessPage'
 import LeadsDashboard from './pages/LeadsDashboard'
+import PaymentsPage from './pages/PaymentsPage'
+import PaymentQueuePage from './pages/PaymentQueuePage'
+import { useAuthStore } from './store/auth.store'
+
+function PaymentsRoute() {
+  const user = useAuthStore((s) => s.user)
+  return user?.role === 'BOOTCAMPER' ? <PaymentsPage /> : <PaymentQueuePage />
+}
+
+function DashboardRoute() {
+  const user = useAuthStore((s) => s.user)
+  if (user?.role === 'BOOTCAMPER') return <Navigate to="/payments" replace />
+  return <LeadsDashboard />
+}
 
 export default function App() {
   return (
@@ -28,9 +42,10 @@ export default function App() {
           }
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<LeadsDashboard />} />
+          <Route path="/dashboard" element={<DashboardRoute />} />
           <Route path="/my-leads" element={<div className="p-8 text-gray-400">My leads — coming soon</div>} />
           <Route path="/schedule" element={<div className="p-8 text-gray-400">Schedule — coming soon</div>} />
+          <Route path="/payments" element={<PaymentsRoute />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
