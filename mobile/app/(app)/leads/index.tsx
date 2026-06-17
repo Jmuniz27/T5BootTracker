@@ -51,15 +51,21 @@ const OUTCOME_CONFIG: Record<string, { bg: string; color: string; label: string 
   CALLBACK:          { bg: '#e0f2fe', color: '#0369a1', label: 'Llamar después' },
 };
 
-const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
+const DISPLAY_FILTERS: { value: string | null; label: string }[] = [
   { value: null,                label: 'Todos' },
   { value: 'NEW',               label: 'Nuevo' },
-  { value: 'CONTACTED',         label: 'Contactado' },
   { value: 'INTERESTED',        label: 'Interesado' },
   { value: 'NOT_INTERESTED',    label: 'No interesado' },
+  { value: 'NO_ANSWER',         label: 'No contestó' },
+  { value: 'CALLBACK',          label: 'Llamar después' },
   { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
   { value: 'CONVERTED',         label: 'Convertido' },
 ];
+
+function getDisplayKey(lead: Lead): string {
+  if (lead.status === 'CONVERTED') return 'CONVERTED';
+  return lead.last_outcome ?? 'NEW';
+}
 
 const AVATAR_PALETTE = ['#bfdbfe', '#fef08a', '#bbf7d0', '#fecaca', '#e9d5ff', '#fed7aa'];
 
@@ -103,8 +109,8 @@ function StatusChips({
   value,
   onChange,
 }: {
-  value: LeadStatus | null;
-  onChange: (status: LeadStatus | null) => void;
+  value: string | null;
+  onChange: (key: string | null) => void;
 }) {
   return (
     <ScrollView
@@ -112,7 +118,7 @@ function StatusChips({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.chipsRow}
     >
-      {STATUS_FILTERS.map((opt) => {
+      {DISPLAY_FILTERS.map((opt) => {
         const active = value === opt.value;
         return (
           <TouchableOpacity
@@ -198,7 +204,7 @@ export default function LeadsScreen() {
   const [me, setMe]                     = useState<MeData | null>(null);
   const [tab, setTab]                   = useState<Tab>('my');
   const [search, setSearch]             = useState('');
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters]   = useState(false);
   const [myLeads, setMyLeads]           = useState<Lead[]>([]);
   const [available, setAvailable]       = useState<Lead[]>([]);
@@ -268,8 +274,8 @@ export default function LeadsScreen() {
     router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id } });
   }
 
-  const myFiltered        = statusFilter ? myLeads.filter((l) => l.status === statusFilter) : myLeads;
-  const availableFiltered = statusFilter ? available.filter((l) => l.status === statusFilter) : available;
+  const myFiltered        = statusFilter ? myLeads.filter((l) => getDisplayKey(l) === statusFilter) : myLeads;
+  const availableFiltered = statusFilter ? available.filter((l) => getDisplayKey(l) === statusFilter) : available;
   const displayed         = tab === 'my' ? myFiltered : availableFiltered;
 
   if (loading) {
