@@ -21,6 +21,7 @@ class Lead(models.Model):
     class Status(models.TextChoices):
         NEW               = 'NEW',               'Nuevo'
         CONTACTED         = 'CONTACTED',         'Contactado'
+        QUALIFIED         = 'QUALIFIED',         'Calificado'
         INTERESTED        = 'INTERESTED',        'Interesado'
         NOT_INTERESTED    = 'NOT_INTERESTED',    'No interesado'
         SPEAK_COORDINATOR = 'SPEAK_COORDINATOR', 'Hablar con coordinador'
