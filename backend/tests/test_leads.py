@@ -11,7 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.authentication.models import CustomUser
 from apps.leads.models import Lead, Interaction
-from apps.programs.models import Program
+from apps.programs.models import Program, Enrollment
 
 LEADS_URL = '/api/leads/'
 
@@ -39,16 +39,15 @@ def program(db):
     )
 
 @pytest.fixture
-def interested_lead(db, salesperson_user):
-    """Fixture for a lead ready to be converted (Status: INTERESTED)."""
+def qualified_lead(db, salesperson_user):
+    """Fixture for a lead ready to be converted (Status: QUALIFIED)."""
     return Lead.objects.create(
         name='Juan Perez',
         phone='0991234567',
         email='juan.perez@test.com',
-        status=Lead.Status.INTERESTED,
+        status=Lead.Status.QUALIFIED,
         owner=salesperson_user
     )
-
 
 # ==========================================
 # LEAD CRUD & LISTING TESTS
@@ -477,16 +476,17 @@ class TestInteractions:
 
 class TestConvertLead:
 
-    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=True)
+    # NOTA: La ruta del patch ahora apunta a services, donde realmente se usa la función.
+    @patch('apps.leads.services.validate_cedula_ecuatoriana', return_value=True)
     @patch('apps.notifications.tasks.send_conversion_notification.delay')
-    def test_convert_lead_success_new_bootcamper(self, mock_notify, mock_validator, db, salesperson_user, interested_lead, program):
+    def test_convert_lead_success_new_bootcamper(self, mock_notify, mock_validator, db, salesperson_user, qualified_lead, program):
         client = make_client(salesperson_user)
         payload = {
             'cedula': '0955555555',
             'program_id': str(program.id)
         }
 
-        resp = client.post(f'{LEADS_URL}{interested_lead.id}/convert/', payload, format='json')
+        resp = client.post(f'{LEADS_URL}{qualified_lead.id}/convert/', payload, format='json')
 
         assert resp.status_code == 201
         data = resp.json()
@@ -494,23 +494,28 @@ class TestConvertLead:
         assert data['is_returning'] is False
         assert data['temporary_password'] is not None
         assert data['lead_status'] == Lead.Status.CONVERTED
-        assert data['email'] == interested_lead.email
+        assert data['email'] == qualified_lead.email
 
-        interested_lead.refresh_from_db()
-        assert interested_lead.status == Lead.Status.CONVERTED
-        assert interested_lead.program == program
+        qualified_lead.refresh_from_db()
+        assert qualified_lead.status == Lead.Status.CONVERTED
+        assert qualified_lead.program == program
 
         new_user = CustomUser.objects.get(id=data['bootcamper_id'])
         assert new_user.role == CustomUser.Role.BOOTCAMPER
         assert new_user.cedula == '0955555555'
 
-        mock_notify.assert_called_once_with(str(interested_lead.id), str(new_user.id))
+        enrollment = Enrollment.objects.get(bootcamper=new_user)
+        assert enrollment.bootcamp == program
+        assert enrollment.start_date == program.start_date
+        assert enrollment.agreed_price == program.total_cost
 
-    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=True)
+        mock_notify.assert_called_once_with(str(qualified_lead.id), str(new_user.id))
+
+    @patch('apps.leads.services.validate_cedula_ecuatoriana', return_value=True)
     @patch('apps.notifications.tasks.send_conversion_notification.delay')
-    def test_convert_lead_success_returning_bootcamper(self, mock_notify, mock_validator, db, salesperson_user, interested_lead, program):
+    def test_convert_lead_success_returning_bootcamper(self, mock_notify, mock_validator, db, salesperson_user, qualified_lead, program):
         existing_bootcamper = CustomUser.objects.create_user(
-            email=interested_lead.email,
+            email=qualified_lead.email,
             password='oldpassword123',
             role=CustomUser.Role.BOOTCAMPER,
             cedula='0944444444'
@@ -522,7 +527,7 @@ class TestConvertLead:
             'program_id': str(program.id)
         }
 
-        resp = client.post(f'{LEADS_URL}{interested_lead.id}/convert/', payload, format='json')
+        resp = client.post(f'{LEADS_URL}{qualified_lead.id}/convert/', payload, format='json')
 
         assert resp.status_code == 201
         data = resp.json()
@@ -531,14 +536,16 @@ class TestConvertLead:
         assert data['temporary_password'] is None
         assert data['bootcamper_id'] == str(existing_bootcamper.id)
 
-        interested_lead.refresh_from_db()
-        assert interested_lead.status == Lead.Status.CONVERTED
+        qualified_lead.refresh_from_db()
+        assert qualified_lead.status == Lead.Status.CONVERTED
 
-    def test_convert_lead_fails_if_status_not_interested(self, db, salesperson_user, program):
+        assert Enrollment.objects.filter(bootcamper=existing_bootcamper, bootcamp=program).exists()
+
+    def test_convert_lead_fails_if_status_not_qualified(self, db, salesperson_user, program):
         not_ready_lead = Lead.objects.create(
             name='Ana Gomez',
             phone='0990000000',
-            status=Lead.Status.NEW,
+            status=Lead.Status.INTERESTED,
             owner=salesperson_user
         )
 
@@ -550,20 +557,20 @@ class TestConvertLead:
         assert resp.status_code == 400
         assert resp.json()['code'] == 'INVALID_STATUS'
 
-    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=False)
-    def test_convert_lead_fails_invalid_cedula(self, mock_validator, db, salesperson_user, interested_lead, program):
+    @patch('apps.leads.services.validate_cedula_ecuatoriana', return_value=False)
+    def test_convert_lead_fails_invalid_cedula(self, mock_validator, db, salesperson_user, qualified_lead, program):
         client = make_client(salesperson_user)
         payload = {'cedula': '123', 'program_id': str(program.id)}
 
-        resp = client.post(f'{LEADS_URL}{interested_lead.id}/convert/', payload, format='json')
+        resp = client.post(f'{LEADS_URL}{qualified_lead.id}/convert/', payload, format='json')
 
         assert resp.status_code == 400
         assert resp.json()['code'] == 'INVALID_CEDULA'
 
-    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=True)
-    def test_convert_lead_fails_email_conflict_with_staff(self, mock_validator, db, salesperson_user, interested_lead, program):
+    @patch('apps.leads.services.validate_cedula_ecuatoriana', return_value=True)
+    def test_convert_lead_fails_email_conflict_with_staff(self, mock_validator, db, salesperson_user, qualified_lead, program):
         CustomUser.objects.create_user(
-            email=interested_lead.email,
+            email=qualified_lead.email,
             password='adminpassword',
             role=CustomUser.Role.ADMINISTRATOR
         )
@@ -571,13 +578,13 @@ class TestConvertLead:
         client = make_client(salesperson_user)
         payload = {'cedula': '0955555555', 'program_id': str(program.id)}
 
-        resp = client.post(f'{LEADS_URL}{interested_lead.id}/convert/', payload, format='json')
+        resp = client.post(f'{LEADS_URL}{qualified_lead.id}/convert/', payload, format='json')
 
         assert resp.status_code == 409
         assert resp.json()['code'] == 'EMAIL_CONFLICT'
 
-    @patch('apps.authentication.validators.validate_cedula_ecuatoriana', return_value=True)
-    def test_convert_lead_fails_duplicate_cedula(self, mock_validator, db, salesperson_user, interested_lead, program):
+    @patch('apps.leads.services.validate_cedula_ecuatoriana', return_value=True)
+    def test_convert_lead_fails_duplicate_cedula(self, mock_validator, db, salesperson_user, qualified_lead, program):
         CustomUser.objects.create_user(
             email='otro.correo@test.com',
             password='somepassword',
@@ -591,7 +598,7 @@ class TestConvertLead:
             'program_id': str(program.id)
         }
 
-        resp = client.post(f'{LEADS_URL}{interested_lead.id}/convert/', payload, format='json')
+        resp = client.post(f'{LEADS_URL}{qualified_lead.id}/convert/', payload, format='json')
 
         assert resp.status_code == 409
         assert resp.json()['code'] == 'CEDULA_ALREADY_EXISTS'
