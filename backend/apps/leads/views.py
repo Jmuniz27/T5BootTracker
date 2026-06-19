@@ -21,10 +21,9 @@ from .serializers import (
     LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
     InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
 )
-from .services import register_interaction
+from .services import register_interaction, convert_lead_to_bootcamper
 
 logger = logging.getLogger(__name__)
-
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE     = 100
@@ -88,8 +87,7 @@ class LeadListCreateView(APIView):
             }),
         })},
         summary='Listar leads',
-        description='Devuelve my_leads (asignados al usuario) y available_leads (sin asignar), '
-                    'paginados de forma independiente. Usa ?page y ?page_size para paginar.',
+        description='Devuelve my_leads (asignados al usuario) y available_leads (sin asignar), paginados de forma independiente.',
         tags=['Leads'],
     )
     def get(self, request):
@@ -179,7 +177,6 @@ class LeadAssignView(APIView):
     @extend_schema(
         responses={200: LeadListSerializer, 409: OpenApiResponse(description='Lead ya asignado')},
         summary='Asignar lead',
-        description='El vendedor autenticado se auto-asigna el lead. 409 si ya tiene dueño.',
         tags=['Leads'],
     )
     def patch(self, request, pk):
@@ -233,7 +230,6 @@ class LeadDetailView(APIView):
     @extend_schema(
         responses={200: LeadDetailSerializer, 404: OpenApiResponse(description='Lead no encontrado')},
         summary='Detalle de lead',
-        description='Devuelve el detalle de un lead. Cualquier vendedor o admin puede verlo.',
         tags=['Leads'],
     )
     def get(self, request, pk):
@@ -244,13 +240,6 @@ class LeadDetailView(APIView):
         request=LeadWriteSerializer,
         responses={200: LeadDetailSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
         summary='Actualizar lead',
-        description=(
-            'Actualiza un lead. El vendedor solo puede gestionar los suyos o los disponibles. '
-            'El admin puede gestionar cualquiera.\n\n'
-            '**Admin only:** enviar `owner` (UUID de un vendedor) reasigna el lead y actualiza '
-            '`assigned_at` y `version`. Enviar `owner: null` lo libera. '
-            'Este campo es ignorado silenciosamente para tokens de vendedor.'
-        ),
         tags=['Leads'],
     )
     def patch(self, request, pk):
@@ -269,11 +258,8 @@ class LeadDetailView(APIView):
     @extend_schema(
         responses={
             204: OpenApiResponse(description='Lead eliminado (soft delete)'),
-            403: OpenApiResponse(description='Solo un administrador puede eliminar leads'),
-            404: OpenApiResponse(description='Lead no encontrado'),
         },
         summary='Eliminar lead (soft delete)',
-        description='Marca el lead como eliminado. Solo Admin.',
         tags=['Leads'],
     )
     def delete(self, request, pk):
@@ -298,7 +284,6 @@ class InteractionListCreateView(APIView):
     )
     def get(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
-        # Owner or admin can view
         if not request.user.is_administrator and lead.owner != request.user:
             return Response(
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
@@ -311,13 +296,10 @@ class InteractionListCreateView(APIView):
         request=InteractionSerializer,
         responses={201: InteractionSerializer},
         summary='Registrar interacción',
-        description='Crea una interacción y actualiza estado y last_contact del lead. '
-                    'Solo el vendedor asignado puede registrar (admins no, aunque puedan ver).',
         tags=['Leads'],
     )
     def post(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
-        # Only the assigned salesperson may create — admins can view (GET) but not register.
         if lead.owner != request.user:
             return Response(
                 {'error': 'Solo el vendedor asignado puede registrar interacciones.', 'code': 'NOT_OWNER'},
@@ -337,13 +319,8 @@ class InteractionDetailView(APIView):
 
     @extend_schema(
         request=InteractionSerializer,
-        responses={
-            200: InteractionSerializer,
-            403: OpenApiResponse(description='Solo el vendedor que registró la interacción puede editarla'),
-            404: OpenApiResponse(description='Lead o interacción no encontrada'),
-        },
+        responses={200: InteractionSerializer},
         summary='Editar interacción',
-        description='Actualiza una interacción existente. Solo el vendedor que la registró o un admin.',
         tags=['Leads'],
     )
     def patch(self, request, pk, interaction_pk):
@@ -381,93 +358,20 @@ class ConvertLeadView(APIView):
         summary='Convertir lead a bootcamper',
         description=(
             'Valida la cédula ecuatoriana, crea o reutiliza un usuario BOOTCAMPER, '
-            'marca el lead como CONVERTED y dispara notificación a coordinadores.'
+            'crea la inscripción (Enrollment), marca el lead como CONVERTED '
+            'y dispara notificación a coordinadores. Requiere que el Lead sea QUALIFIED.'
         ),
         tags=['Leads'],
     )
     def post(self, request, pk):
-        from apps.authentication.validators import validate_cedula_ecuatoriana
-        from apps.notifications.tasks import send_conversion_notification
+        lead = get_object_or_404(Lead, pk=pk)
 
         serializer = ConvertLeadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
 
-        temporary_password = None
-        is_returning = False
-        bootcamper = None
+        result_data = convert_lead_to_bootcamper(lead, serializer.validated_data)
 
-        with transaction.atomic():
-            lead = get_object_or_404(Lead.objects.select_for_update(), pk=pk)
-
-            if lead.status != Lead.Status.INTERESTED:
-                return Response(
-                    {'error': 'Solo se puede convertir un lead con estado INTERESTED.', 'code': 'INVALID_STATUS'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            if not validate_cedula_ecuatoriana(data['cedula']):
-                return Response(
-                    {'error': 'La cédula ingresada no es válida.', 'code': 'INVALID_CEDULA'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            try:
-                program = Program.objects.get(pk=data['program_id'])
-            except Program.DoesNotExist:
-                return Response(
-                    {'error': 'Programa no encontrado.', 'code': 'PROGRAM_NOT_FOUND'},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-
-            email = data.get('email') or lead.email
-            phone = data.get('phone') or lead.phone
-
-            if email:
-                try:
-                    existing = CustomUser.objects.get(email=email)
-                    if existing.role != CustomUser.Role.BOOTCAMPER:
-                        return Response(
-                            {'error': 'El email ya está asociado a otro rol.', 'code': 'EMAIL_CONFLICT'},
-                            status=status.HTTP_409_CONFLICT,
-                        )
-                    bootcamper = existing
-                    is_returning = True
-                except CustomUser.DoesNotExist:
-                    pass
-
-            if bootcamper is None:
-                import secrets
-                temporary_password = secrets.token_urlsafe(12)
-                try:
-                    bootcamper = CustomUser.objects.create_user(
-                        email=email or f'bootcamper_{data["cedula"]}@placeholder.com',
-                        password=temporary_password,
-                        first_name=lead.name.split()[0] if lead.name else 'Bootcamper',
-                        last_name=' '.join(lead.name.split()[1:]) if len(lead.name.split()) > 1 else 'N/A',
-                        role=CustomUser.Role.BOOTCAMPER,
-                        cedula=data['cedula'],
-                        phone=phone,
-                    )
-                except IntegrityError:
-                    return Response(
-                        {'error': 'Esta cédula ya está registrada en el sistema.', 'code': 'CEDULA_ALREADY_EXISTS'},
-                        status=status.HTTP_409_CONFLICT,
-                    )
-
-            lead.status  = Lead.Status.CONVERTED
-            lead.program = program
-            lead.save()
-
-        send_conversion_notification.delay(str(lead.id), str(bootcamper.id))
-
-        return Response({
-            'bootcamper_id':       str(bootcamper.id),
-            'email':               bootcamper.email,
-            'temporary_password':  temporary_password,
-            'is_returning':        is_returning,
-            'lead_status':         lead.status,
-        }, status=status.HTTP_201_CREATED)
+        return Response(result_data, status=status.HTTP_201_CREATED)
 
 
 class ReturningBootcamperView(APIView):
@@ -511,7 +415,7 @@ class ReturningBootcamperView(APIView):
 
         if Lead.objects.filter(
             program=program,
-            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.INTERESTED],
+            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.INTERESTED, Lead.Status.QUALIFIED],
             email=bootcamper.email,
         ).exists():
             return Response(
