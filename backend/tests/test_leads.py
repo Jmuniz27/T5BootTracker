@@ -1,6 +1,5 @@
 """Tests for leads API endpoints."""
 import threading
-from unittest.mock import patch
 from datetime import timedelta
 
 import pytest
@@ -11,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.authentication.models import CustomUser
 from apps.leads.models import Lead, Interaction
-from apps.programs.models import Program, Enrollment
+from apps.programs.models import Program
 
 LEADS_URL = '/api/leads/'
 

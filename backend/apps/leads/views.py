@@ -3,7 +3,7 @@ import logging
 import uuid
 
 from django.core.paginator import Paginator
-from django.db import transaction, IntegrityError
+from django.db import transaction
 from django.db.models import Count, Q, OuterRef, Subquery
 from django.utils.dateparse import parse_date
 from django.utils.timezone import now
