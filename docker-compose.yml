@@ -71,13 +71,6 @@ services:
     networks:
       - boottracker-network
 
-volumes:
-  postgres_data:
-
-networks:
-  boottracker-network:
-    driver: bridge
-
   frontend-test:
     build:
       context: ./frontend
@@ -101,3 +94,9 @@ networks:
     profiles:
       - test
 
+volumes:
+  postgres_data:
+
+networks:
+  boottracker-network:
+    driver: bridge
