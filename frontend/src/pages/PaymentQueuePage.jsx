@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
   getPaymentQueue,
   getPayment,
@@ -173,22 +173,7 @@ function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess }) {
                     </div>
                   ))}
 
-                  {payment.receipt_file && (
-                    <div className="pt-3">
-                      <a
-                        href={payment.receipt_file}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-sm text-[#1D3176] font-medium hover:underline"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        Ver comprobante
-                      </a>
-                    </div>
-                  )}
+                  {/* TODO: Ver comprobante — pendiente de implementar */}
                 </div>
               )}
 
@@ -340,7 +325,12 @@ function QueueRow({ payment, onClick }) {
         </span>
       </td>
       <td className="py-3.5 px-4">
-        <button className="text-xs text-[#1D3176] font-medium hover:underline">Ver detalle</button>
+        <button className="p-1.5 bg-[#1D3176] hover:bg-[#162560] text-white rounded-lg transition-colors" title="Ver detalle">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+        </button>
       </td>
     </tr>
   )
@@ -366,9 +356,10 @@ export default function PaymentQueuePage() {
   const [programId, setProgramId] = useState('')
   const [toast, setToast] = useState(null)
 
-  const { data: queue = [], isLoading } = useQuery({
+  const { data: queue = [], isLoading, isFetching } = useQuery({
     queryKey: ['payment-queue', { search, programId }],
     queryFn: () => getPaymentQueue({ search: search || undefined, program_id: programId || undefined }),
+    placeholderData: keepPreviousData,
   })
 
   const { data: programs = [] } = useQuery({
@@ -382,12 +373,11 @@ export default function PaymentQueuePage() {
     <div className="flex-1 bg-gray-50 min-h-screen p-8">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">💳 Payment Queue</h1>
-        <p className="text-sm text-gray-500 mt-1">Review and approve bootcamper payment receipts</p>
+        <h1 className="text-2xl font-bold text-gray-900">Payment Queue</h1>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-6">
+      <div className="flex gap-3 mb-6 items-center">
         <div className="relative flex-1 max-w-xs">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -410,6 +400,12 @@ export default function PaymentQueuePage() {
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
+        {isFetching && !isLoading && (
+          <svg className="w-4 h-4 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+        )}
       </div>
 
       {/* Queue table */}
@@ -422,7 +418,7 @@ export default function PaymentQueuePage() {
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Monto</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Fecha</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
-              <th className="py-3 px-4" />
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Acciones</th>
             </tr>
           </thead>
           <tbody>

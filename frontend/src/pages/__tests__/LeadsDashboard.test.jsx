@@ -15,6 +15,6 @@ describe('LeadsDashboard', () => {
         </BrowserRouter>
       </QueryClientProvider>
     );
-    expect(screen.getByText(/Filter/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dashboard de Leads/i)).toBeInTheDocument();
   });
 });
