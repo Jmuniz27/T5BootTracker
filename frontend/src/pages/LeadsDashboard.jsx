@@ -37,7 +37,6 @@ const STATUS_LABELS = {
   INTERESTED: 'Interesado',
   NOT_INTERESTED: 'No interesado',
   SPEAK_COORDINATOR: 'Hablar coordinador',
-  WANTS_NEXT_CALL: 'Próxima llamada',
   CONVERTED: 'Convertido',
 }
 
@@ -47,7 +46,6 @@ const STATUS_COLORS = {
   INTERESTED: 'bg-blue-100 text-blue-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
   SPEAK_COORDINATOR: 'bg-purple-100 text-purple-700',
-  WANTS_NEXT_CALL: 'bg-orange-100 text-orange-700',
   CONVERTED: 'bg-green-100 text-green-700',
 }
 
@@ -308,7 +306,9 @@ function ViewHistoryModal({ lead, onClose }) {
 
 // ─── Log Interaction Modal ────────────────────────────────────────────────────
 
-const LOG_EMPTY = { interaction_type: '', outcome: '', notes: '', interest_level: 0, duration_minutes: '', next_action: '' }
+const LOG_EMPTY = { interaction_type: '', outcome: '', notes: '', interest_level: 0, duration_minutes: '', next_action: '', discount_offered: null }
+
+const DISCOUNT_OPTIONS = [10, 20, 30, 40, 50]
 
 const NEXT_ACTION_OPTIONS = [
   'Llamar de nuevo',
@@ -1135,7 +1135,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus }) {
   const [open, setOpen] = useState(false)
+  const [openUpward, setOpenUpward] = useState(false)
   const ref = useRef(null)
+  const btnRef = useRef(null)
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
@@ -1143,10 +1145,20 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const handleToggle = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      // dropdown is ~160px tall max; open upward if less than 200px below
+      setOpenUpward(window.innerHeight - rect.bottom < 200)
+    }
+    setOpen((v) => !v)
+  }
+
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={btnRef}
+        onClick={handleToggle}
         className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1155,7 +1167,7 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+        <div className={`absolute right-0 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 ${openUpward ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           <button
             onClick={() => { onView(); setOpen(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1272,8 +1284,15 @@ export default function LeadsDashboard() {
   const [convertTarget, setConvertTarget] = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [toast, setToast]                 = useState(null) // { message, type }
+  const [activeTab, setActiveTab]         = useState('mine') // 'mine' | 'available'
+  const [flashedLeadId, setFlashedLeadId] = useState(null)
 
   const showToast = (message, type = 'success') => setToast({ message, type })
+
+  const flashLead = (id) => {
+    setFlashedLeadId(id)
+    setTimeout(() => setFlashedLeadId(null), 1500)
+  }
 
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey])
@@ -1297,22 +1316,22 @@ export default function LeadsDashboard() {
 
   const myLeads        = data?.my_leads ?? []
   const availableLeads = data?.available_leads ?? []
-  const allLeads = sortLeads(
-    [
-      ...myLeads.map((l) => ({ ...l, _isOwned: true })),
-      ...availableLeads.map((l) => ({ ...l, _isOwned: false })),
-    ].filter((l) => !companyFilter || l.is_company),
-    sortKey,
-  )
 
   const pagination     = data?.pagination ?? {}
   const statsPagination = statsData?.pagination ?? {}
   const conversions    = myLeads.filter((l) => l.status === 'CONVERTED').length
-  const totalPages   = Math.max(
-    pagination.my_leads_total_pages ?? 1,
-    pagination.available_leads_total_pages ?? 1,
+  const totalPages   = activeTab === 'mine'
+    ? (pagination.my_leads_total_pages ?? 1)
+    : (pagination.available_leads_total_pages ?? 1)
+
+  const tabLeads = activeTab === 'mine'
+    ? myLeads.map((l) => ({ ...l, _isOwned: true }))
+    : availableLeads.map((l) => ({ ...l, _isOwned: false }))
+
+  const pageLeads = sortLeads(
+    tabLeads.filter((l) => !companyFilter || l.is_company),
+    sortKey,
   )
-  const pageLeads    = allLeads
 
   const assignMutation = useMutation({
     mutationFn: assignLead,
@@ -1413,6 +1432,30 @@ export default function LeadsDashboard() {
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
+          <button
+            onClick={() => { setActiveTab('mine'); setPage(1) }}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === 'mine'
+                ? 'bg-[#213A8E] text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Mis leads ({myLeads.length})
+          </button>
+          <button
+            onClick={() => { setActiveTab('available'); setPage(1) }}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === 'available'
+                ? 'bg-[#213A8E] text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Disponibles ({availableLeads.length})
+          </button>
+        </div>
+
         {/* Table */}
         {isError && (
           <p className="text-center text-red-500 py-8 text-sm">
@@ -1442,7 +1485,7 @@ export default function LeadsDashboard() {
             )}
 
             {!isLoading && !isError && pageLeads.map((lead) => (
-              <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
+              <tr key={lead.id} className={`transition-colors duration-700 ${flashedLeadId === lead.id ? 'bg-slate-100' : 'hover:bg-gray-50'}`}>
                 <td className="py-3.5 px-3">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-gray-900">{lead.name}</span>
@@ -1513,7 +1556,7 @@ export default function LeadsDashboard() {
         <LogInteractionModal
           lead={logLead}
           onClose={() => setLogLead(null)}
-          onSuccess={() => showToast('Interacción registrada correctamente.')}
+          onSuccess={() => { flashLead(logLead.id); showToast('Interacción registrada correctamente.') }}
         />
       )}
 
@@ -1521,7 +1564,7 @@ export default function LeadsDashboard() {
         <ConvertLeadModal
           lead={convertTarget}
           onClose={() => setConvertTarget(null)}
-          onSuccess={() => showToast(`${convertTarget.name} convertido correctamente.`)}
+          onSuccess={() => { flashLead(convertTarget.id); showToast(`${convertTarget.name} convertido correctamente.`) }}
         />
       )}
 
@@ -1529,7 +1572,7 @@ export default function LeadsDashboard() {
         <UpdateStatusModal
           lead={statusLead}
           onClose={() => setStatusLead(null)}
-          onSuccess={() => showToast('Estado actualizado correctamente.')}
+          onSuccess={() => { flashLead(statusLead.id); showToast('Estado actualizado correctamente.') }}
         />
       )}
 
