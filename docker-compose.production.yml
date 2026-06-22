@@ -23,7 +23,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4
     ports:
       - "8000:8000"
@@ -40,7 +40,7 @@ services:
   celery:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     command: celery -A config.celery_app worker --loglevel=info
     env_file:
       - .env
@@ -53,11 +53,11 @@ services:
       - boottracker-network
 
   frontend:
-    image: node:20-alpine
-    working_dir: /app
-    command: npm run build && npm run preview
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
     ports:
-      - "5173:5173"
+      - "80:80"
     env_file:
       - .env
     networks:
