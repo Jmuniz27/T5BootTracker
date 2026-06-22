@@ -6,6 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.authentication.models import CustomUser
 from apps.authentication.validators import validate_cedula_ecuatoriana
 from apps.leads.models import Lead
+from apps.programs.models import Enrollment
 
 CONVERT_URL    = '/api/leads/{id}/convert/'
 RETURNING_URL  = '/api/leads/returning-bootcamper/'
@@ -51,7 +52,7 @@ class TestConvertLead:
         lead = Lead.objects.create(
             name='Juan Pérez', phone='0991234567',
             email='juan.perez@test.com',
-            status=Lead.Status.INTERESTED,
+            status=Lead.Status.QUALIFIED,  # <-- CORREGIDO A QUALIFIED
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -60,19 +61,28 @@ class TestConvertLead:
                 'cedula':     '1713175071',
                 'program_id': str(program.id),
             }, format='json')
+
         assert resp.status_code == 201
         data = resp.json()
         assert data['is_returning'] is False
         assert data['temporary_password'] is not None
         assert data['lead_status'] == Lead.Status.CONVERTED
+
         lead.refresh_from_db()
         assert lead.status == Lead.Status.CONVERTED
         assert lead.program == program
 
+        # <-- NUEVA ASERCIÓN: Verificar Enrollment -->
+        new_user = CustomUser.objects.get(id=data['bootcamper_id'])
+        enrollment = Enrollment.objects.get(bootcamper=new_user)
+        assert enrollment.bootcamp == program
+        assert enrollment.start_date == program.start_date
+        assert enrollment.agreed_price == program.total_cost
+
     def test_convert_lead_wrong_status(self, db, salesperson_user, program):
         lead = Lead.objects.create(
             name='Jane', phone='0991111111',
-            status=Lead.Status.NEW,
+            status=Lead.Status.NEW, # <-- Mantenemos en NEW para forzar el fallo 400
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -85,7 +95,7 @@ class TestConvertLead:
     def test_convert_lead_invalid_cedula(self, db, salesperson_user, program):
         lead = Lead.objects.create(
             name='Test', phone='0992222222',
-            status=Lead.Status.INTERESTED,
+            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -100,7 +110,7 @@ class TestConvertLead:
         import uuid
         lead = Lead.objects.create(
             name='Test', phone='0993333333',
-            status=Lead.Status.INTERESTED,
+            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -119,7 +129,7 @@ class TestConvertLead:
         lead = Lead.objects.create(
             name='Re Turning', phone='0994444444',
             email='returning@test.com',
-            status=Lead.Status.INTERESTED,
+            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -127,11 +137,15 @@ class TestConvertLead:
             resp = client.post(CONVERT_URL.format(id=lead.id), {
                 'cedula': '1713175071', 'program_id': str(program.id),
             }, format='json')
+
         assert resp.status_code == 201
         data = resp.json()
         assert data['is_returning'] is True
         assert data['bootcamper_id'] == str(existing.id)
         assert data['temporary_password'] is None
+
+        # <-- NUEVA ASERCIÓN: Verificar Enrollment para bootcamper recurrente -->
+        assert Enrollment.objects.filter(bootcamper=existing, bootcamp=program).exists()
 
     def test_convert_lead_email_conflict_non_bootcamper(self, db, salesperson_user, program):
         CustomUser.objects.create_user(
@@ -142,7 +156,7 @@ class TestConvertLead:
         lead = Lead.objects.create(
             name='Test Conflict', phone='0995555555',
             email='admin.conflict@test.com',
-            status=Lead.Status.INTERESTED,
+            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -156,7 +170,7 @@ class TestConvertLead:
         lead = Lead.objects.create(
             name='Celery Test', phone='0996666666',
             email='celery.test@test.com',
-            status=Lead.Status.INTERESTED,
+            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -168,7 +182,7 @@ class TestConvertLead:
         mock_delay.assert_called_once()
 
     def test_convert_lead_unauthorized_bootcamper(self, db, bootcamper_user, program):
-        lead = Lead.objects.create(name='Test', phone='0997777777', status=Lead.Status.INTERESTED)
+        lead = Lead.objects.create(name='Test', phone='0997777777', status=Lead.Status.QUALIFIED) # <-- CORREGIDO A QUALIFIED
         client = make_client(bootcamper_user)
         resp = client.post(CONVERT_URL.format(id=lead.id), {
             'cedula': '1713175071', 'program_id': str(program.id),
