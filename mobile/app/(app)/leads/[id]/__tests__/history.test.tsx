@@ -1,5 +1,5 @@
 import React from 'react';
-import renderer from 'react-test-renderer';
+import renderer, { act } from 'react-test-renderer';
 import HistoryScreen from '../history';
 
 jest.mock('expo-router', () => ({
@@ -12,8 +12,14 @@ jest.mock('../../../../../src/api/leads.api', () => ({
 }));
 
 describe('HistoryScreen', () => {
-  it('renders without crashing', () => {
-    const tree = renderer.create(<HistoryScreen />).toJSON();
-    expect(tree).toBeTruthy();
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.runOnlyPendingTimers(); jest.useRealTimers(); });
+
+  it('renders without crashing', async () => {
+    let root: any;
+    await act(async () => {
+      root = renderer.create(<HistoryScreen />);
+    });
+    expect(root?.toJSON()).toBeTruthy();
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import renderer from 'react-test-renderer';
+import renderer, { act } from 'react-test-renderer';
 import ForgotPasswordScreen from '../forgot-password';
 
 jest.mock('expo-router', () => ({
@@ -12,8 +12,14 @@ jest.mock('../../../src/lib/api', () => ({
 }));
 
 describe('ForgotPasswordScreen', () => {
-  it('renders without crashing', () => {
-    const tree = renderer.create(<ForgotPasswordScreen />).toJSON();
-    expect(tree).toBeTruthy();
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.runOnlyPendingTimers(); jest.useRealTimers(); });
+
+  it('renders without crashing', async () => {
+    let root;
+    await act(async () => {
+      root = renderer.create(<ForgotPasswordScreen />);
+    });
+    expect(root?.toJSON()).toBeTruthy();
   });
 });

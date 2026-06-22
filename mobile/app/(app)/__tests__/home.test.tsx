@@ -1,10 +1,16 @@
 import React from 'react';
-import renderer from 'react-test-renderer';
+import renderer, { act } from 'react-test-renderer';
 import HomeScreen from '../home';
 
 describe('HomeScreen', () => {
-  it('renders without crashing', () => {
-    const tree = renderer.create(<HomeScreen />).toJSON();
-    expect(tree).toBeTruthy();
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.runOnlyPendingTimers(); jest.useRealTimers(); });
+
+  it('renders without crashing', async () => {
+    let root: any;
+    await act(async () => {
+      root = renderer.create(<HomeScreen />);
+    });
+    expect(root?.toJSON()).toBeTruthy();
   });
 });
