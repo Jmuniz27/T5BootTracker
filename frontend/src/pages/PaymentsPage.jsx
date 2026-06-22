@@ -304,12 +304,29 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
     ocr_payment_date: payment.ocr_payment_date || '',
   })
   const qc = useQueryClient()
+  const [timedOut, setTimedOut] = useState(false)
+
+  // OCR runs async (Celery). Poll ocr-status until the backend writes the
+  // confidence map (set only after the task finishes), then stop.
+  const isOcrDone = (d) => d?.ocr_confidence && Object.keys(d.ocr_confidence).length > 0
 
   const { data: ocrData, isLoading: ocrLoading } = useQuery({
     queryKey: ['ocr-status', payment.id],
     queryFn: () => getOCRStatus(payment.id),
     enabled: payment.status === 'DRAFT',
+    refetchInterval: (query) =>
+      isOcrDone(query.state.data) || timedOut ? false : 1500,
   })
+
+  // Give up polling after 30s so a stuck/slow OCR doesn't block manual entry.
+  useEffect(() => {
+    if (payment.status !== 'DRAFT') return
+    const t = setTimeout(() => setTimedOut(true), 30000)
+    return () => clearTimeout(t)
+  }, [payment.status])
+
+  const ocrReady = isOcrDone(ocrData) || isOcrDone(payment)
+  const ocrProcessing = payment.status === 'DRAFT' && !ocrReady && !timedOut
 
   useEffect(() => {
     if (ocrData) {
@@ -373,14 +390,24 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
 
           {/* Datos extraídos */}
           <div className="px-6 py-5 space-y-4">
-          {ocrLoading ? (
-            <div className="space-y-3 animate-pulse">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-10 bg-gray-100 rounded-lg" />
-              ))}
+          {(ocrLoading || ocrProcessing) ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <svg className="w-10 h-10 text-[#1D3176] animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <p className="text-sm font-medium text-gray-700 mt-4">Procesando OCR…</p>
+              <p className="text-xs text-gray-400 mt-1 max-w-xs">
+                Estamos extrayendo los datos de tu comprobante. Esto puede tardar unos segundos.
+              </p>
             </div>
           ) : (
             <>
+              {timedOut && !ocrReady && (
+                <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                  No se pudieron extraer los datos automáticamente. Complétalos manualmente antes de confirmar.
+                </p>
+              )}
               {[
                 { key: 'ocr_bank_name', label: 'Banco', placeholder: 'Nombre del banco' },
                 { key: 'ocr_account_last_digits', label: 'Últimos dígitos cuenta', placeholder: 'Ej: 1234' },
@@ -423,7 +450,7 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
             </button>
             <button
               type="button"
-              disabled={mutation.isPending || ocrLoading}
+              disabled={mutation.isPending || ocrLoading || ocrProcessing}
               onClick={() => mutation.mutate(fields)}
               className="flex-1 bg-[#1D3176] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#16265d] disabled:opacity-60 transition-colors"
             >
