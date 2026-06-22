@@ -75,7 +75,7 @@ const OUTCOME_COLORS = {
   SPEAK_COORDINATOR: 'bg-purple-100 text-purple-700',
 }
 
-// Badge que usa last_outcome igual que mobile
+// Badge usa status como fuente de verdad; lastOutcome solo como fallback visual si status no tiene label
 function LeadStatusBadge({ status, lastOutcome }) {
   if (status === 'CONVERTED') {
     return (
@@ -84,10 +84,11 @@ function LeadStatusBadge({ status, lastOutcome }) {
       </span>
     )
   }
-  const key = lastOutcome ?? status
+  const label = STATUS_LABELS[status] ?? OUTCOME_LABELS[lastOutcome] ?? status
+  const color = STATUS_COLORS[status] ?? OUTCOME_COLORS[lastOutcome] ?? 'bg-gray-100 text-gray-500'
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[key] ?? OUTCOME_COLORS[key] ?? 'bg-gray-100 text-gray-500'}`}>
-      {OUTCOME_LABELS[key] ?? STATUS_LABELS[key] ?? key}
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
+      {label}
     </span>
   )
 }
