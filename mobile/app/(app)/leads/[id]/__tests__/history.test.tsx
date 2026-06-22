@@ -1,24 +1,24 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
-import ForgotPasswordScreen from '../forgot-password';
+import HistoryScreen from '../history';
 
 jest.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({ id: '123' }),
   useRouter: () => ({ back: jest.fn() }),
-  Link: ({ children }: any) => <>{children}</>,
 }));
 
-jest.mock('../../../src/lib/api', () => ({
-  api: { post: jest.fn() }
+jest.mock('../../../../../src/api/leads.api', () => ({
+  getInteractions: jest.fn(() => Promise.resolve([])),
 }));
 
-describe('ForgotPasswordScreen', () => {
+describe('HistoryScreen', () => {
   beforeEach(() => { jest.useFakeTimers(); });
   afterEach(() => { jest.runOnlyPendingTimers(); jest.useRealTimers(); });
 
   it('renders without crashing', async () => {
-    let root;
+    let root: any;
     await act(async () => {
-      root = renderer.create(<ForgotPasswordScreen />);
+      root = renderer.create(<HistoryScreen />);
     });
     expect(root?.toJSON()).toBeTruthy();
   });
