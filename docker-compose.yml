@@ -77,3 +77,27 @@ volumes:
 networks:
   boottracker-network:
     driver: bridge
+
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    command: npm run test
+    volumes:
+      - ./frontend:/app
+    env_file:
+      - .env
+    profiles:
+      - test
+    networks:
+      - boottracker-network
+
+  mobile-test:
+    image: node:22-alpine
+    working_dir: /app
+    command: npm run test
+    volumes:
+      - ./mobile:/app
+    profiles:
+      - test
+
