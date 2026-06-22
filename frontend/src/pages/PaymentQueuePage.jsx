@@ -153,7 +153,7 @@ function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess }) {
               ))}
             </div>
 
-            <div className="px-6 py-5 overflow-y-auto flex-1">
+            <div className="px-6 py-5 overflow-y-auto h-[60vh]">
               {/* OCR Fields tab */}
               {tab === 'details' && (
                 <div className="space-y-1">
