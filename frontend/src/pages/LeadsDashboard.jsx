@@ -35,6 +35,7 @@ const STATUS_LABELS = {
   NEW: 'Nuevo',
   CONTACTED: 'Contactado',
   INTERESTED: 'Interesado',
+  QUALIFIED: 'Calificado',
   NOT_INTERESTED: 'No interesado',
   SPEAK_COORDINATOR: 'Hablar coordinador',
   CONVERTED: 'Convertido',
@@ -44,6 +45,7 @@ const STATUS_COLORS = {
   NEW: 'bg-gray-100 text-gray-500',
   CONTACTED: 'bg-yellow-100 text-yellow-700',
   INTERESTED: 'bg-blue-100 text-blue-700',
+  QUALIFIED: 'bg-emerald-100 text-emerald-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
   SPEAK_COORDINATOR: 'bg-purple-100 text-purple-700',
   CONVERTED: 'bg-green-100 text-green-700',
@@ -1196,7 +1198,7 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               Cambiar estado
             </button>
           )}
-          {isOwned && lead.status === 'INTERESTED' && (
+          {isOwned && lead.status === 'QUALIFIED' && (
             <button
               onClick={() => { onConvert(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
