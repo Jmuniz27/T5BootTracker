@@ -1005,7 +1005,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-2 mb-6">
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+            {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'CONVERTED').map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -1425,7 +1425,7 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               Registrar interacción
             </button>
           )}
-          {isOwned && (
+          {isOwned && lead.status !== 'CONVERTED' && (
             <button
               onClick={() => { onChangeStatus(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
