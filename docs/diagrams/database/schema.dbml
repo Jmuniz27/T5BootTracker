@@ -1,0 +1,129 @@
+// ============================================================
+// Boot-Tracker — Database Schema
+// Generated from Django models — grouped by app
+// ============================================================
+
+// ─── App: authentication ────────────────────────────────────
+
+Table authentication_customuser {
+  id            uuid         [pk, note: "uuid4"]
+  email         varchar(254) [unique, not null]
+  first_name    varchar(150) [not null]
+  last_name     varchar(150) [not null]
+  phone         varchar(20)  [null]
+  cedula        varchar(10)  [unique, null]
+  role          varchar(20)  [not null, default: "BOOTCAMPER", note: "SALESPERSON | BOOTCAMPER | ADMINISTRATOR | COORDINATOR | FINANCE"]
+  password      varchar(128) [not null]
+  last_login    timestamp    [null]
+  is_active     boolean      [not null, default: true]
+  is_staff      boolean      [not null, default: false]
+  is_superuser  boolean      [not null, default: false]
+  created_at    timestamp    [not null]
+  updated_at    timestamp    [not null]
+}
+
+// ─── App: programs ──────────────────────────────────────────
+
+Table programs_program {
+  id          uuid          [pk, note: "uuid4"]
+  name        varchar(200)  [not null]
+  start_date  date          [not null]
+  end_date    date          [not null]
+  total_cost  decimal(10,2) [not null]
+  is_active   boolean       [not null, default: true]
+  created_at  timestamp     [not null]
+}
+
+Table programs_coordinatoremailconfig {
+  id             uuid         [pk, note: "uuid4"]
+  program_id     uuid         [not null, ref: > programs_program.id]
+  email          varchar(254) [not null]
+  name           varchar(200) [not null]
+  recipient_type varchar(2)   [not null, default: "TO", note: "TO | CC"]
+  is_active      boolean      [not null, default: true]
+  created_at     timestamp    [not null]
+
+  indexes {
+    (program_id, email) [unique]
+  }
+}
+
+Table programs_enrollment {
+  id            uuid          [pk, note: "uuid4"]
+  bootcamper_id uuid          [not null, ref: > authentication_customuser.id]
+  bootcamp_id   uuid          [not null, ref: > programs_program.id]
+  start_date    date          [not null]
+  agreed_price  decimal(10,2) [not null]
+  status        varchar(20)   [not null, default: "ACTIVE", note: "ACTIVE | DROPPED | GRADUATED"]
+  created_at    timestamp     [not null]
+  updated_at    timestamp     [not null]
+
+  indexes {
+    (bootcamper_id, bootcamp_id) [unique]
+  }
+}
+
+// ─── App: leads ─────────────────────────────────────────────
+
+Table leads_lead {
+  id               uuid         [pk, note: "uuid4"]
+  name             varchar(200) [not null]
+  phone            varchar(20)  [not null]
+  email            varchar(254) [null]
+  program_interest varchar(200)
+  source           varchar(20)  [not null, default: "MANUAL", note: "INSTAGRAM | WHATSAPP | LANDING_PAGE | MANUAL"]
+  is_company       boolean      [not null, default: false]
+  status           varchar(30)  [not null, default: "NEW", note: "NEW | CONTACTED | QUALIFIED | INTERESTED | NOT_INTERESTED | SPEAK_COORDINATOR | CONVERTED"]
+  owner_id         uuid         [null, ref: > authentication_customuser.id]
+  program_id       uuid         [null, ref: > programs_program.id]
+  assigned_at      timestamp    [null]
+  last_contact     timestamp    [null]
+  version          int          [not null, default: 0]
+  deleted_at       timestamp    [null, note: "soft delete"]
+  created_at       timestamp    [not null]
+  updated_at       timestamp    [not null]
+}
+
+Table leads_interaction {
+  id               uuid        [pk, note: "uuid4"]
+  lead_id          uuid        [not null, ref: > leads_lead.id]
+  salesperson_id   uuid        [not null, ref: > authentication_customuser.id]
+  interaction_type varchar(20) [not null, note: "CALL | WHATSAPP | EMAIL | VISIT | NOTE"]
+  outcome          varchar(30) [not null, note: "INTERESTED | NOT_INTERESTED | NO_ANSWER | CALLBACK | SPEAK_COORDINATOR"]
+  interest_level   int         [null, note: "1–5"]
+  notes            text
+  campaign         varchar(100)
+  duration_minutes int         [null]
+  next_action      text
+  next_action_date date        [null]
+  created_at       timestamp   [not null]
+}
+
+// ─── App: payments ──────────────────────────────────────────
+
+Table payments_payment {
+  id                       uuid          [pk, note: "uuid4"]
+  bootcamper_id            uuid          [not null, ref: > authentication_customuser.id]
+  program_id               uuid          [not null, ref: > programs_program.id]
+  receipt_file             varchar(255)  [not null]
+  receipt_file_type        varchar(10)   [not null, note: "image | pdf"]
+  ocr_bank_name            varchar(200)
+  ocr_account_last_digits  varchar(10)
+  ocr_amount               decimal(12,2) [null]
+  ocr_transaction_id       varchar(100)
+  ocr_payment_date         date          [null]
+  ocr_confidence           json
+  ocr_raw_text             text
+  confirmed_amount         decimal(12,2) [null]
+  confirmed_bank_name      varchar(200)
+  confirmed_transaction_id varchar(100)
+  status                   varchar(10)   [not null, default: "PENDING", note: "DRAFT | PENDING | APPROVED | REJECTED"]
+  rejection_reason         text
+  validated_by_id          uuid          [null, ref: > authentication_customuser.id]
+  validated_at             timestamp     [null]
+  submitted_at             timestamp     [not null]
+  updated_at               timestamp     [not null]
+}
+
+// ─── App: notifications — stub, no models yet ───────────────
+// ─── App: analytics     — stub, no models yet ───────────────
