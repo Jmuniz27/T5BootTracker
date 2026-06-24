@@ -16,6 +16,11 @@ Fields marked `[PENDING]` will be completed by the Scrum Master (JL Chong).
 | 002 | kickoff_meeting_transcript.md | Full transcript of the initial requirements elicitation meeting with the client | MD (transcript) | PhD. Carmen Vaca, team | ~November 2024 | CB-36, CB-37 |
 | 003 | figma_review_meeting.md | Transcript of UI/UX review session with client over Figma prototypes | MD (transcript) | PhD. Carmen Vaca, Gabriela (gabsjimz), team | January 12, 2026 | CB-95 |
 | 004 | sprint_acceptances.md | Compilation of sprint acceptance confirmations (S1–S5) from the client | MD | PhD. Carmen Vaca, JL Chong (Jlchong3) | S1–S5 (2025–2026) | CB-41, CB-47, CB-69, CB-94 |
+| 005 | sprint1_acceptance_signed.pdf | Digitally signed Sprint 1 (Foundation & Auth) sprint review acceptance | PDF, digitally signed | PhD. Carmen Vaca | Sprint 1 | CB-41 |
+| 006 | sprint2_acceptance_signed.pdf | Digitally signed Sprint 2 (Leads) sprint review acceptance | PDF, digitally signed | PhD. Carmen Vaca | Sprint 2 | CB-47 |
+| 007 | sprint3_acceptance_signed.pdf | Digitally signed Sprint 3 (Conversion, Payments & OCR) sprint review acceptance | PDF, digitally signed | PhD. Carmen Vaca | Sprint 3 | CB-69 |
+
+Entries 005–007 carry a verifiable digital signature. Keep these files exactly as received (do not re-save, flatten, or print-to-PDF them) — that signature is only valid against the original byte-for-byte file. The copies embedded in the final report (Annex A) are visual only and are not independently verifiable.
 
 ---
 
