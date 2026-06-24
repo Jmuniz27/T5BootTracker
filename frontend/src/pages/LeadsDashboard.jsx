@@ -1433,7 +1433,7 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               Cambiar estado
             </button>
           )}
-          {isOwned && lead.status === 'QUALIFIED' && (
+          {isOwned && lead.status === 'INTERESTED' && (
             <button
               onClick={() => { onConvert(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
