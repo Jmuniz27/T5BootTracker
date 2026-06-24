@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, convertLead, getPrograms, updateLeadStatus } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus } from '../api/leads.api'
 
 const PAGE_SIZE = 10
 
@@ -35,6 +35,7 @@ const STATUS_LABELS = {
   NEW: 'Nuevo',
   CONTACTED: 'Contactado',
   INTERESTED: 'Interesado',
+  QUALIFIED: 'Calificado',
   NOT_INTERESTED: 'No interesado',
   SPEAK_COORDINATOR: 'Hablar coordinador',
   CONVERTED: 'Convertido',
@@ -43,9 +44,10 @@ const STATUS_LABELS = {
 const STATUS_COLORS = {
   NEW: 'bg-gray-100 text-gray-500',
   CONTACTED: 'bg-yellow-100 text-yellow-700',
-  INTERESTED: 'bg-blue-100 text-blue-700',
+  INTERESTED: 'bg-yellow-100 text-yellow-700',
+  QUALIFIED: 'bg-yellow-100 text-yellow-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
-  SPEAK_COORDINATOR: 'bg-purple-100 text-purple-700',
+  SPEAK_COORDINATOR: 'bg-yellow-100 text-yellow-700',
   CONVERTED: 'bg-green-100 text-green-700',
 }
 
@@ -66,11 +68,11 @@ const OUTCOME_LABELS = {
 }
 
 const OUTCOME_COLORS = {
-  INTERESTED: 'bg-blue-100 text-blue-700',
-  NOT_INTERESTED: 'bg-red-100 text-red-600',
-  NO_ANSWER: 'bg-yellow-100 text-yellow-700',
-  CALLBACK: 'bg-sky-100 text-sky-700',
-  SPEAK_COORDINATOR: 'bg-purple-100 text-purple-700',
+  INTERESTED: 'bg-blue-50 text-blue-600',
+  NOT_INTERESTED: 'bg-blue-50 text-blue-600',
+  NO_ANSWER: 'bg-blue-50 text-blue-600',
+  CALLBACK: 'bg-blue-50 text-blue-600',
+  SPEAK_COORDINATOR: 'bg-blue-50 text-blue-600',
 }
 
 // Badge usa status como fuente de verdad; lastOutcome solo como fallback visual si status no tiene label
@@ -235,6 +237,7 @@ function SkeletonRow() {
 // ─── View History Modal ───────────────────────────────────────────────────────
 
 function ViewHistoryModal({ lead, onClose }) {
+  const [editTarget, setEditTarget] = useState(null)
   const { data: interactions = [], isLoading } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -246,8 +249,9 @@ function ViewHistoryModal({ lead, onClose }) {
     new Date(iso).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', hour12: true })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl p-8 w-[500px] max-h-[80vh] flex flex-col shadow-xl relative">
+    <>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[500px] max-h-[85vh] flex flex-col shadow-xl relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -277,28 +281,240 @@ function ViewHistoryModal({ lead, onClose }) {
                 <InteractionTypeIcon type={interaction.interaction_type} />
               </div>
               <div className="flex-1 min-w-0">
+                {/* Tipo + estrellas + duración */}
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="text-sm font-medium text-gray-900">
                     {INTERACTION_TYPE_LABELS[interaction.interaction_type]}
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${OUTCOME_COLORS[interaction.outcome] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {OUTCOME_LABELS[interaction.outcome]}
-                  </span>
-                  {interaction.interest_level != null && (
-                    <span className="text-xs text-blue-500 font-semibold">+{interaction.interest_level}</span>
+                  {interaction.interest_level != null && interaction.interest_level > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-xs text-amber-500 font-semibold">
+                      <svg className="w-3.5 h-3.5 fill-amber-400" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.37 2.448a1 1 0 00-.364 1.118l1.286 3.957c.3.921-.755 1.688-1.54 1.118l-3.37-2.448a1 1 0 00-1.175 0l-3.37 2.448c-.784.57-1.838-.197-1.54-1.118l1.286-3.957a1 1 0 00-.364-1.118L2.063 9.384c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69L9.049 2.927z"/></svg>
+                      {interaction.interest_level}
+                    </span>
+                  )}
+                  {interaction.duration_minutes != null && (
+                    <>
+                      <span className="text-gray-300">|</span>
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {interaction.duration_minutes} min
+                      </span>
+                    </>
                   )}
                 </div>
+                {/* Badges: outcome (gris) + próxima acción (azul) */}
+                <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                  <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">
+                    {OUTCOME_LABELS[interaction.outcome]}
+                  </span>
+                  {interaction.next_action && (
+                    <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">
+                      {interaction.next_action}
+                    </span>
+                  )}
+                </div>
+                {/* Notas */}
                 {interaction.notes && (
                   <p className="text-xs text-gray-500 line-clamp-2">{interaction.notes}</p>
                 )}
               </div>
-              <div className="text-right shrink-0 ml-2">
+              <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+                <button
+                  onClick={() => setEditTarget(interaction)}
+                  className="p-1.5 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
+                  title="Editar interacción"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
+                  </svg>
+                </button>
                 <p className="text-xs text-gray-400">{formatDate(interaction.created_at)}</p>
                 <p className="text-xs text-gray-400">{formatTime(interaction.created_at)}</p>
               </div>
             </div>
           ))}
         </div>
+      </div>
+    </div>
+      {editTarget && (
+        <EditInteractionModal
+          lead={lead}
+          interaction={editTarget}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
+    </>
+  )
+}
+
+// ─── Edit Interaction Modal ───────────────────────────────────────────────────
+
+function EditInteractionModal({ lead, interaction, onClose }) {
+  const queryClient = useQueryClient()
+  const [form, setForm] = useState({
+    interaction_type: interaction.interaction_type ?? '',
+    outcome: interaction.outcome ?? '',
+    notes: interaction.notes ?? '',
+    interest_level: interaction.interest_level ?? 0,
+    duration_minutes: interaction.duration_minutes ?? '',
+    next_action: interaction.next_action ?? '',
+  })
+  const [errors, setErrors] = useState({})
+
+  const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
+
+  const validate = () => {
+    const errs = {}
+    if (!form.interaction_type) errs.interaction_type = 'Selecciona un tipo.'
+    if (!form.outcome) errs.outcome = 'Selecciona un resultado.'
+    return errs
+  }
+
+  const mutation = useMutation({
+    mutationFn: (data) => updateInteraction(lead.id, interaction.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['interactions', lead.id] })
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      onClose()
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    const errs = validate()
+    if (Object.keys(errs).length) { setErrors(errs); return }
+    const payload = { interaction_type: form.interaction_type, outcome: form.outcome }
+    if (form.notes) payload.notes = form.notes
+    if (form.interest_level) payload.interest_level = form.interest_level
+    if (form.duration_minutes) payload.duration_minutes = parseInt(form.duration_minutes, 10)
+    if (form.next_action) payload.next_action = form.next_action
+    mutation.mutate(payload)
+  }
+
+  const selectClass = (err) =>
+    `w-full pl-3 pr-10 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white ${err ? 'border-red-400' : 'border-gray-200'}`
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-8 w-[520px] max-h-[90vh] overflow-y-auto shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">Editar interacción</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <select value={form.interaction_type} onChange={set('interaction_type')} className={selectClass(errors.interaction_type)}>
+                  <option value="">Seleccionar</option>
+                  <option value="CALL">Llamada</option>
+                  <option value="WHATSAPP">WhatsApp</option>
+                  <option value="EMAIL">Email</option>
+                  <option value="VISIT">Visita</option>
+                  <option value="NOTE">Nota</option>
+                </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+              {errors.interaction_type && <p className="text-xs text-red-500 mt-1">{errors.interaction_type}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Resultado <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <select value={form.outcome} onChange={set('outcome')} className={selectClass(errors.outcome)}>
+                  <option value="">Seleccionar</option>
+                  <option value="INTERESTED">Interesado</option>
+                  <option value="NOT_INTERESTED">No interesado</option>
+                  <option value="NO_ANSWER">No contestó</option>
+                  <option value="CALLBACK">Llamar después</option>
+                  <option value="SPEAK_COORDINATOR">Hablar coordinador</option>
+                </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+              {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 items-start">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nivel de interés <span className="text-xs text-gray-400 font-normal">(opcional)</span></label>
+              <InteractiveStarRating
+                value={form.interest_level}
+                onChange={(v) => setForm((prev) => ({ ...prev, interest_level: v }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duración <span className="text-xs text-gray-400 font-normal">(opcional)</span></label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="999"
+                  value={form.duration_minutes}
+                  onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/[^0-9]/g, '') }))}
+                  placeholder="ej. 5"
+                  className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
+                />
+                <span className="text-sm text-gray-500">min</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notas <span className="text-xs text-gray-400 font-normal">(opcional)</span></label>
+            <textarea
+              value={form.notes}
+              onChange={set('notes')}
+              placeholder="¿Cómo fue la interacción?"
+              rows={3}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Próxima acción <span className="text-xs text-gray-400 font-normal">(opcional)</span></label>
+            <div className="flex flex-wrap gap-2">
+              {['Llamar de nuevo', 'Enviar información', 'Agendar visita', 'Esperar respuesta', 'Hablar con coordinador'].map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, next_action: prev.next_action === opt ? '' : opt }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    form.next_action === opt
+                      ? 'bg-[#213A8E] text-white border-[#213A8E]'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-[#213A8E]'
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mutation.isError && (
+            <p className="text-xs text-red-500 text-center">
+              {mutation.error?.response?.data?.error ?? 'No se pudo guardar. Intenta de nuevo.'}
+            </p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+              Cancelar
+            </button>
+            <button type="submit" disabled={mutation.isPending} className="flex-1 py-3 rounded-xl bg-[#1e3164] text-white font-semibold hover:bg-[#162550] transition-colors disabled:opacity-60">
+              {mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )
@@ -358,8 +574,8 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     `w-full pl-3 pr-10 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white ${err ? 'border-red-400' : 'border-gray-200'}`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-2xl p-8 w-[520px] max-h-[90vh] overflow-y-auto shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -369,7 +585,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Tipo + Resultado */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Tipo de interacción <span className="text-red-500">*</span>
@@ -516,8 +732,8 @@ function ViewLeadModal({ lead, onClose }) {
   const rating = lastInteraction?.interest_level ?? null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl p-8 w-96 shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-sm shadow-xl relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -575,8 +791,8 @@ function ViewLeadModal({ lead, onClose }) {
 
 function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl p-8 w-[420px] shadow-xl text-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[420px] shadow-xl text-center">
         <h2 className="text-lg font-bold text-gray-900 mb-3">
           ¿Seguro que quieres desasignar este lead?
         </h2>
@@ -605,11 +821,12 @@ function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
 
 // ─── Create Lead Modal ────────────────────────────────────────────────────────
 
-const EMPTY_FORM = { name: '', phone: '', email: '', source: 'MANUAL', program_interest: '', is_company: false }
+const EMPTY_FORM = { name: '', phone: '', email: '', source: 'MANUAL', program_interest: '', is_company: false, autoAssign: false }
 
 function CreateLeadModal({ onClose, onSubmit, isLoading }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
+  const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
 
   const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
 
@@ -624,10 +841,10 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
     e.preventDefault()
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
-    const payload = { ...form }
+    const { autoAssign, ...payload } = form
     if (!payload.email) delete payload.email
     if (!payload.program_interest) delete payload.program_interest
-    onSubmit(payload)
+    onSubmit(payload, autoAssign)
   }
 
   const field = (label, key, type = 'text', required = false) => (
@@ -653,8 +870,8 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
     }`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl p-8 w-[480px] shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -699,8 +916,28 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
-            <input type="text" value={form.program_interest} onChange={set('program_interest')} className={inputClass('program_interest')} />
+            <div className="relative">
+              <select value={form.program_interest} onChange={set('program_interest')} className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white">
+                <option value="">Sin especificar</option>
+                {programs.map((p) => (
+                  <option key={p.id} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+              <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </div>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.autoAssign}
+              onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
+              className="w-4 h-4 accent-[#1e3164] rounded"
+            />
+            <span className="text-sm font-medium text-gray-700">Asignarme este lead</span>
+          </label>
 
           <label className="flex items-center gap-3 cursor-pointer">
             <input
@@ -755,8 +992,8 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl p-8 w-[400px] shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[400px] shadow-xl relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -982,8 +1219,8 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   // ── Success screen ──
   if (result) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-white rounded-2xl p-8 w-[480px] shadow-xl text-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl text-center">
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -1025,8 +1262,8 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
   // ── Form screen ──
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl p-8 w-[500px] shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[500px] shadow-xl relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1196,7 +1433,7 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               Cambiar estado
             </button>
           )}
-          {isOwned && lead.status === 'INTERESTED' && (
+          {isOwned && lead.status === 'QUALIFIED' && (
             <button
               onClick={() => { onConvert(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
@@ -1358,12 +1595,28 @@ export default function LeadsDashboard() {
     },
   })
 
+  const autoAssignRef = useRef(false)
+
   const createMutation = useMutation({
     mutationFn: createLead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    onSuccess: async (newLead) => {
+      if (autoAssignRef.current) {
+        try {
+          await assignLead(newLead.id)
+          showToast('Lead creado y asignado a ti.')
+          setActiveTab('mine')
+        } catch {
+          showToast('Lead creado, pero no se pudo asignar. Búscalo en Disponibles.', 'error')
+          setActiveTab('available')
+        }
+      } else {
+        showToast('Lead creado. Puedes encontrarlo en Disponibles.')
+        setActiveTab('available')
+      }
+      await queryClient.invalidateQueries({ queryKey: ['leads'] })
       setShowCreate(false)
-      showToast('Lead creado correctamente.')
+      setPage(1)
+      setTimeout(() => flashLead(newLead.id), 100)
     },
     onError: (err) => {
       const msg = err.response?.data?.error ?? 'No se pudo crear el lead.'
@@ -1372,9 +1625,9 @@ export default function LeadsDashboard() {
   })
 
   return (
-    <div className="p-8 min-h-screen">
+    <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
           Dashboard de Leads
         </h1>
@@ -1390,11 +1643,11 @@ export default function LeadsDashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="flex gap-4 mb-8">
-        <StatCard label="Total leads"      value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
-        <StatCard label="Asignados a mí"   value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
-        <StatCard label="Conversiones"     value={conversions} loading={isLoading} />
-        <StatCard label="No interesados"   value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 lg:mb-8">
+        <StatCard label="Total leads"    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
+        <StatCard label="Asignados a mí" value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
+        <StatCard label="Conversiones"   value={conversions} loading={isLoading} />
+        <StatCard label="No interesados" value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
       </div>
 
       {/* Leads Table */}
@@ -1402,7 +1655,7 @@ export default function LeadsDashboard() {
         <h2 className="text-lg font-bold text-gray-900 mb-4">Leads</h2>
 
         {/* Search + controls */}
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-5">
           <div className="flex-1 relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1463,7 +1716,8 @@ export default function LeadsDashboard() {
           </p>
         )}
 
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[600px]">
           <thead>
             <tr className="border-b border-gray-100">
               {['Nombre', 'Email', 'Teléfono', 'Fuente', 'Estado', 'Asignado a', 'Acciones'].map((h) => (
@@ -1536,6 +1790,7 @@ export default function LeadsDashboard() {
             ))}
           </tbody>
         </table>
+        </div>
 
         <Pagination
           page={page}
@@ -1588,7 +1843,7 @@ export default function LeadsDashboard() {
       {showCreate && (
         <CreateLeadModal
           onClose={() => setShowCreate(false)}
-          onSubmit={(data) => createMutation.mutate(data)}
+          onSubmit={(data, autoAssign) => { autoAssignRef.current = autoAssign; createMutation.mutate(data) }}
           isLoading={createMutation.isPending}
         />
       )}

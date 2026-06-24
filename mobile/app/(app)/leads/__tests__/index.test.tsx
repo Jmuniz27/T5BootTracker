@@ -17,6 +17,10 @@ jest.mock('../../../../src/lib/api', () => ({
   api: { get: jest.fn(() => Promise.resolve({ data: { full_name: 'Test', role: 'SALESPERSON' } })) }
 }));
 
+jest.mock('../../../../src/context/AuthContext', () => ({
+  useAuth: () => ({ logout: jest.fn() }),
+}));
+
 describe('LeadsScreen', () => {
   beforeEach(() => { jest.useFakeTimers(); });
   afterEach(() => { jest.runOnlyPendingTimers(); jest.useRealTimers(); });

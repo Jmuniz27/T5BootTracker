@@ -1,0 +1,87 @@
+<mxfile host="65bd71144e">
+    <diagram id="diagram_1" name="ERD">
+        <mxGraphModel dx="996" dy="373" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="app_auth" value="authentication" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="40" width="260" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="table_auth" value="&lt;b&gt;customuser&lt;/b&gt;&lt;hr&gt;id (uuid) [PK]&lt;br&gt;email (varchar)&lt;br&gt;first_name (varchar)&lt;br&gt;last_name (varchar)&lt;br&gt;phone (varchar)&lt;br&gt;cedula (varchar)&lt;br&gt;role (varchar)&lt;br&gt;password (varchar)&lt;br&gt;last_login (timestamp)&lt;br&gt;is_active (boolean)&lt;br&gt;is_staff (boolean)&lt;br&gt;is_superuser (boolean)&lt;br&gt;created_at (timestamp)&lt;br&gt;updated_at (timestamp)" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=5;spacingTop=5;" parent="app_auth" vertex="1">
+                    <mxGeometry y="30" width="260" height="230" as="geometry"/>
+                </mxCell>
+                <mxCell id="app_programs" value="programs" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="40" width="260" height="400" as="geometry"/>
+                </mxCell>
+                <mxCell id="table_program" value="&lt;b&gt;program&lt;/b&gt;&lt;hr&gt;id (uuid) [PK]&lt;br&gt;name (varchar)&lt;br&gt;start_date (date)&lt;br&gt;end_date (date)&lt;br&gt;total_cost (decimal)&lt;br&gt;is_active (boolean)&lt;br&gt;created_at (timestamp)" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=5;spacingTop=5;" parent="app_programs" vertex="1">
+                    <mxGeometry y="30" width="260" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="table_coord" value="&lt;b&gt;coordinatoremailconfig&lt;/b&gt;&lt;hr&gt;id (uuid) [PK]&lt;br&gt;program_id (uuid) [FK]&lt;br&gt;email (varchar)&lt;br&gt;name (varchar)&lt;br&gt;recipient_type (varchar)&lt;br&gt;is_active (boolean)&lt;br&gt;created_at (timestamp)" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=5;spacingTop=5;" parent="app_programs" vertex="1">
+                    <mxGeometry y="160" width="260" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="table_enroll" value="&lt;b&gt;enrollment&lt;/b&gt;&lt;hr&gt;id (uuid) [PK]&lt;br&gt;bootcamper_id (uuid) [FK]&lt;br&gt;bootcamp_id (uuid) [FK]&lt;br&gt;start_date (date)&lt;br&gt;agreed_price (decimal)&lt;br&gt;status (varchar)&lt;br&gt;created_at (timestamp)&lt;br&gt;updated_at (timestamp)" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=5;spacingTop=5;" parent="app_programs" vertex="1">
+                    <mxGeometry y="290" width="260" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="app_leads" value="leads" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;" parent="1" vertex="1">
+                    <mxGeometry x="640" y="40" width="260" height="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="table_lead" value="&lt;b&gt;lead&lt;/b&gt;&lt;hr&gt;id (uuid) [PK]&lt;br&gt;name (varchar)&lt;br&gt;phone (varchar)&lt;br&gt;email (varchar)&lt;br&gt;program_interest (varchar)&lt;br&gt;source (varchar)&lt;br&gt;is_company (boolean)&lt;br&gt;status (varchar)&lt;br&gt;owner_id (uuid) [FK]&lt;br&gt;program_id (uuid) [FK]&lt;br&gt;assigned_at (timestamp)&lt;br&gt;last_contact (timestamp)&lt;br&gt;version (int)&lt;br&gt;deleted_at (timestamp)&lt;br&gt;created_at (timestamp)&lt;br&gt;updated_at (timestamp)" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=5;spacingTop=5;" parent="app_leads" vertex="1">
+                    <mxGeometry y="30" width="260" height="260" as="geometry"/>
+                </mxCell>
+                <mxCell id="app_payments" value="payments" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="320" width="260" height="360" as="geometry"/>
+                </mxCell>
+                <mxCell id="table_payment" value="&lt;b&gt;payment&lt;/b&gt;&lt;hr&gt;id (uuid) [PK]&lt;br&gt;bootcamper_id (uuid) [FK]&lt;br&gt;program_id (uuid) [FK]&lt;br&gt;receipt_file (varchar)&lt;br&gt;receipt_file_type (varchar)&lt;br&gt;ocr_bank_name (varchar)&lt;br&gt;ocr_account_last_digits (varchar)&lt;br&gt;ocr_amount (decimal)&lt;br&gt;ocr_transaction_id (varchar)&lt;br&gt;ocr_payment_date (date)&lt;br&gt;ocr_confidence (json)&lt;br&gt;ocr_raw_text (text)&lt;br&gt;confirmed_amount (decimal)&lt;br&gt;confirmed_bank_name (varchar)&lt;br&gt;confirmed_transaction_id (varchar)&lt;br&gt;status (varchar)&lt;br&gt;rejection_reason (text)&lt;br&gt;validated_by_id (uuid) [FK]&lt;br&gt;validated_at (timestamp)&lt;br&gt;submitted_at (timestamp)&lt;br&gt;updated_at (timestamp)" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=5;spacingTop=5;" parent="app_payments" vertex="1">
+                    <mxGeometry y="30" width="260" height="340" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="table_coord" target="table_program" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="table_enroll" target="table_program" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="table_enroll" target="table_auth" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="470" y="550"/>
+                            <mxPoint x="170" y="550"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="table_lead" target="table_program" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="table_lead" target="table_auth" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="table_interaction" target="table_lead" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.75;entryDx=0;entryDy=0;" parent="1" source="table_interaction" target="table_auth" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="770" y="580"/>
+                            <mxPoint x="320" y="580"/>
+                            <mxPoint x="320" y="240"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="table_payment" target="table_program" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="170" y="700"/>
+                            <mxPoint x="320" y="700"/>
+                            <mxPoint x="320" y="105"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.25;entryY=1;entryDx=0;entryDy=0;" parent="1" source="table_payment" target="table_auth" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="table_interaction" value="&lt;b&gt;interaction&lt;/b&gt;&lt;hr&gt;id (uuid) [PK]&lt;br&gt;lead_id (uuid) [FK]&lt;br&gt;salesperson_id (uuid) [FK]&lt;br&gt;interaction_type (varchar)&lt;br&gt;outcome (varchar)&lt;br&gt;interest_level (int)&lt;br&gt;notes (text)&lt;br&gt;campaign (varchar)&lt;br&gt;duration_minutes (int)&lt;br&gt;next_action (text)&lt;br&gt;next_action_date (date)&lt;br&gt;created_at (timestamp)" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=5;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="640" y="460" width="260" height="210" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
