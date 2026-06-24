@@ -1,0 +1,79 @@
+@startuml
+title Boot-Tracker — Deployment Diagram
+
+skinparam defaultFontSize 12
+skinparam ArrowColor #444444
+skinparam linetype ortho
+skinparam node {
+  BackgroundColor White
+  BorderColor #555555
+}
+skinparam node<<planned>> {
+  BackgroundColor #F5F5F5
+  BorderColor #AAAAAA
+  FontColor #888888
+}
+skinparam database {
+  BackgroundColor White
+  BorderColor #555555
+}
+skinparam note {
+  BackgroundColor #FFFFF0
+  BorderColor #CCCCAA
+}
+
+' ─── Clients ─────────────────────────────────────────────────────────────────
+node "User's Browser" as Browser #DAE8FC
+node "Mobile Device\n(Android / iOS)" as MobileDevice #E1D5E7
+
+' ─── ESPOL Server (Coolify) ──────────────────────────────────────────────────
+node "ESPOL Server — taws.espol.edu.ec\n(Coolify PaaS)" as ESPOLServer #D5E8D4 {
+
+  node "Coolify\n(Reverse Proxy + TLS + DNS)" as Coolify
+
+  node "Docker Stack — boottracker-network" as DockerStack {
+
+    node "frontend\n(Vite preview · :5173)" as FrontendSvc
+    node "backend\n(Gunicorn 4 workers · :8000)" as BackendSvc
+    node "celery\n(Celery Worker)" as CelerySvc
+    node "celery beat\n<<planned>>" <<planned>> as CeleryBeat
+
+    database "db\n(PostgreSQL 16 · :5432)" as DB
+    node "redis\n(Redis 7 · :6379)" as RedisSvc
+  }
+}
+
+' ─── External services ───────────────────────────────────────────────────────
+node "SMTP Server\n(Gmail / any SMTP)" as SMTPServer
+node "Object Storage\n(S3 / MinIO)\n<<planned>>" <<planned>> as ObjStorage
+node "Google Calendar API\n<<planned>>" <<planned>> as GCalAPI
+
+' ─── Connections ─────────────────────────────────────────────────────────────
+Browser      --> Coolify      : HTTPS :443
+MobileDevice --> Coolify      : HTTPS :443
+
+Coolify      --> FrontendSvc  : proxy :5173
+Coolify      --> BackendSvc   : proxy /api :8000
+
+FrontendSvc  --> BackendSvc   : /api (internal)
+
+BackendSvc   --> DB           : :5432
+BackendSvc   --> RedisSvc     : :6379 (token blacklist / cache)
+BackendSvc   --> CelerySvc    : enqueue tasks
+
+CelerySvc    --> RedisSvc     : :6379 (broker / result backend)
+CelerySvc    --> SMTPServer   : SMTP (email notifications)
+CelerySvc    --> BackendSvc   : OCR (Tesseract, in-process)
+
+CeleryBeat   ..> CelerySvc   : periodic tasks [planned]
+BackendSvc   ..> ObjStorage  : file storage [planned]
+CelerySvc    ..> GCalAPI     : calendar events [planned]
+
+' ─── Legend ──────────────────────────────────────────────────────────────────
+note as Legend #FFFFFF
+  **Legend**
+  Solid = implemented
+  Dashed / grey = planned
+end note
+
+@enduml
