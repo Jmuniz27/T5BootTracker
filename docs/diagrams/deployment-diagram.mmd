@@ -1,0 +1,40 @@
+flowchart TB
+    classDef planned fill:#F5F5F5,stroke:#AAAAAA,color:#888888,stroke-dasharray:5 5
+
+    Browser["User's Browser"]
+    MobileDevice["Mobile Device\nAndroid / iOS"]
+
+    subgraph ESPOL["ESPOL Server — taws.espol.edu.ec  (Coolify PaaS)"]
+        Coolify["Coolify\nReverse Proxy · TLS · DNS"]
+
+        subgraph Docker["Docker Stack — boottracker-network"]
+            Frontend["frontend\nNginx (Static SPA) · :80"]
+            Backend["backend\nGunicorn 4 workers · :8000"]
+            CeleryW["celery\nCelery Worker"]
+            CeleryB["celery beat\nplanned"]:::planned
+            DB[("db\nPostgreSQL 16 · :5432")]
+            RedisN["redis\nRedis 7 · :6379"]
+        end
+    end
+
+    SMTP["SMTP Server\nGmail / any SMTP"]
+    ObjStorage["Object Storage\nS3 / MinIO\nplanned"]:::planned
+    GCalAPI["Google Calendar API\nplanned"]:::planned
+
+    Browser -->|HTTPS :443| Coolify
+    MobileDevice -->|HTTPS :443| Coolify
+
+    Coolify -->|proxy :80| Frontend
+    Coolify -->|proxy /api · /admin · /media :8000| Backend
+
+    Frontend -->|Reverse Proxy /api · /admin · /media :8000| Backend
+    Backend --> DB
+    Backend -->|token blacklist / cache| RedisN
+    Backend -->|enqueue tasks| CeleryW
+    CeleryW -->|broker / result| RedisN
+    CeleryW -->|email notifications| SMTP
+    CeleryW -->|OCR in-process| Backend
+
+    CeleryB -.->|periodic tasks - planned| CeleryW
+    Backend -.->|file storage - planned| ObjStorage
+    CeleryW -.->|calendar events - planned| GCalAPI
