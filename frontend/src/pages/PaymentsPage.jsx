@@ -581,9 +581,9 @@ export default function PaymentsPage() {
   const showToast = (message, type = 'success') => setToast({ message, type })
 
   return (
-    <div className="flex-1 bg-gray-50 min-h-screen p-8">
+    <div className="flex-1 bg-gray-50 min-h-screen p-4 sm:p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">💰 Payments</h1>
           <p className="text-sm text-gray-500 mt-1">Upload proof of payment and track your transactions</p>
@@ -600,7 +600,7 @@ export default function PaymentsPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="flex gap-4 mb-8">
+      <div className="grid grid-cols-2 gap-3 sm:flex sm:gap-4 mb-6 sm:mb-8">
         <StatCard
           label="Total Paid"
           value={`$${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 0 })}`}

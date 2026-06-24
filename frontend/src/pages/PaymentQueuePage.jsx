@@ -133,7 +133,7 @@ function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess }) {
         ) : payment ? (
           <>
             {/* Tabs */}
-            <div className="flex border-b border-gray-100 px-6 flex-shrink-0">
+            <div className="flex border-b border-gray-100 px-4 sm:px-6 flex-shrink-0 overflow-x-auto">
               {[
                 { id: 'details', label: 'Campos OCR' },
                 { id: 'raw', label: 'Texto crudo' },
@@ -204,7 +204,7 @@ function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess }) {
                   {/* Approve */}
                   <div className="border border-green-200 rounded-xl p-4 space-y-3">
                     <h3 className="text-sm font-semibold text-green-700">Aprobar pago</h3>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Monto confirmado *</label>
                         <input
@@ -370,15 +370,15 @@ export default function PaymentQueuePage() {
   const showToast = (message, type = 'success') => setToast({ message, type })
 
   return (
-    <div className="flex-1 bg-gray-50 min-h-screen p-8">
+    <div className="flex-1 bg-gray-50 min-h-screen p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Payment Queue</h1>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-6 items-center">
-        <div className="relative flex-1 max-w-xs">
+      <div className="flex flex-wrap gap-2 sm:gap-3 mb-6 items-center">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -410,7 +410,8 @@ export default function PaymentQueuePage() {
 
       {/* Queue table */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[600px]">
           <thead>
             <tr className="border-b border-gray-100">
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Bootcamper</th>
@@ -440,6 +441,7 @@ export default function PaymentQueuePage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {selectedPayment && (

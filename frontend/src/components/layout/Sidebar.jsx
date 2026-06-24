@@ -26,7 +26,7 @@ const NAV_ITEMS = [
   },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }) {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
   const user = useAuthStore((s) => s.user)
@@ -42,9 +42,18 @@ export default function Sidebar() {
     : NAV_ITEMS
 
   return (
-    <aside className="w-56 min-h-screen bg-white border-r border-gray-200 flex flex-col">
-      <div className="px-6 py-6">
+    <aside className="w-56 h-full min-h-screen bg-white border-r border-gray-200 flex flex-col">
+      <div className="px-6 py-6 flex items-center justify-between">
         <h1 className="text-[#213A8E] font-bold text-xl tracking-tight">Boot-Tracker</h1>
+        <button
+          onClick={onClose}
+          className="lg:hidden p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          aria-label="Close menu"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
@@ -52,6 +61,7 @@ export default function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
