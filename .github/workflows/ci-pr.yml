@@ -67,6 +67,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Run linter
+        working-directory: frontend
+        run: npm run lint
+
       - name: Build check
         working-directory: frontend
         run: npm run build
@@ -93,6 +97,10 @@ jobs:
       - name: Install dependencies
         working-directory: mobile
         run: npm ci --legacy-peer-deps
+
+      - name: Run linter
+        working-directory: mobile
+        run: npm run lint
 
       - name: Run tests
         working-directory: mobile
