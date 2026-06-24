@@ -9,8 +9,8 @@ import { useAuthStore } from '../store/auth.store'
 import logo from '../assets/logo.png'
 
 const schema = z.object({
-  email: z.string().email('Enter a valid email'),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().email('Ingresa un email válido'),
+  password: z.string().min(1, 'La contraseña es requerida'),
 })
 
 export default function LoginPage() {
@@ -34,11 +34,11 @@ export default function LoginPage() {
 
   const errorMsg =
     error?.response?.status === 401
-      ? 'Invalid credentials'
+      ? 'Credenciales incorrectas'
       : error?.response?.status === 403
         ? error.response.data?.error
         : error
-          ? 'Connection error. Please try again.'
+          ? 'Error de conexión. Intenta de nuevo.'
           : null
 
   return (
@@ -65,9 +65,9 @@ export default function LoginPage() {
       {/* Form card */}
       <div className="relative z-10 w-full max-w-md">
         <h2 className="text-3xl font-bold text-white mb-2">
-          Sign in to <span className="text-[#5B9BD5]">continue</span>
+          Inicia sesión para <span className="text-[#5B9BD5]">continuar</span>
         </h2>
-        <p className="text-white/50 text-sm mb-10">Pick up where you left off!</p>
+        <p className="text-white/50 text-sm mb-10">¡Retoma donde lo dejaste!</p>
 
         <form onSubmit={handleSubmit((d) => mutate(d))} noValidate className="space-y-5">
           {/* Email */}
@@ -95,9 +95,9 @@ export default function LoginPage() {
           {/* Password */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-white/70">Password</label>
+              <label className="text-sm font-medium text-white/70">Contraseña</label>
               <Link to="/forgot-password" className="text-sm text-[#5B9BD5] hover:text-[#7ab3e0] transition-colors">
-                Forgot password?
+                ¿Olvidaste tu contraseña?
               </Link>
             </div>
             <div className="relative">
@@ -145,7 +145,7 @@ export default function LoginPage() {
             className="w-full py-3.5 rounded-full text-white font-semibold text-sm transition hover:opacity-90 disabled:opacity-60 mt-4"
             style={{ background: 'linear-gradient(135deg, #2D4DB5 0%, #1a3399 100%)' }}
           >
-            {isPending ? 'Signing in...' : 'Sign in'}
+            {isPending ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>
       </div>
