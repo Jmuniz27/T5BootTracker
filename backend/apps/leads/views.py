@@ -4,7 +4,7 @@ import uuid
 
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q, OuterRef, Subquery
+from django.db.models import Count, F, Q, OuterRef, Subquery
 from django.utils.dateparse import parse_date
 from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
@@ -35,13 +35,12 @@ class LeadListCreateView(APIView):
     permission_classes = [IsSalespersonOrAdmin]
 
     def _annotated_qs(self):
-        latest_outcome = Interaction.objects.filter(
-            lead=OuterRef('pk')
-        ).order_by('-created_at').values('outcome')[:1]
+        latest = Interaction.objects.filter(lead=OuterRef('pk')).order_by('-created_at')
         return Lead.objects.annotate(
             interaction_count=Count('interactions'),
-            last_outcome=Subquery(latest_outcome),
-        ).order_by('-created_at')
+            last_outcome=Subquery(latest.values('outcome')[:1]),
+            last_interaction_at=Subquery(latest.values('created_at')[:1]),
+        ).order_by(F('last_interaction_at').desc(nulls_last=True), 'name')
 
     def _page_params(self, request):
         """Read and clamp ``page`` / ``page_size`` query params."""
