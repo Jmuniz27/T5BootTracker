@@ -1,8 +1,21 @@
 """Business logic for leads app."""
-from django.db import transaction
+import secrets
+from django.db import transaction, IntegrityError
 from django.utils.timezone import now
+# 1. ACTUALIZA ESTA LÍNEA DE IMPORTACIÓN:
+from rest_framework.exceptions import ValidationError, NotFound, APIException
+from rest_framework import status
 
+from apps.authentication.models import CustomUser
+from apps.authentication.validators import validate_cedula_ecuatoriana
+from apps.programs.models import Program, Enrollment
+from apps.notifications.tasks import send_conversion_notification
 from .models import Interaction, Lead
+
+class ConflictError(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = 'Conflicto en la base de datos.'
+    default_code = 'conflict'
 
 # Outcome of an interaction -> resulting lead status (when it implies a transition).
 OUTCOME_TO_STATUS = {
@@ -10,7 +23,6 @@ OUTCOME_TO_STATUS = {
     Interaction.Outcome.NOT_INTERESTED:    Lead.Status.NOT_INTERESTED,
     Interaction.Outcome.SPEAK_COORDINATOR: Lead.Status.SPEAK_COORDINATOR,
 }
-
 
 @transaction.atomic
 def register_interaction(lead, user, validated_data):
@@ -34,3 +46,79 @@ def register_interaction(lead, user, validated_data):
 
     lead.save(update_fields=update_fields)
     return interaction
+
+
+@transaction.atomic
+def convert_lead_to_bootcamper(lead, validated_data):
+    if lead.status != Lead.Status.QUALIFIED:
+        raise ValidationError({'error': 'Solo se puede convertir un lead con estado QUALIFIED.', 'code': 'INVALID_STATUS'})
+
+    if not validate_cedula_ecuatoriana(validated_data['cedula']):
+        raise ValidationError({'error': 'La cédula ingresada no es válida.', 'code': 'INVALID_CEDULA'})
+
+    try:
+        program = Program.objects.get(pk=validated_data['program_id'])
+    except Program.DoesNotExist:
+        # 3. LANZAR NOTFOUND (404)
+        raise NotFound({'error': 'Programa no encontrado.', 'code': 'PROGRAM_NOT_FOUND'})
+
+    email = validated_data.get('email') or lead.email
+    phone = validated_data.get('phone') or lead.phone
+
+    temporary_password = None
+    is_returning = False
+    bootcamper = None
+
+    if email:
+        try:
+            existing = CustomUser.objects.get(email=email)
+            if existing.role != CustomUser.Role.BOOTCAMPER:
+                # 4. LANZAR CONFLICTERROR (409)
+                raise ConflictError({'error': 'El email ya está asociado a otro rol.', 'code': 'EMAIL_CONFLICT'})
+            bootcamper = existing
+            is_returning = True
+        except CustomUser.DoesNotExist:
+            pass
+
+    if bootcamper is None:
+        temporary_password = secrets.token_urlsafe(12)
+        try:
+            first_name = lead.name.split()[0] if lead.name else 'Bootcamper'
+            last_name = ' '.join(lead.name.split()[1:]) if len(lead.name.split()) > 1 else 'N/A'
+
+            bootcamper = CustomUser.objects.create_user(
+                email=email or f'bootcamper_{validated_data["cedula"]}@placeholder.com',
+                password=temporary_password,
+                first_name=first_name,
+                last_name=last_name,
+                role=CustomUser.Role.BOOTCAMPER,
+                cedula=validated_data['cedula'],
+                phone=phone,
+            )
+        except IntegrityError:
+            # 5. LANZAR CONFLICTERROR (409)
+            raise ConflictError({'error': 'Esta cédula ya está registrada en el sistema.', 'code': 'CEDULA_ALREADY_EXISTS'})
+
+    try:
+        Enrollment.objects.create(
+            bootcamper=bootcamper,
+            bootcamp=program,
+            start_date=program.start_date,
+            agreed_price=program.total_cost
+        )
+    except IntegrityError:
+        raise ConflictError({'error': 'El bootcamper ya está inscrito en este programa.', 'code': 'ALREADY_ENROLLED'})
+
+    lead.status = Lead.Status.CONVERTED
+    lead.program = program
+    lead.save(update_fields=['status', 'program', 'updated_at'])
+
+    send_conversion_notification.delay(str(lead.id), str(bootcamper.id))
+
+    return {
+        'bootcamper_id': str(bootcamper.id),
+        'email': bootcamper.email,
+        'temporary_password': temporary_password,
+        'is_returning': is_returning,
+        'lead_status': lead.status,
+    }

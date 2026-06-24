@@ -42,3 +42,6 @@ mobile/.env
 
 # Pytest
 .pytest_cache/
+
+# Agents Agy
+.agents/
