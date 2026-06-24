@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   FlatList,
   Modal,
-  TextInput,
   ScrollView,
   StyleSheet,
   SafeAreaView,
@@ -21,39 +21,39 @@ import type { Interaction } from '../../../../src/types/leads';
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
-const TYPE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
-  CALL:     { label: 'Llamada',  icon: 'call',          color: '#3b82f6' },
-  WHATSAPP: { label: 'WhatsApp', icon: 'logo-whatsapp', color: '#22c55e' },
-  EMAIL:    { label: 'Email',    icon: 'mail',          color: '#8b5cf6' },
-  VISIT:    { label: 'Visita',   icon: 'location',      color: '#f59e0b' },
-  NOTE:     { label: 'Nota',     icon: 'create',        color: '#6b7280' },
+const TYPE_CONFIG: Record<string, { label: string; icon: string; iconColor: string; bg: string }> = {
+  CALL:     { label: 'Llamada',  icon: 'call',          iconColor: '#3b82f6', bg: '#eff6ff' },
+  WHATSAPP: { label: 'WhatsApp', icon: 'logo-whatsapp', iconColor: '#22c55e', bg: '#f0fdf4' },
+  EMAIL:    { label: 'Email',    icon: 'mail',          iconColor: '#8b5cf6', bg: '#f5f3ff' },
+  VISIT:    { label: 'Visita',   icon: 'location',      iconColor: '#f59e0b', bg: '#fffbeb' },
+  NOTE:     { label: 'Nota',     icon: 'create',        iconColor: '#6b7280', bg: '#f9fafb' },
 };
 
-const OUTCOME_LABEL: Record<string, string> = {
-  INTERESTED:        'Interesado',
-  NOT_INTERESTED:    'No interesado',
-  NO_ANSWER:         'No contestó',
-  CALLBACK:          'Llamar después',
-  SPEAK_COORDINATOR: 'Hablar coordinador',
+const OUTCOME_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+  INTERESTED:        { label: 'Interesado',         bg: '#dcfce7', color: '#15803d' },
+  NOT_INTERESTED:    { label: 'No interesado',      bg: '#fee2e2', color: '#dc2626' },
+  NO_ANSWER:         { label: 'No contestó',        bg: '#f3f4f6', color: '#4b5563' },
+  CALLBACK:          { label: 'Llamar después',     bg: '#fef9c3', color: '#a16207' },
+  SPEAK_COORDINATOR: { label: 'Hablar coordinador', bg: '#f3e8ff', color: '#7e22ce' },
 };
 
 const TYPES = [
-  { value: 'CALL',      label: 'Llamada',  icon: 'call-outline' },
-  { value: 'WHATSAPP',  label: 'WhatsApp', icon: 'logo-whatsapp' },
-  { value: 'EMAIL',     label: 'Email',    icon: 'mail-outline' },
-  { value: 'VISIT',     label: 'Visita',   icon: 'location-outline' },
-  { value: 'NOTE',      label: 'Nota',     icon: 'create-outline' },
+  { value: 'CALL',     label: 'Llamada',  icon: 'call-outline' },
+  { value: 'WHATSAPP', label: 'WhatsApp', icon: 'logo-whatsapp' },
+  { value: 'EMAIL',    label: 'Email',    icon: 'mail-outline' },
+  { value: 'VISIT',    label: 'Visita',   icon: 'location-outline' },
+  { value: 'NOTE',     label: 'Nota',     icon: 'create-outline' },
 ] as const;
 
 const OUTCOMES = [
-  { value: 'INTERESTED',        label: 'Interesado' },
-  { value: 'NOT_INTERESTED',    label: 'No interesado' },
-  { value: 'NO_ANSWER',         label: 'No contestó' },
-  { value: 'CALLBACK',          label: 'Llamar después' },
-  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+  { value: 'INTERESTED',        label: 'Interesado',         bg: '#dcfce7', color: '#15803d' },
+  { value: 'NOT_INTERESTED',    label: 'No interesado',      bg: '#fee2e2', color: '#dc2626' },
+  { value: 'NO_ANSWER',         label: 'No contestó',        bg: '#f3f4f6', color: '#4b5563' },
+  { value: 'CALLBACK',          label: 'Llamar después',     bg: '#fef9c3', color: '#a16207' },
+  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador', bg: '#f3e8ff', color: '#7e22ce' },
 ] as const;
 
-const NEXT_ACTION_OPTIONS = [
+const NEXT_ACTIONS = [
   'Llamar de nuevo',
   'Enviar información',
   'Agendar visita',
@@ -112,41 +112,44 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
 
   return (
     <Modal visible={interaction !== null} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={modal.screen}>
-        {/* Header fijo fuera del KAV */}
-        <View style={modal.header}>
-          <TouchableOpacity hitSlop={8} onPress={onClose}>
-            <Text style={modal.cancelText}>Cancelar</Text>
+      <SafeAreaView style={m.screen}>
+        {/* Header */}
+        <View style={m.header}>
+          <TouchableOpacity onPress={onClose} hitSlop={8}>
+            <Text style={m.cancelText}>Cancelar</Text>
           </TouchableOpacity>
-          <Text style={modal.headerTitle}>Editar interacción</Text>
+          <Text style={m.headerTitle}>Editar interacción</Text>
           <TouchableOpacity
-            style={[modal.saveBtn, !canSave && modal.saveBtnDisabled]}
+            style={[m.saveBtn, !canSave && m.saveBtnDisabled]}
             onPress={handleSave}
             disabled={!canSave}
+            activeOpacity={0.85}
           >
             {loading
               ? <ActivityIndicator size="small" color={colors.white} />
-              : <Text style={modal.saveBtnText}>Guardar</Text>
+              : <Text style={m.saveBtnText}>Guardar</Text>
             }
           </TouchableOpacity>
         </View>
 
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView contentContainerStyle={modal.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={m.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
             {/* Tipo */}
-            <View style={modal.section}>
-              <Text style={modal.sectionLabel}>Tipo <Text style={modal.required}>*</Text></Text>
-              <View style={modal.typeGrid}>
+            <View style={m.card}>
+              <Text style={m.sectionTitle}>Tipo <Text style={m.required}>*</Text></Text>
+              <View style={m.typeGrid}>
                 {TYPES.map((t) => {
                   const active = type === t.value;
                   return (
                     <TouchableOpacity
                       key={t.value}
-                      style={[modal.typeBtn, active && modal.typeBtnActive]}
+                      style={[m.typeBtn, active && m.typeBtnActive]}
                       onPress={() => setType(t.value)}
+                      activeOpacity={0.8}
                     >
                       <Ionicons name={t.icon as any} size={18} color={active ? colors.white : colors.textMuted} />
-                      <Text style={[modal.typeBtnText, active && modal.typeBtnTextActive]}>{t.label}</Text>
+                      <Text style={[m.typeBtnText, active && m.typeBtnTextActive]}>{t.label}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -154,36 +157,39 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
             </View>
 
             {/* Resultado */}
-            <View style={modal.section}>
-              <Text style={modal.sectionLabel}>Resultado <Text style={modal.required}>*</Text></Text>
-              <View style={modal.outcomeList}>
+            <View style={m.card}>
+              <Text style={m.sectionTitle}>Resultado <Text style={m.required}>*</Text></Text>
+              <View style={m.outcomeList}>
                 {OUTCOMES.map((o) => {
                   const active = outcome === o.value;
                   return (
                     <TouchableOpacity
                       key={o.value}
-                      style={[modal.outcomeBtn, active && modal.outcomeBtnActive]}
+                      style={[m.outcomeRow, active && { borderColor: o.color, backgroundColor: o.bg + '66' }]}
                       onPress={() => setOutcome(o.value)}
+                      activeOpacity={0.8}
                     >
-                      <View style={[modal.radio, active && modal.radioActive]}>
-                        {active && <View style={modal.radioDot} />}
+                      <View style={[m.radio, active && { borderColor: o.color }]}>
+                        {active && <View style={[m.radioDot, { backgroundColor: o.color }]} />}
                       </View>
-                      <Text style={[modal.outcomeBtnText, active && modal.outcomeBtnTextActive]}>{o.label}</Text>
+                      <Text style={[m.outcomeText, active && { color: o.color, fontWeight: '600' }]}>
+                        {o.label}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
             </View>
 
-            {/* Nivel de interés */}
-            <View style={modal.section}>
-              <Text style={modal.sectionLabel}>Nivel de interés <Text style={modal.optional}>(opcional)</Text></Text>
-              <View style={modal.starsRow}>
+            {/* Interés */}
+            <View style={m.card}>
+              <Text style={m.sectionTitle}>Nivel de interés <Text style={m.optional}>(opcional)</Text></Text>
+              <View style={m.starsRow}>
                 {[1, 2, 3, 4, 5].map((n) => (
-                  <TouchableOpacity key={n} hitSlop={6} onPress={() => setStars(stars === n ? null : n)}>
+                  <TouchableOpacity key={n} hitSlop={8} onPress={() => setStars(stars === n ? null : n)} activeOpacity={0.7}>
                     <Ionicons
                       name={stars !== null && n <= stars ? 'star' : 'star-outline'}
-                      size={30}
+                      size={34}
                       color={stars !== null && n <= stars ? '#f59e0b' : colors.border}
                     />
                   </TouchableOpacity>
@@ -191,58 +197,60 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
               </View>
             </View>
 
-            {/* Duración */}
-            <View style={modal.section}>
-              <Text style={modal.sectionLabel}>Duración <Text style={modal.optional}>(opcional)</Text></Text>
-              <View style={modal.durationRow}>
+            {/* Duración + Notas */}
+            <View style={m.card}>
+              <View style={{ gap: 10 }}>
+                <Text style={m.sectionTitle}>Duración <Text style={m.optional}>(opcional)</Text></Text>
+                <View style={m.durationRow}>
+                  <TextInput
+                    style={m.durationInput}
+                    value={duration}
+                    onChangeText={(v) => setDuration(v.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    maxLength={3}
+                  />
+                  <Text style={m.durationUnit}>minutos</Text>
+                </View>
+              </View>
+              <View style={m.cardDivider} />
+              <View style={{ gap: 10 }}>
+                <Text style={m.sectionTitle}>Notas <Text style={m.optional}>(opcional)</Text></Text>
                 <TextInput
-                  style={modal.durationInput}
-                  value={duration}
-                  onChangeText={(v) => setDuration(v.replace(/[^0-9]/g, ''))}
-                  placeholder="ej. 5"
+                  ref={notesRef}
+                  style={m.notesInput}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Notas de la interacción..."
                   placeholderTextColor={colors.textMuted}
-                  keyboardType="numeric"
-                  maxLength={3}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
                 />
-                <Text style={modal.durationUnit}>min</Text>
               </View>
             </View>
 
-            {/* Notas */}
-            <View style={modal.section}>
-              <Text style={modal.sectionLabel}>Notas <Text style={modal.optional}>(opcional)</Text></Text>
-              <TextInput
-                ref={notesRef}
-                style={modal.notesInput}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Notas de la interacción..."
-                placeholderTextColor={colors.textMuted}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-
             {/* Próxima acción */}
-            <View style={modal.section}>
-              <Text style={modal.sectionLabel}>Próxima acción <Text style={modal.optional}>(opcional)</Text></Text>
-              <View style={modal.chipRow}>
-                {NEXT_ACTION_OPTIONS.map((opt) => {
+            <View style={m.card}>
+              <Text style={m.sectionTitle}>Próxima acción <Text style={m.optional}>(opcional)</Text></Text>
+              <View style={m.chipRow}>
+                {NEXT_ACTIONS.map((opt) => {
                   const active = nextAction === opt;
                   return (
                     <TouchableOpacity
                       key={opt}
-                      style={[modal.chip, active && modal.chipActive]}
+                      style={[m.chip, active && m.chipActive]}
                       onPress={() => setNextAction(active ? '' : opt)}
+                      activeOpacity={0.8}
                     >
-                      <Text style={[modal.chipText, active && modal.chipTextActive]}>{opt}</Text>
+                      <Text style={[m.chipText, active && m.chipTextActive]}>{opt}</Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
               <TextInput
-                style={modal.nextActionInput}
+                style={m.nextActionInput}
                 value={nextAction}
                 onChangeText={setNextAction}
                 placeholder="O escribe una acción personalizada..."
@@ -250,7 +258,12 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
               />
             </View>
 
-            {error && <Text style={modal.errorText}>{error}</Text>}
+            {error && (
+              <View style={m.errorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
+                <Text style={m.errorText}>{error}</Text>
+              </View>
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -258,65 +271,80 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
   );
 }
 
-// ─── interaction card ────────────────────────────────────────────────────────
+// ─── interaction card ─────────────────────────────────────────────────────────
 
-function InteractionCard({ item, onEdit }: { item: Interaction; onEdit: () => void }) {
-  const cfg = TYPE_CONFIG[item.interaction_type] ?? TYPE_CONFIG.NOTE;
+function InteractionCard({ item, onEdit, isLast }: { item: Interaction; onEdit: () => void; isLast: boolean }) {
+  const cfg     = TYPE_CONFIG[item.interaction_type] ?? TYPE_CONFIG.NOTE;
+  const outcome = OUTCOME_CONFIG[item.outcome];
+
   return (
-    <View style={styles.card}>
-      <View style={styles.cardLeft}>
-        <View style={[styles.typeIcon, { backgroundColor: cfg.color + '20' }]}>
-          <Ionicons name={cfg.icon as any} size={18} color={cfg.color} />
+    <View style={s.timelineRow}>
+      {/* Left: icon circle + connecting line */}
+      <View style={s.timelineLeft}>
+        <View style={[s.typeIconCircle, { backgroundColor: cfg.bg }]}>
+          <Ionicons name={cfg.icon as any} size={16} color={cfg.iconColor} />
         </View>
-        <View style={styles.timeline} />
+        {!isLast && <View style={s.timelineLine} />}
       </View>
 
-      <View style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.typeLabel}>{cfg.label}</Text>
-          <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
+      {/* Right: card */}
+      <View style={s.card}>
+        {/* Header: label + date + edit button */}
+        <View style={s.cardHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.typeLabel, { color: cfg.iconColor }]}>{cfg.label}</Text>
+            <Text style={s.cardDate}>{formatDate(item.created_at)}</Text>
+          </View>
+          <TouchableOpacity style={s.editBtn} onPress={onEdit} activeOpacity={0.8}>
+            <Ionicons name="pencil" size={14} color={colors.white} />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.outcomePill}>
-          <Text style={styles.outcomeText}>{OUTCOME_LABEL[item.outcome] ?? item.outcome}</Text>
-        </View>
+        {/* Outcome badge */}
+        {outcome && (
+          <View style={[s.outcomeBadge, { backgroundColor: outcome.bg }]}>
+            <Text style={[s.outcomeBadgeText, { color: outcome.color }]}>{outcome.label}</Text>
+          </View>
+        )}
 
+        {/* Stars */}
         {item.interest_level !== null && (
-          <View style={styles.starsRow}>
+          <View style={s.starsRow}>
             {[1, 2, 3, 4, 5].map((n) => (
               <Ionicons
                 key={n}
                 name={n <= (item.interest_level ?? 0) ? 'star' : 'star-outline'}
-                size={13}
+                size={14}
                 color={n <= (item.interest_level ?? 0) ? '#f59e0b' : colors.border}
               />
             ))}
+            <Text style={s.starsLabel}>{item.interest_level} / 5</Text>
           </View>
         )}
 
-        {item.notes ? <Text style={styles.notes}>{item.notes}</Text> : null}
+        {/* Notes */}
+        {item.notes ? <Text style={s.notes}>{item.notes}</Text> : null}
 
-        {item.duration_minutes ? (
-          <View style={styles.metaRow}>
-            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-            <Text style={styles.metaText}>{item.duration_minutes} min</Text>
+        {/* Meta row */}
+        {(item.duration_minutes || item.next_action) ? (
+          <View style={s.metaRow}>
+            {item.duration_minutes ? (
+              <View style={s.metaChip}>
+                <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                <Text style={s.metaChipText}>{item.duration_minutes} min</Text>
+              </View>
+            ) : null}
+            {item.next_action ? (
+              <View style={s.nextActionChip}>
+                <Ionicons name="arrow-forward-circle-outline" size={12} color={colors.navy} />
+                <Text style={s.nextActionText} numberOfLines={1}>{item.next_action}</Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
-        {item.next_action ? (
-          <View style={styles.metaRow}>
-            <Ionicons name="arrow-forward-circle-outline" size={13} color={colors.navy} />
-            <Text style={styles.nextActionText}>{item.next_action}</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.cardFooter}>
-          <Text style={styles.salesperson}>{item.salesperson_name}</Text>
-          <TouchableOpacity style={styles.editBtn} onPress={onEdit}>
-            <Ionicons name="pencil-outline" size={13} color={colors.navy} />
-            <Text style={styles.editBtnText}>Editar</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Salesperson */}
+        <Text style={s.salesperson}>{item.salesperson_name}</Text>
       </View>
     </View>
   );
@@ -348,42 +376,55 @@ export default function LeadHistoryScreen() {
   useEffect(() => { load(); }, []);
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity hitSlop={8} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+    <SafeAreaView style={s.screen}>
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity style={s.backBtn} hitSlop={8} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Historial</Text>
-        <View style={{ width: 26 }} />
+        <View style={s.headerCenter}>
+          <Text style={s.headerTitle}>Historial</Text>
+          {!loading && !error && (
+            <Text style={s.headerSub}>{interactions.length} interacciones</Text>
+          )}
+        </View>
+        <View style={{ width: 36 }} />
       </View>
 
       {loading ? (
-        <ActivityIndicator style={styles.loader} color={colors.navy} size="large" />
+        <ActivityIndicator style={s.loader} color={colors.navy} size="large" />
       ) : error ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={load} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Reintentar</Text>
+        <View style={s.center}>
+          <View style={s.errorBox}>
+            <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
+            <Text style={s.errorText}>{error}</Text>
+          </View>
+          <TouchableOpacity style={s.retryBtn} onPress={load} activeOpacity={0.8}>
+            <Text style={s.retryText}>Reintentar</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={interactions}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={s.list}
           ListEmptyComponent={
-            <View style={styles.center}>
-              <Ionicons name="time-outline" size={40} color={colors.textMuted} />
-              <Text style={styles.emptyText}>Sin interacciones registradas.</Text>
+            <View style={s.center}>
+              <Ionicons name="time-outline" size={44} color={colors.border} />
+              <Text style={s.emptyTitle}>Sin interacciones</Text>
+              <Text style={s.emptyText}>Aún no hay registros para este lead.</Text>
             </View>
           }
-          renderItem={({ item }) => (
-            <InteractionCard item={item} onEdit={() => setEditing(item)} />
+          renderItem={({ item, index }) => (
+            <InteractionCard
+              item={item}
+              onEdit={() => setEditing(item)}
+              isLast={index === interactions.length - 1}
+            />
           )}
         />
       )}
 
-      {/* key prop garantiza que el modal remonta con datos frescos al abrir otro registro */}
       <EditModal
         key={editing?.id ?? 'none'}
         leadId={id}
@@ -397,162 +438,269 @@ export default function LeadHistoryScreen() {
 
 // ─── styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#f8f9fb' },
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     backgroundColor: colors.white,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenter: { flex: 1, alignItems: 'center', gap: 1 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  headerSub: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   loader: { marginTop: 80 },
-  list: { padding: 16, paddingBottom: 40 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 },
-  errorText: { color: '#dc2626', fontSize: 13, textAlign: 'center' },
+  list: { paddingTop: 16, paddingBottom: 48 },
+  // States
+  center: { paddingTop: 80, alignItems: 'center', gap: 12, paddingHorizontal: 32 },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    padding: 12,
+    width: '100%',
+  },
+  errorText: { color: '#dc2626', fontSize: 13, flex: 1 },
   retryBtn: {
-    borderWidth: 1, borderColor: colors.navy, borderRadius: 8,
-    paddingHorizontal: 16, paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: colors.navy,
+    borderRadius: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 9,
   },
-  retryText: { color: colors.navy, fontWeight: '600', fontSize: 13 },
-  emptyText: { fontSize: 14, color: colors.textMuted },
+  retryText: { color: colors.navy, fontWeight: '600', fontSize: 14 },
+  emptyTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  emptyText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
+  // Timeline
+  timelineRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 4 },
+  timelineLeft: { alignItems: 'center', width: 38 },
+  typeIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineLine: { flex: 1, width: 2, backgroundColor: colors.border, marginTop: 4, minHeight: 16 },
   // Card
-  card: { flexDirection: 'row', gap: 12, marginBottom: 4 },
-  cardLeft: { alignItems: 'center', width: 36 },
-  typeIcon: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
+  card: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    gap: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  timeline: {
-    flex: 1, width: 2, backgroundColor: colors.border,
-    marginTop: 4, marginBottom: -4, minHeight: 16,
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  cardContent: {
-    flex: 1, backgroundColor: colors.white, borderRadius: 12,
-    padding: 14, marginBottom: 12,
-    borderWidth: 1, borderColor: colors.border, gap: 6,
+  typeLabel: { fontSize: 13, fontWeight: '700' },
+  cardDate: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+  outcomeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  typeLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  cardDate: { fontSize: 12, color: colors.textMuted },
-  outcomePill: {
-    alignSelf: 'flex-start', backgroundColor: '#f3f4f6',
-    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3,
+  outcomeBadgeText: { fontSize: 12, fontWeight: '600' },
+  starsRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  starsLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '600', marginLeft: 4 },
+  notes: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },
+  metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  outcomeText: { fontSize: 12, color: '#6b7280', fontWeight: '600' },
-  starsRow: { flexDirection: 'row', gap: 2 },
-  notes: { fontSize: 13, color: colors.textMuted, lineHeight: 18 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { fontSize: 12, color: colors.textMuted },
+  metaChipText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  nextActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff2fb',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    flex: 1,
+  },
   nextActionText: { fontSize: 12, color: colors.navy, fontWeight: '500', flex: 1 },
-  cardFooter: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginTop: 2,
-  },
-  salesperson: { fontSize: 12, color: colors.textMuted },
+  salesperson: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   editBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    borderWidth: 1, borderColor: colors.navy, borderRadius: 6,
-    paddingHorizontal: 8, paddingVertical: 4,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  editBtnText: { fontSize: 12, color: colors.navy, fontWeight: '600' },
 });
 
-const modal = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
+// ─── edit modal styles ────────────────────────────────────────────────────────
+
+const m = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#f8f9fb' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     backgroundColor: colors.white,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
-  cancelText: { color: colors.navy, fontSize: 15 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  cancelText: { color: colors.navy, fontSize: 15, fontWeight: '500' },
   saveBtn: {
-    backgroundColor: colors.navy, borderRadius: 8,
-    paddingHorizontal: 14, paddingVertical: 7,
-    minWidth: 72, alignItems: 'center',
+    backgroundColor: colors.navy,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    minWidth: 76,
+    alignItems: 'center',
   },
   saveBtnDisabled: { opacity: 0.4 },
   saveBtnText: { color: colors.white, fontWeight: '700', fontSize: 14 },
-  body: { padding: 16, gap: 24, paddingBottom: 40 },
-  section: { gap: 10 },
-  sectionLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  body: { padding: 16, gap: 12, paddingBottom: 48 },
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    gap: 12,
+  },
+  cardDivider: { height: 1, backgroundColor: '#f3f4f6' },
+  sectionTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   required: { color: '#dc2626' },
-  optional: { fontWeight: '400', color: colors.textMuted, fontSize: 13 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  micBtn: { padding: 4 },
-  // Type
+  optional: { fontSize: 13, fontWeight: '400', color: colors.textMuted },
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   typeBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 10, borderWidth: 1.5, borderColor: colors.border,
-    backgroundColor: colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: '#f8f9fb',
   },
   typeBtnActive: { backgroundColor: colors.navy, borderColor: colors.navy },
   typeBtnText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   typeBtnTextActive: { color: colors.white },
-  // Outcome
   outcomeList: { gap: 8 },
-  outcomeBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: colors.white, borderRadius: 10,
-    borderWidth: 1.5, borderColor: colors.border,
-    paddingHorizontal: 14, paddingVertical: 12,
+  outcomeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    backgroundColor: '#f8f9fb',
   },
-  outcomeBtnActive: { borderColor: colors.navy, backgroundColor: '#f0f4ff' },
   radio: {
-    width: 20, height: 20, borderRadius: 10,
-    borderWidth: 2, borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  radioActive: { borderColor: colors.navy },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.navy },
-  outcomeBtnText: { fontSize: 14, color: colors.textMuted, fontWeight: '500' },
-  outcomeBtnTextActive: { color: colors.textPrimary, fontWeight: '600' },
-  // Stars
-  starsRow: { flexDirection: 'row', gap: 6 },
-  // Duration
-  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  radioDot: { width: 10, height: 10, borderRadius: 5 },
+  outcomeText: { flex: 1, fontSize: 14, color: colors.textMuted, fontWeight: '500' },
+  starsRow: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   durationInput: {
-    backgroundColor: colors.white, borderRadius: 10,
-    borderWidth: 1, borderColor: colors.border,
-    paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 14, color: colors.textPrimary,
-    width: 90, textAlign: 'center',
+    backgroundColor: '#f8f9fb',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    width: 80,
+    textAlign: 'center',
   },
   durationUnit: { fontSize: 14, color: colors.textMuted, fontWeight: '500' },
-  // Notes
   notesInput: {
-    backgroundColor: colors.white, borderRadius: 10,
-    borderWidth: 1, borderColor: colors.border,
-    paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 14, color: colors.textPrimary, minHeight: 100,
+    backgroundColor: '#f8f9fb',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: colors.textPrimary,
+    minHeight: 110,
   },
-  // Next action chips
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 20, borderWidth: 1.5, borderColor: colors.border,
-    backgroundColor: colors.white,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: '#f8f9fb',
   },
   chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  chipText: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
+  chipText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
   chipTextActive: { color: colors.white, fontWeight: '600' },
   nextActionInput: {
-    backgroundColor: colors.white, borderRadius: 10,
-    borderWidth: 1, borderColor: colors.border,
-    paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 14, color: colors.textPrimary,
+    backgroundColor: '#f8f9fb',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: colors.textPrimary,
   },
-  errorText: { color: '#dc2626', fontSize: 13, textAlign: 'center' },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    padding: 12,
+  },
+  errorText: { color: '#dc2626', fontSize: 13, flex: 1 },
 });
