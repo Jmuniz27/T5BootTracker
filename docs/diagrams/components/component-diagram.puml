@@ -1,0 +1,99 @@
+@startuml
+title Boot-Tracker — Component Diagram
+
+skinparam defaultFontSize 12
+skinparam linetype ortho
+skinparam componentStyle rectangle
+skinparam ArrowColor #444444
+skinparam component {
+  BackgroundColor White
+  BorderColor #555555
+}
+skinparam component<<planned>> {
+  BackgroundColor #F5F5F5
+  BorderColor #AAAAAA
+  FontColor #888888
+}
+skinparam note {
+  BackgroundColor #FFFFF0
+  BorderColor #CCCCAA
+}
+
+' ─── Clients ────────────────────────────────────────────────────────────────
+package "Clients" {
+  package "Web Browser" #DAE8FC {
+    [React SPA\n(Vite + Zustand + TanStack Query)] as Frontend
+  }
+
+  package "Mobile Device" #E1D5E7 {
+    [Expo App\n(Expo Router + AuthContext)] as Mobile
+  }
+}
+
+' ─── Backend ────────────────────────────────────────────────────────────────
+package "Backend — Django 5.1 + DRF" #D5E8D4 {
+
+  note as AuthNote
+    JWT (simplejwt) · access 2 h / refresh 1 d
+    Roles: Admin · Salesperson · Bootcamper
+  end note
+
+  [Authentication] as Auth
+  [Leads] as Leads
+  [Payments] as Payments
+  [Programs] as Programs
+  [Users] as Users
+  [Notifications\n(Celery tasks only)] as Notif
+  [Analytics <<planned>>] <<planned>> as Analytics
+  [API Docs\n(drf-spectacular)] as Swagger
+}
+
+' ─── Data / Async / External ────────────────────────────────────────────────
+package "Data & Infrastructure" #FFF2CC {
+  database "PostgreSQL 16" as PG
+  [Redis 7] as Redis
+  [Celery Worker] as Celery
+  [SMTP Email\n(Gmail / any SMTP)] as SMTP
+  [OCR Engine\n(Tesseract)] as OCR
+}
+
+package "External Services (planned)" #F5F5F5 {
+  [Object Storage\n(S3 / MinIO) <<planned>>] <<planned>> as S3
+  [Google Calendar API <<planned>>] <<planned>> as GCal
+}
+
+' ─── Arrows ─────────────────────────────────────────────────────────────────
+Frontend --> Auth     : REST + JWT
+Frontend --> Leads
+Frontend --> Payments
+Frontend --> Programs
+
+Mobile --> Auth       : REST + JWT
+Mobile --> Leads
+
+Auth      --> PG
+Leads     --> PG
+Payments  --> PG
+Programs  --> PG
+Users     --> PG
+
+Auth      --> Redis   : token blacklist
+Leads     --> Celery  : enqueue tasks
+Payments  --> Celery  : enqueue OCR
+Notif     --> Celery
+
+Celery    --> Redis   : broker / result
+Celery    --> SMTP    : send emails
+Celery    --> OCR     : parse receipts
+
+Payments  ..> S3      : upload receipts\n[planned]
+Leads     ..> GCal    : schedule calls\n[planned]
+
+' ─── Legend ──────────────────────────────────────────────────────────────────
+note as Legend #FFFFFF
+  **Legend**
+  Solid border  = implemented
+  Dashed / grey = planned
+end note
+
+@enduml
