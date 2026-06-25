@@ -39,6 +39,7 @@ export default [
       'sonarjs/no-dead-store': 'warn',
       'sonarjs/no-nested-conditional': 'warn',
       'sonarjs/unused-import': 'warn',
+      'sonarjs/no-identical-functions': 'warn',
     },
   },
   {
