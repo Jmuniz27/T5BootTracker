@@ -17,24 +17,24 @@ describe('LoginPage', () => {
 
   it('renders login form elements correctly', () => {
     setup();
-    expect(screen.getByText(/Sign in to/i)).toBeInTheDocument();
-    
+    expect(screen.getByText(/Inicia sesión para/i)).toBeInTheDocument();
+
     // Labels
     expect(screen.getByText('Email')).toBeInTheDocument();
-    expect(screen.getByText('Password')).toBeInTheDocument();
-    
+    expect(screen.getByText('Contraseña')).toBeInTheDocument();
+
     // Button
-    expect(screen.getByRole('button', { name: /Sign in/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ingresar/i })).toBeInTheDocument();
   });
 
   it('shows validation errors when submitting an empty form', async () => {
     setup();
-    const submitBtn = screen.getByRole('button', { name: /Sign in/i });
+    const submitBtn = screen.getByRole('button', { name: /Ingresar/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/Enter a valid email/i)).toBeInTheDocument();
-      expect(screen.getByText(/Password is required/i)).toBeInTheDocument();
+      expect(screen.getByText(/Ingresa un email válido/i)).toBeInTheDocument();
+      expect(screen.getByText(/La contraseña es requerida/i)).toBeInTheDocument();
     });
   });
 });
