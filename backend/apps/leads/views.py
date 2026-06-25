@@ -414,7 +414,7 @@ class ReturningBootcamperView(APIView):
 
         if Lead.objects.filter(
             program=program,
-            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.INTERESTED, Lead.Status.QUALIFIED],
+            status__in=[Lead.Status.NEW, Lead.Status.INTERESTED, Lead.Status.QUALIFIED],
             email=bootcamper.email,
         ).exists():
             return Response(
@@ -439,7 +439,7 @@ class ReturningBootcamperView(APIView):
                 lead=lead,
                 salesperson=request.user,
                 interaction_type=Interaction.InteractionType.NOTE,
-                outcome=Interaction.Outcome.CALLBACK,
+                outcome=Interaction.Outcome.CALL_AGAIN,  # <-- ACTUALIZADO AQUÍ
                 notes=notes,
             )
 

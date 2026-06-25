@@ -69,14 +69,11 @@ def sample_lead(db):
 
 @pytest.fixture
 def assigned_lead(db, salesperson_user):
-    from django.utils.timezone import now
     return Lead.objects.create(
         name='Assigned Lead',
-        phone='0999000002',
-        source=Lead.Source.INSTAGRAM,
-        status=Lead.Status.CONTACTED,
-        owner=salesperson_user,
-        assigned_at=now(),
+        phone='0991112222',
+        status=Lead.Status.INTERESTED,
+        owner=salesperson_user
     )
 
 

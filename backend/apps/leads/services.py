@@ -19,9 +19,8 @@ class ConflictError(APIException):
 
 # Outcome of an interaction -> resulting lead status (when it implies a transition).
 OUTCOME_TO_STATUS = {
-    Interaction.Outcome.INTERESTED:        Lead.Status.INTERESTED,
-    Interaction.Outcome.NOT_INTERESTED:    Lead.Status.NOT_INTERESTED,
-    Interaction.Outcome.SPEAK_COORDINATOR: Lead.Status.SPEAK_COORDINATOR,
+    Interaction.Outcome.SEND_INFO:         Lead.Status.INTERESTED,
+    Interaction.Outcome.SCHEDULE_VISIT:    Lead.Status.QUALIFIED,
 }
 
 @transaction.atomic
@@ -50,9 +49,6 @@ def register_interaction(lead, user, validated_data):
 
 @transaction.atomic
 def convert_lead_to_bootcamper(lead, validated_data):
-    if lead.status != Lead.Status.QUALIFIED:
-        raise ValidationError({'error': 'Solo se puede convertir un lead con estado QUALIFIED.', 'code': 'INVALID_STATUS'})
-
     if not validate_cedula_ecuatoriana(validated_data['cedula']):
         raise ValidationError({'error': 'La cédula ingresada no es válida.', 'code': 'INVALID_CEDULA'})
 
