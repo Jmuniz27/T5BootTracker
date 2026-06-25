@@ -8,12 +8,13 @@ import ResetPasswordPage from './pages/ResetPasswordPage'
 import ResetSuccessPage from './pages/ResetSuccessPage'
 import LeadsDashboard from './pages/LeadsDashboard'
 import PaymentsPage from './pages/PaymentsPage'
-import PaymentQueuePage from './pages/PaymentQueuePage'
+import SalespersonPaymentsPage from './pages/SalespersonPaymentsPage'
+import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
 import { useAuthStore } from './store/auth.store'
 
 function PaymentsRoute() {
   const user = useAuthStore((s) => s.user)
-  return user?.role === 'BOOTCAMPER' ? <PaymentsPage /> : <PaymentQueuePage />
+  return user?.role === 'BOOTCAMPER' ? <PaymentsPage /> : <SalespersonPaymentsPage />
 }
 
 function DashboardRoute() {
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/my-leads" element={<div className="p-8 text-gray-400">My leads — coming soon</div>} />
           <Route path="/schedule" element={<div className="p-8 text-gray-400">Schedule — coming soon</div>} />
           <Route path="/payments" element={<PaymentsRoute />} />
+          <Route path="/payments/:bootcamperId/:programId" element={<BootcamperPaymentDetailPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -38,3 +38,6 @@ export const notifyCoordinator = (bootcamperId, programId) =>
       params: { program_id: programId },
     })
     .then((r) => r.data)
+
+export const getMonitoring = (params = {}) =>
+  client.get('/payments/monitoring/', { params }).then((r) => r.data)
