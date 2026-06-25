@@ -1,0 +1,21 @@
+# backend/ruff.toml
+
+line-length = 100
+
+[lint]
+# Documenting the target selects, including preemptive error detection
+# Currently in CI only E, F, W are enforced. Expanding to B and I is a next step.
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "W",  # pycodestyle warnings
+    # "B",  # flake8-bugbear (Next step)
+    # "I",  # isort (Next step)
+]
+ignore = [
+    "E501",  # line too long (handled by formatting/line-length if possible)
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"apps/*/migrations/*" = ["E501"]
