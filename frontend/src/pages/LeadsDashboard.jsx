@@ -1373,11 +1373,18 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus }) {
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
   const ref = useRef(null)
   const btnRef = useRef(null)
+  const menuRef = useRef(null)
 
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const handler = (e) => {
+      if (
+        ref.current && !ref.current.contains(e.target) &&
+        (!menuRef.current || !menuRef.current.contains(e.target))
+      ) setOpen(false)
+    }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
@@ -1385,8 +1392,12 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
   const handleToggle = () => {
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect()
-      // dropdown is ~160px tall max; open upward if less than 200px below
-      setOpenUpward(window.innerHeight - rect.bottom < 200)
+      const upward = window.innerHeight - rect.bottom < 220
+      setOpenUpward(upward)
+      setPos({
+        top: upward ? rect.top - 4 : rect.bottom + 4,
+        left: rect.right - 160,
+      })
     }
     setOpen((v) => !v)
   }
@@ -1404,7 +1415,11 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
       </button>
 
       {open && (
-        <div className={`absolute right-0 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 ${openUpward ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+        <div
+          ref={menuRef}
+          className={`fixed w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 ${openUpward ? '-translate-y-full' : ''}`}
+          style={{ top: pos.top, left: pos.left }}
+        >
           <button
             onClick={() => { onView(); setOpen(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
