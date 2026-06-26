@@ -1,10 +1,15 @@
 # Boot-Tracker
 
-Sistema de seguimiento de leads y pagos para bootcamps de programación (ESPOL).
-Gestiona el proceso desde la captación de candidatos hasta el cobro de cuotas,
-con notificaciones automáticas y reportes analíticos.
+[![CI](https://github.com/Jmuniz27/boot-tracker/actions/workflows/ci-pr.yml/badge.svg)](https://github.com/Jmuniz27/boot-tracker/actions/workflows/ci-pr.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+Sistema CRM de seguimiento de leads y pagos para los Coding Bootcamps de ESPOL.
+Gestiona el ciclo completo: captación de candidatos → seguimiento comercial →
+conversión a bootcamper → control de pagos, con notificaciones automáticas y
+reportes analíticos.
 
 - **Cliente:** PhD. Carmen Vaca (cvaca@espol.edu.ec)
+- **Producción:** https://boottracker.taws.espol.edu.ec
 - **Entrega parcial:** 15 jun 2026 — flujo end-to-end (login → leads → interacciones)
 - **Entrega final:** 17 ago 2026 — producción + docs + handoff
 
@@ -94,6 +99,13 @@ curl -X POST http://localhost:8000/api/auth/login/ \
   -d '{"email":"admin@boottracker.com","password":"admin1234"}'
 ```
 
+## Variables de entorno
+
+Copia `.env.example` como `.env` y ajusta los valores antes de levantar Docker.
+Las variables requeridas están documentadas en [`.env.example`](.env.example).
+Las variables críticas en producción (`SECRET_KEY`, `DB_PASSWORD`, etc.) deben
+setearse en el panel de Coolify — nunca en el código.
+
 ## URLs de desarrollo
 
 | Servicio | URL |
@@ -103,14 +115,31 @@ curl -X POST http://localhost:8000/api/auth/login/ \
 | Swagger UI | http://localhost:8000/api/schema/swagger-ui/ |
 | Frontend Vite | http://localhost:5173 |
 
+## Documentación
+
+- [Manual de usuario](docs/user-manual/) — guías por rol (admin, vendedor, bootcamper)
+- [Diagramas de arquitectura](docs/diagrams/) — componentes, ERD, despliegue
+- [Estándares de codificación](docs/coding-standards.md)
+- [Comunicaciones con el cliente](Communications/) — evidencias de reuniones y aprobaciones
+
+## Arquitectura
+
+Ver diagramas en [`docs/diagrams/`](docs/diagrams/):
+- **Componentes** — relación entre backend, frontend, mobile, DB, Redis, Celery y MinIO.
+- **Base de datos (ERD)** — esquema completo con entidades y relaciones.
+- **Despliegue** — topología en Coolify/Traefik con contenedores Docker.
+
+API interactiva (Swagger UI): `http://localhost:8000/api/schema/swagger-ui/`
+(en producción requiere acceso de administrador).
+
 ## Estado del código
 
 | Área | Estado |
 |---|---|
 | Backend Django | ✅ Auth, Leads, Payments, Programs, Notifications. Analytics: stub vacío. |
-| Frontend React | ❌ Solo placeholder. Dependencias base instaladas, cero pantallas. |
-| Mobile Expo | ⚠️ Auth screens (login, forgot-password) implementadas. App screens pendientes. |
-| DevOps | ⚠️ CI verde. Deploy a producción pendiente. |
+| Frontend React | ✅ Login, dashboard de leads, interacciones, conversión, pagos (vendedor/bootcamper/admin). |
+| Mobile Expo | ✅ Auth (login, forgot-password). App: home, leads, log-interaction. |
+| DevOps | ✅ CI verde. Desplegado en producción: https://boottracker.taws.espol.edu.ec |
 
 ## Convenciones
 
@@ -134,3 +163,7 @@ chore/<descripcion>         — tareas técnicas
 ```
 
 Ver [CONTRIBUTING.md](CONTRIBUTING.md) para el flujo completo de PRs.
+
+## Licencia
+
+[MIT](LICENSE) © 2026 Boot-Tracker Team — ESPOL FIEC
