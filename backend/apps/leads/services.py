@@ -1,10 +1,12 @@
 """Business logic for leads app."""
+import logging
 import secrets
 from django.db import transaction, IntegrityError
 from django.utils.timezone import now
-# 1. ACTUALIZA ESTA LÍNEA DE IMPORTACIÓN:
 from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import status
+
+logger = logging.getLogger(__name__)
 
 from apps.authentication.models import CustomUser
 from apps.authentication.validators import validate_cedula_ecuatoriana
@@ -41,6 +43,11 @@ def register_interaction(lead, user, validated_data):
     new_status = OUTCOME_TO_STATUS.get(interaction.outcome)
     if new_status:
         lead.status = new_status
+        update_fields.append('status')
+    elif lead.status == Lead.Status.NEW:
+        # Registering any interaction on a NEW lead auto-transitions it to INTERESTED.
+        # CONTACTED is no longer a distinct status; first contact implies interest.
+        lead.status = Lead.Status.INTERESTED
         update_fields.append('status')
 
     lead.save(update_fields=update_fields)
@@ -109,7 +116,13 @@ def convert_lead_to_bootcamper(lead, validated_data):
     lead.program = program
     lead.save(update_fields=['status', 'program', 'updated_at'])
 
-    send_conversion_notification.delay(str(lead.id), str(bootcamper.id))
+    try:
+        send_conversion_notification.delay(str(lead.id), str(bootcamper.id))
+    except Exception:
+        logger.warning(
+            'Could not enqueue conversion notification for lead %s — Celery/Redis may be unavailable.',
+            lead.id,
+        )
 
     return {
         'bootcamper_id': str(bootcamper.id),
