@@ -1,18 +1,19 @@
 """Business logic for leads app."""
 import logging
 import secrets
+
 from django.db import transaction, IntegrityError
 from django.utils.timezone import now
 from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import status
-
-logger = logging.getLogger(__name__)
 
 from apps.authentication.models import CustomUser
 from apps.authentication.validators import validate_cedula_ecuatoriana
 from apps.programs.models import Program, Enrollment
 from apps.notifications.tasks import send_conversion_notification
 from .models import Interaction, Lead
+
+logger = logging.getLogger(__name__)
 
 class ConflictError(APIException):
     status_code = status.HTTP_409_CONFLICT
