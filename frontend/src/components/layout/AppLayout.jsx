@@ -59,7 +59,7 @@ export default function AppLayout() {
               <p className="text-sm font-normal text-gray-900 leading-tight">
                 {user?.full_name || user?.email || 'User'}
               </p>
-              <span className="text-xs bg-[#213A8E] text-white px-2 py-0.5 rounded-full capitalize">
+              <span className="text-xs bg-blue-100 text-[#213A8E] font-semibold px-2 py-0.5 rounded-full capitalize">
                 {user?.role?.toLowerCase().replace('_', ' ') ?? 'Salesperson'}
               </span>
             </div>
