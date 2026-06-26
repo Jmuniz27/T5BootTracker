@@ -44,6 +44,14 @@ jobs:
       - name: Run linter
         run: docker compose exec -T backend python -m ruff check . --select E,F,W --ignore E501
 
+      - name: Security scan (bandit)
+        continue-on-error: true
+        run: docker compose exec -T backend bandit -r apps/ -ll
+
+      - name: Type check (mypy)
+        continue-on-error: true
+        run: docker compose exec -T backend mypy apps/ --ignore-missing-imports
+
       - name: Tear down
         if: always()
         run: docker compose down -v
