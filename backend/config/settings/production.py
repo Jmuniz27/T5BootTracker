@@ -6,6 +6,14 @@ from .base import * # noqa
 
 DEBUG = False
 
+# ---------------------------------------------------------------------------
+# Critical secrets — NO fallback: if these env vars are missing, startup
+# fails loudly rather than running with a known-insecure value in production.
+# Before going public, rotate these in Coolify (see docs/audit/security-audit-2026-06-26.md).
+# ---------------------------------------------------------------------------
+SECRET_KEY = os.environ['SECRET_KEY']
+DATABASES['default']['PASSWORD'] = os.environ['DB_PASSWORD']  # noqa
+
 # Pulling from Coolify Environment Variables (with safe fallbacks)
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'boottracker.taws.espol.edu.ec,localhost,127.0.0.1,backend').split(',')
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'https://boottracker.taws.espol.edu.ec').split(',')
@@ -49,3 +57,9 @@ LOGGING = {
         'level': 'WARNING',
     },
 }
+
+# Lock down auto-generated API schema/docs to admin users only.
+# In local.py the endpoint stays open for developer convenience.
+SPECTACULAR_SETTINGS['SERVE_PERMISSIONS'] = [  # noqa
+    'rest_framework.permissions.IsAdminUser'
+]

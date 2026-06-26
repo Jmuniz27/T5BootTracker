@@ -8,6 +8,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_seriali
 from rest_framework import status, serializers as drf_serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
@@ -30,6 +31,8 @@ def _get_redis():
 class LoginView(APIView):
     """JWT login endpoint — authenticates via email + password."""
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     @extend_schema(
         request=LoginSerializer,
@@ -187,6 +190,8 @@ class MeView(APIView):
 class PasswordResetRequestView(APIView):
     """Send password reset link via email. Always returns 200."""
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     @extend_schema(
         request=PasswordResetRequestSerializer,
@@ -223,6 +228,8 @@ class PasswordResetRequestView(APIView):
 class PasswordResetConfirmView(APIView):
     """Reset password using the UUID token from email."""
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     @extend_schema(
         request=PasswordResetConfirmSerializer,
