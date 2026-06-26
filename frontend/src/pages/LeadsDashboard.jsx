@@ -33,21 +33,17 @@ const AVATAR_COLORS = [
 
 const STATUS_LABELS = {
   NEW: 'Nuevo',
-  CONTACTED: 'Contactado',
-  INTERESTED: 'Interesado',
   QUALIFIED: 'Calificado',
+  INTERESTED: 'Interesado',
   NOT_INTERESTED: 'No interesado',
-  SPEAK_COORDINATOR: 'Hablar coordinador',
   CONVERTED: 'Convertido',
 }
 
 const STATUS_COLORS = {
   NEW: 'bg-gray-100 text-gray-500',
-  CONTACTED: 'bg-yellow-100 text-yellow-700',
+  QUALIFIED: 'bg-blue-100 text-blue-700',
   INTERESTED: 'bg-yellow-100 text-yellow-700',
-  QUALIFIED: 'bg-yellow-100 text-yellow-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
-  SPEAK_COORDINATOR: 'bg-yellow-100 text-yellow-700',
   CONVERTED: 'bg-green-100 text-green-700',
 }
 
@@ -60,18 +56,18 @@ const INTERACTION_TYPE_LABELS = {
 }
 
 const OUTCOME_LABELS = {
-  INTERESTED: 'Interesado',
-  NOT_INTERESTED: 'No interesado',
-  NO_ANSWER: 'No contestó',
-  CALLBACK: 'Llamar después',
+  CALL_AGAIN: 'Llamar de nuevo',
+  SEND_INFO: 'Enviar información',
+  SCHEDULE_VISIT: 'Agendar visita',
+  AWAIT_REPLY: 'Esperar respuesta',
   SPEAK_COORDINATOR: 'Hablar coordinador',
 }
 
 const OUTCOME_COLORS = {
-  INTERESTED: 'bg-blue-50 text-blue-600',
-  NOT_INTERESTED: 'bg-blue-50 text-blue-600',
-  NO_ANSWER: 'bg-blue-50 text-blue-600',
-  CALLBACK: 'bg-blue-50 text-blue-600',
+  CALL_AGAIN: 'bg-blue-50 text-blue-600',
+  SEND_INFO: 'bg-blue-50 text-blue-600',
+  SCHEDULE_VISIT: 'bg-blue-50 text-blue-600',
+  AWAIT_REPLY: 'bg-blue-50 text-blue-600',
   SPEAK_COORDINATOR: 'bg-blue-50 text-blue-600',
 }
 
@@ -164,6 +160,47 @@ function StarRating({ value }) {
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
+function CustomSelect({ value, onChange, options, placeholder = 'Seleccionar' }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selected = options.find((o) => o.value === value)
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white text-left"
+      >
+        {selected ? selected.label : placeholder}
+        <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          {options.map((o) => (
+            <li
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false) }}
+              className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-blue-50 hover:text-[#213A8E] transition-colors ${value === o.value ? 'text-[#213A8E] font-medium bg-blue-50' : 'text-gray-700'}`}
+            >
+              {o.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function StatCard({ label, value, loading }) {
   if (loading) {
     return (
@@ -250,8 +287,8 @@ function ViewHistoryModal({ lead, onClose }) {
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[500px] max-h-[85vh] flex flex-col shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[500px] max-h-[85vh] flex flex-col shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -359,7 +396,6 @@ function EditInteractionModal({ lead, interaction, onClose }) {
     notes: interaction.notes ?? '',
     interest_level: interaction.interest_level ?? 0,
     duration_minutes: interaction.duration_minutes ?? '',
-    next_action: interaction.next_action ?? '',
   })
   const [errors, setErrors] = useState({})
 
@@ -389,7 +425,6 @@ function EditInteractionModal({ lead, interaction, onClose }) {
     if (form.notes) payload.notes = form.notes
     if (form.interest_level) payload.interest_level = form.interest_level
     if (form.duration_minutes) payload.duration_minutes = parseInt(form.duration_minutes, 10)
-    if (form.next_action) payload.next_action = form.next_action
     mutation.mutate(payload)
   }
 
@@ -410,36 +445,34 @@ function EditInteractionModal({ lead, interaction, onClose }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <select value={form.interaction_type} onChange={set('interaction_type')} className={selectClass(errors.interaction_type)}>
-                  <option value="">Seleccionar</option>
-                  <option value="CALL">Llamada</option>
-                  <option value="WHATSAPP">WhatsApp</option>
-                  <option value="EMAIL">Email</option>
-                  <option value="VISIT">Visita</option>
-                  <option value="NOTE">Nota</option>
-                </select>
-                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
+              <CustomSelect
+                value={form.interaction_type}
+                onChange={(val) => setForm((prev) => ({ ...prev, interaction_type: val }))}
+                placeholder="Seleccionar"
+                options={[
+                  { value: 'CALL', label: 'Llamada' },
+                  { value: 'WHATSAPP', label: 'WhatsApp' },
+                  { value: 'EMAIL', label: 'Email' },
+                  { value: 'VISIT', label: 'Visita' },
+                  { value: 'NOTE', label: 'Nota' },
+                ]}
+              />
               {errors.interaction_type && <p className="text-xs text-red-500 mt-1">{errors.interaction_type}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Resultado <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <select value={form.outcome} onChange={set('outcome')} className={selectClass(errors.outcome)}>
-                  <option value="">Seleccionar</option>
-                  <option value="INTERESTED">Interesado</option>
-                  <option value="NOT_INTERESTED">No interesado</option>
-                  <option value="NO_ANSWER">No contestó</option>
-                  <option value="CALLBACK">Llamar después</option>
-                  <option value="SPEAK_COORDINATOR">Hablar coordinador</option>
-                </select>
-                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
+              <CustomSelect
+                value={form.outcome}
+                onChange={(val) => setForm((prev) => ({ ...prev, outcome: val }))}
+                placeholder="Seleccionar"
+                options={[
+                  { value: 'CALL_AGAIN', label: 'Llamar de nuevo' },
+                  { value: 'SEND_INFO', label: 'Enviar información' },
+                  { value: 'SCHEDULE_VISIT', label: 'Agendar visita' },
+                  { value: 'AWAIT_REPLY', label: 'Esperar respuesta' },
+                  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+                ]}
+              />
               {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
             </div>
           </div>
@@ -480,26 +513,6 @@ function EditInteractionModal({ lead, interaction, onClose }) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Próxima acción <span className="text-xs text-gray-400 font-normal">(opcional)</span></label>
-            <div className="flex flex-wrap gap-2">
-              {['Llamar de nuevo', 'Enviar información', 'Agendar visita', 'Esperar respuesta', 'Hablar con coordinador'].map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => setForm((prev) => ({ ...prev, next_action: prev.next_action === opt ? '' : opt }))}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                    form.next_action === opt
-                      ? 'bg-[#213A8E] text-white border-[#213A8E]'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-[#213A8E]'
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {mutation.isError && (
             <p className="text-xs text-red-500 text-center">
               {mutation.error?.response?.data?.error ?? 'No se pudo guardar. Intenta de nuevo.'}
@@ -522,7 +535,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
 
 // ─── Log Interaction Modal ────────────────────────────────────────────────────
 
-const LOG_EMPTY = { interaction_type: '', outcome: '', notes: '', interest_level: 0, duration_minutes: '', next_action: '', discount_offered: null }
+const LOG_EMPTY = { interaction_type: '', outcome: '', notes: '', interest_level: 0, duration_minutes: '', discount_offered: null }
 
 const DISCOUNT_OPTIONS = [10, 20, 30, 40, 50]
 
@@ -566,7 +579,6 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     if (form.notes) payload.notes = form.notes
     if (form.interest_level) payload.interest_level = form.interest_level
     if (form.duration_minutes) payload.duration_minutes = parseInt(form.duration_minutes, 10)
-    if (form.next_action) payload.next_action = form.next_action
     mutation.mutate(payload)
   }
 
@@ -590,38 +602,36 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Tipo de interacción <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <select value={form.interaction_type} onChange={set('interaction_type')} className={selectClass(errors.interaction_type)}>
-                  <option value="">Seleccionar</option>
-                  <option value="CALL">Llamada</option>
-                  <option value="WHATSAPP">WhatsApp</option>
-                  <option value="EMAIL">Email</option>
-                  <option value="VISIT">Visita</option>
-                  <option value="NOTE">Nota</option>
-                </select>
-                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
+              <CustomSelect
+                value={form.interaction_type}
+                onChange={(val) => setForm((prev) => ({ ...prev, interaction_type: val }))}
+                placeholder="Seleccionar"
+                options={[
+                  { value: 'CALL', label: 'Llamada' },
+                  { value: 'WHATSAPP', label: 'WhatsApp' },
+                  { value: 'EMAIL', label: 'Email' },
+                  { value: 'VISIT', label: 'Visita' },
+                  { value: 'NOTE', label: 'Nota' },
+                ]}
+              />
               {errors.interaction_type && <p className="text-xs text-red-500 mt-1">{errors.interaction_type}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Resultado <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <select value={form.outcome} onChange={set('outcome')} className={selectClass(errors.outcome)}>
-                  <option value="">Seleccionar</option>
-                  <option value="INTERESTED">Interesado</option>
-                  <option value="NOT_INTERESTED">No interesado</option>
-                  <option value="NO_ANSWER">No contestó</option>
-                  <option value="CALLBACK">Llamar después</option>
-                  <option value="SPEAK_COORDINATOR">Hablar coordinador</option>
-                </select>
-                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
+              <CustomSelect
+                value={form.outcome}
+                onChange={(val) => setForm((prev) => ({ ...prev, outcome: val }))}
+                placeholder="Seleccionar"
+                options={[
+                  { value: 'CALL_AGAIN', label: 'Llamar de nuevo' },
+                  { value: 'SEND_INFO', label: 'Enviar información' },
+                  { value: 'SCHEDULE_VISIT', label: 'Agendar visita' },
+                  { value: 'AWAIT_REPLY', label: 'Esperar respuesta' },
+                  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+                ]}
+              />
               {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
             </div>
           </div>
@@ -671,36 +681,6 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
             />
           </div>
 
-          {/* Próxima acción */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Próxima acción <span className="text-xs text-gray-400 font-normal">(opcional)</span>
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {NEXT_ACTION_OPTIONS.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => setForm((prev) => ({ ...prev, next_action: prev.next_action === opt ? '' : opt }))}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                    form.next_action === opt
-                      ? 'bg-[#213A8E] text-white border-[#213A8E]'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-[#213A8E]'
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-            <input
-              type="text"
-              value={form.next_action}
-              onChange={set('next_action')}
-              placeholder="O escribe una acción personalizada..."
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
-          </div>
-
           {mutation.isError && (
             <p className="text-xs text-red-500 text-center">
               {mutation.error?.response?.data?.error ?? 'No se pudo guardar la interacción.'}
@@ -732,8 +712,8 @@ function ViewLeadModal({ lead, onClose }) {
   const rating = lastInteraction?.interest_level ?? null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-sm shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-sm shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -741,9 +721,11 @@ function ViewLeadModal({ lead, onClose }) {
         </button>
 
         <div className="flex items-start gap-4 mb-5">
-          <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-500 shrink-0">
-            {lead.name?.charAt(0).toUpperCase()}
-          </div>
+          <img
+            src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(lead.name ?? 'lead')}`}
+            alt={lead.name}
+            className="w-16 h-16 rounded-full bg-gray-100 shrink-0 object-cover"
+          />
           <div>
             {rating !== null ? (
               <>
@@ -762,8 +744,21 @@ function ViewLeadModal({ lead, onClose }) {
 
         <div className="space-y-3 text-sm">
           <div>
-            <p className="font-semibold text-gray-700 mb-0.5">Contacto:</p>
-            <p className="text-gray-600">{lead.email || '—'}&nbsp;|&nbsp;{lead.phone}</p>
+            <p className="font-semibold text-gray-700 mb-1">Contacto:</p>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-gray-600">
+                <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span>{lead.email || '—'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-gray-600">
+                <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                <span>{lead.phone}</span>
+              </div>
+            </div>
           </div>
           <div>
             <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
@@ -791,8 +786,8 @@ function ViewLeadModal({ lead, onClose }) {
 
 function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[420px] shadow-xl text-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onKeep}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[420px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-gray-900 mb-3">
           ¿Seguro que quieres desasignar este lead?
         </h2>
@@ -833,7 +828,15 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
   const validate = () => {
     const errs = {}
     if (!form.name.trim()) errs.name = 'El nombre es requerido.'
-    if (!form.phone.trim()) errs.phone = 'El teléfono es requerido.'
+    const phone = form.phone.trim()
+    if (!phone) {
+      errs.phone = 'El teléfono es requerido.'
+    } else if (!/^(09\d{8}|0[2-7]\d{7})$/.test(phone)) {
+      errs.phone = 'Ingresa un teléfono ecuatoriano válido (ej. 0991234567 o 042345678).'
+    }
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      errs.email = 'Ingresa un email válido.'
+    }
     return errs
   }
 
@@ -870,15 +873,31 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
     }`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Nuevo lead</h2>
+        <div className="flex items-center justify-between mb-6 pr-8">
+          <h2 className="text-xl font-bold text-gray-900">Nuevo lead</h2>
+          <button
+            type="button"
+            onClick={() => setForm((prev) => ({ ...prev, is_company: !prev.is_company }))}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              form.is_company
+                ? 'bg-indigo-200 text-indigo-700 border-indigo-300'
+                : 'bg-indigo-50 text-indigo-300 border-indigo-100 hover:bg-indigo-100 hover:text-indigo-500 hover:border-indigo-200'
+            }`}
+          >
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+            </svg>
+            Empresa
+          </button>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -892,41 +911,37 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Teléfono<span className="text-red-500 ml-0.5">*</span>
             </label>
-            <input type="tel" value={form.phone} onChange={set('phone')} className={inputClass('phone')} />
+            <input type="tel" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={inputClass('phone')} />
             {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input type="email" value={form.email} onChange={set('email')} className={inputClass('email')} />
+            <input type="text" value={form.email} onChange={set('email')} className={inputClass('email')} />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Fuente</label>
-            <select
+            <CustomSelect
               value={form.source}
-              onChange={set('source')}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            >
-              <option value="MANUAL">Manual</option>
-              <option value="INSTAGRAM">Instagram</option>
-              <option value="WHATSAPP">WhatsApp</option>
-              <option value="LANDING_PAGE">Landing Page</option>
-            </select>
+              onChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
+              options={[
+                { value: 'MANUAL', label: 'Manual' },
+                { value: 'INSTAGRAM', label: 'Instagram' },
+                { value: 'WHATSAPP', label: 'WhatsApp' },
+                { value: 'LANDING_PAGE', label: 'Landing Page' },
+              ]}
+            />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
-            <div className="relative">
-              <select value={form.program_interest} onChange={set('program_interest')} className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white">
-                <option value="">Sin especificar</option>
-                {programs.map((p) => (
-                  <option key={p.id} value={p.name}>{p.name}</option>
-                ))}
-              </select>
-              <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+            <CustomSelect
+              value={form.program_interest}
+              onChange={(val) => setForm((prev) => ({ ...prev, program_interest: val }))}
+              placeholder="Sin especificar"
+              options={programs.map((p) => ({ value: p.name, label: p.name }))}
+            />
           </div>
 
           <label className="flex items-center gap-3 cursor-pointer">
@@ -939,15 +954,6 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
             <span className="text-sm font-medium text-gray-700">Asignarme este lead</span>
           </label>
 
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.is_company}
-              onChange={(e) => setForm((prev) => ({ ...prev, is_company: e.target.checked }))}
-              className="w-4 h-4 accent-[#1e3164] rounded"
-            />
-            <span className="text-sm font-medium text-gray-700">Lead empresarial</span>
-          </label>
 
           <div className="flex gap-3 pt-2">
             <button
@@ -992,8 +998,8 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[400px] shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[400px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1005,7 +1011,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-2 mb-6">
-            {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'CONVERTED').map(([value, label]) => (
+            {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'CONVERTED' && value !== 'NEW').map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -1219,8 +1225,8 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   // ── Success screen ──
   if (result) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl text-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -1262,8 +1268,8 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
   // ── Form screen ──
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[500px] shadow-xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[500px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1302,21 +1308,12 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Programa <span className="text-red-500">*</span>
             </label>
-            <select
+            <CustomSelect
               value={programId}
-              onChange={(e) => setProgramId(e.target.value)}
-              disabled={loadingPrograms}
-              className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
-                errors.programId ? 'border-red-400' : 'border-gray-200'
-              }`}
-            >
-              <option value="">{loadingPrograms ? 'Cargando programas…' : 'Selecciona un programa'}</option>
-              {programs.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} — starts {p.start_date} · ${p.total_cost}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setProgramId(val)}
+              placeholder={loadingPrograms ? 'Cargando programas…' : 'Selecciona un programa'}
+              options={programs.map((p) => ({ value: p.id, label: `${p.name} — starts ${p.start_date} · $${p.total_cost}` }))}
+            />
             {errors.programId && <p className="text-xs text-red-500 mt-1">{errors.programId}</p>}
           </div>
 
@@ -1757,15 +1754,22 @@ export default function LeadsDashboard() {
               <tr key={lead.id} className={`transition-colors duration-700 ${flashedLeadId === lead.id ? 'bg-slate-100' : 'hover:bg-gray-50'}`}>
                 <td className="py-3.5 px-3">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900">{lead.name}</span>
-                    {lead.is_company && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
-                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
-                        </svg>
-                        Empresa
-                      </span>
-                    )}
+                    <img
+                      src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(lead.name ?? 'lead')}`}
+                      alt={lead.name}
+                      className="w-7 h-7 rounded-full bg-gray-100 shrink-0"
+                    />
+                    <div className="flex flex-col gap-0.5">
+                      {lead.is_company && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-400 w-fit">
+                          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+                          </svg>
+                          Empresa
+                        </span>
+                      )}
+                      <span className="font-medium text-gray-900">{lead.name}</span>
+                    </div>
                   </div>
                 </td>
                 <td className="py-3.5 px-3 text-gray-500">{lead.email || '—'}</td>
