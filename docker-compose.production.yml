@@ -24,7 +24,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
-    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4
+    command: bash -c "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"
     expose:
       - "8000"
     env_file:
@@ -36,6 +36,8 @@ services:
         condition: service_started
     networks:
       - boottracker-network
+    volumes:
+      - media_data:/app/media
 
   celery:
     build:
@@ -51,6 +53,8 @@ services:
         condition: service_started
     networks:
       - boottracker-network
+    volumes:
+      - media_data:/app/media
 
   frontend:
     build:
@@ -60,11 +64,14 @@ services:
       - "80"
     env_file:
       - .env
+    depends_on:
+      - backend
     networks:
       - boottracker-network
 
 volumes:
   postgres_data:
+  media_data:
 
 networks:
   boottracker-network:

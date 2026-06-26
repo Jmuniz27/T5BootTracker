@@ -20,11 +20,9 @@ class Lead(models.Model):
 
     class Status(models.TextChoices):
         NEW               = 'NEW',               'Nuevo'
-        CONTACTED         = 'CONTACTED',         'Contactado'
         QUALIFIED         = 'QUALIFIED',         'Calificado'
         INTERESTED        = 'INTERESTED',        'Interesado'
         NOT_INTERESTED    = 'NOT_INTERESTED',    'No interesado'
-        SPEAK_COORDINATOR = 'SPEAK_COORDINATOR', 'Hablar con coordinador'
         CONVERTED         = 'CONVERTED',         'Convertido'
 
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -93,10 +91,10 @@ class Interaction(models.Model):
         NOTE      = 'NOTE',      'Nota'
 
     class Outcome(models.TextChoices):
-        INTERESTED        = 'INTERESTED',        'Interesado'
-        NOT_INTERESTED    = 'NOT_INTERESTED',    'No interesado'
-        NO_ANSWER         = 'NO_ANSWER',         'No contestó'
-        CALLBACK          = 'CALLBACK',          'Llamar después'
+        CALL_AGAIN        = 'CALL_AGAIN',        'Llamar de nuevo'
+        SEND_INFO         = 'SEND_INFO',         'Enviar información'
+        SCHEDULE_VISIT    = 'SCHEDULE_VISIT',    'Agendar visita'
+        AWAIT_REPLY       = 'AWAIT_REPLY',       'Esperar respuesta'
         SPEAK_COORDINATOR = 'SPEAK_COORDINATOR', 'Hablar con coordinador'
 
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

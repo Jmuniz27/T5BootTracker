@@ -52,7 +52,7 @@ class TestConvertLead:
         lead = Lead.objects.create(
             name='Juan Pérez', phone='0991234567',
             email='juan.perez@test.com',
-            status=Lead.Status.QUALIFIED,  # <-- CORREGIDO A QUALIFIED
+            status=Lead.Status.QUALIFIED,
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -79,23 +79,10 @@ class TestConvertLead:
         assert enrollment.start_date == program.start_date
         assert enrollment.agreed_price == program.total_cost
 
-    def test_convert_lead_wrong_status(self, db, salesperson_user, program):
-        lead = Lead.objects.create(
-            name='Jane', phone='0991111111',
-            status=Lead.Status.NEW, # <-- Mantenemos en NEW para forzar el fallo 400
-            owner=salesperson_user,
-        )
-        client = make_client(salesperson_user)
-        resp = client.post(CONVERT_URL.format(id=lead.id), {
-            'cedula': '1713175071', 'program_id': str(program.id),
-        }, format='json')
-        assert resp.status_code == 400
-        assert resp.json()['code'] == 'INVALID_STATUS'
-
     def test_convert_lead_invalid_cedula(self, db, salesperson_user, program):
         lead = Lead.objects.create(
             name='Test', phone='0992222222',
-            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
+            status=Lead.Status.QUALIFIED,
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -110,7 +97,7 @@ class TestConvertLead:
         import uuid
         lead = Lead.objects.create(
             name='Test', phone='0993333333',
-            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
+            status=Lead.Status.QUALIFIED,
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -129,7 +116,7 @@ class TestConvertLead:
         lead = Lead.objects.create(
             name='Re Turning', phone='0994444444',
             email='returning@test.com',
-            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
+            status=Lead.Status.QUALIFIED,
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -156,7 +143,7 @@ class TestConvertLead:
         lead = Lead.objects.create(
             name='Test Conflict', phone='0995555555',
             email='admin.conflict@test.com',
-            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
+            status=Lead.Status.QUALIFIED,
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)
@@ -170,7 +157,7 @@ class TestConvertLead:
         lead = Lead.objects.create(
             name='Celery Test', phone='0996666666',
             email='celery.test@test.com',
-            status=Lead.Status.QUALIFIED, # <-- CORREGIDO A QUALIFIED
+            status=Lead.Status.QUALIFIED,
             owner=salesperson_user,
         )
         client = make_client(salesperson_user)

@@ -138,12 +138,14 @@ class TestLeadDetail:
 class TestLeadUpdatePermissions:
     def test_salesperson_can_update_own_lead(self, db, salesperson_user, assigned_lead):
         client = make_client(salesperson_user)
-        resp = client.patch(f'{LEADS_URL}{assigned_lead.id}/', {'status': Lead.Status.CONTACTED}, format='json')
+        # Cambiamos CONTACTED por INTERESTED
+        resp = client.patch(f'{LEADS_URL}{assigned_lead.id}/', {'status': Lead.Status.INTERESTED}, format='json')
         assert resp.status_code == 200
 
     def test_salesperson_can_update_unassigned_lead(self, db, salesperson_user, sample_lead):
         client = make_client(salesperson_user)
-        resp = client.patch(f'{LEADS_URL}{sample_lead.id}/', {'status': Lead.Status.CONTACTED}, format='json')
+        # Cambiamos CONTACTED por INTERESTED
+        resp = client.patch(f'{LEADS_URL}{sample_lead.id}/', {'status': Lead.Status.INTERESTED}, format='json')
         assert resp.status_code == 200
 
     def test_salesperson_cannot_update_another_sellers_lead(self, db, assigned_lead):
@@ -156,7 +158,8 @@ class TestLeadUpdatePermissions:
         assert resp.status_code == 403
         assert resp.json()['code'] == 'NOT_OWNER'
         assigned_lead.refresh_from_db()
-        assert assigned_lead.status == Lead.Status.CONTACTED
+        # Asegúrate de que esta línea verifique el estado inicial de tu fixture (ahora INTERESTED)
+        assert assigned_lead.status == Lead.Status.INTERESTED
 
 
 class TestLeadSoftDelete:
@@ -378,18 +381,19 @@ class TestInteractions:
         client = make_client(salesperson_user)
         resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
             'interaction_type': Interaction.InteractionType.CALL,
-            'outcome': Interaction.Outcome.INTERESTED,
-            'notes': 'El cliente está muy interesado.',
+            'outcome': Interaction.Outcome.SEND_INFO,  # <-- ACTUALIZADO
+            'notes': 'Se envió la información, el cliente está muy interesado.',
         }, format='json')
         assert resp.status_code == 201
         assigned_lead.refresh_from_db()
+        # Esto asume que en OUTCOME_TO_STATUS mapeaste SEND_INFO a Lead.Status.INTERESTED
         assert assigned_lead.status == Lead.Status.INTERESTED
 
     def test_interaction_includes_days_as_lead(self, db, salesperson_user, assigned_lead):
         client = make_client(salesperson_user)
         resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
             'interaction_type': Interaction.InteractionType.NOTE,
-            'outcome': Interaction.Outcome.CALLBACK,
+            'outcome': Interaction.Outcome.CALL_AGAIN,
         }, format='json')
         assert resp.status_code == 201
         assert 'days_as_lead' in resp.json()
@@ -400,7 +404,7 @@ class TestInteractions:
         client = make_client(salesperson_user)
         resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
             'interaction_type': Interaction.InteractionType.CALL,
-            'outcome': Interaction.Outcome.CALLBACK,
+            'outcome': Interaction.Outcome.CALL_AGAIN,
         }, format='json')
         assert resp.status_code == 201
         assigned_lead.refresh_from_db()
@@ -410,7 +414,7 @@ class TestInteractions:
         client = make_client(salesperson_user)
         resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
             'interaction_type': Interaction.InteractionType.VISIT,
-            'outcome': Interaction.Outcome.INTERESTED,
+            'outcome': Interaction.Outcome.SCHEDULE_VISIT,  # <-- ACTUALIZADO
             'duration_minutes': 45,
             'next_action': 'Enviar propuesta',
             'next_action_date': '2026-06-20',
@@ -425,14 +429,15 @@ class TestInteractions:
         client = make_client(salesperson_user)
         resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
             'interaction_type': Interaction.InteractionType.CALL,
-            'outcome': Interaction.Outcome.INTERESTED,
+            'outcome': Interaction.Outcome.SEND_INFO,  # <-- ACTUALIZADO
             'interest_level': 9,
         }, format='json')
         assert resp.status_code == 400
 
     def test_interaction_list_ordered_desc(self, db, salesperson_user, assigned_lead):
         client = make_client(salesperson_user)
-        for outcome in (Interaction.Outcome.NO_ANSWER, Interaction.Outcome.CALLBACK, Interaction.Outcome.INTERESTED):
+        # <-- ACTUALIZADO: Se usan los nuevos outcomes
+        for outcome in (Interaction.Outcome.AWAIT_REPLY, Interaction.Outcome.CALL_AGAIN, Interaction.Outcome.SEND_INFO):
             resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
                 'interaction_type': Interaction.InteractionType.CALL,
                 'outcome': outcome,
@@ -453,7 +458,7 @@ class TestInteractions:
         client = make_client(other)
         resp = client.post(f'{LEADS_URL}{assigned_lead.id}/interactions/', {
             'interaction_type': Interaction.InteractionType.CALL,
-            'outcome': Interaction.Outcome.INTERESTED,
+            'outcome': Interaction.Outcome.SEND_INFO,  # <-- ACTUALIZADO
         }, format='json')
         assert resp.status_code == 403
         assert resp.json()['code'] == 'NOT_OWNER'
