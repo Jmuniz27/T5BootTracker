@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus } from '../api/leads.api'
 import CustomSelect from '../components/CustomSelect'
@@ -389,9 +389,6 @@ function EditInteractionModal({ lead, interaction, onClose }) {
     mutation.mutate(payload)
   }
 
-  const selectClass = (err) =>
-    `w-full pl-3 pr-10 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white ${err ? 'border-red-400' : 'border-gray-200'}`
-
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
       <div className="bg-white rounded-2xl p-8 w-[520px] max-h-[90vh] overflow-y-auto shadow-xl relative" onClick={(e) => e.stopPropagation()}>
@@ -542,9 +539,6 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     if (form.duration_minutes) payload.duration_minutes = parseInt(form.duration_minutes, 10)
     mutation.mutate(payload)
   }
-
-  const selectClass = (err) =>
-    `w-full pl-3 pr-10 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white ${err ? 'border-red-400' : 'border-gray-200'}`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -745,7 +739,7 @@ function ViewLeadModal({ lead, onClose }) {
 
 // ─── Release Lead Modal ───────────────────────────────────────────────────────
 
-function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
+function ReleaseLeadModal({ onKeep, onRelease, isLoading }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onKeep}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[420px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
@@ -810,23 +804,6 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
     if (!payload.program_interest) delete payload.program_interest
     onSubmit(payload, autoAssign)
   }
-
-  const field = (label, key, type = 'text', required = false) => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      <input
-        type={type}
-        value={form[key]}
-        onChange={set(key)}
-        className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
-          errors[key] ? 'border-red-400' : 'border-gray-200'
-        }`}
-      />
-      {errors[key] && <p className="text-xs text-red-500 mt-1">{errors[key]}</p>}
-    </div>
-  )
 
   const inputClass = (key) =>
     `w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${

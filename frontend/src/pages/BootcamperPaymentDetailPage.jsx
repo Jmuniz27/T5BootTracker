@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { getMonitoring, getPaymentQueue, notifyCoordinator } from '../api/payments.api'
 import PaymentDetailModal from '../components/PaymentDetailModal'
 import Toast from '../components/Toast'
@@ -38,7 +38,7 @@ function fmt(v) {
 
 // ─── SVG Donut Chart ──────────────────────────────────────────────────────────
 
-function DonutChart({ totalCost, totalPaid, deficit, paymentStatus }) {
+function DonutChart({ totalCost, totalPaid, deficit }) {
   const r = 52, cx = 68, cy = 68
   const C = 2 * Math.PI * r
   const total = parseFloat(totalCost) || 1
@@ -128,7 +128,6 @@ export default function BootcamperPaymentDetailPage() {
   const { bootcamperId, programId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const qc = useQueryClient()
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [toast, setToast] = useState(null)
 
@@ -223,7 +222,6 @@ export default function BootcamperPaymentDetailPage() {
                   totalCost={totalCost}
                   totalPaid={totalPaid}
                   deficit={deficit}
-                  paymentStatus={bc.payment_status}
                 />
               </div>
               <div className="flex-1 space-y-4">
