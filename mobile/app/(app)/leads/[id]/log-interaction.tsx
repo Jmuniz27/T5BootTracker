@@ -35,14 +35,6 @@ const OUTCOMES = [
   { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador',    bg: '#f3e8ff', color: '#7e22ce' },
 ] as const;
 
-const NEXT_ACTIONS = [
-  'Llamar de nuevo',
-  'Enviar información',
-  'Agendar visita',
-  'Esperar respuesta',
-  'Hablar con coordinador',
-] as const;
-
 // ─── shared form components ───────────────────────────────────────────────────
 
 function SectionCard({ children }: { children: React.ReactNode }) {
@@ -74,7 +66,6 @@ export default function LogInteractionScreen() {
   const [stars, setStars]           = useState<number | null>(null);
   const [notes, setNotes]           = useState('');
   const [duration, setDuration]     = useState('');
-  const [nextAction, setNextAction] = useState('');
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -100,7 +91,6 @@ export default function LogInteractionScreen() {
         interest_level: stars,
         notes: notes.trim() || undefined,
         duration_minutes: duration ? parseInt(duration, 10) : null,
-        next_action: nextAction.trim() || undefined,
       });
       showToast();
     } catch {
@@ -251,33 +241,6 @@ export default function LogInteractionScreen() {
             </View>
           </SectionCard>
 
-          {/* Próxima acción */}
-          <SectionCard>
-            <SectionTitle optional>Próxima acción</SectionTitle>
-            <View style={s.chipRow}>
-              {NEXT_ACTIONS.map((opt) => {
-                const active = nextAction === opt;
-                return (
-                  <TouchableOpacity
-                    key={opt}
-                    style={[s.chip, active && s.chipActive]}
-                    onPress={() => setNextAction(active ? '' : opt)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[s.chipText, active && s.chipTextActive]}>{opt}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <TextInput
-              style={s.nextActionInput}
-              value={nextAction}
-              onChangeText={setNextAction}
-              placeholder="O escribe una acción personalizada..."
-              placeholderTextColor={colors.textMuted}
-            />
-          </SectionCard>
-
           {error && (
             <View style={s.errorBox}>
               <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
@@ -424,29 +387,6 @@ const s = StyleSheet.create({
     fontSize: 14,
     color: colors.textPrimary,
     minHeight: 110,
-  },
-  // Next action
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: '#f8f9fb',
-  },
-  chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  chipText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  chipTextActive: { color: colors.white, fontWeight: '600' },
-  nextActionInput: {
-    backgroundColor: '#f8f9fb',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
   },
   // Error
   errorBox: {

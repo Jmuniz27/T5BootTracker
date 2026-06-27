@@ -53,14 +53,6 @@ const OUTCOMES = [
   { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador',  bg: '#f3e8ff', color: '#7e22ce' },
 ] as const;
 
-const NEXT_ACTIONS = [
-  'Llamar de nuevo',
-  'Enviar información',
-  'Agendar visita',
-  'Esperar respuesta',
-  'Hablar con coordinador',
-] as const;
-
 function formatDate(iso: string) {
   const d = new Date(iso);
   const date = d.toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -83,7 +75,6 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
   const [stars, setStars]           = useState<number | null>(interaction?.interest_level ?? null);
   const [notes, setNotes]           = useState(interaction?.notes ?? '');
   const [duration, setDuration]     = useState(interaction?.duration_minutes?.toString() ?? '');
-  const [nextAction, setNextAction] = useState(interaction?.next_action ?? '');
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -101,7 +92,6 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
         interest_level: stars,
         notes: notes.trim() || undefined,
         duration_minutes: duration ? parseInt(duration, 10) : null,
-        next_action: nextAction.trim() || undefined,
       });
       onSaved();
     } catch {
@@ -229,33 +219,6 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
                   textAlignVertical="top"
                 />
               </View>
-            </View>
-
-            {/* Próxima acción */}
-            <View style={m.card}>
-              <Text style={m.sectionTitle}>Próxima acción <Text style={m.optional}>(opcional)</Text></Text>
-              <View style={m.chipRow}>
-                {NEXT_ACTIONS.map((opt) => {
-                  const active = nextAction === opt;
-                  return (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[m.chip, active && m.chipActive]}
-                      onPress={() => setNextAction(active ? '' : opt)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[m.chipText, active && m.chipTextActive]}>{opt}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <TextInput
-                style={m.nextActionInput}
-                value={nextAction}
-                onChangeText={setNextAction}
-                placeholder="O escribe una acción personalizada..."
-                placeholderTextColor={colors.textMuted}
-              />
             </View>
 
             {error && (
@@ -669,28 +632,6 @@ const m = StyleSheet.create({
     fontSize: 14,
     color: colors.textPrimary,
     minHeight: 110,
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: '#f8f9fb',
-  },
-  chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  chipText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  chipTextActive: { color: colors.white, fontWeight: '600' },
-  nextActionInput: {
-    backgroundColor: '#f8f9fb',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
   },
   errorBox: {
     flexDirection: 'row',
