@@ -282,20 +282,12 @@ function InteractionCard({ item, onEdit, isLast }: { item: Interaction; onEdit: 
         {item.notes ? <Text style={s.notes}>{item.notes}</Text> : null}
 
         {/* Meta row */}
-        {(item.duration_minutes || item.next_action) ? (
+        {item.duration_minutes ? (
           <View style={s.metaRow}>
-            {item.duration_minutes ? (
-              <View style={s.metaChip}>
-                <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-                <Text style={s.metaChipText}>{item.duration_minutes} min</Text>
-              </View>
-            ) : null}
-            {item.next_action ? (
-              <View style={s.nextActionChip}>
-                <Ionicons name="arrow-forward-circle-outline" size={12} color={colors.navy} />
-                <Text style={s.nextActionText} numberOfLines={1}>{item.next_action}</Text>
-              </View>
-            ) : null}
+            <View style={s.metaChip}>
+              <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+              <Text style={s.metaChipText}>{item.duration_minutes} min</Text>
+            </View>
           </View>
         ) : null}
 
@@ -499,17 +491,6 @@ const s = StyleSheet.create({
     paddingVertical: 3,
   },
   metaChipText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
-  nextActionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#eff2fb',
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    flex: 1,
-  },
-  nextActionText: { fontSize: 12, color: colors.navy, fontWeight: '500', flex: 1 },
   salesperson: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   editBtn: {
     width: 34,
