@@ -118,8 +118,15 @@ export default function LoginScreen() {
     try {
       await login(email, password);
       router.replace('/(app)/leads');
-    } catch {
-      setError('Credenciales inválidas. Verifica e intenta de nuevo.');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 403) {
+        setError(err.response?.data?.error ?? 'Cuenta desactivada. Contacte al administrador.');
+      } else if (status === 401) {
+        setError('Credenciales inválidas. Verifica e intenta de nuevo.');
+      } else {
+        setError('Error de conexión. Intenta de nuevo.');
+      }
     } finally {
       setLoading(false);
     }
