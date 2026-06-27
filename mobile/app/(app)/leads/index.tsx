@@ -17,7 +17,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
-import { fetchLeads, assignLead, releaseLead } from '../../../src/api/leads.api';
+import { fetchLeads, assignLead, releaseLead, updateLeadStatus } from '../../../src/api/leads.api';
 import { api } from '../../../src/lib/api';
 import { useAuth } from '../../../src/context/AuthContext';
 import type { Lead, LeadStatus } from '../../../src/types/leads';
@@ -39,37 +39,24 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: string }> = {
-  NEW:               { bg: '#fefce8', color: '#a16207', label: 'Nuevo' },
-  CONTACTED:         { bg: '#dbeafe', color: '#1d4ed8', label: 'Contactado' },
-  INTERESTED:        { bg: '#dcfce7', color: '#15803d', label: 'Interesado' },
-  NOT_INTERESTED:    { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
-  SPEAK_COORDINATOR: { bg: '#fef9c3', color: '#a16207', label: 'Hablar coordinador' },
-  CONVERTED:         { bg: '#f3e8ff', color: '#7e22ce', label: 'Convertido' },
+  NEW:            { bg: '#fefce8', color: '#a16207', label: 'Nuevo' },
+  QUALIFIED:      { bg: '#dbeafe', color: '#1d4ed8', label: 'Calificado' },
+  INTERESTED:     { bg: '#dcfce7', color: '#15803d', label: 'Interesado' },
+  NOT_INTERESTED: { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
+  CONVERTED:      { bg: '#f3e8ff', color: '#7e22ce', label: 'Convertido' },
 };
 
-const OUTCOME_CONFIG: Record<string, { bg: string; color: string; label: string }> = {
-  INTERESTED:        { bg: '#dcfce7', color: '#15803d', label: 'Interesado' },
-  NOT_INTERESTED:    { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
-  SPEAK_COORDINATOR: { bg: '#f3e8ff', color: '#7e22ce', label: 'Hablar coordinador' },
-  NO_ANSWER:         { bg: '#f3f4f6', color: '#4b5563', label: 'No contestó' },
-  CALLBACK:          { bg: '#fef9c3', color: '#a16207', label: 'Llamar después' },
-};
+// Estados que un vendedor puede asignar manualmente — CONVERTED queda excluido.
+const ASSIGNABLE_STATUSES: LeadStatus[] = ['NEW', 'QUALIFIED', 'INTERESTED', 'NOT_INTERESTED'];
 
-const DISPLAY_FILTERS: { value: string | null; label: string }[] = [
-  { value: null,                label: 'Todos' },
-  { value: 'NEW',               label: 'Nuevo' },
-  { value: 'INTERESTED',        label: 'Interesado' },
-  { value: 'NOT_INTERESTED',    label: 'No interesado' },
-  { value: 'NO_ANSWER',         label: 'No contestó' },
-  { value: 'CALLBACK',          label: 'Llamar después' },
-  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
-  { value: 'CONVERTED',         label: 'Convertido' },
+const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
+  { value: null,             label: 'Todos' },
+  { value: 'NEW',            label: 'Nuevo' },
+  { value: 'QUALIFIED',      label: 'Calificado' },
+  { value: 'INTERESTED',     label: 'Interesado' },
+  { value: 'NOT_INTERESTED', label: 'No interesado' },
+  { value: 'CONVERTED',      label: 'Convertido' },
 ];
-
-function getDisplayKey(lead: Lead): string {
-  if (lead.status === 'CONVERTED') return 'CONVERTED';
-  return lead.last_outcome ?? 'NEW';
-}
 
 const AVATAR_PALETTE = ['#213A8E', '#8b5cf6', '#14b8a6', '#f43f5e', '#f59e0b', '#0891b2', '#ec4899', '#6366f1'];
 
@@ -96,16 +83,21 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
-function StatusBadge({ status, lastOutcome }: { status: LeadStatus; lastOutcome: string | null }) {
-  const cfg = status === 'CONVERTED'
-    ? STATUS_CONFIG.CONVERTED
-    : lastOutcome
-      ? (OUTCOME_CONFIG[lastOutcome] ?? STATUS_CONFIG.NEW)
-      : STATUS_CONFIG.NEW;
-  return (
+// El badge usa `status` como fuente de verdad (igual que el web) — last_outcome ya no decide el color.
+// Si se pasa onPress, el badge es tappable (abre el selector de "Cambiar estado").
+function StatusBadge({ status, onPress }: { status: LeadStatus; onPress?: () => void }) {
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.NEW;
+  const badge = (
     <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
       <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
+      {onPress && <Ionicons name="chevron-down" size={10} color={cfg.color} style={{ marginLeft: 2 }} />}
     </View>
+  );
+  if (!onPress) return badge;
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} hitSlop={6}>
+      {badge}
+    </TouchableOpacity>
   );
 }
 
@@ -113,8 +105,8 @@ function StatusChips({
   value,
   onChange,
 }: {
-  value: string | null;
-  onChange: (key: string | null) => void;
+  value: LeadStatus | null;
+  onChange: (key: LeadStatus | null) => void;
 }) {
   return (
     <ScrollView
@@ -122,7 +114,7 @@ function StatusChips({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.chipsRow}
     >
-      {DISPLAY_FILTERS.map((f) => {
+      {STATUS_FILTERS.map((f) => {
         const active = value === f.value;
         return (
           <TouchableOpacity
@@ -146,9 +138,11 @@ interface CardProps {
   onRelease: (id: string) => void;
   onViewHistory: (lead: Lead) => void;
   onLogInteraction: (lead: Lead) => void;
+  onChangeStatus: (lead: Lead) => void;
 }
 
-function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction }: CardProps) {
+function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction, onChangeStatus }: CardProps) {
+  const canChangeStatus = !isAvailable && lead.status !== 'CONVERTED';
   return (
     <View style={styles.card}>
       {/* Top: avatar + info */}
@@ -157,7 +151,7 @@ function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLog
         <View style={styles.cardInfo}>
           <View style={styles.cardNameRow}>
             <Text style={styles.cardName} numberOfLines={1}>{lead.name}</Text>
-            <StatusBadge status={lead.status} lastOutcome={lead.last_outcome} />
+            <StatusBadge status={lead.status} onPress={canChangeStatus ? () => onChangeStatus(lead) : undefined} />
           </View>
           {lead.email ? (
             <View style={styles.cardRow}>
@@ -204,6 +198,50 @@ function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLog
   );
 }
 
+function ChangeStatusModal({
+  lead,
+  saving,
+  onClose,
+  onSelect,
+}: {
+  lead: Lead;
+  saving: boolean;
+  onClose: () => void;
+  onSelect: (status: LeadStatus) => void;
+}) {
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.menuOverlay} onPress={onClose}>
+        <View style={styles.statusSheet}>
+          <View style={styles.menuHandle} />
+          <Text style={styles.statusSheetTitle}>Cambiar estado</Text>
+          <Text style={styles.statusSheetSubtitle} numberOfLines={1}>{lead.name}</Text>
+          <View style={styles.statusOptionList}>
+            {ASSIGNABLE_STATUSES.map((value) => {
+              const cfg = STATUS_CONFIG[value];
+              const active = lead.status === value;
+              return (
+                <TouchableOpacity
+                  key={value}
+                  style={[styles.statusOption, active && { borderColor: cfg.color, backgroundColor: cfg.bg }]}
+                  onPress={() => onSelect(value)}
+                  disabled={saving}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.statusOptionText, active && { color: cfg.color, fontWeight: '700' }]}>
+                    {cfg.label}
+                  </Text>
+                  {saving && active && <ActivityIndicator size="small" color={cfg.color} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ─── screen ──────────────────────────────────────────────────────────────────
 
 type Tab = 'my' | 'available';
@@ -215,7 +253,7 @@ export default function LeadsScreen() {
   const [me, setMe]                     = useState<MeData | null>(null);
   const [tab, setTab]                   = useState<Tab>('my');
   const [search, setSearch]             = useState('');
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<LeadStatus | null>(null);
   const [showFilters, setShowFilters]   = useState(false);
   const [myLeads, setMyLeads]           = useState<Lead[]>([]);
   const [available, setAvailable]       = useState<Lead[]>([]);
@@ -223,6 +261,8 @@ export default function LeadsScreen() {
   const [refreshing, setRefreshing]     = useState(false);
   const [error, setError]               = useState<string | null>(null);
   const [menuOpen, setMenuOpen]         = useState(false);
+  const [statusLead, setStatusLead]     = useState<Lead | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
   const slideAnim                        = useRef(new Animated.Value(300)).current;
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -240,9 +280,12 @@ export default function LeadsScreen() {
     });
   }
 
-  async function loadLeads(q?: string) {
+  async function loadLeads(q?: string, status?: LeadStatus | null) {
     try {
-      const data = await fetchLeads(q ? { search: q } : undefined);
+      const params: { search?: string; status?: string } = {};
+      if (q) params.search = q;
+      if (status) params.status = status;
+      const data = await fetchLeads(Object.keys(params).length ? params : undefined);
       setMyLeads(data.my_leads);
       setAvailable(data.available_leads);
       setError(null);
@@ -258,26 +301,31 @@ export default function LeadsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadLeads(search);
-    }, [search]),
+      loadLeads(search, statusFilter);
+    }, [search, statusFilter]),
   );
 
   function handleSearchChange(text: string) {
     setSearch(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => loadLeads(text), 400);
+    debounceRef.current = setTimeout(() => loadLeads(text, statusFilter), 400);
+  }
+
+  function handleStatusFilterChange(value: LeadStatus | null) {
+    setStatusFilter(value);
+    loadLeads(search, value);
   }
 
   async function handleRefresh() {
     setRefreshing(true);
-    await loadLeads(search);
+    await loadLeads(search, statusFilter);
     setRefreshing(false);
   }
 
   async function handleAssign(leadId: string) {
     try {
       await assignLead(leadId);
-      await loadLeads(search);
+      await loadLeads(search, statusFilter);
     } catch {
       setError('No pudimos asignar el lead. Puede que ya haya sido tomado.');
     }
@@ -286,7 +334,7 @@ export default function LeadsScreen() {
   async function handleRelease(leadId: string) {
     try {
       await releaseLead(leadId);
-      await loadLeads(search);
+      await loadLeads(search, statusFilter);
     } catch {
       setError('No pudimos desasignar el lead. Intenta de nuevo.');
     }
@@ -300,9 +348,25 @@ export default function LeadsScreen() {
     router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id } });
   }
 
-  const myFiltered        = statusFilter ? myLeads.filter((l) => getDisplayKey(l) === statusFilter) : myLeads;
-  const availableFiltered = statusFilter ? available.filter((l) => getDisplayKey(l) === statusFilter) : available;
-  const displayed         = tab === 'my' ? myFiltered : availableFiltered;
+  function handleChangeStatus(lead: Lead) {
+    setStatusLead(lead);
+  }
+
+  async function handleSelectStatus(newStatus: LeadStatus) {
+    if (!statusLead) return;
+    setStatusSaving(true);
+    try {
+      await updateLeadStatus(statusLead.id, { status: newStatus });
+      setStatusLead(null);
+      await loadLeads(search, statusFilter);
+    } catch {
+      setError('No pudimos actualizar el estado. Intenta de nuevo.');
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
+  const displayed = tab === 'my' ? myLeads : available;
 
   if (loading) {
     return (
@@ -388,7 +452,7 @@ export default function LeadsScreen() {
             </View>
 
             {/* Status filter chips */}
-            {showFilters && <StatusChips value={statusFilter} onChange={setStatusFilter} />}
+            {showFilters && <StatusChips value={statusFilter} onChange={handleStatusFilterChange} />}
 
             {/* Tabs */}
             <View style={styles.tabs}>
@@ -398,7 +462,7 @@ export default function LeadsScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]}>
-                  Mis leads ({myFiltered.length})
+                  Mis leads ({myLeads.length})
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -407,7 +471,7 @@ export default function LeadsScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.tabText, tab === 'available' && styles.tabTextActive]}>
-                  Disponibles ({availableFiltered.length})
+                  Disponibles ({available.length})
                 </Text>
               </TouchableOpacity>
             </View>
@@ -423,6 +487,7 @@ export default function LeadsScreen() {
             onRelease={handleRelease}
             onViewHistory={handleViewHistory}
             onLogInteraction={handleLogInteraction}
+            onChangeStatus={handleChangeStatus}
           />
         )}
         ListEmptyComponent={
@@ -478,6 +543,16 @@ export default function LeadsScreen() {
           </Animated.View>
         </Pressable>
       </Modal>
+
+      {/* Change status modal */}
+      {statusLead && (
+        <ChangeStatusModal
+          lead={statusLead}
+          saving={statusSaving}
+          onClose={() => setStatusLead(null)}
+          onSelect={handleSelectStatus}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -728,6 +803,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 20,
@@ -891,5 +968,45 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#dc2626',
+  },
+  // Change status modal
+  statusSheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingBottom: 36,
+    paddingHorizontal: 20,
+  },
+  statusSheetTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  statusSheetSubtitle: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  statusOptionList: {
+    gap: 8,
+  },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    backgroundColor: '#f8f9fb',
+  },
+  statusOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textMuted,
   },
 });

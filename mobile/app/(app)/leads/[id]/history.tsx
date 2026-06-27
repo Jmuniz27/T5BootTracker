@@ -30,11 +30,11 @@ const TYPE_CONFIG: Record<string, { label: string; icon: string; iconColor: stri
 };
 
 const OUTCOME_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  INTERESTED:        { label: 'Interesado',         bg: '#dcfce7', color: '#15803d' },
-  NOT_INTERESTED:    { label: 'No interesado',      bg: '#fee2e2', color: '#dc2626' },
-  NO_ANSWER:         { label: 'No contestó',        bg: '#f3f4f6', color: '#4b5563' },
-  CALLBACK:          { label: 'Llamar después',     bg: '#fef9c3', color: '#a16207' },
-  SPEAK_COORDINATOR: { label: 'Hablar coordinador', bg: '#f3e8ff', color: '#7e22ce' },
+  CALL_AGAIN:        { label: 'Llamar de nuevo',     bg: '#fef9c3', color: '#a16207' },
+  SEND_INFO:         { label: 'Enviar información',  bg: '#dcfce7', color: '#15803d' },
+  SCHEDULE_VISIT:    { label: 'Agendar visita',      bg: '#dbeafe', color: '#1d4ed8' },
+  AWAIT_REPLY:       { label: 'Esperar respuesta',   bg: '#f3f4f6', color: '#4b5563' },
+  SPEAK_COORDINATOR: { label: 'Hablar coordinador',  bg: '#f3e8ff', color: '#7e22ce' },
 };
 
 const TYPES = [
@@ -46,11 +46,11 @@ const TYPES = [
 ] as const;
 
 const OUTCOMES = [
-  { value: 'INTERESTED',        label: 'Interesado',         bg: '#dcfce7', color: '#15803d' },
-  { value: 'NOT_INTERESTED',    label: 'No interesado',      bg: '#fee2e2', color: '#dc2626' },
-  { value: 'NO_ANSWER',         label: 'No contestó',        bg: '#f3f4f6', color: '#4b5563' },
-  { value: 'CALLBACK',          label: 'Llamar después',     bg: '#fef9c3', color: '#a16207' },
-  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador', bg: '#f3e8ff', color: '#7e22ce' },
+  { value: 'CALL_AGAIN',        label: 'Llamar de nuevo',     bg: '#fef9c3', color: '#a16207' },
+  { value: 'SEND_INFO',         label: 'Enviar información',  bg: '#dcfce7', color: '#15803d' },
+  { value: 'SCHEDULE_VISIT',    label: 'Agendar visita',      bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'AWAIT_REPLY',       label: 'Esperar respuesta',   bg: '#f3f4f6', color: '#4b5563' },
+  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador',  bg: '#f3e8ff', color: '#7e22ce' },
 ] as const;
 
 const NEXT_ACTIONS = [

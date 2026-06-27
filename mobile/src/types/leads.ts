@@ -1,9 +1,8 @@
 export type LeadStatus =
   | 'NEW'
-  | 'CONTACTED'
+  | 'QUALIFIED'
   | 'INTERESTED'
   | 'NOT_INTERESTED'
-  | 'SPEAK_COORDINATOR'
   | 'CONVERTED';
 
 export interface Lead {

@@ -1,5 +1,5 @@
 import { api } from '../lib/api';
-import type { LeadsResponse, Interaction } from '../types/leads';
+import type { LeadsResponse, Interaction, LeadStatus } from '../types/leads';
 
 interface LeadFilters {
   search?: string;
@@ -19,6 +19,11 @@ export async function assignLead(leadId: string) {
 
 export async function releaseLead(leadId: string) {
   const { data } = await api.patch(`/leads/${leadId}/release/`);
+  return data;
+}
+
+export async function updateLeadStatus(leadId: string, payload: { status: LeadStatus }) {
+  const { data } = await api.patch(`/leads/${leadId}/`, payload);
   return data;
 }
 
