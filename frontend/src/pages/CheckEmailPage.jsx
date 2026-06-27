@@ -4,11 +4,17 @@ import { useMutation } from '@tanstack/react-query';
 import AuthLayout from '../components/AuthLayout';
 import { requestPasswordReset } from '../api/auth.api';
 
+function maskEmail(email) {
+  const at = email.indexOf('@');
+  if (at < 3) return email;
+  return `${email.slice(0, 2)}…${email.slice(at)}`;
+}
+
 export default function CheckEmailPage() {
   const { state } = useLocation();
   const navigate = useNavigate();
   const email = state?.email ?? '';
-  const displayEmail = email ? email.replace(/(.{2}).+(@.+)/, '$1…$2') : 'tu correo';
+  const displayEmail = email ? maskEmail(email) : 'tu correo';
 
   const inputRefs = useRef([]);
   const digits = useRef(Array(5).fill(''));

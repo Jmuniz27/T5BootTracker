@@ -16,6 +16,12 @@ const STATUS_COLORS = {
   REJECTED: 'bg-red-100 text-red-600',
 }
 
+function dropZoneClass(dragOver, file) {
+  if (dragOver) return 'border-[#1D3176] bg-blue-50'
+  if (file) return 'border-green-400 bg-green-50'
+  return 'border-gray-300 hover:border-[#1D3176] hover:bg-gray-50'
+}
+
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
 function Toast({ message, type = 'success', onClose }) {
@@ -197,13 +203,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
                 const f = e.dataTransfer.files[0]
                 if (f) validateAndSetFile(f)
               }}
-              className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-6 transition-colors cursor-pointer ${
-                dragOver
-                  ? 'border-[#1D3176] bg-blue-50'
-                  : file
-                  ? 'border-green-400 bg-green-50'
-                  : 'border-gray-300 hover:border-[#1D3176] hover:bg-gray-50'
-              }`}
+              className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-6 transition-colors cursor-pointer ${dropZoneClass(dragOver, file)}`}
               onClick={() => fileRef.current?.click()}
             >
               {file ? (
@@ -651,9 +651,8 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {isLoading ? (
-          [...Array(3)].map((_, i) => <SkeletonPaymentRow key={i} />)
-        ) : sorted.length === 0 ? (
+        {isLoading && [...Array(3)].map((_, i) => <SkeletonPaymentRow key={i} />)}
+        {!isLoading && sorted.length === 0 && (
           <div className="text-center py-12">
             <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -666,11 +665,10 @@ export default function PaymentsPage() {
               Subir tu primer comprobante
             </button>
           </div>
-        ) : (
-          sorted.map((p) => (
-            <PaymentRow key={p.id} payment={p} onReview={setReviewPayment} />
-          ))
         )}
+        {!isLoading && sorted.length > 0 && sorted.map((p) => (
+          <PaymentRow key={p.id} payment={p} onReview={setReviewPayment} />
+        ))}
       </div>
 
       {/* Modals */}
