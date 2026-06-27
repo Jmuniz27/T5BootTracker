@@ -178,9 +178,9 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
                 {[1, 2, 3, 4, 5].map((n) => (
                   <TouchableOpacity key={n} hitSlop={8} onPress={() => setStars(stars === n ? null : n)} activeOpacity={0.7}>
                     <Ionicons
-                      name={stars !== null && n <= stars ? 'star' : 'star-outline'}
-                      size={34}
-                      color={stars !== null && n <= stars ? '#f59e0b' : colors.border}
+                      name="star"
+                      size={28}
+                      color={stars !== null && n <= stars ? '#3b82f6' : '#d1d5db'}
                     />
                   </TouchableOpacity>
                 ))}
@@ -271,17 +271,10 @@ function InteractionCard({ item, onEdit, isLast }: { item: Interaction; onEdit: 
         )}
 
         {/* Stars */}
-        {item.interest_level !== null && (
+        {item.interest_level != null && item.interest_level > 0 && (
           <View style={s.starsRow}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <Ionicons
-                key={n}
-                name={n <= (item.interest_level ?? 0) ? 'star' : 'star-outline'}
-                size={14}
-                color={n <= (item.interest_level ?? 0) ? '#f59e0b' : colors.border}
-              />
-            ))}
-            <Text style={s.starsLabel}>{item.interest_level} / 5</Text>
+            <Ionicons name="star" size={14} color="#f59e0b" />
+            <Text style={s.starsLabel}>{item.interest_level}</Text>
           </View>
         )}
 
@@ -493,7 +486,7 @@ const s = StyleSheet.create({
   },
   outcomeBadgeText: { fontSize: 12, fontWeight: '600' },
   starsRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  starsLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '600', marginLeft: 4 },
+  starsLabel: { fontSize: 12, color: '#f59e0b', fontWeight: '600', marginLeft: 2 },
   notes: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },
   metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   metaChip: {

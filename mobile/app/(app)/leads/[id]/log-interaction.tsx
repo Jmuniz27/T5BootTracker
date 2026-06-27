@@ -192,17 +192,12 @@ export default function LogInteractionScreen() {
               {[1, 2, 3, 4, 5].map((n) => (
                 <TouchableOpacity key={n} hitSlop={8} onPress={() => setStars(stars === n ? null : n)} activeOpacity={0.7}>
                   <Ionicons
-                    name={stars !== null && n <= stars ? 'star' : 'star-outline'}
-                    size={34}
-                    color={stars !== null && n <= stars ? '#f59e0b' : colors.border}
+                    name="star"
+                    size={28}
+                    color={stars !== null && n <= stars ? '#3b82f6' : '#d1d5db'}
                   />
                 </TouchableOpacity>
               ))}
-              {stars !== null && (
-                <View style={s.starsBadge}>
-                  <Text style={s.starsBadgeText}>{stars} / 5</Text>
-                </View>
-              )}
             </View>
           </SectionCard>
 
@@ -351,14 +346,6 @@ const s = StyleSheet.create({
   outcomeBadgeText: { fontSize: 11, fontWeight: '700' },
   // Stars
   starsRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  starsBadge: {
-    marginLeft: 8,
-    backgroundColor: '#fef9c3',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  starsBadgeText: { fontSize: 12, fontWeight: '700', color: '#a16207' },
   // Duration
   durationSection: { gap: 10 },
   durationRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
