@@ -3,6 +3,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { getPaymentQueue, getPrograms } from '../api/payments.api'
 import PaymentDetailModal from '../components/PaymentDetailModal'
 import Toast from '../components/Toast'
+import CustomSelect from '../components/CustomSelect'
 
 const STATUS_COLORS = {
   PENDING: 'bg-yellow-100 text-yellow-700',
@@ -113,21 +114,15 @@ export default function PaymentQueuePage() {
               className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-transparent bg-white"
             />
           </div>
-          <div className="relative">
-            <select
-              value={programId}
-              onChange={(e) => setProgramId(e.target.value)}
-              className="pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white"
-            >
-              <option value="">Todos los programas</option>
-              {programs.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
+          <CustomSelect
+            value={programId}
+            onChange={setProgramId}
+            options={[
+              { value: '', label: 'Todos los programas' },
+              ...programs.map((p) => ({ value: p.id, label: p.name })),
+            ]}
+            placeholder="Todos los programas"
+          />
           {isFetching && !isLoading && (
             <svg className="w-4 h-4 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

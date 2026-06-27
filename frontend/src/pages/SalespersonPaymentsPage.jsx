@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMonitoring, getPrograms } from '../api/payments.api'
 import StatCard from '../components/StatCard'
+import CustomSelect from '../components/CustomSelect'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -201,36 +202,26 @@ export default function SalespersonPaymentsPage() {
             className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-transparent bg-white"
           />
         </div>
-        <div className="relative">
-          <select
-            value={programId}
-            onChange={(e) => setProgramId(e.target.value)}
-            className="pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white"
-          >
-            <option value="">Todos los programas</option>
-            {programs.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-        <div className="relative">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white"
-          >
-            <option value="">Todos los estados</option>
-            <option value="CRITICAL">Crítico</option>
-            <option value="AT_RISK">En riesgo</option>
-            <option value="ON_TRACK">Al día</option>
-          </select>
-          <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
+        <CustomSelect
+          value={programId}
+          onChange={setProgramId}
+          options={[
+            { value: '', label: 'Todos los programas' },
+            ...programs.map((p) => ({ value: p.id, label: p.name })),
+          ]}
+          placeholder="Todos los programas"
+        />
+        <CustomSelect
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[
+            { value: '', label: 'Todos los estados' },
+            { value: 'CRITICAL', label: 'Crítico' },
+            { value: 'AT_RISK', label: 'En riesgo' },
+            { value: 'ON_TRACK', label: 'Al día' },
+          ]}
+          placeholder="Todos los estados"
+        />
         {isFetching && !isLoading && (
           <svg className="w-4 h-4 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
