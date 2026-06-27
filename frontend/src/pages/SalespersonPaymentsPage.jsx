@@ -12,10 +12,6 @@ const STATUS = {
   CRITICAL: { label: 'Crítico',   bg: 'bg-red-100',     text: 'text-red-600',     bar: 'bg-red-500'     },
 }
 
-const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-violet-500', 'bg-pink-500', 'bg-teal-500', 'bg-orange-500',
-]
-
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function fmt(v) {
@@ -23,15 +19,6 @@ function fmt(v) {
   const n = parseFloat(v)
   if (isNaN(n)) return '—'
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function getInitials(name) {
-  return (name || '').split(' ').slice(0, 2).map((w) => w[0] || '').join('').toUpperCase() || '?'
-}
-
-function avatarColor(id) {
-  const n = [...(id || '')].reduce((a, c) => a + c.charCodeAt(0), 0)
-  return AVATAR_COLORS[n % AVATAR_COLORS.length]
 }
 
 // ─── Bootcamper Card ──────────────────────────────────────────────────────────
@@ -50,9 +37,11 @@ function BootcamperCard({ bc, onClick }) {
       {/* Top row */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 ${avatarColor(bc.bootcamper_id)}`}>
-            {getInitials(bc.bootcamper_name)}
-          </div>
+          <img
+            src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(bc.bootcamper_name ?? 'bootcamper')}`}
+            alt={bc.bootcamper_name}
+            className="w-10 h-10 rounded-full bg-gray-100 flex-shrink-0 object-cover"
+          />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 group-hover:text-[#1D3176] transition-colors truncate">
               {bc.bootcamper_name}
