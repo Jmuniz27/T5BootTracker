@@ -27,10 +27,6 @@ const PAYMENT_STATUS_LABELS = {
   DRAFT:    'En revisión',
 }
 
-const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-violet-500', 'bg-pink-500', 'bg-teal-500', 'bg-orange-500',
-]
-
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function fmt(v) {
@@ -38,15 +34,6 @@ function fmt(v) {
   const n = parseFloat(v)
   if (isNaN(n)) return '—'
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function getInitials(name) {
-  return (name || '').split(' ').slice(0, 2).map((w) => w[0] || '').join('').toUpperCase() || '?'
-}
-
-function avatarColor(id) {
-  const n = [...(id || '')].reduce((a, c) => a + c.charCodeAt(0), 0)
-  return AVATAR_COLORS[n % AVATAR_COLORS.length]
 }
 
 // ─── SVG Donut Chart ──────────────────────────────────────────────────────────
@@ -207,9 +194,11 @@ export default function BootcamperPaymentDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div className="flex items-center gap-4">
-          <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 ${avatarColor(bc.bootcamper_id)}`}>
-            {getInitials(bc.bootcamper_name)}
-          </div>
+          <img
+            src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(bc.bootcamper_name ?? 'bootcamper')}`}
+            alt={bc.bootcamper_name}
+            className="w-14 h-14 rounded-full bg-gray-100 flex-shrink-0 object-cover"
+          />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{bc.bootcamper_name}</h1>
             <p className="text-sm text-gray-400 mt-0.5">{bc.email} · {bc.program_name}</p>

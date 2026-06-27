@@ -290,7 +290,7 @@ class PaymentMonitoringView(APIView):
             ).distinct()
             for bc in bootcampers:
                 summary = svc.get_payment_summary(str(bc.id), str(program.id))
-                if status_filter == 'CRITICAL' and not summary['is_critical']:
+                if status_filter and summary.get('payment_status') != status_filter:
                     continue
                 data.append({
                     'bootcamper_id':   str(bc.id),
