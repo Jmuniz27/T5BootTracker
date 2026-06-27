@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMonitoring, getPrograms } from '../api/payments.api'
 import StatCard from '../components/StatCard'
+import CustomSelect from '../components/CustomSelect'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -12,10 +13,6 @@ const STATUS = {
   CRITICAL: { label: 'Crítico',   bg: 'bg-red-100',     text: 'text-red-600',     bar: 'bg-red-500'     },
 }
 
-const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-violet-500', 'bg-pink-500', 'bg-teal-500', 'bg-orange-500',
-]
-
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function fmt(v) {
@@ -23,15 +20,6 @@ function fmt(v) {
   const n = parseFloat(v)
   if (isNaN(n)) return '—'
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function getInitials(name) {
-  return (name || '').split(' ').slice(0, 2).map((w) => w[0] || '').join('').toUpperCase() || '?'
-}
-
-function avatarColor(id) {
-  const n = [...(id || '')].reduce((a, c) => a + c.charCodeAt(0), 0)
-  return AVATAR_COLORS[n % AVATAR_COLORS.length]
 }
 
 // ─── Bootcamper Card ──────────────────────────────────────────────────────────
@@ -50,9 +38,11 @@ function BootcamperCard({ bc, onClick }) {
       {/* Top row */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 ${avatarColor(bc.bootcamper_id)}`}>
-            {getInitials(bc.bootcamper_name)}
-          </div>
+          <img
+            src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(bc.bootcamper_name ?? 'bootcamper')}`}
+            alt={bc.bootcamper_name}
+            className="w-10 h-10 rounded-full bg-gray-100 flex-shrink-0 object-cover"
+          />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 group-hover:text-[#1D3176] transition-colors truncate">
               {bc.bootcamper_name}
@@ -212,36 +202,26 @@ export default function SalespersonPaymentsPage() {
             className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-transparent bg-white"
           />
         </div>
-        <div className="relative">
-          <select
-            value={programId}
-            onChange={(e) => setProgramId(e.target.value)}
-            className="pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white"
-          >
-            <option value="">Todos los programas</option>
-            {programs.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-        <div className="relative">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white"
-          >
-            <option value="">Todos los estados</option>
-            <option value="CRITICAL">Crítico</option>
-            <option value="AT_RISK">En riesgo</option>
-            <option value="ON_TRACK">Al día</option>
-          </select>
-          <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
+        <CustomSelect
+          value={programId}
+          onChange={setProgramId}
+          options={[
+            { value: '', label: 'Todos los programas' },
+            ...programs.map((p) => ({ value: p.id, label: p.name })),
+          ]}
+          placeholder="Todos los programas"
+        />
+        <CustomSelect
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[
+            { value: '', label: 'Todos los estados' },
+            { value: 'CRITICAL', label: 'Crítico' },
+            { value: 'AT_RISK', label: 'En riesgo' },
+            { value: 'ON_TRACK', label: 'Al día' },
+          ]}
+          placeholder="Todos los estados"
+        />
         {isFetching && !isLoading && (
           <svg className="w-4 h-4 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
