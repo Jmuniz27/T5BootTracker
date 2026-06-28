@@ -3,8 +3,12 @@
 **Fecha/Referencia:** Grabación del Daily S3
 **Participantes:** Isabella, José Luis, Zahid, Gabriela, Annabella, Juan.
 
+**Videos de referencia:**
+- [Daily 20260612](https://espolec.sharepoint.com/:v:/s/Ing.desoftwareBoot-Tracker/IQA7DBJANPdCS5SgdeKDPZ4EAfVbk-voLZ7kdm9uS1jRVI4?e=HZxqNF)
+- [Daily 20260616](https://espolec.sharepoint.com/:v:/s/Ing.desoftwareBoot-Tracker/IQDO2uECXy8gTaQUunu86__wAWWrFGtIrVqtvWtpgx0JYYU?e=PAu8EJ)
+
 ## Puntos Tratados:
-- **Avances en Mobile (Isabella):** 
+- **Avances en Mobile (Isabella):**
   - Se presentó la vista de leads para el vendedor, con pestañas separadas para "Mis leads" y "Leads disponibles".
   - Filtro y barra de búsqueda implementados en tiempo real.
   - Funcionalidad de *Voice-to-Text* nativa integrada para registrar interacciones, debido a que el módulo de selección de campañas aún no está expuesto en el backend.
