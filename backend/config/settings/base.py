@@ -134,6 +134,18 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Rate limiting — prevents brute-force on auth endpoints and API abuse.
+    # Auth endpoints (login, password-reset) use the tighter 'auth' scope via
+    # ScopedRateThrottle declared directly on those views.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '200/hour',
+        'user': '2000/hour',
+        'auth': '5/min',   # applied to login + password-reset views
+    },
 }
 
 # JWT Settings
