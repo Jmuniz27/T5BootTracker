@@ -3,6 +3,8 @@
 **Fecha/Referencia:** Grabación del Sprint 2
 **Participantes:** Zahid, Juan, José Luis, Gabriela, Annabella, Isabella.
 
+**Video de referencia:** [Sprint 2 recording](https://espolec.sharepoint.com/:v:/s/Ing.desoftwareBoot-Tracker/IQAbzUpVgtMfQLlLEyHUkpZyAdWb3vNf_d7N__KiBQSZErA?e=epq14E)
+
 ## Puntos Tratados:
 - **Revisión de Pull Requests (PR):** El equipo revisó PRs pendientes (incluyendo uno de Juan y uno de Isabella). Se discutieron algunos conflictos y validaciones durante la mezcla de código.
 - **Despliegue del Proyecto:** Se conversó sobre dónde hostear el frontend y backend. Las opciones mencionadas incluyeron Railway y VPS, descartando Streamlit dado que no usan Python en el frontend. Se llegó al acuerdo de que al ser una herramienta de uso interno (para el bootcamp), se podría manejar con un VPS sencillo.
