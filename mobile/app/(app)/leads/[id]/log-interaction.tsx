@@ -28,19 +28,11 @@ const TYPES = [
 ] as const;
 
 const OUTCOMES = [
-  { value: 'INTERESTED',        label: 'Interesado',          bg: '#dcfce7', color: '#15803d' },
-  { value: 'NOT_INTERESTED',    label: 'No interesado',       bg: '#fee2e2', color: '#dc2626' },
-  { value: 'NO_ANSWER',         label: 'No contestó',         bg: '#f3f4f6', color: '#4b5563' },
-  { value: 'CALLBACK',          label: 'Llamar después',      bg: '#fef9c3', color: '#a16207' },
-  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador',  bg: '#f3e8ff', color: '#7e22ce' },
-] as const;
-
-const NEXT_ACTIONS = [
-  'Llamar de nuevo',
-  'Enviar información',
-  'Agendar visita',
-  'Esperar respuesta',
-  'Hablar con coordinador',
+  { value: 'CALL_AGAIN',        label: 'Llamar de nuevo',       bg: '#fef9c3', color: '#a16207' },
+  { value: 'SEND_INFO',         label: 'Enviar información',    bg: '#dcfce7', color: '#15803d' },
+  { value: 'SCHEDULE_VISIT',    label: 'Agendar visita',        bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'AWAIT_REPLY',       label: 'Esperar respuesta',     bg: '#f3f4f6', color: '#4b5563' },
+  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador',    bg: '#f3e8ff', color: '#7e22ce' },
 ] as const;
 
 // ─── shared form components ───────────────────────────────────────────────────
@@ -74,7 +66,6 @@ export default function LogInteractionScreen() {
   const [stars, setStars]           = useState<number | null>(null);
   const [notes, setNotes]           = useState('');
   const [duration, setDuration]     = useState('');
-  const [nextAction, setNextAction] = useState('');
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -100,7 +91,6 @@ export default function LogInteractionScreen() {
         interest_level: stars,
         notes: notes.trim() || undefined,
         duration_minutes: duration ? parseInt(duration, 10) : null,
-        next_action: nextAction.trim() || undefined,
       });
       showToast();
     } catch {
@@ -202,17 +192,12 @@ export default function LogInteractionScreen() {
               {[1, 2, 3, 4, 5].map((n) => (
                 <TouchableOpacity key={n} hitSlop={8} onPress={() => setStars(stars === n ? null : n)} activeOpacity={0.7}>
                   <Ionicons
-                    name={stars !== null && n <= stars ? 'star' : 'star-outline'}
-                    size={34}
-                    color={stars !== null && n <= stars ? '#f59e0b' : colors.border}
+                    name="star"
+                    size={28}
+                    color={stars !== null && n <= stars ? '#3b82f6' : '#d1d5db'}
                   />
                 </TouchableOpacity>
               ))}
-              {stars !== null && (
-                <View style={s.starsBadge}>
-                  <Text style={s.starsBadgeText}>{stars} / 5</Text>
-                </View>
-              )}
             </View>
           </SectionCard>
 
@@ -249,33 +234,6 @@ export default function LogInteractionScreen() {
                 textAlignVertical="top"
               />
             </View>
-          </SectionCard>
-
-          {/* Próxima acción */}
-          <SectionCard>
-            <SectionTitle optional>Próxima acción</SectionTitle>
-            <View style={s.chipRow}>
-              {NEXT_ACTIONS.map((opt) => {
-                const active = nextAction === opt;
-                return (
-                  <TouchableOpacity
-                    key={opt}
-                    style={[s.chip, active && s.chipActive]}
-                    onPress={() => setNextAction(active ? '' : opt)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[s.chipText, active && s.chipTextActive]}>{opt}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <TextInput
-              style={s.nextActionInput}
-              value={nextAction}
-              onChangeText={setNextAction}
-              placeholder="O escribe una acción personalizada..."
-              placeholderTextColor={colors.textMuted}
-            />
           </SectionCard>
 
           {error && (
@@ -388,14 +346,6 @@ const s = StyleSheet.create({
   outcomeBadgeText: { fontSize: 11, fontWeight: '700' },
   // Stars
   starsRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  starsBadge: {
-    marginLeft: 8,
-    backgroundColor: '#fef9c3',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  starsBadgeText: { fontSize: 12, fontWeight: '700', color: '#a16207' },
   // Duration
   durationSection: { gap: 10 },
   durationRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -424,29 +374,6 @@ const s = StyleSheet.create({
     fontSize: 14,
     color: colors.textPrimary,
     minHeight: 110,
-  },
-  // Next action
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: '#f8f9fb',
-  },
-  chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  chipText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  chipTextActive: { color: colors.white, fontWeight: '600' },
-  nextActionInput: {
-    backgroundColor: '#f8f9fb',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
   },
   // Error
   errorBox: {

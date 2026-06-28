@@ -30,11 +30,11 @@ const TYPE_CONFIG: Record<string, { label: string; icon: string; iconColor: stri
 };
 
 const OUTCOME_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  INTERESTED:        { label: 'Interesado',         bg: '#dcfce7', color: '#15803d' },
-  NOT_INTERESTED:    { label: 'No interesado',      bg: '#fee2e2', color: '#dc2626' },
-  NO_ANSWER:         { label: 'No contestó',        bg: '#f3f4f6', color: '#4b5563' },
-  CALLBACK:          { label: 'Llamar después',     bg: '#fef9c3', color: '#a16207' },
-  SPEAK_COORDINATOR: { label: 'Hablar coordinador', bg: '#f3e8ff', color: '#7e22ce' },
+  CALL_AGAIN:        { label: 'Llamar de nuevo',     bg: '#fef9c3', color: '#a16207' },
+  SEND_INFO:         { label: 'Enviar información',  bg: '#dcfce7', color: '#15803d' },
+  SCHEDULE_VISIT:    { label: 'Agendar visita',      bg: '#dbeafe', color: '#1d4ed8' },
+  AWAIT_REPLY:       { label: 'Esperar respuesta',   bg: '#f3f4f6', color: '#4b5563' },
+  SPEAK_COORDINATOR: { label: 'Hablar coordinador',  bg: '#f3e8ff', color: '#7e22ce' },
 };
 
 const TYPES = [
@@ -46,19 +46,11 @@ const TYPES = [
 ] as const;
 
 const OUTCOMES = [
-  { value: 'INTERESTED',        label: 'Interesado',         bg: '#dcfce7', color: '#15803d' },
-  { value: 'NOT_INTERESTED',    label: 'No interesado',      bg: '#fee2e2', color: '#dc2626' },
-  { value: 'NO_ANSWER',         label: 'No contestó',        bg: '#f3f4f6', color: '#4b5563' },
-  { value: 'CALLBACK',          label: 'Llamar después',     bg: '#fef9c3', color: '#a16207' },
-  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador', bg: '#f3e8ff', color: '#7e22ce' },
-] as const;
-
-const NEXT_ACTIONS = [
-  'Llamar de nuevo',
-  'Enviar información',
-  'Agendar visita',
-  'Esperar respuesta',
-  'Hablar con coordinador',
+  { value: 'CALL_AGAIN',        label: 'Llamar de nuevo',     bg: '#fef9c3', color: '#a16207' },
+  { value: 'SEND_INFO',         label: 'Enviar información',  bg: '#dcfce7', color: '#15803d' },
+  { value: 'SCHEDULE_VISIT',    label: 'Agendar visita',      bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'AWAIT_REPLY',       label: 'Esperar respuesta',   bg: '#f3f4f6', color: '#4b5563' },
+  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador',  bg: '#f3e8ff', color: '#7e22ce' },
 ] as const;
 
 function formatDate(iso: string) {
@@ -83,7 +75,6 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
   const [stars, setStars]           = useState<number | null>(interaction?.interest_level ?? null);
   const [notes, setNotes]           = useState(interaction?.notes ?? '');
   const [duration, setDuration]     = useState(interaction?.duration_minutes?.toString() ?? '');
-  const [nextAction, setNextAction] = useState(interaction?.next_action ?? '');
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -101,7 +92,6 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
         interest_level: stars,
         notes: notes.trim() || undefined,
         duration_minutes: duration ? parseInt(duration, 10) : null,
-        next_action: nextAction.trim() || undefined,
       });
       onSaved();
     } catch {
@@ -188,9 +178,9 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
                 {[1, 2, 3, 4, 5].map((n) => (
                   <TouchableOpacity key={n} hitSlop={8} onPress={() => setStars(stars === n ? null : n)} activeOpacity={0.7}>
                     <Ionicons
-                      name={stars !== null && n <= stars ? 'star' : 'star-outline'}
-                      size={34}
-                      color={stars !== null && n <= stars ? '#f59e0b' : colors.border}
+                      name="star"
+                      size={28}
+                      color={stars !== null && n <= stars ? '#3b82f6' : '#d1d5db'}
                     />
                   </TouchableOpacity>
                 ))}
@@ -229,33 +219,6 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
                   textAlignVertical="top"
                 />
               </View>
-            </View>
-
-            {/* Próxima acción */}
-            <View style={m.card}>
-              <Text style={m.sectionTitle}>Próxima acción <Text style={m.optional}>(opcional)</Text></Text>
-              <View style={m.chipRow}>
-                {NEXT_ACTIONS.map((opt) => {
-                  const active = nextAction === opt;
-                  return (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[m.chip, active && m.chipActive]}
-                      onPress={() => setNextAction(active ? '' : opt)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[m.chipText, active && m.chipTextActive]}>{opt}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <TextInput
-                style={m.nextActionInput}
-                value={nextAction}
-                onChangeText={setNextAction}
-                placeholder="O escribe una acción personalizada..."
-                placeholderTextColor={colors.textMuted}
-              />
             </View>
 
             {error && (
@@ -308,17 +271,10 @@ function InteractionCard({ item, onEdit, isLast }: { item: Interaction; onEdit: 
         )}
 
         {/* Stars */}
-        {item.interest_level !== null && (
+        {item.interest_level != null && item.interest_level > 0 && (
           <View style={s.starsRow}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <Ionicons
-                key={n}
-                name={n <= (item.interest_level ?? 0) ? 'star' : 'star-outline'}
-                size={14}
-                color={n <= (item.interest_level ?? 0) ? '#f59e0b' : colors.border}
-              />
-            ))}
-            <Text style={s.starsLabel}>{item.interest_level} / 5</Text>
+            <Ionicons name="star" size={14} color="#f59e0b" />
+            <Text style={s.starsLabel}>{item.interest_level}</Text>
           </View>
         )}
 
@@ -326,20 +282,12 @@ function InteractionCard({ item, onEdit, isLast }: { item: Interaction; onEdit: 
         {item.notes ? <Text style={s.notes}>{item.notes}</Text> : null}
 
         {/* Meta row */}
-        {(item.duration_minutes || item.next_action) ? (
+        {item.duration_minutes ? (
           <View style={s.metaRow}>
-            {item.duration_minutes ? (
-              <View style={s.metaChip}>
-                <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-                <Text style={s.metaChipText}>{item.duration_minutes} min</Text>
-              </View>
-            ) : null}
-            {item.next_action ? (
-              <View style={s.nextActionChip}>
-                <Ionicons name="arrow-forward-circle-outline" size={12} color={colors.navy} />
-                <Text style={s.nextActionText} numberOfLines={1}>{item.next_action}</Text>
-              </View>
-            ) : null}
+            <View style={s.metaChip}>
+              <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+              <Text style={s.metaChipText}>{item.duration_minutes} min</Text>
+            </View>
           </View>
         ) : null}
 
@@ -530,7 +478,7 @@ const s = StyleSheet.create({
   },
   outcomeBadgeText: { fontSize: 12, fontWeight: '600' },
   starsRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  starsLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '600', marginLeft: 4 },
+  starsLabel: { fontSize: 12, color: '#f59e0b', fontWeight: '600', marginLeft: 2 },
   notes: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },
   metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   metaChip: {
@@ -543,17 +491,6 @@ const s = StyleSheet.create({
     paddingVertical: 3,
   },
   metaChipText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
-  nextActionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#eff2fb',
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    flex: 1,
-  },
-  nextActionText: { fontSize: 12, color: colors.navy, fontWeight: '500', flex: 1 },
   salesperson: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   editBtn: {
     width: 34,
@@ -669,28 +606,6 @@ const m = StyleSheet.create({
     fontSize: 14,
     color: colors.textPrimary,
     minHeight: 110,
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: '#f8f9fb',
-  },
-  chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  chipText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  chipTextActive: { color: colors.white, fontWeight: '600' },
-  nextActionInput: {
-    backgroundColor: '#f8f9fb',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
   },
   errorBox: {
     flexDirection: 'row',
