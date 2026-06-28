@@ -13,6 +13,13 @@ const schema = z.object({
   password: z.string().min(1, 'La contraseña es requerida'),
 })
 
+function loginErrorMessage(error) {
+  if (error?.response?.status === 401) return 'Credenciales incorrectas'
+  if (error?.response?.status === 403) return error.response.data?.error
+  if (error) return 'Error de conexión. Intenta de nuevo.'
+  return null
+}
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
@@ -32,14 +39,7 @@ export default function LoginPage() {
     },
   })
 
-  const errorMsg =
-    error?.response?.status === 401
-      ? 'Credenciales incorrectas'
-      : error?.response?.status === 403
-        ? error.response.data?.error
-        : error
-          ? 'Error de conexión. Intenta de nuevo.'
-          : null
+  const errorMsg = loginErrorMessage(error)
 
   return (
     <div

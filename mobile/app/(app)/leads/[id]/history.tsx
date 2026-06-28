@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -309,7 +309,7 @@ export default function LeadHistoryScreen() {
   const [error, setError]               = useState<string | null>(null);
   const [editing, setEditing]           = useState<Interaction | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const data = await fetchInteractions(id);
       setInteractions(data);
@@ -319,9 +319,9 @@ export default function LeadHistoryScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <SafeAreaView style={s.screen}>

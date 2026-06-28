@@ -110,7 +110,7 @@ export default function LoginScreen() {
       },
     );
     return () => { show.remove(); hide.remove(); };
-  }, []);
+  }, [slideAnim]);
 
   async function handleLogin() {
     setError(null);
