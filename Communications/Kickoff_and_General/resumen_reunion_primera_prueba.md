@@ -3,7 +3,7 @@
 **Fecha/Referencia:** Grabaciones de audio "Audio primera prueba", "Revisión ayudante" y "Voice 260617"
 **Participantes principales:** Gabriela, Isabella, Juan, Zahid, José Luis (equipo) y el cliente/ayudante.
 
-**Carpeta externa de evidencia:** [General recordings folder](https://espolec.sharepoint.com/:f:/s/Ing.desoftwareBoot-Tracker/IgBTi9WWQQm8T68JZBd2K0gWAQOdzbTebGR6jF71tDnTV-Y?e=cjx1Uo)
+**Carpeta externa de evidencia:** [General recordings folder](https://espolec.sharepoint.com/:f:/s/Ing.desoftwareBoot-Tracker/IgBTi9WWQQm8T68JZBd2K0gWARDgH4Hy4RKuITeKn-Ka7hE?e=NvI9Tf)
 
 ## Puntos Tratados:
 - **Demostración de la App Móvil:** Se mostró la pantalla de inicio de sesión para vendedores (salespersons). Se enfatizó que los usuarios nuevos no pueden registrarse desde la app directamente, sino que son creados desde el backend. Se incluye funcionalidad de "ver contraseña" y "olvidé mi contraseña" (este último en progreso de conexión con correo).
