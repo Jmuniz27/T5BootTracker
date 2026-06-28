@@ -7,8 +7,8 @@ Keep it current and use it as the source of truth for review and submission.
 
 | N° | Folder | File | Description | Type | Participants | Date | Related |
 |---|---|---|---|---|---|---|---|
-| 001 | `Kickoff_and_General` | `commitment_letter.md` | Commitment letter establishing the project scope, team responsibilities, and delivery terms. | MD | PhD. Carmen Vaca, full team | Oct 2024 | - |
-| 002 | `Kickoff_and_General` | `kickoff_meeting.md` | Initial requirements elicitation meeting with the client. | MD (transcript) | PhD. Carmen Vaca, full team | ~Nov 2024 | CB-36, CB-37, CB-42 |
+| 001 | `Kickoff_and_General` | `commitment_letter.md` | Commitment letter establishing the project scope, team responsibilities, and delivery terms. | MD | PhD. Carmen Vaca, full team | Oct 2025 | - |
+| 002 | `Kickoff_and_General` | `kickoff_meeting.md` | Initial requirements elicitation meeting with the client. | MD (transcript) | PhD. Carmen Vaca, full team | ~Nov 2025 | CB-36, CB-37, CB-42 |
 | 003 | `Kickoff_and_General` | `figma_review.md` | Client review of the Figma prototype and UI decisions. | MD (transcript) | PhD. Carmen Vaca, Gabriela, full team | 12 Jan 2026 | CB-95, CB-44, CB-54 |
 | 004 | `Kickoff_and_General` | `004_sprint_acceptances.md` | Compilation of sprint acceptance confirmations collected during the project. | MD | PhD. Carmen Vaca, Jose Chong | S1-S5 2026 | CB-41, CB-47, CB-69, CB-94 |
 | 005 | `Kickoff_and_General` | `resumen_reunion_primera_prueba.md` | Summary of the first app validation session and follow-up notes. | MD (summary) | Team, client, assistant | 2026 | - |
@@ -35,7 +35,7 @@ Keep it current and use it as the source of truth for review and submission.
 
 ## External Recording References
 
-- General folder: [SharePoint recordings folder](https://espolec.sharepoint.com/:f:/s/Ing.desoftwareBoot-Tracker/IgBTi9WWQQm8T68JZBd2K0gWAQOdzbTebGR6jF71tDnTV-Y?e=cjx1Uo)
+- General folder: [SharePoint recordings folder](https://espolec.sharepoint.com/:f:/s/Ing.desoftwareBoot-Tracker/IgBTi9WWQQm8T68JZBd2K0gWARDgH4Hy4RKuITeKn-Ka7hE?e=NvI9Tf)
   - Source folder for the recordings summarized in `Kickoff_and_General/resumen_reunion_primera_prueba.md`.
 - Sprint 2 review: [SharePoint video](https://espolec.sharepoint.com/:v:/s/Ing.desoftwareBoot-Tracker/IQAbzUpVgtMfQLlLEyHUkpZyAdWb3vNf_d7N__KiBQSZErA?e=epq14E)
   - Supports `Internal_Team_Communications/Sprint_2/sprint2_meeting_summary.md`.
