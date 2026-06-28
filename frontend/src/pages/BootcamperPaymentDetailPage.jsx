@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { getMonitoring, getPaymentQueue, notifyCoordinator } from '../api/payments.api'
 import PaymentDetailModal from '../components/PaymentDetailModal'
 import Toast from '../components/Toast'
@@ -29,6 +29,11 @@ const PAYMENT_STATUS_LABELS = {
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
+function deficitColor(deficit, isCritical) {
+  if (deficit <= 0) return 'text-emerald-600'
+  return isCritical ? 'text-red-600' : 'text-amber-600'
+}
+
 function fmt(v) {
   if (v == null) return '—'
   const n = parseFloat(v)
@@ -38,7 +43,7 @@ function fmt(v) {
 
 // ─── SVG Donut Chart ──────────────────────────────────────────────────────────
 
-function DonutChart({ totalCost, totalPaid, deficit, paymentStatus }) {
+function DonutChart({ totalCost, totalPaid, deficit }) {
   const r = 52, cx = 68, cy = 68
   const C = 2 * Math.PI * r
   const total = parseFloat(totalCost) || 1
@@ -128,7 +133,6 @@ export default function BootcamperPaymentDetailPage() {
   const { bootcamperId, programId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const qc = useQueryClient()
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [toast, setToast] = useState(null)
 
@@ -223,7 +227,6 @@ export default function BootcamperPaymentDetailPage() {
                   totalCost={totalCost}
                   totalPaid={totalPaid}
                   deficit={deficit}
-                  paymentStatus={bc.payment_status}
                 />
               </div>
               <div className="flex-1 space-y-4">
@@ -238,7 +241,7 @@ export default function BootcamperPaymentDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-400">Adeudado</p>
-                    <p className={`text-base font-semibold ${deficit > 0 ? (bc.is_critical ? 'text-red-600' : 'text-amber-600') : 'text-emerald-600'}`}>
+                    <p className={`text-base font-semibold ${deficitColor(deficit, bc.is_critical)}`}>
                       {deficit > 0 ? fmt(deficit) : 'Sin deuda'}
                     </p>
                   </div>
@@ -331,18 +334,20 @@ export default function BootcamperPaymentDetailPage() {
             )}
           </h2>
 
-          {loadingPayments ? (
+          {loadingPayments && (
             <div className="space-y-2">
               {[1, 2].map((i) => <div key={i} className="h-16 bg-white border border-gray-200 rounded-xl animate-pulse" />)}
             </div>
-          ) : payments.length === 0 ? (
+          )}
+          {!loadingPayments && payments.length === 0 && (
             <div className="bg-white border border-gray-200 rounded-2xl py-16 text-center">
               <svg className="w-10 h-10 text-gray-200 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
               <p className="text-sm text-gray-400">Sin pagos pendientes de revisión.</p>
             </div>
-          ) : (
+          )}
+          {!loadingPayments && payments.length > 0 && (
             <div className="space-y-2">
               {payments.map((p) => (
                 <PaymentRow

@@ -89,7 +89,7 @@ export default function ForgotPasswordScreen() {
       },
     );
     return () => { show.remove(); hide.remove(); };
-  }, []);
+  }, [slideAnim]);
 
   async function handleSend() {
     setError(null);

@@ -18,7 +18,7 @@ api.interceptors.request.use(async (config) => {
 
 // Queue of requests waiting for a token refresh to complete
 let isRefreshing = false;
-let pendingQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> = [];
+let pendingQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];
 
 function flushQueue(error: unknown, token: string | null = null) {
   pendingQueue.forEach(({ resolve, reject }) => {

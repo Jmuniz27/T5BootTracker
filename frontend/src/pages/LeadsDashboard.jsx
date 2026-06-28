@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus } from '../api/leads.api'
 import CustomSelect from '../components/CustomSelect'
@@ -347,6 +347,30 @@ function ViewHistoryModal({ lead, onClose }) {
   )
 }
 
+function validateInteractionForm(form) {
+  const errs = {}
+  if (!form.interaction_type) errs.interaction_type = 'Selecciona un tipo.'
+  if (!form.outcome) errs.outcome = 'Selecciona un resultado.'
+  return errs
+}
+
+function buildInteractionPayload(form) {
+  const payload = { interaction_type: form.interaction_type, outcome: form.outcome }
+  if (form.notes) payload.notes = form.notes
+  if (form.interest_level) payload.interest_level = form.interest_level
+  if (form.duration_minutes) payload.duration_minutes = parseInt(form.duration_minutes, 10)
+  return payload
+}
+
+function makeInteractionSubmitHandler(form, mutation, setErrors) {
+  return (e) => {
+    e.preventDefault()
+    const errs = validateInteractionForm(form)
+    if (Object.keys(errs).length) { setErrors(errs); return }
+    mutation.mutate(buildInteractionPayload(form))
+  }
+}
+
 // ─── Edit Interaction Modal ───────────────────────────────────────────────────
 
 function EditInteractionModal({ lead, interaction, onClose }) {
@@ -362,13 +386,6 @@ function EditInteractionModal({ lead, interaction, onClose }) {
 
   const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
 
-  const validate = () => {
-    const errs = {}
-    if (!form.interaction_type) errs.interaction_type = 'Selecciona un tipo.'
-    if (!form.outcome) errs.outcome = 'Selecciona un resultado.'
-    return errs
-  }
-
   const mutation = useMutation({
     mutationFn: (data) => updateInteraction(lead.id, interaction.id, data),
     onSuccess: () => {
@@ -378,19 +395,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
     },
   })
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    const errs = validate()
-    if (Object.keys(errs).length) { setErrors(errs); return }
-    const payload = { interaction_type: form.interaction_type, outcome: form.outcome }
-    if (form.notes) payload.notes = form.notes
-    if (form.interest_level) payload.interest_level = form.interest_level
-    if (form.duration_minutes) payload.duration_minutes = parseInt(form.duration_minutes, 10)
-    mutation.mutate(payload)
-  }
-
-  const selectClass = (err) =>
-    `w-full pl-3 pr-10 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white ${err ? 'border-red-400' : 'border-gray-200'}`
+  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors)
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -454,7 +459,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
                   min="0"
                   max="999"
                   value={form.duration_minutes}
-                  onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/[^0-9]/g, '') }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/\D/g, '') }))}
                   placeholder="ej. 5"
                   className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
                 />
@@ -515,13 +520,6 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
   const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
 
-  const validate = () => {
-    const errs = {}
-    if (!form.interaction_type) errs.interaction_type = 'Selecciona un tipo.'
-    if (!form.outcome) errs.outcome = 'Selecciona un resultado.'
-    return errs
-  }
-
   const mutation = useMutation({
     mutationFn: (data) => createInteraction(lead.id, data),
     onSuccess: () => {
@@ -532,19 +530,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     },
   })
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    const errs = validate()
-    if (Object.keys(errs).length) { setErrors(errs); return }
-    const payload = { interaction_type: form.interaction_type, outcome: form.outcome }
-    if (form.notes) payload.notes = form.notes
-    if (form.interest_level) payload.interest_level = form.interest_level
-    if (form.duration_minutes) payload.duration_minutes = parseInt(form.duration_minutes, 10)
-    mutation.mutate(payload)
-  }
-
-  const selectClass = (err) =>
-    `w-full pl-3 pr-10 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white ${err ? 'border-red-400' : 'border-gray-200'}`
+  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -619,7 +605,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
                   min="0"
                   max="999"
                   value={form.duration_minutes}
-                  onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/[^0-9]/g, '') }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/\D/g, '') }))}
                   placeholder="ej. 5"
                   className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
                 />
@@ -745,7 +731,7 @@ function ViewLeadModal({ lead, onClose }) {
 
 // ─── Release Lead Modal ───────────────────────────────────────────────────────
 
-function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
+function ReleaseLeadModal({ onKeep, onRelease, isLoading }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onKeep}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[420px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
@@ -779,6 +765,15 @@ function ReleaseLeadModal({ lead, onKeep, onRelease, isLoading }) {
 
 const EMPTY_FORM = { name: '', phone: '', email: '', source: 'MANUAL', program_interest: '', is_company: false, autoAssign: false }
 
+function isValidEmail(value) {
+  const at = value.indexOf('@')
+  if (at <= 0) return false
+  const local = value.slice(0, at)
+  const domain = value.slice(at + 1)
+  if (/\s/.test(local) || /[\s@]/.test(domain)) return false
+  return domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.')
+}
+
 function CreateLeadModal({ onClose, onSubmit, isLoading }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
@@ -795,7 +790,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
     } else if (!/^(09\d{8}|0[2-7]\d{7})$/.test(phone)) {
       errs.phone = 'Ingresa un teléfono ecuatoriano válido (ej. 0991234567 o 042345678).'
     }
-    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    if (form.email.trim() && !isValidEmail(form.email.trim())) {
       errs.email = 'Ingresa un email válido.'
     }
     return errs
@@ -810,23 +805,6 @@ function CreateLeadModal({ onClose, onSubmit, isLoading }) {
     if (!payload.program_interest) delete payload.program_interest
     onSubmit(payload, autoAssign)
   }
-
-  const field = (label, key, type = 'text', required = false) => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      <input
-        type={type}
-        value={form[key]}
-        onChange={set(key)}
-        className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
-          errors[key] ? 'border-red-400' : 'border-gray-200'
-        }`}
-      />
-      {errors[key] && <p className="text-xs text-red-500 mt-1">{errors[key]}</p>}
-    </div>
-  )
 
   const inputClass = (key) =>
     `w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
@@ -1136,6 +1114,12 @@ function validateCedulaEcuatoriana(cedula) {
   return checkDigit === digits[9]
 }
 
+function cedulaInputBorderClass(hasError, cedula) {
+  if (hasError) return 'border-red-400'
+  if (cedula.length === 10 && validateCedulaEcuatoriana(cedula)) return 'border-green-400'
+  return 'border-gray-200'
+}
+
 // ─── Convert Lead Modal ───────────────────────────────────────────────────────
 
 function ConvertLeadModal({ lead, onClose, onSuccess }) {
@@ -1254,9 +1238,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               value={cedula}
               onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
               placeholder="10 dígitos"
-              className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
-                errors.cedula ? 'border-red-400' : cedula.length === 10 && validateCedulaEcuatoriana(cedula) ? 'border-green-400' : 'border-gray-200'
-              }`}
+              className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${cedulaInputBorderClass(errors.cedula, cedula)}`}
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
             {cedula.length === 10 && validateCedulaEcuatoriana(cedula) && (

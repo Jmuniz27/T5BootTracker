@@ -16,6 +16,12 @@ const schema = z
     path: ['password_confirm'],
   });
 
+function resetPasswordErrorMessage(error) {
+  if (error?.response?.status === 400) return error.response.data?.error ?? 'Token expirado o inválido.';
+  if (error) return 'Error de conexión. Intenta de nuevo.';
+  return null;
+}
+
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -32,12 +38,7 @@ export default function ResetPasswordPage() {
     onSuccess: () => navigate('/reset-success'),
   });
 
-  const errorMsg =
-    error?.response?.status === 400
-      ? error.response.data?.error ?? 'Token expirado o inválido.'
-      : error
-        ? 'Error de conexión. Intenta de nuevo.'
-        : null;
+  const errorMsg = resetPasswordErrorMessage(error);
 
   if (!token) {
     return (
