@@ -10,8 +10,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import CustomUser
 from .serializers import (
@@ -123,6 +124,8 @@ class LogoutView(APIView):
 class RefreshView(APIView):
     """Refresh access token using a valid refresh token."""
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     @extend_schema(
         request=inline_serializer('RefreshRequest', fields={'refresh': drf_serializers.CharField()}),
@@ -138,23 +141,22 @@ class RefreshView(APIView):
         tags=['Auth'],
     )
     def post(self, request):
-        refresh_token = request.data.get('refresh')
-        if not refresh_token:
+        if not request.data.get('refresh'):
             return Response(
                 {'error': 'Refresh token requerido.', 'code': 'MISSING_REFRESH_TOKEN'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
         try:
-            token = RefreshToken(refresh_token)
-            return Response({
-                'access':  str(token.access_token),
-                'refresh': str(token),
-            }, status=status.HTTP_200_OK)
-        except TokenError:
+            serializer = TokenRefreshSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+        except (TokenError, drf_serializers.ValidationError):
             return Response(
                 {'error': 'Token inválido o expirado.', 'code': 'INVALID_TOKEN'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 
 class MeView(APIView):

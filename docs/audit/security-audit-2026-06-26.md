@@ -47,7 +47,7 @@ been committed. The `.gitignore` covers them.
 | I2 | `backend/config/settings/production.py:7-25` | Production security headers are correctly set: `DEBUG=False`, `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`, `HSTS (31536000s + subdomains)`, `X_FRAME_OPTIONS='DENY'`, `SECURE_PROXY_SSL_HEADER` for Coolify. | No action needed. |
 | I3 | Multiple views | RBAC coverage is solid: `DEFAULT_PERMISSION_CLASSES=[IsAuthenticated]`; every `APIView`/`ViewSet` declares role-based `permission_classes`; `AllowAny` is used only intentionally (login/refresh/reset). | No action needed. |
 | I4 | `.gitignore:5,41` | `.env`, `backend/.env`, `mobile/.env` correctly ignored. Git history is clean. | Re-confirm with `git log --all -- .env` before publishing. |
-| I5 | `authentication/views.py:120-154` | `RefreshView` constructs a new access token manually and returns the same refresh token, bypassing `ROTATE_REFRESH_TOKENS`/`BLACKLIST_AFTER_ROTATION`. A stolen refresh token stays valid its full lifetime. `LogoutView` blacklists correctly. | Marked as future improvement (post-delivery). Does not block publication. |
+| I5 | `authentication/views.py:120-154` | `RefreshView` constructs a new access token manually and returns the same refresh token, bypassing `ROTATE_REFRESH_TOKENS`/`BLACKLIST_AFTER_ROTATION`. A stolen refresh token stays valid its full lifetime. `LogoutView` blacklists correctly. | Fixed in this MVP by delegating to SimpleJWT's refresh serializer so rotation and blacklist handling follow the configured JWT policy. |
 | I6 | `Communications/` | Sprint-review PDFs and acceptance forms are git-tracked. | Intentional — spec requires client communication evidence in the repo. |
 
 ---
