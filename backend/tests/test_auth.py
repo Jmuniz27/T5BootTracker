@@ -1,6 +1,7 @@
 """Tests for authentication endpoints."""
 import pytest
 from unittest.mock import patch, MagicMock
+from django.core.cache import cache
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -62,27 +63,107 @@ class TestLogin:
 
 class TestLogout:
     def test_logout_blacklists_token(self, active_user):
+        cache.clear()
         client = APIClient()
         refresh = RefreshToken.for_user(active_user)
         client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
 
         # Logout with the refresh token
-        resp = client.post(LOGOUT_URL, {'refresh': str(refresh)}, format='json')
+        resp = client.post(
+            LOGOUT_URL,
+            {'refresh': str(refresh)},
+            format='json',
+            REMOTE_ADDR='10.10.10.1',
+        )
         assert resp.status_code == 204
 
         # Using the same refresh token again should fail
         client2 = APIClient()
-        resp2 = client2.post(REFRESH_URL, {'refresh': str(refresh)}, format='json')
+        resp2 = client2.post(
+            REFRESH_URL,
+            {'refresh': str(refresh)},
+            format='json',
+            REMOTE_ADDR='10.10.10.1',
+        )
         assert resp2.status_code == 401
 
 
 class TestTokenRefresh:
+    def test_token_refresh_requires_token(self):
+        cache.clear()
+        client = APIClient()
+        resp = client.post(REFRESH_URL, {}, format='json', REMOTE_ADDR='10.10.10.2')
+        assert resp.status_code == 400
+        assert resp.json()['code'] == 'MISSING_REFRESH_TOKEN'
+
     def test_token_refresh(self, active_user):
+        cache.clear()
         refresh = RefreshToken.for_user(active_user)
         client = APIClient()
-        resp = client.post(REFRESH_URL, {'refresh': str(refresh)}, format='json')
+        resp = client.post(
+            REFRESH_URL,
+            {'refresh': str(refresh)},
+            format='json',
+            REMOTE_ADDR='10.10.10.3',
+        )
         assert resp.status_code == 200
-        assert 'access' in resp.json()
+        data = resp.json()
+        assert 'access' in data
+        assert 'refresh' in data
+
+    def test_token_refresh_rotates_and_invalidates_old_token(self, active_user):
+        cache.clear()
+        refresh = RefreshToken.for_user(active_user)
+        client = APIClient()
+
+        first = client.post(
+            REFRESH_URL,
+            {'refresh': str(refresh)},
+            format='json',
+            REMOTE_ADDR='10.10.10.4',
+        )
+        assert first.status_code == 200
+        first_data = first.json()
+        assert first_data['refresh'] != str(refresh)
+
+        second = client.post(
+            REFRESH_URL,
+            {'refresh': str(refresh)},
+            format='json',
+            REMOTE_ADDR='10.10.10.4',
+        )
+        assert second.status_code == 401
+        assert second.json()['code'] == 'INVALID_TOKEN'
+
+        third = client.post(
+            REFRESH_URL,
+            {'refresh': first_data['refresh']},
+            format='json',
+            REMOTE_ADDR='10.10.10.4',
+        )
+        assert third.status_code == 200
+        assert 'access' in third.json()
+
+    def test_token_refresh_rate_limited(self, db):
+        cache.clear()
+        client = APIClient()
+
+        for _ in range(5):
+            resp = client.post(
+                REFRESH_URL,
+                {'refresh': 'not-a-valid-token'},
+                format='json',
+                REMOTE_ADDR='10.10.10.5',
+            )
+            assert resp.status_code == 401
+
+        limited = client.post(
+            REFRESH_URL,
+            {'refresh': 'not-a-valid-token'},
+            format='json',
+            REMOTE_ADDR='10.10.10.5',
+        )
+        assert limited.status_code == 429
 
 
 class TestPasswordReset:

@@ -45,3 +45,19 @@ mobile/.env
 
 # Agents Agy
 .agents/
+
+# Test / coverage artifacts
+.coverage
+htmlcov/
+
+# Scratch / internal files — keep out of public repo
+scratch_*.md
+*.log
+main.log
+texput.log
+
+# Project-spec PDFs and university delivery docs (stay in the latex folder, not here)
+*ProjectSpec*.pdf
+
+# SQL dump / queries
+backend/query.sql

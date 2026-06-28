@@ -1,26 +1,67 @@
-# Communications — Evidence Index
+# Communications - Evidence Guide
 
-This folder contains all documented communications between the Boot-Tracker development
-team and the client, Dr. Carmen Vaca (Coding Bootcamps ESPOL).
+This folder stores the communication evidence for the Boot-Tracker project.
+Keep this area in English, but preserve the original wording of transcripts when
+the source material requires it.
 
-Each evidence file is stored under `evidences/` and referenced in the table below.
-Fields marked `[PENDING]` will be completed by the Scrum Master (JL Chong).
+## Folder Layout
 
----
+```text
+Communications/
+|-- Kickoff_and_General/
+|   `-- Project-wide communication evidence.
+|-- Client_Communications/
+|   |-- Sprint_1/
+|   |-- Sprint_2/
+|   |-- Sprint_3/
+|   `-- Partial_Delivery/
+|-- Internal_Team_Communications/
+|   `-- Internal team evidence.
+|-- COMMUNICATIONS_INDEX.md
+|-- README.md
+```
 
-## Evidence Table
+## Index Rules
 
-| N°  | File Name | Description | File Type | Participants | Date & Time | Related Linear Issue |
-|-----|-----------|-------------|-----------|--------------|-------------|----------------------|
-| 001 | commitment_letter_signed.pdf | Signed commitment letter between the team and Dr. Carmen Vaca for the Boot-Tracker project | PDF | Dr. Carmen Vaca, all team members | October 2024 | — |
-| 002 | kickoff_meeting_transcript.md | Full transcript of the initial requirements elicitation meeting with the client | MD (transcript) | Dr. Carmen Vaca, team | ~November 2024 | CB-36, CB-37 |
-| 003 | figma_review_meeting.md | Transcript of UI/UX review session with client over Figma prototypes | MD (transcript) | Dr. Carmen Vaca, Gabriela (gabsjimz), team | January 12, 2026 | CB-95 |
-| 004 | sprint_acceptances.md | Compilation of sprint acceptance confirmations (S1–S3) from the client | MD | Dr. Carmen Vaca, JL Chong (Jlchong3) | S1–S3 (2025–2026) | CB-41, CB-47, CB-69, CB-94 |
+- Every evidence file in `Communications/` must appear in `COMMUNICATIONS_INDEX.md`.
+- Each index entry must include:
+  - file path
+  - brief description
+  - file type
+  - participants
+  - date or date range
+  - related sprint or issue, when available
+- Keep the index as the source of truth for evidence discovery.
+- If a source lives in Teams or SharePoint, add the local transcript, summary, or
+  screenshot here and note the external source in the description.
 
----
+## Naming Conventions
 
-## How to add a new evidence
+- Use descriptive, lowercase, underscore-separated filenames.
+- Prefer names that identify the meeting, sprint, or purpose.
+- Keep existing filenames unless a rename is needed to remove ambiguity.
 
-1. Create `evidences/NNN_short_name.md` following the same structure as existing files.
-2. Add a row to the table above.
-3. If the evidence is a binary (PDF, image), commit the file and reference its path.
+Examples:
+
+- `kickoff_meeting.md`
+- `figma_review.md`
+- `sprint_review_s3.pdf`
+- `daily_s3_summary.md`
+
+## How To Add New Evidence
+
+1. Place the file in the appropriate subfolder.
+2. Add a new row to `COMMUNICATIONS_INDEX.md`.
+3. Keep the numbering sequential and stable.
+4. Include an external-source note if the evidence originated in Teams, email,
+   or SharePoint.
+5. Use the commit pattern `docs(communications): add evidence NNN - short description`.
+
+## Maintenance Notes
+
+- Do not store large raw recordings in the repo unless they are required for the
+  final deliverable.
+- Prefer transcripts, summaries, or screenshots when they provide the same proof.
+- If the source video lives in SharePoint or Teams, link it in the summary file
+  and mirror that reference in `COMMUNICATIONS_INDEX.md`.
+- Update the index whenever a file is added, renamed, or removed.
