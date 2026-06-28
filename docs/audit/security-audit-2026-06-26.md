@@ -36,7 +36,7 @@ been committed. The `.gitignore` covers them.
 |----|-----------|---------|------------|
 | W1 | `backend/config/urls.py:17-18` | `/api/schema/` and `/api/docs/` were public (drf-spectacular `SERVE_PERMISSIONS` defaults to `AllowAny`). Full API surface enumerable unauthenticated in production. | Set `SPECTACULAR_SETTINGS['SERVE_PERMISSIONS'] = ['rest_framework.permissions.IsAdminUser']` in `production.py`. Local dev remains open. |
 | W2 | `backend/config/settings/base.py:122-137` | No rate limiting anywhere. Login and password-reset endpoints (`AllowAny`) exposed to brute-force and reset-spam. | Added `AnonRateThrottle`/`UserRateThrottle` as defaults + `'auth': '5/min'` scope. Added `throttle_classes = [ScopedRateThrottle]` + `throttle_scope = 'auth'` to `LoginView`, `PasswordResetRequestView`, `PasswordResetConfirmView`. |
-| W3 | `backend/Dockerfile`, `backend/Dockerfile.prod` | No `USER` directive — gunicorn/Celery ran as root. | Added `appgroup`/`appuser` non-root user and `USER appuser` in both Dockerfiles. |
+| W3 | `backend/Dockerfile.prod` | No `USER` directive — gunicorn/Celery ran as root in production. | Added `appgroup`/`appuser` non-root user and `USER appuser` in the production Dockerfile. The development Dockerfile stays root so bind-mounted CI/dev volumes remain writable. |
 | W4 | (missing file) | No `.dockerignore` — `COPY . .` bundled `.env`, `media/`, `.coverage`, `.sql` into Docker image. | Created `backend/.dockerignore` excluding secrets, runtime artifacts, and test files. |
 
 ### INFO (no code change required)

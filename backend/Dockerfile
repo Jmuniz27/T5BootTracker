@@ -20,6 +20,3 @@ RUN pip install --no-cache-dir -r /tmp/requirements/local.txt
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 COPY . .
-
-RUN chown -R appuser:appgroup /app
-USER appuser
