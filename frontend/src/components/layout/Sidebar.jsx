@@ -11,9 +11,6 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-  // TODO: uncomment when My leads and Schedule are implemented
-  // { to: '/my-leads', label: 'My leads', ... },
-  // { to: '/schedule', label: 'Schedule', ... },
   {
     to: '/payments',
     label: 'Payment',
