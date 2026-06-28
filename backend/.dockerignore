@@ -1,0 +1,29 @@
+# Secrets — never bake into the image
+.env
+.env.*
+
+# Runtime-generated files
+media/
+staticfiles/
+__pycache__/
+*.pyc
+*.pyo
+
+# Test / coverage artifacts
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Database dump / scratch queries
+*.sql
+
+# Logs
+*.log
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
