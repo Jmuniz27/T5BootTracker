@@ -145,9 +145,8 @@ export default function PaymentQueuePage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
-                [...Array(5)].map((_, i) => <SkeletonQueueRow key={i} />)
-              ) : queue.length === 0 ? (
+              {isLoading && [...Array(5)].map((_, i) => <SkeletonQueueRow key={i} />)}
+              {!isLoading && queue.length === 0 && (
                 <tr>
                   <td colSpan={6} className="py-16 text-center">
                     <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -156,11 +155,10 @@ export default function PaymentQueuePage() {
                     <p className="text-sm text-gray-500">No hay pagos pendientes de revisión.</p>
                   </td>
                 </tr>
-              ) : (
-                queue.map((p) => (
-                  <QueueRow key={p.id} payment={p} onClick={() => setSelectedPayment(p)} />
-                ))
               )}
+              {!isLoading && queue.length > 0 && queue.map((p) => (
+                <QueueRow key={p.id} payment={p} onClick={() => setSelectedPayment(p)} />
+              ))}
             </tbody>
           </table>
         </div>
