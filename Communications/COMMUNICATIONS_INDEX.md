@@ -23,3 +23,12 @@ It is the only table of contents kept in the folder.
 
 - The folder intentionally keeps only evidence artifacts and this index.
 - Update this table whenever a file is added, renamed, or removed.
+
+## External Evidence Links
+
+These links point to the external folders and recordings that support the communications evidence:
+
+- [Validation videos folder](https://drive.google.com/drive/folders/1VHH5W_TlDjmUPLqSkHuR_777D2SbYxp1?usp=sharing)
+- [Email signatures and requirement changes](https://espolec.sharepoint.com/:u:/s/Ing.desoftwareBoot-Tracker/IQDqrxOr_agVSZOz87MXzAFJAYk3yB830SkRu0lPIvkVNaE?e=de8YUY)
+- [SCRUM recordings folder](https://espolec.sharepoint.com/:f:/s/Ing.desoftwareBoot-Tracker/IgAqUtEYd3VTSrgHe1nhqRN7AfVYiGT-lxp0Pp6pnhOVZSk?e=I80cAb)
+- [Client audio recordings](https://espolec.sharepoint.com/:f:/s/Ing.desoftwareBoot-Tracker/IgDQUgS9ewVTR4VLkO5RwDxhAd8btm0u3vQA6q4W_2N4HBs?e=L6sbhz)
