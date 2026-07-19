@@ -3,6 +3,7 @@ import logging
 import secrets
 
 from django.db import transaction, IntegrityError
+from django.db.models import Q
 from django.utils.timezone import now
 from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import status
@@ -132,3 +133,11 @@ def convert_lead_to_bootcamper(lead, validated_data):
         'is_returning': is_returning,
         'lead_status': lead.status,
     }
+
+
+def find_duplicate_lead(phone, email):
+    """Return an existing Lead matching phone or email, if any (CR-011)."""
+    query = Q(phone=phone)
+    if email:
+        query |= Q(email=email)
+    return Lead.objects.filter(query).first()

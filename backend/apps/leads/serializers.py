@@ -80,11 +80,13 @@ class LeadDetailSerializer(serializers.ModelSerializer):
 
 
 class LeadWriteSerializer(serializers.ModelSerializer):
+    confirm_duplicate = serializers.BooleanField(required=False, default=False, write_only=True)
+
     class Meta:
         model = Lead
         fields = (
             'name', 'phone', 'email', 'program_interest',
-            'source', 'is_company', 'status',
+            'source', 'is_company', 'status', 'confirm_duplicate',
         )
 
     def validate_name(self, value):
@@ -96,6 +98,14 @@ class LeadWriteSerializer(serializers.ModelSerializer):
         if not value or not value.strip():
             raise serializers.ValidationError('El teléfono no puede estar vacío.')
         return value
+
+    def create(self, validated_data):
+        validated_data.pop('confirm_duplicate', None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop('confirm_duplicate', None)
+        return super().update(instance, validated_data)
 
 
 class LeadAdminWriteSerializer(LeadWriteSerializer):
