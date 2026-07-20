@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('leads', '0006_migrate_contacted_to_interested'),
+        ('leads', '0007_alter_interaction_outcome_alter_lead_status'),
     ]
 
     operations = [
