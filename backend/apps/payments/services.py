@@ -6,6 +6,9 @@ from django.db.models import Sum
 
 logger = logging.getLogger(__name__)
 
+# Regla de negocio: un déficit mayor al 10% del costo total dispara la alerta al coordinador.
+CRITICAL_DEFICIT_THRESHOLD = Decimal('0.10')
+
 
 class PaymentProgressService:
     """Calculate payment progress for a bootcamper in a program."""
@@ -40,7 +43,7 @@ class PaymentProgressService:
         pending_count = payments.filter(status=Payment.Status.PENDING).count()
         total_cost    = program.total_cost
         deficit       = max(total_cost - total_paid, Decimal('0.00'))
-        is_critical   = deficit > total_cost * Decimal('0.10')
+        is_critical   = deficit > total_cost * CRITICAL_DEFICIT_THRESHOLD
 
         today      = date.today()
         start_date = program.start_date
