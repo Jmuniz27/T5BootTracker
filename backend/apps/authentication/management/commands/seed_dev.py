@@ -17,7 +17,8 @@ SOURCES = [
 
 STATUSES = [
     Lead.Status.NEW,
-    Lead.Status.CONTACTED,
+    Lead.Status.CONVERTED,
+    Lead.Status.QUALIFIED,
     Lead.Status.INTERESTED,
     Lead.Status.NOT_INTERESTED,
 ]
@@ -106,9 +107,9 @@ class Command(BaseCommand):
         # Interactions for vendedor1's leads
         v1_leads = Lead.objects.filter(owner=v1)[:3]
         outcomes = [
-            Interaction.Outcome.INTERESTED,
-            Interaction.Outcome.CALLBACK,
-            Interaction.Outcome.NOT_INTERESTED,
+            Interaction.Outcome.SEND_INFO,
+            Interaction.Outcome.CALL_AGAIN,
+            Interaction.Outcome.AWAIT_REPLY,
         ]
         for lead, outcome in zip(v1_leads, outcomes):
             if not lead.interactions.exists():
