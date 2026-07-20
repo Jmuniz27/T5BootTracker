@@ -26,6 +26,7 @@ from .serializers import (
 from .services import (
     register_interaction, convert_lead_to_bootcamper,
     get_self_assignment_enabled, set_self_assignment_enabled,
+    find_duplicate_lead,
 )
 
 logger = logging.getLogger(__name__)
@@ -163,13 +164,38 @@ class LeadListCreateView(APIView):
 
     @extend_schema(
         request=LeadWriteSerializer,
-        responses={201: LeadListSerializer},
+        responses={
+            201: LeadListSerializer,
+            409: OpenApiResponse(description='Posible lead duplicado (phone/email ya registrados)'),
+        },
         summary='Crear lead',
         tags=['Leads'],
     )
     def post(self, request):
         serializer = LeadWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        confirm_duplicate = serializer.validated_data.get('confirm_duplicate', False)
+        if not confirm_duplicate:
+            duplicate = find_duplicate_lead(
+                serializer.validated_data['phone'],
+                serializer.validated_data.get('email'),
+            )
+            if duplicate is not None:
+                return Response(
+                    {
+                        'error': 'Ya existe un lead con estos datos.',
+                        'code': 'POSSIBLE_DUPLICATE',
+                        'duplicate': {
+                            'id': str(duplicate.id),
+                            'name': duplicate.name,
+                            'phone': duplicate.phone,
+                            'email': duplicate.email,
+                        },
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
         lead = serializer.save()
         return Response(LeadListSerializer(lead).data, status=status.HTTP_201_CREATED)
 

@@ -3,6 +3,7 @@ import logging
 import secrets
 
 from django.db import transaction, IntegrityError
+from django.db.models import Q
 from django.utils.timezone import now
 from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import status
@@ -152,3 +153,11 @@ def set_self_assignment_enabled(enabled, user):
         user.email,
     )
     return setting
+
+
+def find_duplicate_lead(phone, email):
+    """Return an existing Lead matching phone or email, if any (CR-011)."""
+    query = Q(phone=phone)
+    if email:
+        query |= Q(email=email)
+    return Lead.objects.filter(query).first()
