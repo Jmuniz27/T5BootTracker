@@ -3,7 +3,7 @@ from django.utils.timezone import now
 from rest_framework import serializers
 
 from apps.authentication.models import CustomUser
-from .models import Lead, Interaction
+from .models import Lead, Interaction, LeadAssignmentSetting
 
 
 class InteractionSerializer(serializers.ModelSerializer):
@@ -140,3 +140,15 @@ class ReturningBootcamperSerializer(serializers.Serializer):
     program_id       = serializers.UUIDField()
     source           = serializers.ChoiceField(choices=Lead.Source.choices, default=Lead.Source.MANUAL)
     notes            = serializers.CharField(required=False, allow_blank=True)
+
+
+class LeadAssignmentSettingSerializer(serializers.ModelSerializer):
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LeadAssignmentSetting
+        fields = ('self_assign_enabled', 'updated_by_name', 'updated_at')
+        read_only_fields = ('updated_by_name', 'updated_at')
+
+    def get_updated_by_name(self, obj):
+        return obj.updated_by.get_full_name() if obj.updated_by else None

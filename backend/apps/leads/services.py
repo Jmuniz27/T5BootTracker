@@ -12,7 +12,7 @@ from apps.authentication.models import CustomUser
 from apps.authentication.validators import validate_cedula_ecuatoriana
 from apps.programs.models import Program, Enrollment
 from apps.notifications.tasks import send_conversion_notification
-from .models import Interaction, Lead
+from .models import Interaction, Lead, LeadAssignmentSetting
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +133,26 @@ def convert_lead_to_bootcamper(lead, validated_data):
         'is_returning': is_returning,
         'lead_status': lead.status,
     }
+
+
+def get_self_assignment_enabled():
+    """Whether salespeople are currently allowed to self-assign leads (CR-004)."""
+    return LeadAssignmentSetting.get_solo().self_assign_enabled
+
+
+@transaction.atomic
+def set_self_assignment_enabled(enabled, user):
+    """Toggle the global self-assignment setting, recording who changed it and when."""
+    setting = LeadAssignmentSetting.objects.select_for_update().get_or_create(pk=1)[0]
+    setting.self_assign_enabled = enabled
+    setting.updated_by = user
+    setting.save(update_fields=['self_assign_enabled', 'updated_by', 'updated_at'])
+    logger.info(
+        'Lead self-assignment %s by %s',
+        'enabled' if enabled else 'disabled',
+        user.email,
+    )
+    return setting
 
 
 def find_duplicate_lead(phone, email):

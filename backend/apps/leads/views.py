@@ -10,18 +10,24 @@ from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
 from rest_framework import status, serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.authentication.models import CustomUser
 from apps.programs.models import Program
-from .models import Lead, Interaction
-from .permissions import IsSalesperson, IsSalespersonOrAdmin
+from .models import Lead, Interaction, LeadAssignmentSetting
+from .permissions import IsAdministrator, IsSalesperson, IsSalespersonOrAdmin
 from .serializers import (
     LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
     InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
+    LeadAssignmentSettingSerializer,
 )
-from .services import register_interaction, convert_lead_to_bootcamper, find_duplicate_lead
+from .services import (
+    register_interaction, convert_lead_to_bootcamper,
+    get_self_assignment_enabled, set_self_assignment_enabled,
+    find_duplicate_lead,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -199,11 +205,24 @@ class LeadAssignView(APIView):
     permission_classes = [IsSalesperson]
 
     @extend_schema(
-        responses={200: LeadListSerializer, 409: OpenApiResponse(description='Lead ya asignado')},
+        responses={
+            200: LeadListSerializer,
+            403: OpenApiResponse(description='Auto-asignación deshabilitada por el Administrador'),
+            409: OpenApiResponse(description='Lead ya asignado'),
+        },
         summary='Asignar lead',
         tags=['Leads'],
     )
     def patch(self, request, pk):
+        if not get_self_assignment_enabled():
+            return Response(
+                {
+                    'error': 'La asignación de leads la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         with transaction.atomic():
             try:
                 lead = Lead.objects.select_for_update().get(pk=pk)
@@ -245,6 +264,42 @@ class LeadReleaseView(APIView):
         lead.assigned_at = None
         lead.save()
         return Response(LeadListSerializer(lead).data)
+
+
+class LeadAssignmentSettingView(APIView):
+    """GET/PATCH /leads/settings/self-assignment/ — global toggle for self-assignment (CR-004)."""
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method == 'PATCH':
+            return [IsAdministrator()]
+        return super().get_permissions()
+
+    @extend_schema(
+        responses={200: LeadAssignmentSettingSerializer},
+        summary='Consultar estado de auto-asignación',
+        tags=['Leads'],
+    )
+    def get(self, request):
+        setting = LeadAssignmentSetting.get_solo()
+        return Response(LeadAssignmentSettingSerializer(setting).data)
+
+    @extend_schema(
+        request=LeadAssignmentSettingSerializer,
+        responses={200: LeadAssignmentSettingSerializer, 403: OpenApiResponse(description='Solo el Administrador puede cambiar este control')},
+        summary='Habilitar/deshabilitar auto-asignación',
+        tags=['Leads'],
+    )
+    def patch(self, request):
+        serializer = LeadAssignmentSettingSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        if 'self_assign_enabled' not in serializer.validated_data:
+            return Response(
+                {'error': 'self_assign_enabled es requerido.', 'code': 'MISSING_FIELD'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        setting = set_self_assignment_enabled(serializer.validated_data['self_assign_enabled'], request.user)
+        return Response(LeadAssignmentSettingSerializer(setting).data)
 
 
 class LeadDetailView(APIView):

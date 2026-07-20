@@ -5,6 +5,7 @@ from .views import (
     LeadListCreateView,
     LeadAssignView,
     LeadReleaseView,
+    LeadAssignmentSettingView,
     LeadDetailView,
     InteractionListCreateView,
     InteractionDetailView,
@@ -15,6 +16,7 @@ from .views import (
 urlpatterns = [
     path('',                                                          LeadListCreateView.as_view(),        name='lead-list-create'),
     path('returning-bootcamper/',                                     ReturningBootcamperView.as_view(),   name='lead-returning-bootcamper'),
+    path('settings/self-assignment/',                                 LeadAssignmentSettingView.as_view(), name='lead-assignment-setting'),
     path('<uuid:pk>/assign/',                                         LeadAssignView.as_view(),            name='lead-assign'),
     path('<uuid:pk>/release/',                                        LeadReleaseView.as_view(),           name='lead-release'),
     path('<uuid:pk>/convert/',                                        ConvertLeadView.as_view(),           name='lead-convert'),
