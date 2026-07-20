@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMyHistory, getOCRStatus, uploadPayment, confirmPayment, getPrograms } from '../api/payments.api'
+import { getMyHistory, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
+import CustomSelect from '../components/CustomSelect'
 
 const STATUS_LABELS = {
   DRAFT: 'En revisión',
@@ -77,10 +78,7 @@ function StatCard({ label, value, sub, loading }) {
 // ─── Upload Modal ─────────────────────────────────────────────────────────────
 
 function UploadModal({ programs, onClose, onSuccess }) {
-  const [amount, setAmount] = useState('')
-  const [date, setDate] = useState('')
   const [programId, setProgramId] = useState('')
-  const [notes, setNotes] = useState('')
   const [file, setFile] = useState(null)
   const [errors, setErrors] = useState({})
   const [dragOver, setDragOver] = useState(false)
@@ -126,7 +124,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
-          <h2 className="text-lg font-semibold text-gray-900">📄 Upload payment</h2>
+          <h2 className="text-lg font-semibold text-gray-900">📄 Subir comprobante</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -135,64 +133,14 @@ function UploadModal({ programs, onClose, onSuccess }) {
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
-          {/* Amount + Date */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          {/* Program */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Program</label>
-            <select
-              value={programId}
-              onChange={(e) => setProgramId(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent bg-white"
-            >
-              <option value="">Select program</option>
-              {programs.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            {errors.program && <p className="text-red-500 text-xs mt-1">{errors.program}</p>}
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes <span className="text-gray-400 font-normal">(Optional)</span>
-            </label>
-            <textarea
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Enter detailed notes about the interaction..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent resize-none"
-            />
-          </div>
+          <p className="text-sm text-gray-500 -mt-1">
+            Sube tu comprobante de transferencia. Revisarás el monto y la fecha en el siguiente paso,
+            una vez escaneado el documento.
+          </p>
 
           {/* File upload — drag & drop */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Payment proof</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Comprobante de transferencia</label>
             <div
               onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -217,7 +165,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
                     onClick={(e) => { e.stopPropagation(); setFile(null) }}
                     className="text-xs text-gray-400 hover:text-red-500 transition-colors"
                   >
-                    Remove
+                    Quitar
                   </button>
                 </>
               ) : (
@@ -226,9 +174,9 @@ function UploadModal({ programs, onClose, onSuccess }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
                   <p className="text-sm text-gray-600">
-                    <span className="font-medium text-[#1D3176]">Click to upload</span> or drag & drop
+                    <span className="font-medium text-[#1D3176]">Haz clic para subir</span> o arrastra el archivo
                   </p>
-                  <p className="text-xs text-gray-400">PNG, JPG or PDF (max 10 MB)</p>
+                  <p className="text-xs text-gray-400">PNG, JPG o PDF (máx. 10 MB)</p>
                 </>
               )}
               <input
@@ -242,6 +190,18 @@ function UploadModal({ programs, onClose, onSuccess }) {
             {errors.file && <p className="text-red-500 text-xs mt-1">{errors.file}</p>}
           </div>
 
+          {/* Program */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Programa</label>
+            <CustomSelect
+              value={programId}
+              onChange={setProgramId}
+              placeholder="Selecciona un programa"
+              options={programs.map((p) => ({ value: p.id, label: p.name }))}
+            />
+            {errors.program && <p className="text-red-500 text-xs mt-1">{errors.program}</p>}
+          </div>
+
           {mutation.isError && (
             <p className="text-red-500 text-sm">
               {mutation.error?.response?.data?.error || 'Error al subir el comprobante.'}
@@ -253,7 +213,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
             disabled={mutation.isPending}
             className="w-full bg-[#1D3176] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#16265d] disabled:opacity-60 transition-colors"
           >
-            {mutation.isPending ? 'Subiendo...' : 'Submit payment'}
+            {mutation.isPending ? 'Subiendo...' : 'Subir comprobante'}
           </button>
         </form>
       </div>
@@ -295,12 +255,15 @@ function ReceiptPreview({ url, type }) {
 
 // ─── OCR Review Modal ─────────────────────────────────────────────────────────
 
-function OCRReviewModal({ payment, onClose, onSuccess }) {
+// mode='review' → confirmar un pago DRAFT recién escaneado (DRAFT → PENDING).
+// mode='edit'   → corregir un pago REJECTED y reenviarlo (REJECTED → PENDING).
+function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
+  const isEdit = mode === 'edit'
   const [fields, setFields] = useState({
-    ocr_bank_name: payment.ocr_bank_name || '',
+    ocr_bank_name: payment.confirmed_bank_name || payment.ocr_bank_name || '',
     ocr_account_last_digits: payment.ocr_account_last_digits || '',
-    ocr_amount: payment.ocr_amount || '',
-    ocr_transaction_id: payment.ocr_transaction_id || '',
+    ocr_amount: payment.confirmed_amount || payment.ocr_amount || '',
+    ocr_transaction_id: payment.confirmed_transaction_id || payment.ocr_transaction_id || '',
     ocr_payment_date: payment.ocr_payment_date || '',
   })
   const qc = useQueryClient()
@@ -313,20 +276,20 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
   const { data: ocrData, isLoading: ocrLoading } = useQuery({
     queryKey: ['ocr-status', payment.id],
     queryFn: () => getOCRStatus(payment.id),
-    enabled: payment.status === 'DRAFT',
+    enabled: !isEdit && payment.status === 'DRAFT',
     refetchInterval: (query) =>
       isOcrDone(query.state.data) || timedOut ? false : 1500,
   })
 
   // Give up polling after 30s so a stuck/slow OCR doesn't block manual entry.
   useEffect(() => {
-    if (payment.status !== 'DRAFT') return
+    if (isEdit || payment.status !== 'DRAFT') return
     const t = setTimeout(() => setTimedOut(true), 30000)
     return () => clearTimeout(t)
-  }, [payment.status])
+  }, [isEdit, payment.status])
 
   const ocrReady = isOcrDone(ocrData) || isOcrDone(payment)
-  const ocrProcessing = payment.status === 'DRAFT' && !ocrReady && !timedOut
+  const ocrProcessing = !isEdit && payment.status === 'DRAFT' && !ocrReady && !timedOut
 
   useEffect(() => {
     if (ocrData) {
@@ -341,7 +304,7 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
   }, [ocrData])
 
   const mutation = useMutation({
-    mutationFn: (data) => confirmPayment(payment.id, data),
+    mutationFn: (data) => (isEdit ? updateMyPayment(payment.id, data) : confirmPayment(payment.id, data)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-payments'] })
       onSuccess()
@@ -364,13 +327,37 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
     return `${Math.round(v * 100)}% confianza`
   }
 
+  // Monto: solo dígitos y un único separador decimal. Normaliza coma → punto,
+  // impide letras/símbolos (incluido texto pegado) y limita a 2 decimales.
+  const sanitizeAmount = (raw) => {
+    let v = raw.replace(/[^\d.,]/g, '').replace(/,/g, '.')
+    const [intPart, ...rest] = v.split('.')
+    if (rest.length === 0) return intPart
+    return `${intPart}.${rest.join('').slice(0, 2)}`
+  }
+
+  const handleFieldChange = (key, raw) => {
+    const value = key === 'ocr_amount' ? sanitizeAmount(raw) : raw
+    setFields((prev) => ({ ...prev, [key]: value }))
+  }
+
+  let submitLabel
+  if (mutation.isPending) submitLabel = isEdit ? 'Reenviando...' : 'Confirmando...'
+  else submitLabel = isEdit ? 'Reenviar pago' : 'Confirmar pago'
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Revisar campos OCR</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Compara tu comprobante con los datos extraídos y corrige lo necesario antes de confirmar</p>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {isEdit ? 'Editar y reenviar pago' : 'Revisar comprobante de transferencia'}
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {isEdit
+                ? 'Corrige los datos observados y reenvía el pago para una nueva revisión'
+                : 'Compara tu comprobante con los datos escaneados y corrige lo necesario antes de confirmar'}
+            </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -396,13 +383,18 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <p className="text-sm font-medium text-gray-700 mt-4">Procesando OCR…</p>
+              <p className="text-sm font-medium text-gray-700 mt-4">Escaneando texto…</p>
               <p className="text-xs text-gray-400 mt-1 max-w-xs">
-                Estamos extrayendo los datos de tu comprobante. Esto puede tardar unos segundos.
+                Estamos leyendo los datos de tu comprobante. Esto puede tardar unos segundos.
               </p>
             </div>
           ) : (
             <>
+              {isEdit && payment.rejection_reason && (
+                <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  <span className="font-medium">Motivo del rechazo:</span> {payment.rejection_reason}
+                </p>
+              )}
               {timedOut && !ocrReady && (
                 <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
                   No se pudieron extraer los datos automáticamente. Complétalos manualmente antes de confirmar.
@@ -411,21 +403,22 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
               {[
                 { key: 'ocr_bank_name', label: 'Banco', placeholder: 'Nombre del banco' },
                 { key: 'ocr_account_last_digits', label: 'Últimos dígitos cuenta', placeholder: 'Ej: 1234' },
-                { key: 'ocr_amount', label: 'Monto', placeholder: 'Ej: 500.00', type: 'number' },
+                { key: 'ocr_amount', label: 'Monto', placeholder: 'Ej: 500.00', type: 'text', inputMode: 'decimal' },
                 { key: 'ocr_transaction_id', label: 'Nro. de transacción', placeholder: 'ID de transacción' },
                 { key: 'ocr_payment_date', label: 'Fecha de pago', type: 'date' },
-              ].map(({ key, label, placeholder, type = 'text' }) => (
+              ].map(({ key, label, placeholder, type = 'text', inputMode }) => (
                 <div key={key}>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-sm font-medium text-gray-700">{label}</label>
-                    {confidence[key] != null && (
+                    {!isEdit && confidence[key] != null && (
                       <span className={`text-xs font-medium ${confColor(key)}`}>{confLabel(key)}</span>
                     )}
                   </div>
                   <input
                     type={type}
+                    inputMode={inputMode}
                     value={fields[key]}
-                    onChange={(e) => setFields((prev) => ({ ...prev, [key]: e.target.value }))}
+                    onChange={(e) => handleFieldChange(key, e.target.value)}
                     placeholder={placeholder}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent"
                   />
@@ -454,7 +447,7 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
               onClick={() => mutation.mutate(fields)}
               className="flex-1 bg-[#1D3176] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#16265d] disabled:opacity-60 transition-colors"
             >
-              {mutation.isPending ? 'Confirmando...' : 'Confirmar pago'}
+              {submitLabel}
             </button>
           </div>
           </div>
@@ -466,7 +459,9 @@ function OCRReviewModal({ payment, onClose, onSuccess }) {
 
 // ─── Payment Row ──────────────────────────────────────────────────────────────
 
-function PaymentRow({ payment, onReview }) {
+function PaymentRow({ payment, onReview, onEdit, onDelete }) {
+  // El bootcamper puede subsanar (editar/eliminar) pagos en revisión o rechazados.
+  const canDelete = payment.status === 'DRAFT' || payment.status === 'REJECTED'
   const initial = (payment.program_name || 'P')[0].toUpperCase()
   const amount = payment.confirmed_amount || payment.ocr_amount
   const date = payment.ocr_payment_date || payment.submitted_at?.slice(0, 10)
@@ -496,6 +491,25 @@ function PaymentRow({ payment, onReview }) {
               className="text-xs text-[#1D3176] font-medium hover:underline"
             >
               Revisar
+            </button>
+          )}
+          {payment.status === 'REJECTED' && (
+            <button
+              onClick={() => onEdit(payment)}
+              className="text-xs text-[#1D3176] font-medium hover:underline"
+            >
+              Editar
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => onDelete(payment)}
+              aria-label="Eliminar pago"
+              className="text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
             </button>
           )}
         </div>
@@ -528,15 +542,62 @@ function SkeletonPaymentRow() {
   )
 }
 
+// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
+
+function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h2 className="text-lg font-semibold text-gray-900">Eliminar pago</h2>
+        <p className="text-sm text-gray-500 mt-2">
+          ¿Seguro que quieres eliminar el comprobante de{' '}
+          <span className="font-medium text-gray-700">{payment.program_name}</span>? Esta acción no se
+          puede deshacer.
+        </p>
+        <div className="flex gap-3 pt-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={onConfirm}
+            className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-red-700 disabled:opacity-60 transition-colors"
+          >
+            {isPending ? 'Eliminando...' : 'Eliminar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PaymentsPage() {
   const [showUpload, setShowUpload] = useState(false)
   const [reviewPayment, setReviewPayment] = useState(null)
+  const [editPayment, setEditPayment] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [sort, setSort] = useState('newest')
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [toast, setToast] = useState(null)
   const sortRef = useRef(null)
+  const qc = useQueryClient()
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteMyPayment,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-payments'] })
+      setDeleteTarget(null)
+      setToast({ message: 'Pago eliminado.' })
+    },
+    onError: () => setToast({ message: 'No se pudo eliminar el pago.', type: 'error' }),
+  })
 
   const { data: payments = [], isLoading } = useQuery({
     queryKey: ['my-payments'],
@@ -667,7 +728,13 @@ export default function PaymentsPage() {
           </div>
         )}
         {!isLoading && sorted.length > 0 && sorted.map((p) => (
-          <PaymentRow key={p.id} payment={p} onReview={setReviewPayment} />
+          <PaymentRow
+            key={p.id}
+            payment={p}
+            onReview={setReviewPayment}
+            onEdit={setEditPayment}
+            onDelete={setDeleteTarget}
+          />
         ))}
       </div>
 
@@ -678,7 +745,7 @@ export default function PaymentsPage() {
           onClose={() => setShowUpload(false)}
           onSuccess={(data) => {
             setShowUpload(false)
-            showToast('Comprobante subido. El OCR está procesando.')
+            showToast('Comprobante subido. Estamos escaneando el texto…')
             if (data.status === 'DRAFT') setReviewPayment(data)
           }}
         />
@@ -692,6 +759,27 @@ export default function PaymentsPage() {
             setReviewPayment(null)
             showToast('Pago confirmado. Queda pendiente de aprobación.')
           }}
+        />
+      )}
+
+      {editPayment && (
+        <OCRReviewModal
+          payment={editPayment}
+          mode="edit"
+          onClose={() => setEditPayment(null)}
+          onSuccess={() => {
+            setEditPayment(null)
+            showToast('Pago reenviado. Queda pendiente de aprobación.')
+          }}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          payment={deleteTarget}
+          isPending={deleteMutation.isPending}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => deleteMutation.mutate(deleteTarget.id)}
         />
       )}
 
