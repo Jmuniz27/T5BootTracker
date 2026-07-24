@@ -1,6 +1,7 @@
 """Serializers for payments app."""
 
 from rest_framework import serializers
+from apps.authentication.validators import validate_cedula_ecuatoriana
 from .models import Payment
 
 MAX_FILE_SIZE_MB = 10
@@ -52,6 +53,12 @@ class PaymentListSerializer(serializers.ModelSerializer):
             "ocr_transaction_id",
             "ocr_payment_date",
             "ocr_confidence",
+            "payer_name",
+            "payer_identification",
+            "payer_email",
+            "payer_address",
+            "payer_phone",
+            "document_number",
             "confirmed_amount",
             "confirmed_bank_name",
             "confirmed_transaction_id",
@@ -114,6 +121,12 @@ class PaymentOCRStatusSerializer(serializers.ModelSerializer):
             "ocr_transaction_id",
             "ocr_payment_date",
             "ocr_confidence",
+            "payer_name",
+            "payer_identification",
+            "payer_email",
+            "payer_address",
+            "payer_phone",
+            "document_number",
             "status",
         )
 
@@ -131,6 +144,33 @@ class PaymentConfirmSerializer(serializers.Serializer):
     ocr_amount              = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
     ocr_transaction_id      = serializers.CharField(max_length=100, required=False, allow_blank=True)
     ocr_payment_date        = serializers.DateField(required=False, allow_null=True)
+    payer_name              = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    payer_identification    = serializers.CharField(max_length=20,  required=False, allow_blank=True)
+    payer_email             = serializers.EmailField(required=False, allow_blank=True)
+    payer_address           = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    payer_phone              = serializers.CharField(max_length=20,  required=False, allow_blank=True)
+    document_number         = serializers.CharField(max_length=50,  required=False, allow_blank=True)
+
+    def validate_payer_identification(self, value):
+        """Accept blank (best-effort field). If provided, must be a valid
+        Ecuadorian cédula (10 digits) or RUC (13 digits, ends in 001)."""
+        if not value:
+            return value
+        if not value.isdigit():
+            raise serializers.ValidationError(
+                "La identificación debe contener solo dígitos."
+            )
+        if len(value) == 10:
+            if not validate_cedula_ecuatoriana(value):
+                raise serializers.ValidationError("Cédula ecuatoriana inválida.")
+        elif len(value) == 13:
+            if not (validate_cedula_ecuatoriana(value[:10]) and value.endswith("001")):
+                raise serializers.ValidationError("RUC ecuatoriano inválido.")
+        else:
+            raise serializers.ValidationError(
+                "La identificación debe tener 10 dígitos (cédula) o 13 (RUC)."
+            )
+        return value
 
 
 class PaymentDetailSerializer(PaymentListSerializer):
