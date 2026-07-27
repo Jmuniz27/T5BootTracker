@@ -95,6 +95,13 @@ class OCRService:
             "payment_date": None,
             "raw_text": "",
             "confidence": {},
+            # Billing fields (CR-009 / CB-123)
+            "payer_name": "",
+            "payer_identification": "",
+            "payer_email": "",
+            "payer_address": "",
+            "payer_phone": "",
+            "document_number": "",
         }
         try:
             if mime_type == "application/pdf":
@@ -109,12 +116,25 @@ class OCRService:
             amount, amount_conf = self._extract_amount(text, words_conf)
             tx_id, tx_conf = self._extract_transaction_id(text, words_conf)
             pay_date, date_conf = self._extract_payment_date(text, words_conf)
+            payer_name, payer_name_conf = self._extract_payer_name(text, words_conf)
+            payer_email, payer_email_conf = self._extract_payer_email(text, words_conf)
+            payer_id, payer_id_conf = self._extract_payer_identification(
+                text, words_conf
+            )
+            doc_number, doc_number_conf = self._extract_document_number(
+                text, words_conf
+            )
 
             result["bank_name"] = bank_name
             result["account_last_digits"] = account
             result["amount"] = amount
             result["transaction_id"] = tx_id
             result["payment_date"] = pay_date
+            result["payer_name"] = payer_name
+            result["payer_email"] = payer_email
+            result["payer_identification"] = payer_id
+            result["document_number"] = doc_number
+            # payer_address / payer_phone never appear on receipts — always manual.
 
             field_scores = {
                 "bank_name": bank_conf,
@@ -122,6 +142,10 @@ class OCRService:
                 "amount": amount_conf,
                 "transaction_id": tx_conf,
                 "payment_date": date_conf,
+                "payer_name": payer_name_conf,
+                "payer_email": payer_email_conf,
+                "payer_identification": payer_id_conf,
+                "document_number": doc_number_conf,
             }
             non_zero = [v for v in field_scores.values() if v > 0]
             field_scores["overall"] = (
@@ -511,3 +535,159 @@ class OCRService:
                 pass
 
         return None, _CONF_ZERO
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Billing field extractors (CR-009 / CB-123)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _extract_payer_email(
+        self, text: str, words_conf: list[float]
+    ) -> tuple[str, float]:
+        """Extract the first email address found in the receipt text."""
+        m = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", text)
+        if m:
+            val = m.group(0)
+            return val, self._confidence(val, words_conf, strong_match=True)
+        return "", _CONF_ZERO
+
+    def _clean_name_candidate(self, raw: str) -> str:
+        """Strip common OCR/label noise from a name candidate line."""
+        cleaned = re.sub(r"^[a-z]\s+(?=[A-ZÁÉÍÓÚÑ])", "", raw)
+        # Drop trailing account-type suffix ("... , Ahorros", "... Corriente")
+        cleaned = re.sub(r",?\s*(ahorros|corriente)\b.*$", "", cleaned, flags=re.IGNORECASE)
+        return cleaned.strip(" .,:;|")
+
+    def _is_name_like(self, candidate: str) -> bool:
+        """True if `candidate` looks like a person's full name (not a bank,
+        label, or account/reference number)."""
+        letters = re.findall(r"[A-Za-zÁÉÍÓÚÑáéíóúñ]", candidate)
+        digits = re.findall(r"\d", candidate)
+        if len(letters) < 6 or digits or len(candidate.split()) < 2:
+            return False
+        # A person's name never contains the word "banco" — guards against
+        # inline "de Banco Guayaquil" (bank attribution, not sender name).
+        return not re.search(r"\bbanco\b", candidate, re.IGNORECASE)
+
+    def _extract_payer_name(
+        self, text: str, words_conf: list[float]
+    ) -> tuple[str, float]:
+        """
+        Extract the payer's (sender's) full name.
+
+        Two passes, each bounded to avoid picking up unrelated text further
+        down the receipt:
+          1. Origin/sender marker line ("Cuenta origen", "De", "Desde la
+             cuenta", or inline "De <name>") — checks only the marker line
+             itself and the single following non-blank line for an explicit
+             "Nombre" label or a bare name-like line (Bolivariano style).
+             Stops looking as soon as a destination marker appears.
+          2. Guayaquil-app-style layout with no origin label at all: the
+             sender's name is the line immediately before the FIRST
+             "Ahorros -"/"Corriente -" account line (sender always appears
+             before the recipient in that layout).
+        """
+        lines = text.splitlines()
+        origin_marker_re = re.compile(
+            r"cuenta\s+(?:de\s+)?origen\s*$|desde\s+la\s+cuenta|^\s*de\s*$",
+            re.IGNORECASE,
+        )
+        inline_de_re = re.compile(r"^\s*de\s+(.+)$", re.IGNORECASE)
+        destination_re = re.compile(
+            r"cuenta\s+(?:de\s+)?destino|a\s+nombre\s+de|^\s*para\s*$",
+            re.IGNORECASE,
+        )
+        name_label_re = re.compile(r"^\s*nombre[:\s]*(.*)", re.IGNORECASE)
+
+        for i, line in enumerate(lines):
+            # Inline "De <name>" on a single line (WhatsApp-app screenshots).
+            m = inline_de_re.match(line)
+            if m:
+                candidate = self._clean_name_candidate(m.group(1).strip())
+                if self._is_name_like(candidate):
+                    return candidate, self._confidence(
+                        candidate, words_conf, strong_match=True
+                    )
+                continue
+
+            if not origin_marker_re.search(line):
+                continue
+
+            # Standalone origin marker line — look at the next non-blank
+            # line only, stopping if it's a destination marker.
+            for j in range(i + 1, len(lines)):
+                nxt = lines[j].strip()
+                if not nxt:
+                    continue
+                if destination_re.search(lines[j]):
+                    break
+                nm = name_label_re.match(lines[j])
+                if nm:
+                    candidate = nm.group(1).strip(" :")
+                    if not candidate and j + 1 < len(lines):
+                        candidate = lines[j + 1].strip()
+                    candidate = self._clean_name_candidate(candidate)
+                    if candidate and self._is_name_like(candidate):
+                        return candidate, self._confidence(
+                            candidate, words_conf, strong_match=True
+                        )
+                    break
+                # Bare name-like line right after the marker (Bolivariano).
+                candidate = self._clean_name_candidate(nxt)
+                if self._is_name_like(candidate):
+                    return candidate, self._confidence(
+                        candidate, words_conf, strong_match=False
+                    )
+                break
+
+        # Pass 2: no origin label anywhere — Guayaquil-app-style confirmation.
+        # Sender's name sits right above the first "Ahorros -"/"Corriente -"
+        # account line (recipient's own name/account line comes after).
+        account_line_re = re.compile(r"^\s*(ahorros|corriente)\s*-\s*\S", re.IGNORECASE)
+        for i, line in enumerate(lines):
+            if account_line_re.match(line) and i > 0:
+                j = i - 1
+                while j >= 0 and not lines[j].strip():
+                    j -= 1
+                if j >= 0:
+                    candidate = self._clean_name_candidate(lines[j].strip())
+                    if self._is_name_like(candidate):
+                        return candidate, self._confidence(
+                            candidate, words_conf, strong_match=False
+                        )
+                break  # only the first account line counts (sender's)
+
+        return "", _CONF_ZERO
+
+    def _extract_document_number(
+        self, text: str, words_conf: list[float]
+    ) -> tuple[str, float]:
+        """Extract the receipt/invoice document number for billing purposes."""
+        patterns = [
+            r"n[uú]mero\s+de\s+comprobante[:\s]*(\d{4,20})",
+            r"comprobante[:\s#]*(\d{4,20})",
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, text, re.IGNORECASE)
+            if m:
+                val = m.group(1)
+                return val, self._confidence(val, words_conf, strong_match=True)
+        return "", _CONF_ZERO
+
+    def _extract_payer_identification(
+        self, text: str, words_conf: list[float]
+    ) -> tuple[str, float]:
+        """
+        Best-effort extraction of the payer's cédula/RUC.
+
+        Ecuadorian receipts rarely include this — most of the time this
+        returns "" and the field must be entered manually.
+        """
+        m = re.search(
+            r"(?:ruc|c[eé]dula|c\.?i\.?|identificaci[oó]n)[:\s#]*(\d{13}|\d{10})",
+            text,
+            re.IGNORECASE,
+        )
+        if m:
+            val = m.group(1)
+            return val, self._confidence(val, words_conf, strong_match=False)
+        return "", _CONF_ZERO

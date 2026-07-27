@@ -20,6 +20,7 @@ import { colors } from '../../../src/theme/colors';
 import { fetchLeads, assignLead, releaseLead, updateLeadStatus } from '../../../src/api/leads.api';
 import { api } from '../../../src/lib/api';
 import { useAuth } from '../../../src/context/AuthContext';
+import { useQuickCall } from '../../../src/hooks/use-quick-call';
 import type { Lead, LeadStatus } from '../../../src/types/leads';
 
 interface MeData {
@@ -139,9 +140,10 @@ interface CardProps {
   onViewHistory: (lead: Lead) => void;
   onLogInteraction: (lead: Lead) => void;
   onChangeStatus: (lead: Lead) => void;
+  onCall: (lead: Lead) => void;
 }
 
-function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction, onChangeStatus }: CardProps) {
+function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction, onChangeStatus, onCall }: CardProps) {
   const canChangeStatus = !isAvailable && lead.status !== 'CONVERTED';
   return (
     <View style={styles.card}>
@@ -160,8 +162,17 @@ function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLog
             </View>
           ) : null}
           <View style={styles.cardRow}>
-            <Ionicons name="call-outline" size={12} color={colors.textMuted} />
-            <Text style={styles.cardDetail}>{lead.phone}</Text>
+            <TouchableOpacity
+              style={styles.phoneBtn}
+              onPress={() => onCall(lead)}
+              activeOpacity={0.6}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Llamar a ${lead.name}`}
+            >
+              <Ionicons name="call-outline" size={12} color={colors.navy} />
+              <Text style={styles.phoneLink}>{lead.phone}</Text>
+            </TouchableOpacity>
             <Text style={styles.cardDot}>·</Text>
             <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} />
             <Text style={styles.cardDetail}>{lead.interaction_count}</Text>
@@ -249,6 +260,7 @@ type Tab = 'my' | 'available';
 export default function LeadsScreen() {
   const router = useRouter();
   const { logout } = useAuth();
+  const { startCall } = useQuickCall();
 
   const [me, setMe]                     = useState<MeData | null>(null);
   const [tab, setTab]                   = useState<Tab>('my');
@@ -488,6 +500,7 @@ export default function LeadsScreen() {
             onViewHistory={handleViewHistory}
             onLogInteraction={handleLogInteraction}
             onChangeStatus={handleChangeStatus}
+            onCall={startCall}
           />
         )}
         ListEmptyComponent={
@@ -822,6 +835,17 @@ const styles = StyleSheet.create({
   cardDetail: {
     fontSize: 12,
     color: colors.textMuted,
+  },
+  phoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  phoneLink: {
+    fontSize: 12,
+    color: colors.navy,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   cardDot: {
     fontSize: 12,
