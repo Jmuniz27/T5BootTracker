@@ -213,10 +213,10 @@ class PasswordResetRequestView(APIView):
             user = CustomUser.objects.get(email=email, is_active=True)
             token = str(uuid.uuid4())
             r = _get_redis()
-            r.setex(f'password_reset:{token}', 86400, str(user.pk))
+            r.setex(f'password_reset:{token}', settings.PASSWORD_RESET_TOKEN_TTL, str(user.pk))
 
             reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
-            send_password_reset_email.delay(email, reset_link)
+            send_password_reset_email.delay(email, reset_link, user_name=user.get_full_name())
             logger.info('Password reset email queued for %s.', email)
         except CustomUser.DoesNotExist:
             pass

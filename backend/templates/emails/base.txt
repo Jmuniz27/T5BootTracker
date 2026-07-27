@@ -1,0 +1,9 @@
+BOOT-TRACKER — Coding Bootcamps ESPOL
+{% if recipient_name %}
+Hola {{ recipient_name }},
+{% endif %}
+{% block content %}{% endblock %}
+
+--
+Boot-Tracker — Coding Bootcamps ESPOL.
+Mensaje automático, por favor no respondas a este correo.

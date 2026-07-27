@@ -163,6 +163,10 @@ SIMPLE_JWT = {
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
 
+# Password reset tokens are single-use (deleted on confirm) but short-lived
+# regardless, since the link travels over email — a channel we don't control.
+PASSWORD_RESET_TOKEN_TTL = int(os.environ.get('PASSWORD_RESET_TOKEN_TTL', 3600))
+
 # CORS
 CORS_ALLOWED_ORIGINS = os.environ.get(
     'CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173'
