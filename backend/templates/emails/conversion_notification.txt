@@ -1,0 +1,10 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+El lead {{ lead_name }} ha sido convertido exitosamente a bootcamper.
+
+Bootcamper: {{ bootcamper_name }}
+Email: {{ bootcamper_email }}
+Programa: {{ program_name }}
+
+Ver panel de pagos: {{ dashboard_url }}
+{% endblock %}
