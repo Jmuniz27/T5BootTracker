@@ -15,6 +15,9 @@ export const assignLead = (id) =>
 export const releaseLead = (id) =>
   client.patch(`/leads/${id}/release/`).then((r) => r.data)
 
+export const adminReassignLead = (id, ownerId) =>
+  client.patch(`/leads/${id}/admin-reassign/`, { owner_id: ownerId ?? null }).then((r) => r.data)
+
 export const getInteractions = (leadId) =>
   client.get(`/leads/${leadId}/interactions/`).then((r) => r.data)
 

@@ -38,6 +38,7 @@ LOCAL_APPS = [
     'apps.leads',
     'apps.payments',
     'apps.notifications',
+    'apps.meetings',
     'apps.analytics',
     'apps.programs',
     'apps.users',

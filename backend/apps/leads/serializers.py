@@ -3,7 +3,8 @@ from django.utils.timezone import now
 from rest_framework import serializers
 
 from apps.authentication.models import CustomUser
-from .models import Lead, Interaction
+from .models import Lead, Interaction, LeadAssignmentSetting
+from .services import reassign_lead_by_admin
 
 
 class InteractionSerializer(serializers.ModelSerializer):
@@ -80,11 +81,13 @@ class LeadDetailSerializer(serializers.ModelSerializer):
 
 
 class LeadWriteSerializer(serializers.ModelSerializer):
+    confirm_duplicate = serializers.BooleanField(required=False, default=False, write_only=True)
+
     class Meta:
         model = Lead
         fields = (
             'name', 'phone', 'email', 'program_interest',
-            'source', 'is_company', 'status',
+            'source', 'is_company', 'status', 'confirm_duplicate',
         )
 
     def validate_name(self, value):
@@ -96,6 +99,14 @@ class LeadWriteSerializer(serializers.ModelSerializer):
         if not value or not value.strip():
             raise serializers.ValidationError('El teléfono no puede estar vacío.')
         return value
+
+    def create(self, validated_data):
+        validated_data.pop('confirm_duplicate', None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop('confirm_duplicate', None)
+        return super().update(instance, validated_data)
 
 
 class LeadAdminWriteSerializer(LeadWriteSerializer):
@@ -110,9 +121,11 @@ class LeadAdminWriteSerializer(LeadWriteSerializer):
         fields = LeadWriteSerializer.Meta.fields + ('owner',)
 
     def update(self, instance, validated_data):
-        if 'owner' in validated_data and validated_data['owner'] != instance.owner:
-            validated_data['assigned_at'] = now() if validated_data['owner'] is not None else None
-            validated_data['version'] = instance.version + 1
+        if 'owner' in validated_data:
+            new_owner = validated_data.pop('owner')
+            if new_owner != instance.owner:
+                admin_user = self.context['request'].user
+                instance = reassign_lead_by_admin(instance.pk, admin_user, new_owner)
         return super().update(instance, validated_data)
 
 
@@ -130,3 +143,15 @@ class ReturningBootcamperSerializer(serializers.Serializer):
     program_id       = serializers.UUIDField()
     source           = serializers.ChoiceField(choices=Lead.Source.choices, default=Lead.Source.MANUAL)
     notes            = serializers.CharField(required=False, allow_blank=True)
+
+
+class LeadAssignmentSettingSerializer(serializers.ModelSerializer):
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LeadAssignmentSetting
+        fields = ('self_assign_enabled', 'updated_by_name', 'updated_at')
+        read_only_fields = ('updated_by_name', 'updated_at')
+
+    def get_updated_by_name(self, obj):
+        return obj.updated_by.get_full_name() if obj.updated_by else None
