@@ -30,6 +30,10 @@ def process_payment_ocr(self, payment_id):
         payment.ocr_payment_date = result["payment_date"]
         payment.ocr_confidence = result["confidence"]
         payment.ocr_raw_text = result["raw_text"]
+        payment.payer_name = result["payer_name"]
+        payment.payer_email = result["payer_email"]
+        payment.payer_identification = result["payer_identification"]
+        payment.document_number = result["document_number"]
         payment.save(
             update_fields=[
                 "ocr_bank_name",
@@ -39,6 +43,10 @@ def process_payment_ocr(self, payment_id):
                 "ocr_payment_date",
                 "ocr_confidence",
                 "ocr_raw_text",
+                "payer_name",
+                "payer_email",
+                "payer_identification",
+                "document_number",
             ]
         )
         logger.info("OCR completed for payment %s.", payment_id)
