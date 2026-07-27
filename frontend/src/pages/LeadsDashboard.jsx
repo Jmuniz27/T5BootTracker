@@ -1590,9 +1590,6 @@ export default function LeadsDashboard() {
     ? (pagination.my_leads_total_pages ?? 1)
     : (pagination.available_leads_total_pages ?? 1)
 
-  // _isOwned refleja la propiedad real (owner === yo), no solo en qué bandeja aparece —
-  // para un Admin, el backend pone TODOS los leads en "my_leads", así que comparar contra
-  // el bucket incorrectamente marcaba como "propios" leads de otros vendedores.
   const tabLeads = activeTab === 'mine'
     ? myLeads.map((l) => ({ ...l, _isOwned: l.owner === currentUser?.id }))
     : availableLeads.map((l) => ({ ...l, _isOwned: false }))

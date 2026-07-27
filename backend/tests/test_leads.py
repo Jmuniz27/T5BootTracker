@@ -492,7 +492,7 @@ class TestLeadAdminReassign:
 
         assert sorted(results) == [200, 200]
         lead.refresh_from_db()
-        assert lead.version == 2  # ambas escrituras aplicadas, ninguna se perdió por la carrera
+        assert lead.version == 2
 
 
 # ==========================================

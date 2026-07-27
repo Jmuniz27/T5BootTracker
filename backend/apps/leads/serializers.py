@@ -125,9 +125,6 @@ class LeadAdminWriteSerializer(LeadWriteSerializer):
             new_owner = validated_data.pop('owner')
             if new_owner != instance.owner:
                 admin_user = self.context['request'].user
-                # reassign_lead_by_admin already saves owner/assigned_at/version + logs the
-                # audit trail (CR-005) — reuse its fresh instance so the plain super().update()
-                # below doesn't clobber those fields with the stale in-memory `instance`.
                 instance = reassign_lead_by_admin(instance.pk, admin_user, new_owner)
         return super().update(instance, validated_data)
 
