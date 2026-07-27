@@ -1,6 +1,6 @@
-"""Cross-app backend integration test (CB-100 / S5-3): a single continuous
-request chain spanning leads -> programs -> payments -> analytics, instead of
-testing each app's endpoints in isolation (as every other test file does).
+"""Cross-app backend integration test: a single continuous request chain
+spanning leads -> programs -> payments -> analytics, instead of testing
+each app's endpoints in isolation (as every other test file does).
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -69,19 +69,16 @@ class TestLeadToPaymentJourney:
     ):
         salesperson_client = make_client(salesperson_user)
 
-        # 1. Crear el lead (flujo manual, CR-001)
         create_resp = salesperson_client.post(LEADS_URL, {
             'name': 'Ana Journey', 'phone': '0991112233', 'source': Lead.Source.MANUAL,
         }, format='json')
         assert create_resp.status_code == 201
         lead_id = create_resp.json()['id']
 
-        # 2. El vendedor se autoasigna
         assign_resp = salesperson_client.patch(f'{LEADS_URL}{lead_id}/assign/')
         assert assign_resp.status_code == 200
         assert assign_resp.json()['owner'] == str(salesperson_user.id)
 
-        # 3. Registra una interacción que califica al lead (SCHEDULE_VISIT -> QUALIFIED)
         interaction_resp = salesperson_client.post(f'{LEADS_URL}{lead_id}/interactions/', {
             'interaction_type': Interaction.InteractionType.VISIT,
             'outcome': Interaction.Outcome.SCHEDULE_VISIT,
@@ -89,7 +86,6 @@ class TestLeadToPaymentJourney:
         assert interaction_resp.status_code == 201
         assert Lead.objects.get(pk=lead_id).status == Lead.Status.QUALIFIED
 
-        # 4. Convierte el lead a bootcamper (crea CustomUser + Enrollment)
         with patch('apps.notifications.tasks.send_conversion_notification.delay'):
             convert_resp = salesperson_client.post(f'{LEADS_URL}{lead_id}/convert/', {
                 'cedula': VALID_CEDULA,
@@ -105,12 +101,8 @@ class TestLeadToPaymentJourney:
         enrollment = Enrollment.objects.get(bootcamper=bootcamper, bootcamp=program)
         assert enrollment.agreed_price == program.total_cost
 
-        # 5. Sube y aprueba el comprobante de pago
         _upload_and_approve_payment(bootcamper, program, admin_user, program.total_cost)
 
-        # 6. El cierre cruzado: los KPIs de analytics (CB-55) reflejan exactamente
-        # lo que acaba de pasar en los pasos 1-5, confirmando que el flujo atravesó
-        # leads + programs + payments + analytics de forma consistente.
         admin_client = make_client(admin_user)
         kpi_resp = admin_client.get(ANALYTICS_KPIS_URL)
         assert kpi_resp.status_code == 200
@@ -154,7 +146,6 @@ class TestLeadToPaymentJourney:
         assert convert_resp.status_code == 201
         bootcamper = CustomUser.objects.get(pk=convert_resp.json()['bootcamper_id'])
 
-        # El mismo bootcamper vuelve a inscribirse en otro programa (S2-4/ReturningBootcamperView)
         second_program = Program.objects.create(
             name='Data Science Julio 2026',
             start_date=date.today() + timedelta(days=5),
@@ -167,7 +158,7 @@ class TestLeadToPaymentJourney:
         }, format='json')
         assert returning_resp.status_code == 201
         assert returning_resp.json()['id'] != lead_id
-        assert returning_resp.json()['owner'] == str(salesperson_user.id)  # ya asignado al vendedor
+        assert returning_resp.json()['owner'] == str(salesperson_user.id)
 
         _upload_and_approve_payment(bootcamper, second_program, admin_user, second_program.total_cost)
 
@@ -175,8 +166,5 @@ class TestLeadToPaymentJourney:
         kpis = admin_client.get(ANALYTICS_KPIS_URL).json()
         by_program = {p['program_id']: p for p in kpis['payment_collection']['by_program']}
         assert by_program[str(second_program.id)]['collected_amount'] == float(second_program.total_cost)
-        # El primer programa de este test sí tiene la Enrollment de la conversión inicial
-        # (agreed_price == total_cost) pero ningún pago aprobado contra él en este test —
-        # ambas filas de payment_collection conviven correctamente en la misma respuesta.
         assert by_program[str(program.id)]['expected_amount'] == float(program.total_cost)
         assert by_program[str(program.id)]['collected_amount'] == 0.0
