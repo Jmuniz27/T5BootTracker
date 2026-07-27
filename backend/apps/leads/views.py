@@ -26,7 +26,7 @@ from .serializers import (
 from .services import (
     register_interaction, convert_lead_to_bootcamper,
     get_self_assignment_enabled, set_self_assignment_enabled,
-    find_duplicate_lead,
+    find_duplicate_lead, reassign_lead_by_admin,
 )
 
 logger = logging.getLogger(__name__)
@@ -266,6 +266,50 @@ class LeadReleaseView(APIView):
         return Response(LeadListSerializer(lead).data)
 
 
+class LeadAdminReassignView(APIView):
+    """PATCH /leads/{id}/admin-reassign/ — Admin liberación/reasignación forzada (CR-005)."""
+    permission_classes = [IsAdministrator]
+
+    @extend_schema(
+        request=inline_serializer('AdminReassignRequest', fields={
+            'owner_id': drf_serializers.UUIDField(required=False, allow_null=True),
+        }),
+        responses={
+            200: LeadDetailSerializer,
+            400: OpenApiResponse(description='owner_id no corresponde a un Vendedor existente'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Liberar o reasignar un lead (Admin)',
+        description=(
+            'El Administrador puede liberar cualquier lead (sin owner_id, vuelve al pool) o '
+            'reasignarlo directamente a otro Vendedor (con owner_id), sin importar quién lo '
+            'tenía asignado. Queda registrado quién ejecutó la acción, cuándo, y quién era el '
+            'vendedor anterior, como una Interaction de tipo SYSTEM.'
+        ),
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        new_owner = None
+        owner_id = request.data.get('owner_id')
+        if owner_id:
+            try:
+                new_owner = CustomUser.objects.get(pk=uuid.UUID(str(owner_id)), role=CustomUser.Role.SALESPERSON)
+            except (CustomUser.DoesNotExist, ValueError):
+                return Response(
+                    {'error': 'owner_id debe ser un Vendedor existente.', 'code': 'INVALID_OWNER'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        try:
+            lead = reassign_lead_by_admin(pk, request.user, new_owner)
+        except Lead.DoesNotExist:
+            return Response(
+                {'error': 'Lead no encontrado.', 'code': 'LEAD_NOT_FOUND'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(LeadDetailSerializer(lead).data)
+
+
 class LeadAssignmentSettingView(APIView):
     """GET/PATCH /leads/settings/self-assignment/ — global toggle for self-assignment (CR-004)."""
     permission_classes = [IsAuthenticated]
@@ -329,7 +373,7 @@ class LeadDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         serializer_class = LeadAdminWriteSerializer if request.user.is_administrator else LeadWriteSerializer
-        serializer = serializer_class(lead, data=request.data, partial=True)
+        serializer = serializer_class(lead, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         lead = serializer.save()
         return Response(LeadDetailSerializer(lead).data)

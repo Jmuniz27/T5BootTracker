@@ -161,3 +161,42 @@ def find_duplicate_lead(phone, email):
     if email:
         query |= Q(email=email)
     return Lead.objects.filter(query).first()
+
+
+@transaction.atomic
+def reassign_lead_by_admin(lead_id, admin_user, new_owner=None):
+    """Force-release or force-reassign a lead as an Administrator (CR-005).
+
+    ``new_owner=None`` releases the lead back to the unassigned pool; a
+    ``CustomUser`` reassigns it directly. Either way, an audit trail is left
+    as a system Interaction (who did it, previous owner, timestamp) — there is
+    no dedicated audit table, so this is the one place that must run whenever
+    an admin changes a lead's owner (also called from
+    ``LeadAdminWriteSerializer.update`` for the generic PATCH path).
+    """
+    lead = Lead.objects.select_for_update().get(pk=lead_id)
+    previous_owner = lead.owner
+
+    lead.owner = new_owner
+    lead.assigned_at = now() if new_owner else None
+    lead.version += 1
+    lead.save(update_fields=['owner', 'assigned_at', 'version', 'updated_at'])
+
+    previous_owner_name = previous_owner.get_full_name() if previous_owner else 'sin asignar'
+    if new_owner:
+        notes = (
+            f'Lead reasignado por {admin_user.get_full_name()} '
+            f'de {previous_owner_name} a {new_owner.get_full_name()}.'
+        )
+    else:
+        notes = f'Lead liberado por {admin_user.get_full_name()} (antes: {previous_owner_name}).'
+
+    Interaction.objects.create(
+        lead=lead,
+        salesperson=admin_user,
+        interaction_type=Interaction.InteractionType.SYSTEM,
+        outcome=Interaction.Outcome.REASSIGNED,
+        notes=notes,
+    )
+
+    return lead

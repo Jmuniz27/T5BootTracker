@@ -89,6 +89,7 @@ class Interaction(models.Model):
         EMAIL     = 'EMAIL',     'Email'
         VISIT     = 'VISIT',     'Visita'
         NOTE      = 'NOTE',      'Nota'
+        SYSTEM    = 'SYSTEM',    'Sistema'
 
     class Outcome(models.TextChoices):
         CALL_AGAIN        = 'CALL_AGAIN',        'Llamar de nuevo'
@@ -96,6 +97,7 @@ class Interaction(models.Model):
         SCHEDULE_VISIT    = 'SCHEDULE_VISIT',    'Agendar visita'
         AWAIT_REPLY       = 'AWAIT_REPLY',       'Esperar respuesta'
         SPEAK_COORDINATOR = 'SPEAK_COORDINATOR', 'Hablar con coordinador'
+        REASSIGNED        = 'REASSIGNED',        'Reasignado por administrador'
 
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     lead             = models.ForeignKey(
