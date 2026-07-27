@@ -372,6 +372,129 @@ class TestLeadRelease:
         assert assigned_lead.assigned_at is None
 
 
+class TestLeadAdminReassign:
+    """PATCH /leads/{id}/admin-reassign/ — liberación/reasignación forzada por Admin (CR-005)."""
+
+    def test_admin_releases_assigned_lead(self, db, admin_user, salesperson_user, assigned_lead):
+        client = make_client(admin_user)
+        resp = client.patch(f'{LEADS_URL}{assigned_lead.id}/admin-reassign/', {}, format='json')
+        assert resp.status_code == 200
+        assigned_lead.refresh_from_db()
+        assert assigned_lead.owner is None
+        assert assigned_lead.assigned_at is None
+        assert assigned_lead.version == 1
+
+        audit = assigned_lead.interactions.filter(interaction_type=Interaction.InteractionType.SYSTEM).first()
+        assert audit is not None
+        assert audit.outcome == Interaction.Outcome.REASSIGNED
+        assert admin_user.get_full_name() in audit.notes
+        assert salesperson_user.get_full_name() in audit.notes
+
+    def test_admin_reassigns_to_specific_vendor(self, db, admin_user, salesperson_user, assigned_lead):
+        other = CustomUser.objects.create_user(
+            email='other_vendor@test.com', password='testpass123',
+            first_name='Otro', last_name='Vendedor', role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(admin_user)
+        resp = client.patch(
+            f'{LEADS_URL}{assigned_lead.id}/admin-reassign/', {'owner_id': str(other.id)}, format='json'
+        )
+        assert resp.status_code == 200
+        assigned_lead.refresh_from_db()
+        assert assigned_lead.owner == other
+        assert assigned_lead.assigned_at is not None
+        assert assigned_lead.version == 1
+
+        other_client = make_client(other)
+        list_resp = other_client.get(LEADS_URL)
+        my_ids = [lead['id'] for lead in list_resp.json()['my_leads']]
+        assert str(assigned_lead.id) in my_ids
+
+    def test_previous_interactions_preserved_after_reassign(self, db, admin_user, salesperson_user, assigned_lead):
+        Interaction.objects.create(
+            lead=assigned_lead, salesperson=salesperson_user,
+            interaction_type=Interaction.InteractionType.CALL, outcome=Interaction.Outcome.CALL_AGAIN,
+        )
+        client = make_client(admin_user)
+        resp = client.patch(f'{LEADS_URL}{assigned_lead.id}/admin-reassign/', {}, format='json')
+        assert resp.status_code == 200
+        assert assigned_lead.interactions.filter(interaction_type=Interaction.InteractionType.CALL).exists()
+
+    def test_salesperson_cannot_use_admin_reassign(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+        resp = client.patch(f'{LEADS_URL}{assigned_lead.id}/admin-reassign/', {}, format='json')
+        assert resp.status_code == 403
+
+    def test_reassign_to_non_salesperson_rejected(self, db, admin_user, bootcamper_user, assigned_lead):
+        client = make_client(admin_user)
+        resp = client.patch(
+            f'{LEADS_URL}{assigned_lead.id}/admin-reassign/', {'owner_id': str(bootcamper_user.id)}, format='json'
+        )
+        assert resp.status_code == 400
+        assert resp.json()['code'] == 'INVALID_OWNER'
+
+    def test_reassign_lead_not_found(self, db, admin_user):
+        import uuid as _uuid
+        client = make_client(admin_user)
+        resp = client.patch(f'{LEADS_URL}{_uuid.uuid4()}/admin-reassign/', {}, format='json')
+        assert resp.status_code == 404
+
+    def test_generic_admin_patch_also_creates_audit_entry(self, db, admin_user, sample_lead):
+        other = CustomUser.objects.create_user(
+            email='generic_reassign@test.com', password='testpass123',
+            first_name='Generic', last_name='Vendor', role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(admin_user)
+        resp = client.patch(f'{LEADS_URL}{sample_lead.id}/', {'owner': str(other.id)}, format='json')
+        assert resp.status_code == 200
+        sample_lead.refresh_from_db()
+        assert sample_lead.owner == other
+        assert sample_lead.interactions.filter(
+            interaction_type=Interaction.InteractionType.SYSTEM,
+            outcome=Interaction.Outcome.REASSIGNED,
+        ).exists()
+
+    @pytest.mark.django_db(transaction=True)
+    def test_admin_reassign_concurrent_calls_do_not_lose_updates(self):
+        admin = CustomUser.objects.create_user(
+            email='race_admin@test.com', password='testpass123',
+            first_name='Race', last_name='Admin', role=CustomUser.Role.ADMINISTRATOR,
+        )
+        v1 = CustomUser.objects.create_user(
+            email='race_target1@test.com', password='testpass123',
+            first_name='Target', last_name='One', role=CustomUser.Role.SALESPERSON,
+        )
+        v2 = CustomUser.objects.create_user(
+            email='race_target2@test.com', password='testpass123',
+            first_name='Target', last_name='Two', role=CustomUser.Role.SALESPERSON,
+        )
+        lead = Lead.objects.create(name='Race Reassign', phone='0777000002', owner=v1)
+        client1 = make_client(admin)
+        client2 = make_client(admin)
+
+        results = []
+
+        def do_reassign(client_instance, owner_id):
+            try:
+                resp = client_instance.patch(
+                    f'{LEADS_URL}{lead.id}/admin-reassign/', {'owner_id': owner_id}, format='json'
+                )
+                results.append(resp.status_code)
+            finally:
+                connection.close()
+
+        t1 = threading.Thread(target=do_reassign, args=(client1, str(v2.id)))
+        t2 = threading.Thread(target=do_reassign, args=(client2, None))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert sorted(results) == [200, 200]
+        lead.refresh_from_db()
+        assert lead.version == 2  # ambas escrituras aplicadas, ninguna se perdió por la carrera
+
+
 # ==========================================
 # INTERACTIONS TESTS
 # ==========================================
