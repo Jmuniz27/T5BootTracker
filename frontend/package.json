@@ -20,6 +20,7 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.79.0",
     "react-router-dom": "^7.2.0",
+    "recharts": "^2.15.4",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },

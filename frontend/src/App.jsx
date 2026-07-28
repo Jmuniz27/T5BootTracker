@@ -10,11 +10,19 @@ import LeadsDashboard from './pages/LeadsDashboard'
 import PaymentsPage from './pages/PaymentsPage'
 import SalespersonPaymentsPage from './pages/SalespersonPaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
+import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage'
 import { useAuthStore } from './store/auth.store'
 
 function PaymentsRoute() {
   const user = useAuthStore((s) => s.user)
   return user?.role === 'BOOTCAMPER' ? <PaymentsPage /> : <SalespersonPaymentsPage />
+}
+
+// Analytics is Admin-only (CB-57). Backend enforces this via IsAdmin; the
+// frontend mirrors that RBAC by redirecting non-admins away from the route.
+function AnalyticsRoute() {
+  const user = useAuthStore((s) => s.user)
+  return user?.role === 'ADMINISTRATOR' ? <AnalyticsDashboardPage /> : <Navigate to="/dashboard" replace />
 }
 
 function DashboardRoute() {
@@ -48,6 +56,7 @@ export default function App() {
           <Route path="/schedule" element={<div className="p-8 text-gray-400">Schedule — coming soon</div>} />
           <Route path="/payments" element={<PaymentsRoute />} />
           <Route path="/payments/:bootcamperId/:programId" element={<BootcamperPaymentDetailPage />} />
+          <Route path="/analytics" element={<AnalyticsRoute />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

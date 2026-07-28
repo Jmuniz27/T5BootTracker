@@ -20,6 +20,16 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    to: '/analytics',
+    label: 'Analytics',
+    adminOnly: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a1 1 0 00-1-1H5a1 1 0 00-1 1v6a1 1 0 001 1h3a1 1 0 001-1zm0 0V9a1 1 0 011-1h4a1 1 0 011 1v10m-6 0a1 1 0 001 1h4a1 1 0 001-1m0 0V5a1 1 0 011-1h3a1 1 0 011 1v14a1 1 0 01-1 1h-3a1 1 0 01-1-1z" />
+      </svg>
+    ),
+  },
 ]
 
 export default function Sidebar({ onClose }) {
@@ -27,6 +37,7 @@ export default function Sidebar({ onClose }) {
   const logout = useAuthStore((s) => s.logout)
   const user = useAuthStore((s) => s.user)
   const isBootcamper = user?.role === 'BOOTCAMPER'
+  const isAdmin = user?.role === 'ADMINISTRATOR'
 
   const handleLogout = () => {
     logout()
@@ -35,7 +46,7 @@ export default function Sidebar({ onClose }) {
 
   const visibleItems = isBootcamper
     ? NAV_ITEMS.filter((item) => item.to === '/payments')
-    : NAV_ITEMS
+    : NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
   return (
     <aside className="w-56 h-full min-h-screen bg-white border-r border-gray-200 flex flex-col">
