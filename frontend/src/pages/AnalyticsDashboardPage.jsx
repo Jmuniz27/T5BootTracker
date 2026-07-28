@@ -8,6 +8,7 @@ import LeadsTrendChart from '../components/analytics/LeadsTrendChart'
 import RevenueChart from '../components/analytics/RevenueChart'
 import StatusBreakdown from '../components/analytics/StatusBreakdown'
 import ConversionFunnel from '../components/analytics/ConversionFunnel'
+import LeadManagementMetrics from '../components/analytics/LeadManagementMetrics'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ const fmtPct = (v) => (v == null ? '—' : `${(v * 100).toFixed(0)}%`)
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsDashboardPage() {
+  const [tab, setTab] = useState('graficos')
   const [filters, setFilters] = useState({
     dateFrom: isoDaysAgo(29),
     dateTo: isoDaysAgo(0),
@@ -94,6 +96,26 @@ export default function AnalyticsDashboardPage() {
         invalidRange={invalidRange}
       />
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200 mb-6">
+        {[
+          { id: 'graficos', label: 'Resumen' },
+          { id: 'gestion', label: 'Gestión de leads' },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t.id
+                ? 'border-[#213A8E] text-[#213A8E]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Error state */}
       {isError ? (
         <div className="py-20 text-center">
@@ -107,29 +129,39 @@ export default function AnalyticsDashboardPage() {
         </div>
       ) : (
         <>
-          {/* KPI cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <KpiCard label="Total de leads" value={kpis?.total_leads ?? '—'} deltaPct={kpis?.leads_delta_pct} loading={isLoading} />
-            <KpiCard label="Tasa de conversión" value={fmtPct(kpis?.conversion_rate)} deltaPct={kpis?.conversion_delta_pct} loading={isLoading} />
-            <KpiCard label="Ingresos recaudados" value={fmtMoney(kpis?.revenue_collected)} deltaPct={kpis?.revenue_delta_pct} loading={isLoading} />
-            <KpiCard label="Pagos pendientes" value={kpis?.pending_payments ?? '—'} loading={isLoading} />
-          </div>
+          {/* Tab: Resumen — KPIs + gráficos */}
+          {tab === 'graficos' && (
+            <>
+              {/* KPI cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                <KpiCard label="Total de leads" value={kpis?.total_leads ?? '—'} deltaPct={kpis?.leads_delta_pct} loading={isLoading} />
+                <KpiCard label="Tasa de conversión" value={fmtPct(kpis?.conversion_rate)} deltaPct={kpis?.conversion_delta_pct} loading={isLoading} />
+                <KpiCard label="Ingresos recaudados" value={fmtMoney(kpis?.revenue_collected)} deltaPct={kpis?.revenue_delta_pct} loading={isLoading} />
+                <KpiCard label="Pagos pendientes" value={kpis?.pending_payments ?? '—'} loading={isLoading} />
+              </div>
 
-          {/* Empty state (loaded but no data in range) */}
-          {!isLoading && !hasData && (
-            <div className="py-16 text-center text-sm text-gray-400">
-              No hay actividad en el rango seleccionado. Prueba ampliar las fechas.
-            </div>
+              {/* Empty state (loaded but no data in range) */}
+              {!isLoading && !hasData && (
+                <div className="py-16 text-center text-sm text-gray-400">
+                  No hay actividad en el rango seleccionado. Prueba ampliar las fechas.
+                </div>
+              )}
+
+              {/* Charts */}
+              {(isLoading || hasData) && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <LeadsTrendChart data={data?.leads_over_time} loading={isLoading} />
+                  <RevenueChart data={data?.revenue_over_time} loading={isLoading} />
+                  <StatusBreakdown data={data?.leads_by_status} loading={isLoading} />
+                  <ConversionFunnel data={data?.conversion_funnel} loading={isLoading} />
+                </div>
+              )}
+            </>
           )}
 
-          {/* Charts */}
-          {(isLoading || hasData) && (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <LeadsTrendChart data={data?.leads_over_time} loading={isLoading} />
-              <RevenueChart data={data?.revenue_over_time} loading={isLoading} />
-              <StatusBreakdown data={data?.leads_by_status} loading={isLoading} />
-              <ConversionFunnel data={data?.conversion_funnel} loading={isLoading} />
-            </div>
+          {/* Tab: Gestión de leads — trazabilidad temporal (CB-122 · CR-006) */}
+          {tab === 'gestion' && (
+            <LeadManagementMetrics data={data?.lead_management} loading={isLoading} />
           )}
         </>
       )}

@@ -51,6 +51,18 @@ export const analyticsDashboardMock = {
     { stage: 'Interested', count: 190 },
     { stage: 'Converted', count: 132 },
   ],
+  // Lead management temporal metrics (CB-122 · CR-006 · HST-024).
+  // Derived from the assignment lifecycle: retention = assigned_at → released_at/now;
+  // time to first contact = assigned_at → first interaction.
+  lead_management: {
+    avg_retention_hours: 42.6,
+    avg_time_to_first_contact_hours: 5.3,
+    by_salesperson: [
+      { salesperson: 'María Cedeño', active_leads: 8, avg_retention_hours: 38.2, avg_time_to_first_contact_hours: 3.1 },
+      { salesperson: 'Jorge Rivas', active_leads: 11, avg_retention_hours: 51.7, avg_time_to_first_contact_hours: 7.8 },
+      { salesperson: 'Lucía Paz', active_leads: 6, avg_retention_hours: 29.4, avg_time_to_first_contact_hours: 4.6 },
+    ],
+  },
 }
 
 export default analyticsDashboardMock
