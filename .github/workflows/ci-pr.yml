@@ -4,7 +4,11 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    # chore/deploy-vps-hetzner está acá temporalmente para poder publicar las primeras
+    # imágenes en GHCR y hacer el despliegue manual de la Fase 4 antes de mergear.
+    # Se quita al mergear a main. Ojo: desde ramas que no son main, build-push publica
+    # sólo el tag del SHA — `latest` lo mueve únicamente main.
+    branches: [main, chore/deploy-vps-hetzner]
 
 jobs:
   backend-ci:
@@ -114,17 +118,14 @@ jobs:
         working-directory: mobile
         run: npm run test -- --passWithNoTests
 
-  deploy:
-    name: Deploy a producción (VPS Hetzner)
+  # Construir y publicar está separado de desplegar a propósito: el primer arranque en el
+  # servidor se hace a mano (Fase 4) y necesita las imágenes en GHCR antes de que exista
+  # ningún automatismo. Si estuvieran en el mismo job, para tener imágenes habría que
+  # encender el deploy, y ese es justo el orden que no queremos.
+  build-push:
+    name: Construir y publicar imágenes (GHCR)
     needs: [backend-ci, frontend-ci]
-    # Sólo main, sólo en push (no en PRs), y sólo si el despliegue está habilitado.
-    # DEPLOY_ENABLED es una variable de repositorio (Settings → Variables). Mientras no
-    # exista o no valga 'true', este job se salta: así se puede mergear sin que falle
-    # antes de que el servidor y los secrets estén listos.
-    if: >-
-      github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' &&
-      vars.DEPLOY_ENABLED == 'true'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -146,6 +147,10 @@ jobs:
 
       # Los builds corren acá y no en el VPS: la caja tiene 2 vCPU y 3.7 GiB
       # compartidos con otra aplicación en producción.
+      #
+      # El tag del SHA se publica siempre; `latest` sólo desde main. Así una rama puede
+      # producir una imagen probable sin que nada apunte a ella como "lo actual", y el
+      # principio de "sólo main llega a producción" se mantiene.
       - name: Build & push backend
         uses: docker/build-push-action@v6
         with:
@@ -154,7 +159,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/jmuniz27/boot-tracker-backend:${{ github.sha }}
-            ghcr.io/jmuniz27/boot-tracker-backend:latest
+            ${{ github.ref == 'refs/heads/main' && 'ghcr.io/jmuniz27/boot-tracker-backend:latest' || '' }}
           # El deploy.sh del servidor limpia imágenes viejas filtrando por esta label.
           # Sin ella, el prune no tendría con qué distinguirlas de las de la otra app.
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -169,11 +174,33 @@ jobs:
           push: true
           tags: |
             ghcr.io/jmuniz27/boot-tracker-frontend:${{ github.sha }}
-            ghcr.io/jmuniz27/boot-tracker-frontend:latest
+            ${{ github.ref == 'refs/heads/main' && 'ghcr.io/jmuniz27/boot-tracker-frontend:latest' || '' }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Resumen
+        run: |
+          echo "### Imágenes publicadas" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/jmuniz27/boot-tracker-backend:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/jmuniz27/boot-tracker-frontend:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    name: Deploy a producción (VPS Hetzner)
+    needs: [build-push]
+    # Sólo main, sólo en push (no en PRs), y sólo si el despliegue está habilitado.
+    # DEPLOY_ENABLED es una variable de repositorio (Settings → Variables). Mientras no
+    # exista o no valga 'true', este job se salta: así se puede mergear sin que falle
+    # antes de que el servidor y los secrets estén listos.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
       # La llave está restringida en authorized_keys con
       #   command="/opt/boot-tracker/deploy.sh",no-port-forwarding,no-agent-forwarding,no-pty
       # así que sólo puede ejecutar el despliegue: si el secret se filtrara, no abre shell.
