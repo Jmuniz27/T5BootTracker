@@ -36,6 +36,50 @@ export function toVelocitySeries(kpis) {
   }))
 }
 
+// ─── Selectores para las KPI cards (CB-57 / S4-4a) ───────────────────────────
+//
+// Devuelven `value: null` cuando el backend no tiene dato suficiente (por
+// ejemplo, tiempo de respuesta sin ninguna interacción registrada). Eso es
+// distinto de cero y la tarjeta lo pinta como "—", no como "0".
+
+const pct = (v) => (v === null || v === undefined ? null : num(v))
+
+export function toConversionCard(kpis) {
+  const block = kpis?.conversion_rate
+  return {
+    value: pct(block?.rate_percentage),
+    converted: num(block?.converted_leads),
+    total: num(block?.total_leads),
+  }
+}
+
+export function toResponseTimeCard(kpis) {
+  const block = kpis?.response_time
+  return {
+    value: block?.avg_hours ?? null,
+    median: block?.median_hours ?? null,
+    withoutResponse: num(block?.leads_without_response),
+  }
+}
+
+export function toVelocityCard(kpis) {
+  const block = kpis?.lead_velocity
+  return {
+    value: num(block?.current_period?.count),
+    previous: num(block?.previous_period?.count),
+    growth: block?.growth_rate_percentage ?? null,
+  }
+}
+
+export function toPaymentCard(kpis) {
+  const block = kpis?.payment_collection?.overall
+  return {
+    value: pct(block?.collection_rate_percentage),
+    collected: num(block?.collected_amount),
+    expected: num(block?.expected_amount),
+  }
+}
+
 // Cobro esperado vs cobrado por programa.
 export function toPaymentByProgram(kpis) {
   const rows = kpis?.payment_collection?.by_program ?? []
