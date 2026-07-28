@@ -181,6 +181,20 @@ class TestPaymentQueue:
         assert "ocr_payment_date" in item
         assert "ocr_confidence" in item
 
+    def test_queue_response_includes_billing_fields(
+        self, db, salesperson_user, pending_payment
+    ):
+        """CB-123: billing fields must be present in queue list items."""
+        client = make_client(salesperson_user)
+        resp = client.get(QUEUE_URL)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) >= 1
+        item = data[0]
+        for field in ("payer_name", "payer_identification", "payer_email",
+                      "payer_address", "payer_phone", "document_number"):
+            assert field in item
+
     def test_queue_bootcamper_forbidden(self, db, converted_bootcamper):
         client = make_client(converted_bootcamper)
         resp = client.get(QUEUE_URL)
@@ -292,6 +306,25 @@ class TestPaymentOCRStatus:
         assert "ocr_confidence" in data
         assert data["ocr_confidence"] == {}
 
+    def test_ocr_status_includes_billing_fields(
+        self, db, converted_bootcamper, pending_payment
+    ):
+        """CB-123: billing fields must appear in the ocr-status response."""
+        pending_payment.payer_name = "Munizaga Torres Juan Andres"
+        pending_payment.payer_email = "juan@example.com"
+        pending_payment.document_number = "4121055"
+        pending_payment.save()
+        client = make_client(converted_bootcamper)
+        resp = client.get(OCR_STATUS_URL.format(id=pending_payment.id))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["payer_name"] == "Munizaga Torres Juan Andres"
+        assert data["payer_email"] == "juan@example.com"
+        assert data["document_number"] == "4121055"
+        assert "payer_identification" in data
+        assert "payer_address" in data
+        assert "payer_phone" in data
+
     def test_ocr_status_other_bootcamper_forbidden(
         self, db, bootcamper_user, pending_payment
     ):
@@ -350,6 +383,73 @@ class TestPaymentConfirm:
         assert draft_payment.status == Payment.Status.PENDING
         assert draft_payment.ocr_amount == Decimal("200.00")
         assert draft_payment.ocr_bank_name == "Banco Guayaquil"
+
+    def test_confirm_with_corrections_overwrites_billing_fields(
+        self, db, converted_bootcamper, draft_payment
+    ):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            CONFIRM_URL.format(id=draft_payment.id),
+            {
+                "payer_name": "Munizaga Torres Juan Andres",
+                "payer_identification": "1713175071",
+                "payer_email": "juan@example.com",
+                "payer_address": "Guayaquil, Ecuador",
+                "payer_phone": "0999999999",
+                "document_number": "4121055",
+            },
+            format="json",
+        )
+        assert resp.status_code == 200
+        draft_payment.refresh_from_db()
+        assert draft_payment.payer_name == "Munizaga Torres Juan Andres"
+        assert draft_payment.payer_identification == "1713175071"
+        assert draft_payment.payer_email == "juan@example.com"
+        assert draft_payment.payer_address == "Guayaquil, Ecuador"
+        assert draft_payment.payer_phone == "0999999999"
+        assert draft_payment.document_number == "4121055"
+
+    def test_confirm_accepts_valid_ruc(self, db, converted_bootcamper, draft_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            CONFIRM_URL.format(id=draft_payment.id),
+            {"payer_identification": "1713175071001"},
+            format="json",
+        )
+        assert resp.status_code == 200
+        draft_payment.refresh_from_db()
+        assert draft_payment.payer_identification == "1713175071001"
+
+    def test_confirm_rejects_invalid_cedula(self, db, converted_bootcamper, draft_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            CONFIRM_URL.format(id=draft_payment.id),
+            {"payer_identification": "1713175070"},  # bad check digit
+            format="json",
+        )
+        assert resp.status_code == 400
+        draft_payment.refresh_from_db()
+        assert draft_payment.payer_identification == ""
+
+    def test_confirm_rejects_malformed_identification(
+        self, db, converted_bootcamper, draft_payment
+    ):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            CONFIRM_URL.format(id=draft_payment.id),
+            {"payer_identification": "12345"},  # wrong length
+            format="json",
+        )
+        assert resp.status_code == 400
+
+    def test_confirm_rejects_invalid_email(self, db, converted_bootcamper, draft_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            CONFIRM_URL.format(id=draft_payment.id),
+            {"payer_email": "not-an-email"},
+            format="json",
+        )
+        assert resp.status_code == 400
 
     def test_confirm_already_pending_fails(self, db, converted_bootcamper, pending_payment):
         client = make_client(converted_bootcamper)

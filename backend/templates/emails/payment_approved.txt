@@ -1,0 +1,6 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Tu pago por USD ${{ amount|floatformat:"2u" }} ha sido aprobado para el programa {{ program_name }}.
+
+Gracias por tu puntualidad.
+{% endblock %}

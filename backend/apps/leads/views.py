@@ -10,18 +10,24 @@ from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
 from rest_framework import status, serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.authentication.models import CustomUser
 from apps.programs.models import Program
-from .models import Lead, Interaction
-from .permissions import IsSalesperson, IsSalespersonOrAdmin
+from .models import Lead, Interaction, LeadAssignmentSetting
+from .permissions import IsAdministrator, IsSalesperson, IsSalespersonOrAdmin
 from .serializers import (
     LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
     InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
+    LeadAssignmentSettingSerializer,
 )
-from .services import register_interaction, convert_lead_to_bootcamper
+from .services import (
+    register_interaction, convert_lead_to_bootcamper,
+    get_self_assignment_enabled, set_self_assignment_enabled,
+    find_duplicate_lead, reassign_lead_by_admin,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -158,13 +164,38 @@ class LeadListCreateView(APIView):
 
     @extend_schema(
         request=LeadWriteSerializer,
-        responses={201: LeadListSerializer},
+        responses={
+            201: LeadListSerializer,
+            409: OpenApiResponse(description='Posible lead duplicado (phone/email ya registrados)'),
+        },
         summary='Crear lead',
         tags=['Leads'],
     )
     def post(self, request):
         serializer = LeadWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        confirm_duplicate = serializer.validated_data.get('confirm_duplicate', False)
+        if not confirm_duplicate:
+            duplicate = find_duplicate_lead(
+                serializer.validated_data['phone'],
+                serializer.validated_data.get('email'),
+            )
+            if duplicate is not None:
+                return Response(
+                    {
+                        'error': 'Ya existe un lead con estos datos.',
+                        'code': 'POSSIBLE_DUPLICATE',
+                        'duplicate': {
+                            'id': str(duplicate.id),
+                            'name': duplicate.name,
+                            'phone': duplicate.phone,
+                            'email': duplicate.email,
+                        },
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
         lead = serializer.save()
         return Response(LeadListSerializer(lead).data, status=status.HTTP_201_CREATED)
 
@@ -174,11 +205,24 @@ class LeadAssignView(APIView):
     permission_classes = [IsSalesperson]
 
     @extend_schema(
-        responses={200: LeadListSerializer, 409: OpenApiResponse(description='Lead ya asignado')},
+        responses={
+            200: LeadListSerializer,
+            403: OpenApiResponse(description='Auto-asignación deshabilitada por el Administrador'),
+            409: OpenApiResponse(description='Lead ya asignado'),
+        },
         summary='Asignar lead',
         tags=['Leads'],
     )
     def patch(self, request, pk):
+        if not get_self_assignment_enabled():
+            return Response(
+                {
+                    'error': 'La asignación de leads la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         with transaction.atomic():
             try:
                 lead = Lead.objects.select_for_update().get(pk=pk)
@@ -222,6 +266,86 @@ class LeadReleaseView(APIView):
         return Response(LeadListSerializer(lead).data)
 
 
+class LeadAdminReassignView(APIView):
+    """PATCH /leads/{id}/admin-reassign/ — Admin liberación/reasignación forzada (CR-005)."""
+    permission_classes = [IsAdministrator]
+
+    @extend_schema(
+        request=inline_serializer('AdminReassignRequest', fields={
+            'owner_id': drf_serializers.UUIDField(required=False, allow_null=True),
+        }),
+        responses={
+            200: LeadDetailSerializer,
+            400: OpenApiResponse(description='owner_id no corresponde a un Vendedor existente'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Liberar o reasignar un lead (Admin)',
+        description=(
+            'El Administrador puede liberar cualquier lead (sin owner_id, vuelve al pool) o '
+            'reasignarlo directamente a otro Vendedor (con owner_id), sin importar quién lo '
+            'tenía asignado. Queda registrado quién ejecutó la acción, cuándo, y quién era el '
+            'vendedor anterior, como una Interaction de tipo SYSTEM.'
+        ),
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        new_owner = None
+        owner_id = request.data.get('owner_id')
+        if owner_id:
+            try:
+                new_owner = CustomUser.objects.get(pk=uuid.UUID(str(owner_id)), role=CustomUser.Role.SALESPERSON)
+            except (CustomUser.DoesNotExist, ValueError):
+                return Response(
+                    {'error': 'owner_id debe ser un Vendedor existente.', 'code': 'INVALID_OWNER'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        try:
+            lead = reassign_lead_by_admin(pk, request.user, new_owner)
+        except Lead.DoesNotExist:
+            return Response(
+                {'error': 'Lead no encontrado.', 'code': 'LEAD_NOT_FOUND'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(LeadDetailSerializer(lead).data)
+
+
+class LeadAssignmentSettingView(APIView):
+    """GET/PATCH /leads/settings/self-assignment/ — global toggle for self-assignment (CR-004)."""
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method == 'PATCH':
+            return [IsAdministrator()]
+        return super().get_permissions()
+
+    @extend_schema(
+        responses={200: LeadAssignmentSettingSerializer},
+        summary='Consultar estado de auto-asignación',
+        tags=['Leads'],
+    )
+    def get(self, request):
+        setting = LeadAssignmentSetting.get_solo()
+        return Response(LeadAssignmentSettingSerializer(setting).data)
+
+    @extend_schema(
+        request=LeadAssignmentSettingSerializer,
+        responses={200: LeadAssignmentSettingSerializer, 403: OpenApiResponse(description='Solo el Administrador puede cambiar este control')},
+        summary='Habilitar/deshabilitar auto-asignación',
+        tags=['Leads'],
+    )
+    def patch(self, request):
+        serializer = LeadAssignmentSettingSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        if 'self_assign_enabled' not in serializer.validated_data:
+            return Response(
+                {'error': 'self_assign_enabled es requerido.', 'code': 'MISSING_FIELD'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        setting = set_self_assignment_enabled(serializer.validated_data['self_assign_enabled'], request.user)
+        return Response(LeadAssignmentSettingSerializer(setting).data)
+
+
 class LeadDetailView(APIView):
     """GET/PATCH/DELETE /leads/{id}/ — detail, partial update, soft delete."""
     permission_classes = [IsSalespersonOrAdmin]
@@ -249,7 +373,7 @@ class LeadDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         serializer_class = LeadAdminWriteSerializer if request.user.is_administrator else LeadWriteSerializer
-        serializer = serializer_class(lead, data=request.data, partial=True)
+        serializer = serializer_class(lead, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         lead = serializer.save()
         return Response(LeadDetailSerializer(lead).data)

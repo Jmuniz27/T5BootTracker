@@ -193,6 +193,8 @@ class PaymentConfirmView(APIView):
         editable = (
             'ocr_bank_name', 'ocr_account_last_digits',
             'ocr_amount', 'ocr_transaction_id', 'ocr_payment_date',
+            'payer_name', 'payer_identification', 'payer_email',
+            'payer_address', 'payer_phone', 'document_number',
         )
         for field in editable:
             if field in data:

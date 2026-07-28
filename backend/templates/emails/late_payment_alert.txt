@@ -1,0 +1,12 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Alerta de pago crítico.
+
+Bootcamper: {{ bootcamper_name }}
+Email: {{ bootcamper_email }}
+Programa: {{ program_name }}
+
+Por favor, contacta al bootcamper para regularizar su situación de pagos.
+
+Ver panel de pagos: {{ dashboard_url }}
+{% endblock %}
