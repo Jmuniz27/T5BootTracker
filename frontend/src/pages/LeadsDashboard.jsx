@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus } from '../api/leads.api'
+import { getUsers } from '../api/users.api'
+import { useAuthStore } from '../store/auth.store'
 import CustomSelect from '../components/CustomSelect'
 
 const PAGE_SIZE = 10
@@ -761,6 +763,66 @@ function ReleaseLeadModal({ onKeep, onRelease, isLoading }) {
   )
 }
 
+// ─── Admin Reassign Modal (CR-005) ────────────────────────────────────────────
+
+function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
+  const [ownerId, setOwnerId] = useState('')
+
+  let submitLabel = 'Liberar'
+  if (isLoading) submitLabel = 'Guardando…'
+  else if (ownerId) submitLabel = 'Reasignar'
+
+  const { data } = useQuery({
+    queryKey: ['users', 'salespersons'],
+    queryFn: getUsers,
+  })
+  const salespeople = (data?.results ?? data ?? []).filter(
+    (u) => u.role === 'SALESPERSON' && u.id !== lead.owner,
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[440px] shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Liberar o reasignar lead</h2>
+        <p className="text-sm text-gray-500 mb-5">
+          Vendedor actual: <strong>{lead.owner_name ?? 'Sin asignar'}</strong>
+        </p>
+
+        <label className="block text-xs font-medium text-gray-600 mb-1.5">
+          Reasignar a (opcional)
+        </label>
+        <select
+          value={ownerId}
+          onChange={(e) => setOwnerId(e.target.value)}
+          className="w-full mb-6 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        >
+          <option value="">Liberar al pool (sin asignar)</option>
+          {salespeople.map((u) => (
+            <option key={u.id} value={u.id}>{u.full_name}</option>
+          ))}
+        </select>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => onSubmit(ownerId || null)}
+            disabled={isLoading}
+            className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
+          >
+            {submitLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Create Lead Modal ────────────────────────────────────────────────────────
 
 const EMPTY_FORM = { name: '', phone: '', email: '', source: 'MANUAL', program_interest: '', is_company: false, autoAssign: false }
@@ -1311,7 +1373,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus }) {
+function ActionsDropdown({ lead, isOwned, isAdmin, onView, onRelease, onAssign, onAdminReassign, onViewHistory, onLogInteraction, onConvert, onChangeStatus }) {
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -1397,7 +1459,15 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
               Convertir lead
             </button>
           )}
-          {isOwned ? (
+          {isAdmin && lead.owner && (
+            <button
+              onClick={() => { onAdminReassign(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Liberar / Reasignar
+            </button>
+          )}
+          {!isAdmin && (isOwned ? (
             <button
               onClick={() => { onRelease(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1411,7 +1481,7 @@ function ActionsDropdown({ lead, isOwned, onView, onRelease, onAssign, onViewHis
             >
               Asignarme
             </button>
-          )}
+          ))}
         </div>
       )}
     </div>
@@ -1464,6 +1534,8 @@ function sortLeads(leads, sortKey) {
 
 export default function LeadsDashboard() {
   const queryClient = useQueryClient()
+  const currentUser = useAuthStore((s) => s.user)
+  const isAdmin = currentUser?.role === 'ADMINISTRATOR'
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [companyFilter, setCompanyFilter] = useState(false)
@@ -1474,6 +1546,7 @@ export default function LeadsDashboard() {
   const [logLead, setLogLead]             = useState(null)
   const [statusLead, setStatusLead]       = useState(null)
   const [releaseTarget, setReleaseTarget] = useState(null)
+  const [reassignTarget, setReassignTarget] = useState(null)
   const [convertTarget, setConvertTarget] = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [toast, setToast]                 = useState(null) // { message, type }
@@ -1518,7 +1591,7 @@ export default function LeadsDashboard() {
     : (pagination.available_leads_total_pages ?? 1)
 
   const tabLeads = activeTab === 'mine'
-    ? myLeads.map((l) => ({ ...l, _isOwned: true }))
+    ? myLeads.map((l) => ({ ...l, _isOwned: l.owner === currentUser?.id }))
     : availableLeads.map((l) => ({ ...l, _isOwned: false }))
 
   const pageLeads = sortLeads(
@@ -1547,6 +1620,19 @@ export default function LeadsDashboard() {
     },
     onError: (err) => {
       const msg = err.response?.data?.error ?? 'No se pudo desasignar el lead.'
+      showToast(msg, 'error')
+    },
+  })
+
+  const adminReassignMutation = useMutation({
+    mutationFn: ({ id, ownerId }) => adminReassignLead(id, ownerId),
+    onSuccess: (_, { ownerId }) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      setReassignTarget(null)
+      showToast(ownerId ? 'Lead reasignado correctamente.' : 'Lead liberado correctamente.')
+    },
+    onError: (err) => {
+      const msg = err.response?.data?.error ?? 'No se pudo liberar/reasignar el lead.'
       showToast(msg, 'error')
     },
   })
@@ -1740,12 +1826,14 @@ export default function LeadsDashboard() {
                   <ActionsDropdown
                     lead={lead}
                     isOwned={lead._isOwned}
+                    isAdmin={isAdmin}
                     onView={() => setViewLead(lead)}
                     onViewHistory={() => setHistoryLead(lead)}
                     onLogInteraction={() => setLogLead(lead)}
                     onChangeStatus={() => setStatusLead(lead)}
                     onRelease={() => setReleaseTarget(lead)}
                     onAssign={() => assignMutation.mutate(lead.id)}
+                    onAdminReassign={() => setReassignTarget(lead)}
                     onConvert={() => setConvertTarget(lead)}
                   />
                 </td>
@@ -1800,6 +1888,15 @@ export default function LeadsDashboard() {
           isLoading={releaseMutation.isPending}
           onKeep={() => setReleaseTarget(null)}
           onRelease={() => releaseMutation.mutate(releaseTarget.id)}
+        />
+      )}
+
+      {reassignTarget && (
+        <AdminReassignModal
+          lead={reassignTarget}
+          isLoading={adminReassignMutation.isPending}
+          onClose={() => setReassignTarget(null)}
+          onSubmit={(ownerId) => adminReassignMutation.mutate({ id: reassignTarget.id, ownerId })}
         />
       )}
 

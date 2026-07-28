@@ -66,6 +66,10 @@ class Command(BaseCommand):
             ("amount", result["amount"]),
             ("transaction_id", result["transaction_id"]),
             ("payment_date", result["payment_date"]),
+            ("payer_name", result["payer_name"]),
+            ("payer_identification", result["payer_identification"]),
+            ("payer_email", result["payer_email"]),
+            ("document_number", result["document_number"]),
         ]
         conf = result.get("confidence", {})
         for name, value in fields:

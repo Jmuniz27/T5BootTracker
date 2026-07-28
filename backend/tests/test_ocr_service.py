@@ -557,6 +557,113 @@ class TestConfidenceHeuristic:
 
 
 # ===========================================================================
+# 7b. Billing field extractors (CR-009 / CB-123)
+# ===========================================================================
+
+
+class TestExtractPayerName:
+    def _name(self, text: str) -> str:
+        val, _ = _svc()._extract_payer_name(text, EMPTY_WORDS)
+        return val
+
+    def test_pichincha_nombre_label_under_cuenta_origen(self):
+        assert self._name(TEXT_PICHINCHA) == "Bohorquez Gorotiza Lucia Cristina"
+
+    def test_bolivariano_name_line_after_de(self):
+        """No 'Nombre' label — name is the bare line right after 'De'; the
+        trailing ', AHORROS' account-type suffix must be stripped."""
+        assert self._name(TEXT_BOLIVARIANO) == "PAUL ALEXANDER MOSQUERA INTRIAGO"
+
+    def test_pacifico_a_nombre_de_is_destination_not_payer(self):
+        """'A NOMBRE DE' is the beneficiary — must NOT be returned as payer."""
+        assert self._name(TEXT_PACIFICO) == ""
+
+    def test_guayaquil_dark_no_origin_data_returns_empty(self):
+        assert self._name(TEXT_GUAYAQUIL_DARK) == ""
+
+    def test_espoltech_juan_guayaquil_app_layout(self):
+        """No label at all — name sits right above 'Ahorros - ...'."""
+        assert self._name(TEXT_ESPOLTECH_JUAN) == "Munizaga Torres Juan Andres"
+
+    def test_inline_de_name_whatsapp_screenshot(self):
+        """'De Andrade Veloz Mariu |...' — inline sender marker; trailing
+        OCR noise ('|...') must be stripped."""
+        assert self._name(TEXT_TEST_PICHINCHA20) == "Andrade Veloz Mariu"
+
+    def test_guayaquil40_sender_before_recipient(self):
+        assert self._name(TEXT_TEST_GUAYAQUIL40) == "Diaz Tapia Zahid Alejandro"
+
+    def test_pichincha3799_inline_de_avoids_false_positive(self):
+        """
+        Regression: an earlier version kept scanning past 'Cuenta origen
+        221336 2942' (a bare account line, no name subsection) until it
+        wrongly grabbed 'Motivo Pedido Hoodie Ts' as the name. The inline
+        'De Munizaga...' marker must be matched first and returned directly.
+        """
+        assert self._name(TEXT_TEST_PICHINCHA3799) == "Munizaga Torres Juan Andres"
+
+    def test_deuna_notification_de_banco_is_not_a_name(self):
+        """'de Banco Guayaquil' attributes the bank, not a sender — must not
+        be returned as a payer name."""
+        assert self._name(TEXT_TEST_DEUNA) == ""
+
+    def test_guayaquil13_sender_before_recipient(self):
+        assert self._name(TEXT_TEST_GUAYAQUIL13) == "Munizaga Torres Jose Daniel"
+
+    def test_no_name_data_returns_empty(self):
+        assert self._name("No hay nombre aquí.") == ""
+
+
+class TestExtractPayerEmail:
+    def _email(self, text: str) -> str:
+        val, _ = _svc()._extract_payer_email(text, EMPTY_WORDS)
+        return val
+
+    def test_pacifico_email(self):
+        assert self._email(TEXT_PACIFICO) == "jmunizagatorres@gmail.com"
+
+    def test_no_email_returns_empty(self):
+        assert self._email("Sin correo electrónico aquí.") == ""
+
+    def test_first_email_wins(self):
+        text = "Contacto: a@example.com y b@example.com"
+        assert self._email(text) == "a@example.com"
+
+
+class TestExtractDocumentNumber:
+    def _doc(self, text: str) -> str:
+        val, _ = _svc()._extract_document_number(text, EMPTY_WORDS)
+        return val
+
+    def test_pichincha_numero_de_comprobante_label(self):
+        assert self._doc(TEXT_PICHINCHA) == "4121055"
+
+    def test_bolivariano_comprobante_label(self):
+        assert self._doc(TEXT_BOLIVARIANO) == "75325973"
+
+    def test_no_document_number_returns_empty(self):
+        assert self._doc("Sin comprobante aquí.") == ""
+
+
+class TestExtractPayerIdentification:
+    def _id(self, text: str) -> str:
+        val, _ = _svc()._extract_payer_identification(text, EMPTY_WORDS)
+        return val
+
+    def test_cedula_10_digits(self):
+        assert self._id("Cédula: 1713175071") == "1713175071"
+
+    def test_ruc_13_digits_not_truncated(self):
+        """Regression: alternation order must prefer the 13-digit RUC match
+        over a truncated 10-digit prefix."""
+        assert self._id("RUC 1792146739001") == "1792146739001"
+
+    def test_no_identification_returns_empty(self):
+        """Most receipts never include the payer's cédula/RUC — best effort."""
+        assert self._id(TEXT_PICHINCHA) == ""
+
+
+# ===========================================================================
 # 8. Integration tests (real images — skipped without tesseract-spa)
 # ===========================================================================
 

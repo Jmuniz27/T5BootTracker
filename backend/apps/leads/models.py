@@ -89,6 +89,7 @@ class Interaction(models.Model):
         EMAIL     = 'EMAIL',     'Email'
         VISIT     = 'VISIT',     'Visita'
         NOTE      = 'NOTE',      'Nota'
+        SYSTEM    = 'SYSTEM',    'Sistema'
 
     class Outcome(models.TextChoices):
         CALL_AGAIN        = 'CALL_AGAIN',        'Llamar de nuevo'
@@ -96,6 +97,7 @@ class Interaction(models.Model):
         SCHEDULE_VISIT    = 'SCHEDULE_VISIT',    'Agendar visita'
         AWAIT_REPLY       = 'AWAIT_REPLY',       'Esperar respuesta'
         SPEAK_COORDINATOR = 'SPEAK_COORDINATOR', 'Hablar con coordinador'
+        REASSIGNED        = 'REASSIGNED',        'Reasignado por administrador'
 
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     lead             = models.ForeignKey(
@@ -134,3 +136,29 @@ class Interaction(models.Model):
     def days_as_lead(self):
         """Days between lead creation and this interaction."""
         return (self.created_at.date() - self.lead.created_at.date()).days
+
+
+class LeadAssignmentSetting(models.Model):
+    """Singleton (pk=1) global toggle for salesperson lead self-assignment (CR-004)."""
+
+    self_assign_enabled = models.BooleanField(default=True, verbose_name='Auto-asignación habilitada')
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        verbose_name='Actualizado por',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Configuración de auto-asignación de leads'
+        verbose_name_plural = 'Configuración de auto-asignación de leads'
+
+    def __str__(self):
+        return f'Auto-asignación: {"habilitada" if self.self_assign_enabled else "deshabilitada"}'
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

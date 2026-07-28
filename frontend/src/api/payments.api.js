@@ -41,3 +41,16 @@ export const notifyCoordinator = (bootcamperId, programId) =>
 
 export const getMonitoring = (params = {}) =>
   client.get('/payments/monitoring/', { params }).then((r) => r.data)
+
+// ── Editar / eliminar pagos propios (CB-117 T6) ───────────────────────────────
+// Contrato ASUMIDO — pendiente de implementación en backend:
+//   PATCH  /payments/my-payments/<id>/  → el bootcamper corrige un pago REJECTED
+//                                          y lo reenvía (backend: REJECTED → PENDING).
+//   DELETE /payments/my-payments/<id>/  → el bootcamper elimina un pago propio en
+//                                          estado DRAFT (en revisión) o REJECTED.
+// Ambos deben validar propiedad (payment.bootcamper == request.user).
+export const updateMyPayment = (id, data) =>
+  client.patch(`/payments/my-payments/${id}/`, data).then((r) => r.data)
+
+export const deleteMyPayment = (id) =>
+  client.delete(`/payments/my-payments/${id}/`).then((r) => r.data)
