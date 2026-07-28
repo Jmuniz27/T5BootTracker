@@ -113,3 +113,78 @@ jobs:
       - name: Run tests
         working-directory: mobile
         run: npm run test -- --passWithNoTests
+
+  deploy:
+    name: Deploy a producción (VPS Hetzner)
+    needs: [backend-ci, frontend-ci]
+    # Sólo main, sólo en push (no en PRs), y sólo si el despliegue está habilitado.
+    # DEPLOY_ENABLED es una variable de repositorio (Settings → Variables). Mientras no
+    # exista o no valga 'true', este job se salta: así se puede mergear sin que falle
+    # antes de que el servidor y los secrets estén listos.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Los builds corren acá y no en el VPS: la caja tiene 2 vCPU y 3.7 GiB
+      # compartidos con otra aplicación en producción.
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          push: true
+          tags: |
+            ghcr.io/jmuniz27/boot-tracker-backend:${{ github.sha }}
+            ghcr.io/jmuniz27/boot-tracker-backend:latest
+          # El deploy.sh del servidor limpia imágenes viejas filtrando por esta label.
+          # Sin ella, el prune no tendría con qué distinguirlas de las de la otra app.
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          push: true
+          tags: |
+            ghcr.io/jmuniz27/boot-tracker-frontend:${{ github.sha }}
+            ghcr.io/jmuniz27/boot-tracker-frontend:latest
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # La llave está restringida en authorized_keys con
+      #   command="/opt/boot-tracker/deploy.sh",no-port-forwarding,no-agent-forwarding,no-pty
+      # así que sólo puede ejecutar el despliegue: si el secret se filtrara, no abre shell.
+      #
+      # Se manda ÚNICAMENTE el SHA, no una línea de comando: con un `command=` forzado,
+      # lo que se envía llega al servidor en $SSH_ORIGINAL_COMMAND, y el script lo lee de
+      # ahí y lo valida contra ^[0-9a-f]{40}$ antes de usarlo.
+      - name: Desplegar en el VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: ${{ github.sha }}

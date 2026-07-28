@@ -1,0 +1,98 @@
+# Despliegue en el VPS de Hetzner.
+#
+# Diferencias con docker-compose.production.yml (que se conserva sin cambios):
+#   - Usa imágenes ya construidas desde GHCR en vez de `build:`. Los builds corren en
+#     GitHub Actions porque el VPS tiene 2 vCPU y 3.7 GiB compartidos con otra app en
+#     producción: un `npm ci` + `vite build` pica 1–1.5 GiB y la dejaría lenta.
+#   - `frontend` publica en 127.0.0.1:8080 para que el nginx del host lo alcance.
+#     Con `expose` a secas no es accesible desde fuera de la red de Docker.
+#   - db y redis no publican ningún puerto: viven sólo dentro de la red del proyecto.
+#
+# En ese servidor ya corre otra aplicación en producción. SIEMPRE invocar con el
+# nombre de proyecto y la ruta explícitos, para que ningún comando pueda alcanzarla:
+#
+#   docker compose -p boottracker -f /opt/boot-tracker/docker-compose.hetzner.yml <cmd>
+#
+# El prefijo `boottracker` aísla volúmenes y red. NUNCA correr `docker system prune -a`
+# ni `docker volume prune` en ese host: borran por "huérfano", no por proyecto.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - boottracker-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - boottracker-network
+
+  backend:
+    image: ghcr.io/jmuniz27/boot-tracker-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: >
+      bash -c "python manage.py collectstatic --noinput &&
+               python manage.py migrate &&
+               gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - boottracker-network
+    volumes:
+      - media_data:/app/media
+
+  celery:
+    image: ghcr.io/jmuniz27/boot-tracker-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: celery -A config.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - boottracker-network
+    volumes:
+      - media_data:/app/media
+
+  frontend:
+    image: ghcr.io/jmuniz27/boot-tracker-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    # Sólo loopback: el nginx del host es el único que debe alcanzarlo.
+    # Nunca 0.0.0.0 — el puerto 8080 no se abre en el firewall.
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - backend
+    networks:
+      - boottracker-network
+
+volumes:
+  postgres_data:
+  media_data:
+
+networks:
+  boottracker-network:
+    driver: bridge
