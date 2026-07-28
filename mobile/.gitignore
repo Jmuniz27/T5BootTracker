@@ -1,0 +1,11 @@
+# Credenciales y firma (NUNCA commitear)
+credentials.json
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+.npmrc
+
+# EAS / build config con datos sensibles
+eas.json

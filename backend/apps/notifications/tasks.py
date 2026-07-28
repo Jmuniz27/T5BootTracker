@@ -1,36 +1,32 @@
 """Celery tasks for notifications app."""
 import logging
 from celery import shared_task
-from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
+
+from .emails import coordinator_recipients, send_templated_email
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def send_password_reset_email(self, email, reset_link):
-    """Send password reset link to the user asynchronously."""
+def send_password_reset_email(self, email, reset_link, user_name=None):
+    """Send password reset link to the user asynchronously.
+
+    `user_name` is optional (added after this task's original rollout) so
+    that any password-reset task already queued with the old two-argument
+    signature keeps working during a deploy.
+    """
     try:
-        subject = 'Recuperación de contraseña — Boot-Tracker'
-        text_body = (
-            f'Haz clic en el siguiente enlace para restablecer tu contraseña:\n\n'
-            f'{reset_link}\n\n'
-            f'El enlace expira en 24 horas. Si no solicitaste este cambio, ignora este mensaje.'
-        )
-        html_body = f"""
-        <p>Haz clic en el siguiente enlace para restablecer tu contraseña:</p>
-        <p><a href="{reset_link}">{reset_link}</a></p>
-        <p>El enlace expira en <strong>24 horas</strong>.</p>
-        <p>Si no solicitaste este cambio, puedes ignorar este mensaje.</p>
-        """
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+        send_templated_email(
+            template='password_reset',
+            context={
+                'recipient_name': user_name,
+                'reset_link': reset_link,
+                'expiry_minutes': settings.PASSWORD_RESET_TOKEN_TTL // 60,
+            },
+            subject='Recuperación de contraseña — Boot-Tracker',
             to=[email],
         )
-        msg.attach_alternative(html_body, 'text/html')
-        msg.send()
         logger.info('Password reset email sent to %s.', email)
     except Exception as exc:
         logger.exception('Error sending password reset email to %s.', email)
@@ -51,41 +47,32 @@ def send_conversion_notification(self, lead_id, bootcamper_id):
             logger.warning('Lead %s has no program, skipping conversion notification.', lead_id)
             return
 
-        configs = lead.program.coordinator_emails.filter(is_active=True)
-        if not configs.exists():
+        to_list, cc_list = coordinator_recipients(lead.program)
+        if not to_list and not cc_list:
             logger.warning(
                 'No active coordinator emails for program %s, skipping notification.',
                 lead.program.name,
             )
             return
 
-        to_list = [c.email for c in configs if c.recipient_type == 'TO']
-        cc_list = [c.email for c in configs if c.recipient_type == 'CC']
-
-        subject  = f'Nuevo bootcamper: {bootcamper.get_full_name()} — {lead.program.name}'
-        text_body = (
-            f'El lead {lead.name} ha sido convertido al bootcamper '
-            f'{bootcamper.get_full_name()} ({bootcamper.email}) '
-            f'para el programa {lead.program.name}.'
-        )
-        html_body = f"""
-        <p>El lead <strong>{lead.name}</strong> ha sido convertido exitosamente.</p>
-        <ul>
-            <li><strong>Bootcamper:</strong> {bootcamper.get_full_name()}</li>
-            <li><strong>Email:</strong> {bootcamper.email}</li>
-            <li><strong>Programa:</strong> {lead.program.name}</li>
-        </ul>
-        """
-
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+        send_templated_email(
+            template='conversion_notification',
+            context={
+                'lead_name': lead.name,
+                'bootcamper_name': bootcamper.get_full_name(),
+                'bootcamper_email': bootcamper.email,
+                'program_name': lead.program.name,
+                'dashboard_url': f'{settings.FRONTEND_URL}/payments',
+                'rows': [
+                    ('Bootcamper', bootcamper.get_full_name()),
+                    ('Email', bootcamper.email),
+                    ('Programa', lead.program.name),
+                ],
+            },
+            subject=f'Nuevo bootcamper: {bootcamper.get_full_name()} — {lead.program.name}',
             to=to_list or [settings.DEFAULT_FROM_EMAIL],
             cc=cc_list,
         )
-        msg.attach_alternative(html_body, 'text/html')
-        msg.send()
         logger.info('Conversion notification sent for lead %s.', lead_id)
 
     except Exception as exc:
@@ -103,41 +90,31 @@ def send_late_payment_alert(self, bootcamper_id, program_id):
         bootcamper = CustomUser.objects.get(id=bootcamper_id)
         program    = Program.objects.get(id=program_id)
 
-        configs = program.coordinator_emails.filter(is_active=True)
-        if not configs.exists():
+        to_list, cc_list = coordinator_recipients(program)
+        if not to_list and not cc_list:
             logger.warning(
                 'No active coordinator emails for program %s, skipping late payment alert.',
                 program.name,
             )
             return
 
-        to_list = [c.email for c in configs if c.recipient_type == 'TO']
-        cc_list = [c.email for c in configs if c.recipient_type == 'CC']
-
-        subject   = f'Alerta de pago: {bootcamper.get_full_name()} — {program.name}'
-        text_body = (
-            f'El bootcamper {bootcamper.get_full_name()} ({bootcamper.email}) '
-            f'tiene pagos pendientes críticos en el programa {program.name}.'
-        )
-        html_body = f"""
-        <p><strong>Alerta de pago crítico</strong></p>
-        <ul>
-            <li><strong>Bootcamper:</strong> {bootcamper.get_full_name()}</li>
-            <li><strong>Email:</strong> {bootcamper.email}</li>
-            <li><strong>Programa:</strong> {program.name}</li>
-        </ul>
-        <p>Por favor, contacte al bootcamper para regularizar su situación de pagos.</p>
-        """
-
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+        send_templated_email(
+            template='late_payment_alert',
+            context={
+                'bootcamper_name': bootcamper.get_full_name(),
+                'bootcamper_email': bootcamper.email,
+                'program_name': program.name,
+                'dashboard_url': f'{settings.FRONTEND_URL}/payments',
+                'rows': [
+                    ('Bootcamper', bootcamper.get_full_name()),
+                    ('Email', bootcamper.email),
+                    ('Programa', program.name),
+                ],
+            },
+            subject=f'Alerta de pago: {bootcamper.get_full_name()} — {program.name}',
             to=to_list or [settings.DEFAULT_FROM_EMAIL],
             cc=cc_list,
         )
-        msg.attach_alternative(html_body, 'text/html')
-        msg.send()
         logger.info('Late payment alert sent for bootcamper %s.', bootcamper_id)
 
     except Exception as exc:

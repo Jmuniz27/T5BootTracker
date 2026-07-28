@@ -37,6 +37,16 @@ class Payment(models.Model):
     ocr_payment_date = models.DateField(null=True, blank=True)
     ocr_confidence = models.JSONField(default=dict, blank=True)
     ocr_raw_text = models.TextField(blank=True)
+    # Billing fields (CR-009 / CB-123): structured invoicing data associated
+    # with the payment. OCR-extracted where possible (payer_name, payer_email,
+    # document_number, best-effort payer_identification); payer_address and
+    # payer_phone never appear on receipts and are always manual entry.
+    payer_name = models.CharField(max_length=200, blank=True)
+    payer_identification = models.CharField(max_length=20, blank=True)  # cédula o RUC
+    payer_email = models.EmailField(blank=True)
+    payer_address = models.CharField(max_length=255, blank=True)
+    payer_phone = models.CharField(max_length=20, blank=True)
+    document_number = models.CharField(max_length=50, blank=True)  # Nº de comprobante
     confirmed_amount = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True
     )
