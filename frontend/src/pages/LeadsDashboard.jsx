@@ -1809,12 +1809,12 @@ export default function LeadsDashboard() {
                   <LeadStatusBadge status={lead.status} lastOutcome={lead.last_outcome} />
                 </td>
                 <td className="py-3.5 px-3">
-                  {lead._isOwned ? (
+                  {lead.owner ? (
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
-                        {lead.owner_name?.charAt(0) ?? 'Y'}
+                        {lead.owner_name?.charAt(0) ?? '?'}
                       </div>
-                      <span className="text-gray-700 text-sm">Tú</span>
+                      <span className="text-gray-700 text-sm">{lead._isOwned ? 'Tú' : lead.owner_name}</span>
                     </div>
                   ) : (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
