@@ -16,6 +16,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
 import { logInteraction } from '../../../../src/api/leads.api';
+import {
+  FOLLOW_UP_PRESETS,
+  presetToDate,
+  scheduleFollowUp,
+  type FollowUpPresetKey,
+} from '../../../../src/lib/follow-up';
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
@@ -59,13 +65,16 @@ function SectionTitle({ children, required, optional }: {
 
 export default function LogInteractionScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
+  const leadName = name || 'tu lead';
 
   const [type, setType]             = useState<string | null>(null);
   const [outcome, setOutcome]       = useState<string | null>(null);
   const [stars, setStars]           = useState<number | null>(null);
   const [notes, setNotes]           = useState('');
   const [duration, setDuration]     = useState('');
+  const [followUp, setFollowUp]     = useState<FollowUpPresetKey | null>(null);
+  const [addToCalendar, setAddToCalendar] = useState(false);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -92,6 +101,21 @@ export default function LogInteractionScreen() {
         notes: notes.trim() || undefined,
         duration_minutes: duration ? parseInt(duration, 10) : null,
       });
+
+      // Recordatorio de seguimiento (push + calendario opcional). No bloquea el
+      // guardado: si falla el permiso, la interacción ya quedó registrada.
+      if (followUp) {
+        const preset = FOLLOW_UP_PRESETS.find((p) => p.key === followUp);
+        if (preset) {
+          await scheduleFollowUp({
+            leadName,
+            date: presetToDate(preset.days),
+            addToCalendar,
+            notes: notes.trim() || undefined,
+          });
+        }
+      }
+
       showToast();
     } catch {
       setError('No pudimos guardar la interacción. Intenta de nuevo.');
@@ -236,6 +260,51 @@ export default function LogInteractionScreen() {
             </View>
           </SectionCard>
 
+          {/* Recordatorio de seguimiento */}
+          <SectionCard>
+            <SectionTitle optional>Recordatorio de seguimiento</SectionTitle>
+            <View style={s.followUpChips}>
+              <TouchableOpacity
+                style={[s.followUpChip, followUp === null && s.followUpChipActive]}
+                onPress={() => setFollowUp(null)}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.followUpChipText, followUp === null && s.followUpChipTextActive]}>
+                  Sin recordatorio
+                </Text>
+              </TouchableOpacity>
+              {FOLLOW_UP_PRESETS.map((p) => {
+                const active = followUp === p.key;
+                return (
+                  <TouchableOpacity
+                    key={p.key}
+                    style={[s.followUpChip, active && s.followUpChipActive]}
+                    onPress={() => setFollowUp(p.key)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[s.followUpChipText, active && s.followUpChipTextActive]}>
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {followUp !== null && (
+              <TouchableOpacity
+                style={s.calRow}
+                onPress={() => setAddToCalendar((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <View style={[s.checkbox, addToCalendar && s.checkboxOn]}>
+                  {addToCalendar && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                </View>
+                <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
+                <Text style={s.calRowText}>Agregar al calendario del dispositivo</Text>
+              </TouchableOpacity>
+            )}
+          </SectionCard>
+
           {error && (
             <View style={s.errorBox}>
               <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
@@ -375,6 +444,31 @@ const s = StyleSheet.create({
     color: colors.textPrimary,
     minHeight: 110,
   },
+  // Follow-up reminder
+  followUpChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  followUpChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: '#f8f9fb',
+  },
+  followUpChipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  followUpChipText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  followUpChipTextActive: { color: colors.white },
+  calRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
+  calRowText: { fontSize: 13, color: colors.textMuted, fontWeight: '500', flex: 1 },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxOn: { backgroundColor: colors.navy, borderColor: colors.navy },
   // Error
   errorBox: {
     flexDirection: 'row',
