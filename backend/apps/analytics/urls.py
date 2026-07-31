@@ -1,8 +1,9 @@
 """URL configuration for analytics app."""
 from django.urls import path
 
-from .views import AnalyticsKPIView
+from .views import AnalyticsKPIView, LeadManagementMetricsView
 
 urlpatterns = [
     path('kpis/', AnalyticsKPIView.as_view(), name='analytics-kpis'),
+    path('lead-management/', LeadManagementMetricsView.as_view(), name='analytics-lead-management'),
 ]
