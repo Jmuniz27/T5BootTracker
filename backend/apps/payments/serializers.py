@@ -1,8 +1,10 @@
 """Serializers for payments app."""
 
+from django.urls import reverse
 from rest_framework import serializers
 from apps.authentication.validators import validate_cedula_ecuatoriana
 from .models import Payment
+from .services import make_receipt_token
 
 MAX_FILE_SIZE_MB = 10
 ALLOWED_MIME_TYPES = {
@@ -36,6 +38,7 @@ class PaymentListSerializer(serializers.ModelSerializer):
     bootcamper_name = serializers.SerializerMethodField()
     program_name = serializers.SerializerMethodField()
     validated_by_name = serializers.SerializerMethodField()
+    receipt_file = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
@@ -70,6 +73,12 @@ class PaymentListSerializer(serializers.ModelSerializer):
             "submitted_at",
             "updated_at",
         )
+
+    def get_receipt_file(self, obj):
+        if not obj.receipt_file:
+            return None
+        url = reverse('payment-receipt-file')
+        return f"{url}?st={make_receipt_token(obj.pk)}"
 
     def get_bootcamper_name(self, obj):
         return obj.bootcamper.get_full_name()
