@@ -61,3 +61,5 @@ texput.log
 
 # SQL dump / queries
 backend/query.sql
+# Auditorias internas: solo en local, nunca en el repo publico
+docs/audit/
