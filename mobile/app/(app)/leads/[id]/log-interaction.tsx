@@ -22,6 +22,7 @@ import {
   scheduleFollowUp,
   type FollowUpPresetKey,
 } from '../../../../src/lib/follow-up';
+import { addFollowUp } from '../../../../src/lib/follow-up-store';
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
@@ -107,12 +108,22 @@ export default function LogInteractionScreen() {
       if (followUp) {
         const preset = FOLLOW_UP_PRESETS.find((p) => p.key === followUp);
         if (preset) {
-          await scheduleFollowUp({
+          const date = presetToDate(preset.days);
+          const scheduled = await scheduleFollowUp({
             leadName,
-            date: presetToDate(preset.days),
+            date,
             addToCalendar,
             notes: notes.trim() || undefined,
           });
+          // Guarda el seguimiento en la agenda local (in-app).
+          await addFollowUp({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            leadId: id,
+            leadName,
+            date: date.toISOString(),
+            notificationId: scheduled.notificationId,
+            eventId: scheduled.eventId,
+          }).catch(() => {});
         }
       }
 
