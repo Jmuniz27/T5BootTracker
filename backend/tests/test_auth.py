@@ -80,6 +80,7 @@ class TestLogin:
         """La respuesta para un email inexistente es idéntica a la de una cuenta
         desactivada con contraseña incorrecta: mismo código y mismo mensaje."""
         client = APIClient()
+        cache.clear()  # el login está limitado a 5/min por el scope 'auth'
         desconocido = client.post(
             LOGIN_URL, {'email': 'nadie@test.com', 'password': 'wrongpass'}, format='json'
         )

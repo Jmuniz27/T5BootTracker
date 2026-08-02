@@ -62,10 +62,16 @@ class LoginView(APIView):
         # permitía averiguar qué emails existen en el sistema (SEC-3).
         serializer = LoginSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
-            detail = serializer.errors
-            if isinstance(detail, dict) and detail.get('code') == 'ACCOUNT_INACTIVE':
+            # DRF envuelve cada valor del detalle en una lista, así que el
+            # código llega como ['ACCOUNT_INACTIVE'] y no como la cadena suelta.
+            codigo = serializer.errors.get('code')
+            if isinstance(codigo, (list, tuple)):
+                codigo = codigo[0] if codigo else None
+
+            if str(codigo) == 'ACCOUNT_INACTIVE':
                 return Response(
-                    {'error': detail['error'], 'code': 'ACCOUNT_INACTIVE'},
+                    {'error': 'Cuenta desactivada. Contacte al administrador.',
+                     'code': 'ACCOUNT_INACTIVE'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             return Response(
