@@ -15,6 +15,9 @@ export const assignLead = (id) =>
 export const releaseLead = (id) =>
   client.patch(`/leads/${id}/release/`).then((r) => r.data)
 
+export const adminReassignLead = (id, ownerId) =>
+  client.patch(`/leads/${id}/admin-reassign/`, { owner_id: ownerId ?? null }).then((r) => r.data)
+
 export const getInteractions = (leadId) =>
   client.get(`/leads/${leadId}/interactions/`).then((r) => r.data)
 
@@ -29,3 +32,11 @@ export const updateInteraction = (leadId, interactionId, data) =>
 
 export const updateLeadStatus = (id, data) =>
   client.patch(`/leads/${id}/`, data).then((r) => r.data)
+
+export const getSelfAssignmentSetting = () =>
+  client.get('/leads/settings/self-assignment/').then((r) => r.data)
+
+export const updateSelfAssignmentSetting = (enabled) =>
+  client
+    .patch('/leads/settings/self-assignment/', { self_assign_enabled: enabled })
+    .then((r) => r.data)

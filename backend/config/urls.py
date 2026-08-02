@@ -17,4 +17,16 @@ urlpatterns = [
     path('api/meetings/', include('apps.meetings.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
+
+if settings.DEBUG:
+    from apps.notifications.preview import preview_email, preview_index
+
+    # static() ya sólo aplica con DEBUG=True (en producción devuelve una lista
+    # vacía); los comprobantes se sirven vía /api/payments/receipt/ con URL
+    # firmada en todos los entornos.
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += [
+        path('dev/emails/', preview_index, name='email-preview-index'),
+        path('dev/emails/<slug:name>/', preview_email, name='email-preview'),
+    ]

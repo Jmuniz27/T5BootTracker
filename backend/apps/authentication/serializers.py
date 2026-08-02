@@ -58,6 +58,19 @@ class UserDataSerializer(serializers.ModelSerializer):
         return obj.get_full_name()
 
 
+class MeUpdateSerializer(serializers.ModelSerializer):
+    """Serializer de escritura para el propio perfil.
+
+    Limitado a campos que el usuario puede cambiar sobre sí mismo:
+    `role`, `is_active` y `email` sólo se gestionan desde el panel de
+    administración (UserViewSet), nunca vía /api/auth/me/.
+    """
+
+    class Meta:
+        model  = CustomUser
+        fields = ('first_name', 'last_name', 'phone')
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     """Serializer for password reset request (always succeeds)."""
     email = serializers.EmailField()

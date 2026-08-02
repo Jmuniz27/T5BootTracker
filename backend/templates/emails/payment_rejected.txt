@@ -1,0 +1,15 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Tu pago para el programa {{ program_name }} ha sido rechazado.
+
+Motivo: {{ rejection_reason }}
+
+Acción requerida: vuelve a subir tu comprobante de pago.
+
+Pasos a seguir:
+1. Ingresa a Boot-Tracker.
+2. Ve a la sección de Pagos.
+3. Sube un nuevo comprobante corrigiendo el motivo indicado arriba.
+
+Subir nuevo comprobante: {{ upload_url }}
+{% endblock %}

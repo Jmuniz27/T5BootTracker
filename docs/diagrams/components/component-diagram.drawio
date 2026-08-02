@@ -79,7 +79,7 @@
     </mxCell>
 
     <!-- Row 1: authentication · leads · payments -->
-    <mxCell id="18" value="authentication&#xa;CustomUser (UUID PK, email login)&#xa;Role: SALESPERSON / ADMIN / BOOTCAMPER&#xa;login · logout · token/refresh · me&#xa;password-reset (Redis tokens 24h TTL)&#xa;validate_cedula_ecuatoriana" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="16">
+    <mxCell id="18" value="authentication&#xa;CustomUser (UUID PK, email login)&#xa;Role: SALESPERSON / ADMIN / BOOTCAMPER&#xa;login · logout · token/refresh · me&#xa;password-reset (Redis tokens 1h TTL)&#xa;validate_cedula_ecuatoriana" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="16">
       <mxGeometry x="10" y="105" width="175" height="110" as="geometry" />
     </mxCell>
 
@@ -134,7 +134,7 @@
       <mxGeometry x="930" y="20" width="310" height="360" as="geometry" />
     </mxCell>
 
-    <mxCell id="30" value="Redis&#xa;Celery broker + result backend&#xa;Password-reset token store (TTL 24h)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="29">
+    <mxCell id="30" value="Redis&#xa;Celery broker + result backend&#xa;Password-reset token store (TTL 1h)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="29">
       <mxGeometry x="10" y="45" width="290" height="65" as="geometry" />
     </mxCell>
 

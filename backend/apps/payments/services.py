@@ -2,9 +2,33 @@
 import logging
 from datetime import date
 from decimal import Decimal
+from django.core import signing
 from django.db.models import Sum
 
 logger = logging.getLogger(__name__)
+
+# Regla de negocio: un déficit mayor al 10% del costo total dispara la alerta al coordinador.
+CRITICAL_DEFICIT_THRESHOLD = Decimal('0.10')
+
+# Los comprobantes se sirven con URL firmada porque el navegador los pide
+# directamente (<img>/<object>) y no puede adjuntar el JWT. La firma se emite
+# solo dentro de respuestas de la API ya autorizadas por rol, y expira junto
+# con la sesión (2h).
+RECEIPT_TOKEN_SALT = 'payments.receipt'
+RECEIPT_TOKEN_MAX_AGE = 2 * 60 * 60
+
+
+def make_receipt_token(payment_id) -> str:
+    """Signed, expiring token granting read access to one receipt file."""
+    return signing.dumps(str(payment_id), salt=RECEIPT_TOKEN_SALT)
+
+
+def read_receipt_token(token: str) -> str:
+    """Return the payment id for a valid token.
+
+    Raises signing.BadSignature (or SignatureExpired) on tampered/expired tokens.
+    """
+    return signing.loads(token, salt=RECEIPT_TOKEN_SALT, max_age=RECEIPT_TOKEN_MAX_AGE)
 
 
 class PaymentProgressService:
@@ -40,7 +64,7 @@ class PaymentProgressService:
         pending_count = payments.filter(status=Payment.Status.PENDING).count()
         total_cost    = program.total_cost
         deficit       = max(total_cost - total_paid, Decimal('0.00'))
-        is_critical   = deficit > total_cost * Decimal('0.10')
+        is_critical   = deficit > total_cost * CRITICAL_DEFICIT_THRESHOLD
 
         today      = date.today()
         start_date = program.start_date

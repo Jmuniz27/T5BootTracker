@@ -12,10 +12,12 @@ from .views import (
     PaymentApproveView,
     PaymentRejectView,
     NotifyCoordinatorView,
+    ReceiptFileView,
 )
 
 urlpatterns = [
     path('upload/',                                   PaymentUploadView.as_view(),       name='payment-upload'),
+    path('receipt/',                                  ReceiptFileView.as_view(),         name='payment-receipt-file'),
     path('my-status/',                                PaymentMyStatusView.as_view(),     name='payment-my-status'),
     path('my-history/',                               PaymentMyHistoryView.as_view(),    name='payment-my-history'),
     path('my-payments/<uuid:pk>/ocr-status/',         PaymentOCRStatusView.as_view(),    name='payment-ocr-status'),
