@@ -10,6 +10,7 @@ vi.mock('../../../api/analytics.api', () => ({
 
 const METRICS = {
   leads_considered: 12,
+  unassigned_leads: 4,
   avg_retention_hours: 42.6,
   avg_time_to_first_contact_hours: 5.3,
   by_salesperson: [
@@ -29,6 +30,11 @@ const METRICS = {
     },
   ],
 };
+
+/** La tarjeta de "Leads sin asignar", para no confundir su valor con el de la tabla. */
+async function unassignedCard() {
+  return (await screen.findByText('Leads sin asignar')).closest('div');
+}
 
 function renderMetrics(props = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -72,6 +78,7 @@ describe('LeadManagementMetrics (CR-006)', () => {
   it('muestra un estado vacío cuando no hay leads asignados', async () => {
     getLeadManagementMetrics.mockResolvedValue({
       leads_considered: 0,
+      unassigned_leads: 0,
       avg_retention_hours: null,
       avg_time_to_first_contact_hours: null,
       by_salesperson: [],
@@ -79,6 +86,31 @@ describe('LeadManagementMetrics (CR-006)', () => {
     renderMetrics();
 
     expect(await screen.findByText(/sin leads asignados/i)).toBeInTheDocument();
+  });
+
+  it('muestra la cantidad de leads sin asignar', async () => {
+    getLeadManagementMetrics.mockResolvedValue(METRICS);
+    renderMetrics();
+
+    // Acotado a la tarjeta: "4" también aparece como leads activos de un vendedor.
+    expect(await unassignedCard()).toHaveTextContent('4');
+  });
+
+  it('muestra 0 leads sin asignar como cero y no como guion', async () => {
+    getLeadManagementMetrics.mockResolvedValue({ ...METRICS, unassigned_leads: 0 });
+    renderMetrics();
+
+    const card = await unassignedCard();
+    expect(card).toHaveTextContent('0');
+    expect(card).not.toHaveTextContent('—');
+  });
+
+  it('muestra "—" si el backend no envía el conteo', async () => {
+    const { unassigned_leads: _omitido, ...sinConteo } = METRICS;
+    getLeadManagementMetrics.mockResolvedValue(sinConteo);
+    renderMetrics();
+
+    expect(await unassignedCard()).toHaveTextContent('—');
   });
 
   it('avisa cuando el backend responde 403', async () => {

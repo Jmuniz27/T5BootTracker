@@ -486,7 +486,7 @@ class TestLeadManagementPermissions:
         resp = make_client(admin_user).get(LEAD_MANAGEMENT_URL)
         assert resp.status_code == 200
         assert set(resp.json().keys()) == {
-            'filters_applied', 'leads_considered',
+            'filters_applied', 'leads_considered', 'unassigned_leads',
             'avg_retention_hours', 'avg_time_to_first_contact_hours', 'by_salesperson',
         }
 
@@ -572,3 +572,57 @@ class TestLeadManagementMetrics:
         lead.soft_delete()
 
         assert make_client(admin_user).get(LEAD_MANAGEMENT_URL).json()['leads_considered'] == 0
+
+
+class TestLeadManagementUnassignedCount:
+    """`unassigned_leads`: los que faltan por asignar (owner=None)."""
+
+    def test_zero_when_everything_is_assigned(self, db, admin_user, salesperson_user):
+        _assign(_make_lead('Asignado', '0990000020'), salesperson_user, timezone.now() - timedelta(hours=2))
+
+        data = make_client(admin_user).get(LEAD_MANAGEMENT_URL).json()
+        assert data['unassigned_leads'] == 0
+
+    def test_counts_leads_without_owner(self, db, admin_user, salesperson_user):
+        _make_lead('Libre 1', '0990000021')
+        _make_lead('Libre 2', '0990000022')
+        _assign(_make_lead('Tomado', '0990000023'), salesperson_user, timezone.now() - timedelta(hours=1))
+
+        data = make_client(admin_user).get(LEAD_MANAGEMENT_URL).json()
+        assert data['unassigned_leads'] == 2
+        # No se mezcla con el universo de retención, que sólo mira los asignados.
+        assert data['leads_considered'] == 1
+
+    def test_released_lead_counts_as_unassigned(self, db, admin_user, salesperson_user):
+        """Liberado por el Administrador (CR-005): conserva assigned_at pero vuelve a la pila."""
+        lead = _make_lead('Liberado', '0990000024')
+        assigned = timezone.now() - timedelta(hours=10)
+        _assign(lead, salesperson_user, assigned, released_at=assigned + timedelta(hours=4))
+        Lead.objects.filter(pk=lead.pk).update(owner=None)
+
+        data = make_client(admin_user).get(LEAD_MANAGEMENT_URL).json()
+        assert data['unassigned_leads'] == 1
+        # Sigue contando para retención: fue asignado alguna vez.
+        assert data['leads_considered'] == 1
+
+    def test_segment_filter_applies(self, db, admin_user):
+        _make_lead('Insta', '0990000025', source=Lead.Source.INSTAGRAM)
+        _make_lead('Manual', '0990000026', source=Lead.Source.MANUAL)
+
+        data = make_client(admin_user).get(LEAD_MANAGEMENT_URL, {'segment': 'INSTAGRAM'}).json()
+        assert data['unassigned_leads'] == 1
+
+    def test_date_filter_applies(self, db, admin_user):
+        _make_lead('Viejo', '0990000027', created_at=timezone.now() - timedelta(days=30))
+        _make_lead('Nuevo', '0990000028')
+
+        desde = (timezone.now() - timedelta(days=1)).date().isoformat()
+        data = make_client(admin_user).get(LEAD_MANAGEMENT_URL, {'fecha_desde': desde}).json()
+        assert data['unassigned_leads'] == 1
+
+    def test_soft_deleted_leads_excluded(self, db, admin_user):
+        _make_lead('Libre', '0990000029')
+        borrado = _make_lead('Borrado', '0990000030')
+        borrado.soft_delete()
+
+        assert make_client(admin_user).get(LEAD_MANAGEMENT_URL).json()['unassigned_leads'] == 1
