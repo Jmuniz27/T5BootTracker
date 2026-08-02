@@ -19,6 +19,11 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 ]
 
+# Dashboard de profiling. Sólo existe cuando SILK_ENABLED=True en desarrollo;
+# el propio silk exige sesión y staff para servirlo (ver config/settings/local.py).
+if getattr(settings, 'SILK_ENABLED', False):
+    urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
+
 if settings.DEBUG:
     from apps.notifications.preview import preview_email, preview_index
 
