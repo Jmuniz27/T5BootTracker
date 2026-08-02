@@ -145,7 +145,10 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '200/hour',
         'user': '2000/hour',
-        'auth': '5/min',   # applied to login + password-reset views
+        # Applied to login + password-reset views. Overridable por env para
+        # entornos de prueba automatizada (la suite E2E hace muchos logins
+        # legítimos por minuto desde una sola IP); producción usa el default.
+        'auth': os.environ.get('AUTH_THROTTLE_RATE', '5/min'),
     },
 }
 

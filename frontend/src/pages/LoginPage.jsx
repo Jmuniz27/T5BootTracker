@@ -72,7 +72,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit((d) => mutate(d))} noValidate className="space-y-5">
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-white/70 mb-2">Email</label>
+            <label htmlFor="login-email" className="block text-sm font-medium text-white/70 mb-2">Email</label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -81,6 +81,8 @@ export default function LoginPage() {
               </span>
               <input
                 {...register('email')}
+                id="login-email"
+                data-testid="login-email"
                 type="email"
                 placeholder="placeholder@placeholder.com"
                 className="w-full rounded-full px-5 py-3.5 pl-12 text-sm text-white placeholder-white/30 outline-none transition"
@@ -95,7 +97,7 @@ export default function LoginPage() {
           {/* Password */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-white/70">Contraseña</label>
+              <label htmlFor="login-password" className="text-sm font-medium text-white/70">Contraseña</label>
               <Link to="/forgot-password" className="text-sm text-[#5B9BD5] hover:text-[#7ab3e0] transition-colors">
                 ¿Olvidaste tu contraseña?
               </Link>
@@ -108,6 +110,8 @@ export default function LoginPage() {
               </span>
               <input
                 {...register('password')}
+                id="login-password"
+                data-testid="login-password"
                 type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••••"
                 className="w-full rounded-full px-5 py-3.5 pl-12 pr-12 text-sm text-white placeholder-white/30 outline-none transition"
@@ -141,6 +145,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
+            data-testid="login-submit"
             disabled={isPending}
             className="w-full py-3.5 rounded-full text-white font-semibold text-sm transition hover:opacity-90 disabled:opacity-60 mt-4"
             style={{ background: 'linear-gradient(135deg, #2D4DB5 0%, #1a3399 100%)' }}
