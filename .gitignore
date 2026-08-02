@@ -61,3 +61,5 @@ texput.log
 
 # SQL dump / queries
 backend/query.sql
+
+google-credentials.json
