@@ -57,7 +57,7 @@ def send_meeting_invitation(meeting_id):
         meeting = Meeting.objects.get(id=meeting_id)
         lead_email = meeting.lead.email
 
-        # 1. Armar el archivo ICS en memoria (¡Lo que aprendiste antes!)
+        # 1. Armar el archivo ICS en memoria
         cal = Calendar()
         cal.add('prodid', '-//BootTracker//boottracker.com//')
         cal.add('version', '2.0')
@@ -79,7 +79,6 @@ def send_meeting_invitation(meeting_id):
         email = EmailMessage(
             subject=subject,
             body=body,
-            from_email='no-reply@boottracker.com', # Cambia por tu correo real
             to=[lead_email],
         )
 
@@ -92,42 +91,3 @@ def send_meeting_invitation(meeting_id):
     except Exception as e:
         logger.error(f"Error enviando correo de invitación para la reunión {meeting_id}: {e}")
 
-@shared_task
-def send_meeting_invitation(meeting_id):
-    try:
-        meeting = Meeting.objects.get(id=meeting_id)
-        lead_email = meeting.lead.email
-
-        cal = Calendar()
-        cal.add('prodid', '-//BootTracker//boottracker.com//')
-        cal.add('version', '2.0')
-
-        event = Event()
-        event.add('summary', meeting.title)
-        event.add('description', meeting.description)
-        event.add('dtstart', meeting.start_time)
-        event.add('dtend', meeting.end_time)
-        event.add('dtstamp', meeting.created_at)
-        cal.add_component(event)
-
-        ics_content = cal.to_ical()
-
-        # 2. Preparar el correo
-        subject = f"Invitación a reunión: {meeting.title}"
-        body = f"Hola,\n\nSe ha programado una reunión contigo.\n\nDetalles:\n{meeting.description}\n\nPor favor revisa el archivo adjunto para agregarlo a tu calendario."
-
-        email = EmailMessage(
-            subject=subject,
-            body=body,
-            from_email='no-reply@boottracker.com', # Cambia por tu correo real
-            to=[lead_email],
-        )
-
-        # 3. Adjuntar el binario y enviar
-        email.attach('invitacion.ics', ics_content, 'text/calendar')
-        email.send(fail_silently=False)
-
-        logger.info(f"Correo de invitación enviado a {lead_email}")
-
-    except Exception as e:
-        logger.error(f"Error enviando correo de invitación para la reunión {meeting_id}: {e}")
