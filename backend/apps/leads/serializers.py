@@ -45,8 +45,11 @@ class LeadListSerializer(serializers.ModelSerializer):
         )
 
     def get_days_assigned(self, obj):
+        # CR-006: si el lead ya fue liberado, la retención se cuenta hasta esa
+        # fecha, no hasta hoy.
         if obj.assigned_at:
-            return (now().date() - obj.assigned_at.date()).days
+            end = obj.released_at or now()
+            return (end.date() - obj.assigned_at.date()).days
         return None
 
     def get_owner_name(self, obj):
@@ -65,13 +68,16 @@ class LeadDetailSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'phone', 'email', 'source', 'status',
             'is_company', 'program_interest', 'program', 'interaction_count',
-            'owner', 'owner_name', 'assigned_at', 'days_assigned',
+            'owner', 'owner_name', 'assigned_at', 'released_at', 'days_assigned',
             'last_contact', 'created_at', 'updated_at',
         )
 
     def get_days_assigned(self, obj):
+        # CR-006: si el lead ya fue liberado, la retención se cuenta hasta esa
+        # fecha, no hasta hoy.
         if obj.assigned_at:
-            return (now().date() - obj.assigned_at.date()).days
+            end = obj.released_at or now()
+            return (end.date() - obj.assigned_at.date()).days
         return None
 
     def get_owner_name(self, obj):
