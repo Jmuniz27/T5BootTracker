@@ -1,6 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 
-export default function CustomSelect({ value, onChange, options, placeholder = 'Seleccionar' }) {
+export default function CustomSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Seleccionar',
+  disabled = false,
+  // Nombre accesible del control. Necesario cuando hay varios selects iguales en
+  // la pantalla y el texto visible no alcanza para distinguirlos.
+  ariaLabel,
+}) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -17,7 +26,9 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white text-left whitespace-nowrap"
+        disabled={disabled}
+        aria-label={ariaLabel}
+        className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white text-left whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {selected ? selected.label : placeholder}
         <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
