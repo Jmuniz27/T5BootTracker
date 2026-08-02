@@ -147,9 +147,12 @@ jobs:
           DB_PORT=5432
           REDIS_URL=redis://redis:6379/0
           FRONTEND_URL=http://localhost:5173
+          AUTH_THROTTLE_RATE=100/min
           EOF
         # Los emails no salen a la red: manage.py usa config.settings.local por
         # defecto y ese módulo fija el backend de consola.
+        # AUTH_THROTTLE_RATE sube el límite de 5/min del login solo en este
+        # entorno: la suite hace muchos logins legítimos desde una sola IP.
 
       - name: Build and start services
         run: docker compose up -d --build db redis backend celery frontend

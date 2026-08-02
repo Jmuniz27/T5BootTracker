@@ -35,7 +35,8 @@ export async function buscarLeadPorTelefono(api, telefono) {
     throw new Error(`No se pudo listar leads: ${respuesta.status()} ${await respuesta.text()}`)
   }
   const cuerpo = await respuesta.json()
-  const leads = cuerpo.results ?? cuerpo
+  // GET /api/leads/ responde {my_leads, available_leads, pagination}.
+  const leads = [...(cuerpo.my_leads ?? []), ...(cuerpo.available_leads ?? [])]
   return leads.find((l) => l.phone === telefono)
 }
 
