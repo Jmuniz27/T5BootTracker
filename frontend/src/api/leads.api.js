@@ -32,3 +32,11 @@ export const updateInteraction = (leadId, interactionId, data) =>
 
 export const updateLeadStatus = (id, data) =>
   client.patch(`/leads/${id}/`, data).then((r) => r.data)
+
+export const getSelfAssignmentSetting = () =>
+  client.get('/leads/settings/self-assignment/').then((r) => r.data)
+
+export const updateSelfAssignmentSetting = (enabled) =>
+  client
+    .patch('/leads/settings/self-assignment/', { self_assign_enabled: enabled })
+    .then((r) => r.data)

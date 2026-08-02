@@ -357,7 +357,7 @@ export default function LeadsScreen() {
   }
 
   function handleLogInteraction(lead: Lead) {
-    router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id } });
+    router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id, name: lead.name } });
   }
 
   function handleChangeStatus(lead: Lead) {

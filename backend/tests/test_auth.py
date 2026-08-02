@@ -12,6 +12,7 @@ LOGOUT_URL           = '/api/auth/logout/'
 REFRESH_URL          = '/api/auth/token/refresh/'
 PASSWORD_RESET_URL   = '/api/auth/password-reset/'
 PASSWORD_CONFIRM_URL = '/api/auth/password-reset/confirm/'
+ME_URL               = '/api/auth/me/'
 
 
 @pytest.fixture
@@ -164,6 +165,50 @@ class TestTokenRefresh:
             REMOTE_ADDR='10.10.10.5',
         )
         assert limited.status_code == 429
+
+
+class TestMeUpdate:
+    def _auth_client(self, user):
+        client = APIClient()
+        refresh = RefreshToken.for_user(user)
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
+        return client
+
+    def test_me_patch_allows_profile_fields(self, active_user):
+        client = self._auth_client(active_user)
+        resp = client.patch(ME_URL, {
+            'first_name': 'Nuevo',
+            'last_name':  'Nombre',
+            'phone':      '0999999999',
+        }, format='json')
+        assert resp.status_code == 200
+        active_user.refresh_from_db()
+        assert active_user.first_name == 'Nuevo'
+        assert active_user.last_name == 'Nombre'
+        assert active_user.phone == '0999999999'
+
+    def test_me_patch_cannot_escalate_role(self, active_user):
+        client = self._auth_client(active_user)
+        resp = client.patch(ME_URL, {'role': CustomUser.Role.ADMINISTRATOR}, format='json')
+        assert resp.status_code == 200
+        active_user.refresh_from_db()
+        assert active_user.role == CustomUser.Role.SALESPERSON
+        assert resp.json()['role'] == CustomUser.Role.SALESPERSON
+
+    def test_me_patch_cannot_change_email(self, active_user):
+        client = self._auth_client(active_user)
+        resp = client.patch(ME_URL, {'email': 'hacker@test.com'}, format='json')
+        assert resp.status_code == 200
+        active_user.refresh_from_db()
+        assert active_user.email == 'user@test.com'
+
+    def test_me_patch_cannot_change_is_active(self, active_user):
+        client = self._auth_client(active_user)
+        resp = client.patch(ME_URL, {'is_active': False, 'first_name': 'Sigo'}, format='json')
+        assert resp.status_code == 200
+        active_user.refresh_from_db()
+        assert active_user.is_active is True
+        assert active_user.first_name == 'Sigo'
 
 
 class TestPasswordReset:

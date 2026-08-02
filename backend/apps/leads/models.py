@@ -60,6 +60,9 @@ class Lead(models.Model):
         verbose_name='Programa',
     )
     assigned_at      = models.DateTimeField(null=True, blank=True)
+    # CR-006: se setea al liberar (por el vendedor o por el admin) y se limpia al
+    # reasignar. Con assigned_at permite calcular el tiempo de retención.
+    released_at      = models.DateTimeField(null=True, blank=True, verbose_name='Liberado')
     last_contact     = models.DateTimeField(null=True, blank=True, verbose_name='Último contacto')
     version          = models.PositiveIntegerField(default=0)
     deleted_at       = models.DateTimeField(null=True, blank=True, verbose_name='Eliminado')

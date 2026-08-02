@@ -1,9 +1,13 @@
 """Views for payments app."""
 import logging
+import mimetypes
+from django.core import signing
+from django.http import FileResponse, Http404
 from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
 from rest_framework import status, serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -14,7 +18,7 @@ from .serializers import (
     PaymentApproveSerializer, PaymentRejectSerializer,
     PaymentOCRStatusSerializer, PaymentConfirmSerializer,
 )
-from .services import PaymentProgressService
+from .services import PaymentProgressService, read_receipt_token
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +31,44 @@ class IsBootcamper(IsSalesperson):
             request.user.is_authenticated
             and request.user.role == CustomUser.Role.BOOTCAMPER
         )
+
+
+class ReceiptFileView(APIView):
+    """GET /api/payments/receipt/?st=<token> — sirve el archivo del comprobante.
+
+    AllowAny deliberado: el navegador pide este recurso desde <img>/<object>
+    sin cabecera Authorization. El control de acceso es el token firmado y
+    con expiración que emite PaymentListSerializer únicamente dentro de
+    respuestas ya autorizadas por rol.
+    """
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        parameters=[OpenApiParameter('st', str, description='Token firmado emitido por la API')],
+        responses={200: OpenApiResponse(description='Archivo del comprobante'), 403: OpenApiResponse(description='Token inválido o expirado')},
+        summary='Descargar comprobante (URL firmada)',
+        tags=['Pagos — Bootcamper'],
+    )
+    def get(self, request):
+        token = request.query_params.get('st', '')
+        try:
+            payment_id = read_receipt_token(token)
+        except signing.BadSignature:
+            return Response(
+                {'error': 'Enlace inválido o expirado.', 'code': 'RECEIPT_TOKEN_INVALID'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        payment = get_object_or_404(Payment, pk=payment_id)
+        if not payment.receipt_file:
+            raise Http404
+        try:
+            file_handle = payment.receipt_file.open('rb')
+        except FileNotFoundError:
+            logger.error('Receipt file missing on disk for payment %s', payment_id)
+            raise Http404
+        content_type = mimetypes.guess_type(payment.receipt_file.name)[0] or 'application/octet-stream'
+        return FileResponse(file_handle, content_type=content_type)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
