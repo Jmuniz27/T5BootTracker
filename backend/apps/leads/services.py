@@ -179,8 +179,11 @@ def reassign_lead_by_admin(lead_id, admin_user, new_owner=None):
 
     lead.owner = new_owner
     lead.assigned_at = now() if new_owner else None
+    # CR-006: al reasignar arranca una tenencia nueva (released_at se limpia);
+    # al liberar se cierra la anterior. Debe ir en update_fields o no persiste.
+    lead.released_at = None if new_owner else now()
     lead.version += 1
-    lead.save(update_fields=['owner', 'assigned_at', 'version', 'updated_at'])
+    lead.save(update_fields=['owner', 'assigned_at', 'released_at', 'version', 'updated_at'])
 
     previous_owner_name = previous_owner.get_full_name() if previous_owner else 'sin asignar'
     if new_owner:

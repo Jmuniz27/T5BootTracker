@@ -372,6 +372,47 @@ class TestLeadRelease:
         assert assigned_lead.assigned_at is None
 
 
+class TestLeadReleasedAtTracking:
+    """CR-006: released_at debe quedar registrado en los tres caminos que cambian owner."""
+
+    def test_release_by_salesperson_sets_released_at(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+        client.patch(f'{LEADS_URL}{assigned_lead.id}/release/')
+        assigned_lead.refresh_from_db()
+        assert assigned_lead.released_at is not None
+
+    def test_admin_release_sets_released_at(self, db, admin_user, assigned_lead):
+        client = make_client(admin_user)
+        client.patch(f'{LEADS_URL}{assigned_lead.id}/admin-reassign/', {}, format='json')
+        assigned_lead.refresh_from_db()
+        assert assigned_lead.released_at is not None
+
+    def test_admin_reassign_clears_released_at(self, db, admin_user, assigned_lead):
+        """Al reasignar arranca una tenencia nueva: released_at vuelve a null."""
+        other = CustomUser.objects.create_user(
+            email='vendor_released@test.com', password='testpass123',
+            first_name='Nuevo', last_name='Vendedor', role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(admin_user)
+        client.patch(f'{LEADS_URL}{assigned_lead.id}/admin-reassign/', {}, format='json')
+        client.patch(
+            f'{LEADS_URL}{assigned_lead.id}/admin-reassign/', {'owner_id': str(other.id)}, format='json'
+        )
+        assigned_lead.refresh_from_db()
+        assert assigned_lead.owner == other
+        assert assigned_lead.released_at is None
+
+    def test_self_assign_clears_released_at(self, db, salesperson_user, sample_lead):
+        sample_lead.released_at = timezone.now()
+        sample_lead.save(update_fields=['released_at'])
+
+        client = make_client(salesperson_user)
+        resp = client.patch(f'{LEADS_URL}{sample_lead.id}/assign/')
+        assert resp.status_code == 200
+        sample_lead.refresh_from_db()
+        assert sample_lead.released_at is None
+
+
 class TestLeadAdminReassign:
     """PATCH /leads/{id}/admin-reassign/ — liberación/reasignación forzada por Admin (CR-005)."""
 
