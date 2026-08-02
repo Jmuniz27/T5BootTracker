@@ -99,7 +99,7 @@ test.describe('HST-016 / HST-021 · Registro y validación de comprobante de pag
           )
           .toBe('PENDING')
 
-        const aprobacion = await apiVendedor.post(`/api/payments/${pagoId}/approve/`, {
+        const aprobacion = await apiVendedor.patch(`/api/payments/${pagoId}/approve/`, {
           data: { confirmed_amount: '450.00' },
         })
         expect(

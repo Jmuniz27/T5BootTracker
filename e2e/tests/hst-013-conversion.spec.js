@@ -69,7 +69,9 @@ test.describe('HST-013 · Conversión de lead a bootcamper con validación de c�
         await expect(page.getByText('✓ Cédula válida')).toBeVisible()
         await page.getByTestId('convert-submit').click()
 
-        await expect(page.getByText(`${NOMBRE} convertido correctamente.`)).toBeVisible()
+        // La conversión exitosa muestra el modal de resultado, no un toast.
+        await expect(page.getByRole('heading', { name: '¡Lead convertido!' })).toBeVisible()
+        await expect(page.getByText('ahora es Bootcamper.')).toBeVisible()
       })
     },
   )
