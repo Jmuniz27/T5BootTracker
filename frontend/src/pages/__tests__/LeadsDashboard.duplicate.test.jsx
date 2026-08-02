@@ -19,6 +19,8 @@ vi.mock('../../api/leads.api', () => ({
   convertLead: vi.fn(),
   getPrograms: vi.fn().mockResolvedValue([]),
   updateLeadStatus: vi.fn(),
+  getSelfAssignmentSetting: vi.fn(),
+  updateSelfAssignmentSetting: vi.fn(),
 }));
 
 vi.mock('../../api/users.api', () => ({
