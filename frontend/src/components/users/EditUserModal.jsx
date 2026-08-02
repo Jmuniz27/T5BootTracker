@@ -51,7 +51,7 @@ export default function EditUserModal({ user, onClose, onSuccess, onError }) {
       cedula: user.cedula ?? '',
       phone: user.phone ?? '',
       coordinator_scope: user.coordinator_scope ?? '',
-      coordinator_program: user.coordinator_program ?? '',
+      coordinator_programs: user.coordinator_programs ?? [],
     },
   })
 
