@@ -63,3 +63,5 @@ texput.log
 backend/query.sql
 # Auditorias internas: solo en local, nunca en el repo publico
 docs/audit/
+
+google-credentials.json
