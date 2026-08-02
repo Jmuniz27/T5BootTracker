@@ -5,7 +5,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from .health import health
+
 urlpatterns = [
+    path('health/', health, name='health'),
     path('admin/', admin.site.urls),
     path('api/auth/', include('apps.authentication.urls')),
     path('api/leads/', include('apps.leads.urls')),
@@ -18,6 +21,11 @@ urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 ]
+
+# Dashboard de profiling. Sólo existe cuando SILK_ENABLED=True en desarrollo;
+# el propio silk exige sesión y staff para servirlo (ver config/settings/local.py).
+if getattr(settings, 'SILK_ENABLED', False):
+    urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
 
 if settings.DEBUG:
     from apps.notifications.preview import preview_email, preview_index

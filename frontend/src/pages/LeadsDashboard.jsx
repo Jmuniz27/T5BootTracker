@@ -4,6 +4,7 @@ import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, 
 import { getUsers } from '../api/users.api'
 import { useAuthStore } from '../store/auth.store'
 import CustomSelect from '../components/CustomSelect'
+import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
 import SelfAssignmentToggle from '../components/leads/SelfAssignmentToggle'
 
 const PAGE_SIZE = 10
@@ -1580,6 +1581,7 @@ export default function LeadsDashboard() {
   const [reassignTarget, setReassignTarget] = useState(null)
   const [convertTarget, setConvertTarget] = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
+  const [duplicateWarning, setDuplicateWarning] = useState(null) // { duplicate, payload }
   const [toast, setToast]                 = useState(null) // { message, type }
   const [activeTab, setActiveTab]         = useState('mine') // 'mine' | 'available'
   const [flashedLeadId, setFlashedLeadId] = useState(null)
@@ -1699,11 +1701,19 @@ export default function LeadsDashboard() {
       }
       await queryClient.invalidateQueries({ queryKey: ['leads'] })
       setShowCreate(false)
+      setDuplicateWarning(null)
       setPage(1)
       setTimeout(() => flashLead(newLead.id), 100)
     },
-    onError: (err) => {
-      const msg = err.response?.data?.error ?? 'No se pudo crear el lead.'
+    onError: (err, variables) => {
+      // 409 POSSIBLE_DUPLICATE (CR-011): no es un fallo, es una confirmación
+      // pendiente. Se guarda el payload para reenviarlo con confirm_duplicate.
+      const data = err.response?.data
+      if (err.response?.status === 409 && data?.code === 'POSSIBLE_DUPLICATE') {
+        setDuplicateWarning({ duplicate: data.duplicate, payload: variables })
+        return
+      }
+      const msg = data?.error ?? 'No se pudo crear el lead.'
       showToast(msg, 'error')
     },
   })
@@ -1864,12 +1874,12 @@ export default function LeadsDashboard() {
                   <LeadStatusBadge status={lead.status} lastOutcome={lead.last_outcome} />
                 </td>
                 <td className="py-3.5 px-3">
-                  {lead._isOwned ? (
+                  {lead.owner ? (
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
-                        {lead.owner_name?.charAt(0) ?? 'Y'}
+                        {lead.owner_name?.charAt(0) ?? '?'}
                       </div>
-                      <span className="text-gray-700 text-sm">Tú</span>
+                      <span className="text-gray-700 text-sm">{lead._isOwned ? 'Tú' : lead.owner_name}</span>
                     </div>
                   ) : (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
@@ -1962,6 +1972,17 @@ export default function LeadsDashboard() {
           onSubmit={(data, autoAssign) => { autoAssignRef.current = autoAssign; createMutation.mutate(data) }}
           isLoading={createMutation.isPending}
           canSelfAssign={selfAssignEnabled}
+        />
+      )}
+
+      {duplicateWarning && (
+        <DuplicateLeadModal
+          duplicate={duplicateWarning.duplicate}
+          isLoading={createMutation.isPending}
+          onClose={() => setDuplicateWarning(null)}
+          onConfirm={() =>
+            createMutation.mutate({ ...duplicateWarning.payload, confirm_duplicate: true })
+          }
         />
       )}
 
