@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 
-export default function CustomSelect({ value, onChange, options, placeholder = 'Seleccionar' }) {
+export default function CustomSelect({ value, onChange, options, placeholder = 'Seleccionar', testId }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -16,6 +16,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
     <div className="relative" ref={ref}>
       <button
         type="button"
+        data-testid={testId}
         onClick={() => setOpen((o) => !o)}
         className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white text-left whitespace-nowrap"
       >
@@ -29,6 +30,8 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
           {options.map((o) => (
             <li
               key={o.value}
+              data-testid={testId ? `${testId}-option` : undefined}
+              data-value={o.value}
               onClick={() => { onChange(o.value); setOpen(false) }}
               className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-blue-50 hover:text-[#213A8E] transition-colors ${
                 value === o.value ? 'text-[#213A8E] font-medium bg-blue-50' : 'text-gray-700'

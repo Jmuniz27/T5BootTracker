@@ -69,6 +69,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
           ].map((t) => (
             <button
               key={t.id}
+              data-testid={`payment-tab-${t.id}`}
               onClick={() => setTab(t.id)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
                 tab === t.id
@@ -134,6 +135,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                     <label className="block text-xs font-medium text-gray-600 mb-1">Monto confirmado *</label>
                     <input
                       type="number"
+                      data-testid="approve-amount"
                       placeholder="Ej: 500.00"
                       value={approveData.confirmed_amount}
                       onChange={(e) => setApproveData((p) => ({ ...p, confirmed_amount: e.target.value }))}
@@ -165,6 +167,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   <p className="text-red-500 text-xs">{approveMutation.error?.response?.data?.error || 'Error al aprobar.'}</p>
                 )}
                 <button
+                  data-testid="approve-submit"
                   disabled={!approveData.confirmed_amount || approveMutation.isPending}
                   onClick={() => approveMutation.mutate(approveData)}
                   className="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-60 transition-colors"
@@ -179,6 +182,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   <label className="block text-xs font-medium text-gray-600 mb-1">Motivo de rechazo *</label>
                   <textarea
                     rows={3}
+                    data-testid="reject-reason"
                     placeholder="Describe el motivo del rechazo..."
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
@@ -189,6 +193,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   <p className="text-red-500 text-xs">{rejectMutation.error?.response?.data?.error || 'Error al rechazar.'}</p>
                 )}
                 <button
+                  data-testid="reject-submit"
                   disabled={!rejectReason.trim() || rejectMutation.isPending}
                   onClick={() => rejectMutation.mutate({ rejection_reason: rejectReason })}
                   className="w-full bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition-colors"

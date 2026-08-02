@@ -553,6 +553,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
                 Tipo de interacción <span className="text-red-500">*</span>
               </label>
               <CustomSelect
+                testId="interaction-type"
                 value={form.interaction_type}
                 onChange={(val) => setForm((prev) => ({ ...prev, interaction_type: val }))}
                 placeholder="Seleccionar"
@@ -571,6 +572,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
                 Resultado <span className="text-red-500">*</span>
               </label>
               <CustomSelect
+                testId="interaction-outcome"
                 value={form.outcome}
                 onChange={(val) => setForm((prev) => ({ ...prev, outcome: val }))}
                 placeholder="Seleccionar"
@@ -623,6 +625,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
               Notas <span className="text-xs text-gray-400 font-normal">(opcional)</span>
             </label>
             <textarea
+              data-testid="interaction-notes"
               value={form.notes}
               onChange={set('notes')}
               placeholder="¿Cómo fue la interacción?"
@@ -639,6 +642,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
           <button
             type="submit"
+            data-testid="interaction-submit"
             disabled={mutation.isPending}
             className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
           >
@@ -906,25 +910,26 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nombre completo<span className="text-red-500 ml-0.5">*</span>
             </label>
-            <input type="text" value={form.name} onChange={set('name')} className={inputClass('name')} />
+            <input type="text" data-testid="create-lead-name" value={form.name} onChange={set('name')} className={inputClass('name')} />
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Teléfono<span className="text-red-500 ml-0.5">*</span>
             </label>
-            <input type="tel" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={inputClass('phone')} />
+            <input type="tel" data-testid="create-lead-phone" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={inputClass('phone')} />
             {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input type="text" value={form.email} onChange={set('email')} className={inputClass('email')} />
+            <input type="text" data-testid="create-lead-email" value={form.email} onChange={set('email')} className={inputClass('email')} />
             {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Fuente</label>
             <CustomSelect
+              testId="create-lead-source"
               value={form.source}
               onChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
               options={[
@@ -939,6 +944,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
             <CustomSelect
+              testId="create-lead-program"
               value={form.program_interest}
               onChange={(val) => setForm((prev) => ({ ...prev, program_interest: val }))}
               placeholder="Sin especificar"
@@ -950,6 +956,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
             <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
               <input
                 type="checkbox"
+                data-testid="create-lead-autoassign"
                 checked={form.autoAssign && canSelfAssign}
                 disabled={!canSelfAssign}
                 onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
@@ -977,6 +984,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
             </button>
             <button
               type="submit"
+              data-testid="create-lead-submit"
               disabled={isLoading}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
@@ -1307,6 +1315,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             </label>
             <input
               type="text"
+              data-testid="convert-cedula"
               maxLength={10}
               value={cedula}
               onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
@@ -1325,6 +1334,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               Programa <span className="text-red-500">*</span>
             </label>
             <CustomSelect
+              testId="convert-program"
               value={programId}
               onChange={(val) => setProgramId(val)}
               placeholder={loadingPrograms ? 'Cargando programas…' : 'Selecciona un programa'}
@@ -1370,6 +1380,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             </button>
             <button
               type="submit"
+              data-testid="convert-submit"
               disabled={convertMutation.isPending}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
@@ -1705,6 +1716,7 @@ export default function LeadsDashboard() {
           Dashboard de Leads
         </h1>
         <button
+          data-testid="new-lead-button"
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 px-4 py-2.5 bg-[#213A8E] text-white text-sm font-semibold rounded-xl hover:bg-[#1a2f72] transition-colors"
         >
@@ -1744,6 +1756,7 @@ export default function LeadsDashboard() {
             </svg>
             <input
               type="text"
+              data-testid="lead-search"
               placeholder="Buscar por nombre, email o teléfono"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -1770,6 +1783,7 @@ export default function LeadsDashboard() {
         {/* Tabs */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
           <button
+            data-testid="tab-mine"
             onClick={() => { setActiveTab('mine'); setPage(1) }}
             className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
               activeTab === 'mine'
@@ -1780,6 +1794,7 @@ export default function LeadsDashboard() {
             Mis leads ({myLeads.length})
           </button>
           <button
+            data-testid="tab-available"
             onClick={() => { setActiveTab('available'); setPage(1) }}
             className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
               activeTab === 'available'
@@ -1821,7 +1836,7 @@ export default function LeadsDashboard() {
             )}
 
             {!isLoading && !isError && pageLeads.map((lead) => (
-              <tr key={lead.id} className={`transition-colors duration-700 ${flashedLeadId === lead.id ? 'bg-slate-100' : 'hover:bg-gray-50'}`}>
+              <tr key={lead.id} data-testid="lead-row" data-lead-phone={lead.phone} className={`transition-colors duration-700 ${flashedLeadId === lead.id ? 'bg-slate-100' : 'hover:bg-gray-50'}`}>
                 <td className="py-3.5 px-3">
                   <div className="flex items-center gap-2">
                     <img
