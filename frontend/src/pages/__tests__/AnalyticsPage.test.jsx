@@ -8,6 +8,7 @@ import { getAnalyticsKpis, getLeadManagementMetrics } from '../../api/analytics.
 vi.mock('../../api/analytics.api', () => ({
   getAnalyticsKpis: vi.fn(),
   getLeadManagementMetrics: vi.fn(),
+  exportAnalyticsReport: vi.fn(),
 }));
 
 const LEAD_MANAGEMENT = {

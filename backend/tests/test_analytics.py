@@ -1,4 +1,5 @@
 """Tests for the analytics KPI endpoint (CB-55)."""
+import io
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -572,3 +573,85 @@ class TestLeadManagementMetrics:
         lead.soft_delete()
 
         assert make_client(admin_user).get(LEAD_MANAGEMENT_URL).json()['leads_considered'] == 0
+
+
+# ==========================================
+# EXPORT DE REPORTES (CB-58 / HST-026)
+# ==========================================
+
+ANALYTICS_EXPORT_URL = '/api/analytics/export/'
+XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+
+class TestAnalyticsExportPermissions:
+    def test_unauthenticated_rejected(self, db):
+        assert APIClient().get(ANALYTICS_EXPORT_URL).status_code == 401
+
+    def test_salesperson_rejected(self, db, salesperson_user):
+        assert make_client(salesperson_user).get(ANALYTICS_EXPORT_URL).status_code == 403
+
+    def test_bootcamper_rejected(self, db, bootcamper_user):
+        assert make_client(bootcamper_user).get(ANALYTICS_EXPORT_URL).status_code == 403
+
+
+class TestAnalyticsExport:
+    def test_defaults_to_xlsx(self, db, admin_user):
+        resp = make_client(admin_user).get(ANALYTICS_EXPORT_URL)
+        assert resp.status_code == 200
+        assert resp['Content-Type'] == XLSX_MIME
+        assert 'attachment;' in resp['Content-Disposition']
+        assert '.xlsx' in resp['Content-Disposition']
+
+    def test_xlsx_is_a_readable_workbook_with_all_sheets(self, db, admin_user):
+        from openpyxl import load_workbook
+
+        resp = make_client(admin_user).get(ANALYTICS_EXPORT_URL, {'format': 'xlsx'})
+        workbook = load_workbook(io.BytesIO(resp.content))
+        assert workbook.sheetnames == [
+            'Filtros', 'Resumen', 'Conversión por segmento',
+            'Tiempo de respuesta', 'Velocidad de leads', 'Cobro por programa',
+        ]
+
+    def test_csv_format(self, db, admin_user):
+        resp = make_client(admin_user).get(ANALYTICS_EXPORT_URL, {'format': 'csv'})
+        assert resp.status_code == 200
+        assert resp['Content-Type'].startswith('text/csv')
+        assert '.csv' in resp['Content-Disposition']
+        assert 'Filtros aplicados' in resp.content.decode('utf-8')
+
+    def test_unsupported_format_rejected(self, db, admin_user):
+        resp = make_client(admin_user).get(ANALYTICS_EXPORT_URL, {'format': 'pdf'})
+        assert resp.status_code == 400
+        assert resp.json()['code'] == 'UNSUPPORTED_FORMAT'
+
+    def test_filters_are_echoed_in_the_file(self, db, admin_user):
+        resp = make_client(admin_user).get(ANALYTICS_EXPORT_URL, {
+            'format': 'csv', 'fecha_desde': '2026-06-01', 'segment': 'INSTAGRAM',
+        })
+        body = resp.content.decode('utf-8')
+        assert '2026-06-01' in body
+        assert 'INSTAGRAM' in body
+
+    def test_values_match_the_kpi_endpoint(self, db, admin_user):
+        """El reporte y la pantalla deben mostrar los mismos números."""
+        _make_lead('Export Uno', '0995000001', status=Lead.Status.CONVERTED)
+        _make_lead('Export Dos', '0995000002')
+        client = make_client(admin_user)
+
+        kpis = client.get(ANALYTICS_KPIS_URL).json()
+        body = client.get(ANALYTICS_EXPORT_URL, {'format': 'csv'}).content.decode('utf-8')
+
+        assert str(kpis['conversion_rate']['total_leads']) in body
+        assert str(kpis['conversion_rate']['rate_percentage']) in body
+
+    def test_decimals_are_not_rendered_as_decimal_objects(self, db, admin_user):
+        program = _make_program('Export Program')
+        bootcamper = _make_bootcamper('bc_export@test.com')
+        _make_enrollment(bootcamper, program, agreed_price=Decimal('500.00'))
+        _make_payment(bootcamper, program, confirmed_amount=Decimal('200.00'))
+
+        body = make_client(admin_user).get(
+            ANALYTICS_EXPORT_URL, {'format': 'csv'}
+        ).content.decode('utf-8')
+        assert 'Decimal(' not in body
+        assert '500' in body

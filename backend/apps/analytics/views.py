@@ -1,4 +1,5 @@
 """Views for analytics app."""
+from django.http import HttpResponse
 from django.utils.dateparse import parse_date
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from rest_framework import serializers as drf_serializers
@@ -6,7 +7,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.leads.permissions import IsAdministrator
+from . import exports
 from .services import AnalyticsService
+
+XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 
 class AnalyticsKPIView(APIView):
@@ -87,3 +91,50 @@ class LeadManagementMetricsView(APIView):
             campaign=params.get('campaign') or None,
         )
         return Response(data)
+
+
+class AnalyticsExportView(APIView):
+    """GET /api/analytics/export/ — reporte exportable de analítica (CB-58, solo Admin)."""
+    permission_classes = [IsAdministrator]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter('format', str, description="'xlsx' (por defecto) o 'csv'."),
+            OpenApiParameter('fecha_desde', str, description='Filtrar desde (YYYY-MM-DD).'),
+            OpenApiParameter('fecha_hasta', str, description='Filtrar hasta (YYYY-MM-DD).'),
+            OpenApiParameter('segment', str, description='Lead.source: INSTAGRAM, WHATSAPP, LANDING_PAGE, MANUAL'),
+            OpenApiParameter('campaign', str, description='Interaction.campaign (coincidencia parcial, case-insensitive)'),
+        ],
+        responses={(200, XLSX_CONTENT_TYPE): bytes, (200, 'text/csv'): str},
+        summary='Exportar el reporte de analítica en Excel o CSV (solo Admin)',
+        description=(
+            'Genera el archivo a partir de los mismos KPIs y filtros del dashboard, '
+            'para que el reporte y la pantalla siempre coincidan. Excel trae una hoja '
+            'por bloque; CSV concatena las secciones en un solo archivo.'
+        ),
+        tags=['Analytics'],
+    )
+    def get(self, request):
+        params = request.query_params
+        export_format = (params.get('format') or 'xlsx').lower()
+        if export_format not in ('xlsx', 'csv'):
+            return Response(
+                {'error': "Formato no soportado. Usa 'xlsx' o 'csv'.", 'code': 'UNSUPPORTED_FORMAT'},
+                status=400,
+            )
+
+        data = AnalyticsService().get_dashboard_kpis(
+            fecha_desde=parse_date(params.get('fecha_desde', '') or ''),
+            fecha_hasta=parse_date(params.get('fecha_hasta', '') or ''),
+            segment=params.get('segment') or None,
+            campaign=params.get('campaign') or None,
+        )
+
+        if export_format == 'csv':
+            response = HttpResponse(exports.to_csv(data), content_type='text/csv; charset=utf-8')
+        else:
+            response = HttpResponse(exports.to_xlsx(data), content_type=XLSX_CONTENT_TYPE)
+
+        filename = exports.build_filename(export_format)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
