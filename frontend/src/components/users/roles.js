@@ -11,6 +11,20 @@ export const ROLE_LABELS = Object.fromEntries(
   ROLE_OPTIONS.map(({ value, label }) => [value, label]),
 )
 
+/**
+ * Espejo de `CustomUser.CoordinatorScope`. Sólo aplica al rol COORDINATOR:
+ * decide a qué programas se le notifica por correo.
+ */
+export const COORDINATOR_SCOPE_OPTIONS = [
+  { value: 'GENERAL', label: 'General — todos los programas' },
+  { value: 'PROGRAM', label: 'Por programa' },
+]
+
+export const COORDINATOR_SCOPE_LABELS = {
+  GENERAL: 'General',
+  PROGRAM: 'Por programa',
+}
+
 export const ROLE_BADGE_CLASSES = {
   ADMINISTRATOR: 'bg-indigo-50 text-indigo-700',
   COORDINATOR: 'bg-purple-50 text-purple-700',
