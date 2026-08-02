@@ -9,6 +9,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage'
 import ResetSuccessPage from './pages/ResetSuccessPage'
 import LeadsDashboard from './pages/LeadsDashboard'
 import UsersPage from './pages/UsersPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 import PaymentsPage from './pages/PaymentsPage'
 import SalespersonPaymentsPage from './pages/SalespersonPaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
@@ -50,6 +51,14 @@ export default function App() {
           <Route path="/schedule" element={<div className="p-8 text-gray-400">Schedule — coming soon</div>} />
           <Route path="/payments" element={<PaymentsRoute />} />
           <Route path="/payments/:bootcamperId/:programId" element={<BootcamperPaymentDetailPage />} />
+          <Route
+            path="/analytics"
+            element={
+              <AdminRoute>
+                <AnalyticsPage />
+              </AdminRoute>
+            }
+          />
           <Route
             path="/admin/users"
             element={
