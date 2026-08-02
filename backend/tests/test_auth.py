@@ -12,6 +12,7 @@ LOGOUT_URL           = '/api/auth/logout/'
 REFRESH_URL          = '/api/auth/token/refresh/'
 PASSWORD_RESET_URL   = '/api/auth/password-reset/'
 PASSWORD_CONFIRM_URL = '/api/auth/password-reset/confirm/'
+ME_URL               = '/api/auth/me/'
 
 
 @pytest.fixture
@@ -55,10 +56,39 @@ class TestLogin:
         assert resp.json()['code'] == 'INVALID_CREDENTIALS'
 
     def test_login_inactive_user(self, inactive_user):
+        """Quien conoce la contraseña sí merece saber que la cuenta está desactivada."""
         client = APIClient()
         resp = client.post(LOGIN_URL, {'email': 'inactive@test.com', 'password': 'validpass123'}, format='json')
         assert resp.status_code == 403
         assert resp.json()['code'] == 'ACCOUNT_INACTIVE'
+
+    def test_login_inactive_user_with_wrong_password_does_not_leak(self, inactive_user):
+        """Sin la contraseña correcta, una cuenta desactivada es indistinguible
+        de una inexistente (SEC-3: enumeración de usuarios).
+
+        Antes se consultaba `is_active` antes de validar la contraseña, así que
+        bastaba con probar cualquier clave para saber si un email existía.
+        """
+        client = APIClient()
+        resp = client.post(
+            LOGIN_URL, {'email': 'inactive@test.com', 'password': 'wrongpass'}, format='json'
+        )
+        assert resp.status_code == 401
+        assert resp.json()['code'] == 'INVALID_CREDENTIALS'
+
+    def test_login_unknown_email_matches_inactive_response(self, inactive_user):
+        """La respuesta para un email inexistente es idéntica a la de una cuenta
+        desactivada con contraseña incorrecta: mismo código y mismo mensaje."""
+        client = APIClient()
+        cache.clear()  # el login está limitado a 5/min por el scope 'auth'
+        desconocido = client.post(
+            LOGIN_URL, {'email': 'nadie@test.com', 'password': 'wrongpass'}, format='json'
+        )
+        desactivado = client.post(
+            LOGIN_URL, {'email': 'inactive@test.com', 'password': 'wrongpass'}, format='json'
+        )
+        assert desconocido.status_code == desactivado.status_code == 401
+        assert desconocido.json() == desactivado.json()
 
 
 class TestLogout:
@@ -164,6 +194,50 @@ class TestTokenRefresh:
             REMOTE_ADDR='10.10.10.5',
         )
         assert limited.status_code == 429
+
+
+class TestMeUpdate:
+    def _auth_client(self, user):
+        client = APIClient()
+        refresh = RefreshToken.for_user(user)
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
+        return client
+
+    def test_me_patch_allows_profile_fields(self, active_user):
+        client = self._auth_client(active_user)
+        resp = client.patch(ME_URL, {
+            'first_name': 'Nuevo',
+            'last_name':  'Nombre',
+            'phone':      '0999999999',
+        }, format='json')
+        assert resp.status_code == 200
+        active_user.refresh_from_db()
+        assert active_user.first_name == 'Nuevo'
+        assert active_user.last_name == 'Nombre'
+        assert active_user.phone == '0999999999'
+
+    def test_me_patch_cannot_escalate_role(self, active_user):
+        client = self._auth_client(active_user)
+        resp = client.patch(ME_URL, {'role': CustomUser.Role.ADMINISTRATOR}, format='json')
+        assert resp.status_code == 200
+        active_user.refresh_from_db()
+        assert active_user.role == CustomUser.Role.SALESPERSON
+        assert resp.json()['role'] == CustomUser.Role.SALESPERSON
+
+    def test_me_patch_cannot_change_email(self, active_user):
+        client = self._auth_client(active_user)
+        resp = client.patch(ME_URL, {'email': 'hacker@test.com'}, format='json')
+        assert resp.status_code == 200
+        active_user.refresh_from_db()
+        assert active_user.email == 'user@test.com'
+
+    def test_me_patch_cannot_change_is_active(self, active_user):
+        client = self._auth_client(active_user)
+        resp = client.patch(ME_URL, {'is_active': False, 'first_name': 'Sigo'}, format='json')
+        assert resp.status_code == 200
+        active_user.refresh_from_db()
+        assert active_user.is_active is True
+        assert active_user.first_name == 'Sigo'
 
 
 class TestPasswordReset:

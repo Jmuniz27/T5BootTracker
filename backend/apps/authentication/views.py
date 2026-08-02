@@ -17,6 +17,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import CustomUser
 from .serializers import (
     LoginSerializer,
+    MeUpdateSerializer,
     UserDataSerializer,
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
@@ -56,20 +57,23 @@ class LoginView(APIView):
         tags=['Auth'],
     )
     def post(self, request):
-        email = request.data.get('email', '')
-
-        try:
-            candidate = CustomUser.objects.get(email=email)
-            if not candidate.is_active:
-                return Response(
-                    {'error': 'Cuenta desactivada. Contacte al administrador.', 'code': 'ACCOUNT_INACTIVE'},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-        except CustomUser.DoesNotExist:
-            pass
-
+        # El estado de la cuenta lo resuelve LoginSerializer, y sólo después de
+        # comprobar la contraseña. Consultarlo aquí, antes de validar nada,
+        # permitía averiguar qué emails existen en el sistema (SEC-3).
         serializer = LoginSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
+            # DRF envuelve cada valor del detalle en una lista, así que el
+            # código llega como ['ACCOUNT_INACTIVE'] y no como la cadena suelta.
+            codigo = serializer.errors.get('code')
+            if isinstance(codigo, (list, tuple)):
+                codigo = codigo[0] if codigo else None
+
+            if str(codigo) == 'ACCOUNT_INACTIVE':
+                return Response(
+                    {'error': 'Cuenta desactivada. Contacte al administrador.',
+                     'code': 'ACCOUNT_INACTIVE'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             return Response(
                 {'error': 'Credenciales inválidas.', 'code': 'INVALID_CREDENTIALS'},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -172,13 +176,13 @@ class MeView(APIView):
         return Response(UserDataSerializer(request.user).data)
 
     @extend_schema(
-        request=UserDataSerializer,
+        request=MeUpdateSerializer,
         responses={200: UserDataSerializer},
         summary='Actualizar mi perfil',
         tags=['Auth'],
     )
     def patch(self, request):
-        serializer = UserDataSerializer(
+        serializer = MeUpdateSerializer(
             request.user,
             data=request.data,
             partial=True,
@@ -186,7 +190,7 @@ class MeView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
+        return Response(UserDataSerializer(request.user).data)
 
 
 class PasswordResetRequestView(APIView):

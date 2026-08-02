@@ -115,6 +115,51 @@ class TestPaymentUpload:
         assert resp.status_code == 403
 
 
+class TestReceiptFile:
+    RECEIPT_URL = "/api/payments/receipt/"
+
+    def _uploaded_payment(self, client, program):
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch("apps.payments.tasks.process_payment_ocr.delay"):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+        assert resp.status_code == 201
+        return resp.json()
+
+    def test_receipt_file_is_signed_url(self, db, converted_bootcamper, program):
+        client = make_client(converted_bootcamper)
+        data = self._uploaded_payment(client, program)
+        assert data["receipt_file"].startswith(f"{self.RECEIPT_URL}?st=")
+
+    def test_signed_url_serves_file_without_auth_header(self, db, converted_bootcamper, program):
+        client = make_client(converted_bootcamper)
+        data = self._uploaded_payment(client, program)
+
+        anonymous = APIClient()
+        resp = anonymous.get(data["receipt_file"])
+        assert resp.status_code == 200
+        assert b"".join(resp.streaming_content) == b"fake-image-data"
+
+    def test_tampered_token_rejected(self, db):
+        anonymous = APIClient()
+        resp = anonymous.get(self.RECEIPT_URL, {"st": "forged-token"})
+        assert resp.status_code == 403
+        assert resp.json()["code"] == "RECEIPT_TOKEN_INVALID"
+
+    def test_valid_token_for_missing_payment_404(self, db):
+        from apps.payments.services import make_receipt_token
+
+        anonymous = APIClient()
+        token = make_receipt_token("00000000-0000-0000-0000-000000000000")
+        resp = anonymous.get(self.RECEIPT_URL, {"st": token})
+        assert resp.status_code == 404
+
+
 class TestPaymentMyStatus:
     def test_my_status_returns_summary(
         self, db, converted_bootcamper, program, approved_payment

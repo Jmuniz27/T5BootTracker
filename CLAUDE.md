@@ -80,6 +80,45 @@ cd frontend && npm run dev
 cd mobile && npx expo start
 ```
 
+### Después de un `git pull` (obligatorio)
+
+Las imágenes y volúmenes de Docker no se actualizan solos cuando un PR agrega
+dependencias. Si sólo haces `docker-compose up`, arrancás con dependencias viejas:
+
+```bash
+# 1. Backend y celery son DOS imágenes distintas del mismo Dockerfile.
+#    Reconstruir sólo backend deja celery caído.
+docker-compose build backend celery
+
+# 2. El compose monta `- /app/node_modules` como volumen anónimo, que tapa el
+#    node_modules del host. Un `npm install` local NO llega al contenedor, y el
+#    volumen se reutiliza aunque reconstruyas la imagen: hay que renovarlo.
+docker-compose up -d --build --renew-anon-volumes frontend
+
+# 3. Migraciones
+docker-compose exec backend python manage.py migrate
+
+# 4. Datos de prueba (usuarios, leads, programas, pagos)
+docker-compose exec backend python manage.py seed_dev
+```
+
+**Cómo se ven los síntomas si te lo saltás:**
+
+| Síntoma | Causa |
+|---|---|
+| `celery exited (1)` con `ModuleNotFoundError` | falta `docker-compose build celery` |
+| Vite: `Failed to resolve import "<paquete>"` | falta `--renew-anon-volumes` en frontend |
+| `relation ... does not exist` | falta `migrate` |
+
+El de celery es el más peligroso: **no produce ningún error visible en la
+interfaz**, pero sin celery no se envían emails ni corre el OCR de comprobantes.
+
+### Profiling opcional
+
+El panel de django-silk está apagado por defecto; se levanta con
+`SILK_ENABLED=True docker-compose up backend` y queda en `/silk/`
+(exige sesión de staff).
+
 ---
 
 ## Estructura

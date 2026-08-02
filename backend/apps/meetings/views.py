@@ -1,45 +1,47 @@
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from django.http import HttpResponse
-from icalendar import Calendar, Event
+from rest_framework import viewsets
+from .models import Meeting
+from .serializers import MeetingSerializer
+from .permissions import IsAdminOrMeetingOwner
+from .tasks import sync_create_meeting_to_google, sync_update_meeting_to_google, sync_delete_meeting_from_google, send_meeting_invitation
 
-from .serializers import CalendarEventSerializer
+class MeetingViewSet(viewsets.ModelViewSet):
+    serializer_class = MeetingSerializer
+    permission_classes = [IsAdminOrMeetingOwner] # <--- Nuevo permiso
 
-class GenerateICSView(APIView):
-    """
-    POST /api/meetings/calendar/generate-ics/
-    Genera y devuelve un archivo .ics descargable.
-    """
-    permission_classes = [IsAuthenticated]
+    def get_queryset(self):
+        """Filtra la base de datos según quién está preguntando."""
+        user = self.request.user
 
-    def post(self, request):
-        serializer = CalendarEventSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
+        # 1. Filtro de seguridad por Rol
+        if user.is_staff: # Administrador
+            queryset = Meeting.objects.all()
+        else:             # Vendedor
+            queryset = Meeting.objects.filter(assigned_to=user)
 
-        # Inicializar el calendario
-        cal = Calendar()
-        cal.add('prodid', '-//BootTracker//boottracker.com//')
-        cal.add('version', '2.0')
+        # 2. Filtros de fecha y lead (Igual que antes)
+        start_date = self.request.query_params.get('start')
+        end_date = self.request.query_params.get('end')
+        if start_date and end_date:
+            queryset = queryset.filter(start_time__gte=start_date, start_time__lte=end_date)
 
-        # Crear el evento
-        event = Event()
-        event.add('summary', data['summary'])
+        lead_id = self.request.query_params.get('lead_id')
+        if lead_id:
+            queryset = queryset.filter(lead_id=lead_id)
 
-        if data.get('description'):
-            event.add('description', data['description'])
+        return queryset.order_by('start_time')
 
-        event.add('dtstart', data['start_time'])
-        event.add('dtend', data['end_time'])
-        event.add('dtstamp', data['start_time'])
+    def perform_create(self, serializer):
+        meeting = serializer.save(assigned_to=self.request.user)
+        sync_create_meeting_to_google.delay(meeting.id)
+        send_meeting_invitation.delay(meeting.id) # <--- Dispara el correo
 
-        for attendee in data.get('attendees', []):
-            event.add('attendee', f'MAILTO:{attendee}')
+    def perform_update(self, serializer):
+        meeting = serializer.save()
+        sync_update_meeting_to_google.delay(meeting.id)
+        # Opcional: podrías crear un send_meeting_update(meeting.id) aquí
 
-        cal.add_component(event)
-
-        # Retornar como archivo binario (.ics)
-        response = HttpResponse(cal.to_ical(), content_type='text/calendar')
-        response['Content-Disposition'] = 'attachment; filename="evento.ics"'
-
-        return response
+    def perform_destroy(self, instance):
+        google_id = instance.google_event_id
+        if google_id:
+            sync_delete_meeting_from_google.delay(google_id)
+        instance.delete()

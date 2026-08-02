@@ -238,6 +238,7 @@ class LeadAssignView(APIView):
                 )
             lead.owner       = request.user
             lead.assigned_at = now()
+            lead.released_at = None  # CR-006: nueva tenencia, se reinicia el reloj
             lead.version    += 1
             lead.save()
 
@@ -261,6 +262,7 @@ class LeadReleaseView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         lead.owner       = None
+        lead.released_at = now()  # CR-006: cierra el período de retención
         lead.assigned_at = None
         lead.save()
         return Response(LeadListSerializer(lead).data)
