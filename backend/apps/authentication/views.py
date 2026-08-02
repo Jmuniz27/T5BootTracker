@@ -17,6 +17,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import CustomUser
 from .serializers import (
     LoginSerializer,
+    MeUpdateSerializer,
     UserDataSerializer,
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
@@ -172,13 +173,13 @@ class MeView(APIView):
         return Response(UserDataSerializer(request.user).data)
 
     @extend_schema(
-        request=UserDataSerializer,
+        request=MeUpdateSerializer,
         responses={200: UserDataSerializer},
         summary='Actualizar mi perfil',
         tags=['Auth'],
     )
     def patch(self, request):
-        serializer = UserDataSerializer(
+        serializer = MeUpdateSerializer(
             request.user,
             data=request.data,
             partial=True,
@@ -186,7 +187,7 @@ class MeView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
+        return Response(UserDataSerializer(request.user).data)
 
 
 class PasswordResetRequestView(APIView):

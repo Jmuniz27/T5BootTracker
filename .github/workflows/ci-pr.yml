@@ -4,11 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    # chore/deploy-vps-hetzner está acá temporalmente para poder publicar las primeras
-    # imágenes en GHCR y hacer el despliegue manual de la Fase 4 antes de mergear.
-    # Se quita al mergear a main. Ojo: desde ramas que no son main, build-push publica
-    # sólo el tag del SHA — `latest` lo mueve únicamente main.
-    branches: [main, chore/deploy-vps-hetzner]
+    branches: [main]
 
 jobs:
   backend-ci:
@@ -148,9 +144,11 @@ jobs:
       # Los builds corren acá y no en el VPS: la caja tiene 2 vCPU y 3.7 GiB
       # compartidos con otra aplicación en producción.
       #
-      # El tag del SHA se publica siempre; `latest` sólo desde main. Así una rama puede
-      # producir una imagen probable sin que nada apunte a ella como "lo actual", y el
-      # principio de "sólo main llega a producción" se mantiene.
+      # El tag del SHA se publica siempre; `latest`, sólo desde main. Hoy el trigger es
+      # únicamente main, pero la condición se conserva: si alguna vez se vuelve a habilitar
+      # una rama para publicar imágenes de prueba (como se hizo para el primer despliegue),
+      # esa rama no puede mover `latest` y el "sólo main llega a producción" sigue en pie.
+      # El tag del SHA es además lo que hace posible el rollback: deploy.sh <sha-anterior>.
       - name: Build & push backend
         uses: docker/build-push-action@v6
         with:
