@@ -92,9 +92,11 @@ export default function UsersTable({ users, isLoading, isError, currentUserId, o
                     <RoleBadge role={user.role} />
                     {user.role === 'COORDINATOR' && (
                       <p className="text-xs text-gray-500 mt-1">
-                        {user.coordinator_program_name ??
-                          COORDINATOR_SCOPE_LABELS[user.coordinator_scope] ??
-                          'Sin alcance'}
+                        {/* Con varios programas se listan por nombre; el general
+                            y el que no tiene alcance caen a la etiqueta. */}
+                        {user.coordinator_program_names?.length
+                          ? user.coordinator_program_names.join(', ')
+                          : COORDINATOR_SCOPE_LABELS[user.coordinator_scope] ?? 'Sin alcance'}
                       </p>
                     )}
                   </td>
