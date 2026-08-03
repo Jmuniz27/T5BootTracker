@@ -404,6 +404,15 @@ export default function LeadsScreen() {
                 <Text style={styles.headerSub}>Dashboard</Text>
               </View>
               <View style={styles.headerRight}>
+                <TouchableOpacity
+                  style={styles.agendaBtn}
+                  onPress={() => router.push('/(app)/agenda')}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Abrir agenda de seguimientos"
+                >
+                  <Ionicons name="calendar-outline" size={20} color={colors.navy} />
+                </TouchableOpacity>
                 <View style={styles.headerNameCol}>
                   <Text style={styles.headerName}>{me?.full_name ?? '—'}</Text>
                   <View style={styles.rolePill}>
@@ -608,6 +617,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  agendaBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#eff2fb',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerNameCol: {
     alignItems: 'flex-end',
