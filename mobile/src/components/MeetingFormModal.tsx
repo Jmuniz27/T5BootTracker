@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Pressable,
   Animated,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -82,7 +83,30 @@ export default function MeetingFormModal({
     setPickerMode('date');
   }
 
-  function onPickerChange(event: DateTimePickerEvent, date?: Date) {
+  // Aplica la fecha/hora final al form y cierra el picker.
+  function commitPicked(finalDate: Date) {
+    const target = pickerTarget!;
+    setPickerTarget(null);
+    setForm((f) => {
+      const next = { ...f, [target]: finalDate };
+      if (target === 'start' && next.end.getTime() <= finalDate.getTime()) {
+        next.end = new Date(finalDate.getTime() + 30 * 60 * 1000);
+      }
+      return next;
+    });
+  }
+
+  // iOS: la rueda solo actualiza el borrador; el botón confirma/avanza.
+  function onIosChange(_event: DateTimePickerEvent, date?: Date) {
+    if (date) setDraft(date);
+  }
+  function confirmIos() {
+    if (pickerMode === 'date') setPickerMode('time');
+    else commitPicked(draft);
+  }
+
+  // Android: cada diálogo nativo confirma un paso (fecha → hora).
+  function onAndroidChange(event: DateTimePickerEvent, date?: Date) {
     if (event.type === 'dismissed' || !date) {
       setPickerTarget(null);
       return;
@@ -95,16 +119,7 @@ export default function MeetingFormModal({
     } else {
       const d = new Date(draft);
       d.setHours(date.getHours(), date.getMinutes(), 0, 0);
-      const target = pickerTarget!;
-      setPickerTarget(null);
-      setForm((f) => {
-        const next = { ...f, [target]: d };
-        // Si el fin queda antes/igual que el inicio, lo empuja a +30 min.
-        if (target === 'start' && next.end.getTime() <= d.getTime()) {
-          next.end = new Date(d.getTime() + 30 * 60 * 1000);
-        }
-        return next;
-      });
+      commitPicked(d);
     }
   }
 
@@ -195,8 +210,24 @@ export default function MeetingFormModal({
         </Animated.View>
       </View>
 
-      {pickerTarget && (
-        <DateTimePicker value={draft} mode={pickerMode} onChange={onPickerChange} />
+      {pickerTarget && Platform.OS === 'android' && (
+        <DateTimePicker value={draft} mode={pickerMode} onChange={onAndroidChange} />
+      )}
+
+      {pickerTarget && Platform.OS === 'ios' && (
+        <Modal transparent visible animationType="fade" onRequestClose={() => setPickerTarget(null)}>
+          <Pressable style={s.overlay} onPress={() => setPickerTarget(null)}>
+            <Pressable style={s.pickerSheet} onPress={() => {}}>
+              <Text style={s.pickerTitle}>
+                {pickerTarget === 'start' ? 'Inicio' : 'Fin'} · {pickerMode === 'date' ? 'Fecha' : 'Hora'}
+              </Text>
+              <DateTimePicker value={draft} mode={pickerMode} display="spinner" onChange={onIosChange} />
+              <TouchableOpacity style={s.pickerDone} onPress={confirmIos} activeOpacity={0.85}>
+                <Text style={s.pickerDoneText}>{pickerMode === 'date' ? 'Siguiente' : 'Listo'}</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
       )}
 
       {/* Selector de lead */}
@@ -236,6 +267,29 @@ const s = StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  pickerSheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+  },
+  pickerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  pickerDone: {
+    backgroundColor: colors.navy,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  pickerDoneText: { color: colors.white, fontWeight: '700', fontSize: 15 },
   sheet: {
     backgroundColor: '#f8f9fb',
     borderTopLeftRadius: 20,
