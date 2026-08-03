@@ -36,6 +36,7 @@ const ROLE_LABEL: Record<string, string> = {
   ADMINISTRATOR: 'Administrador',
   COORDINATOR:   'Coordinador',
   BOOTCAMPER:    'Bootcamper',
+  FINANCE:       'Finanzas',
 };
 
 const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: string }> = {
@@ -144,7 +145,8 @@ type Tab = 'my' | 'available' | 'converted';
 
 export default function LeadsScreen() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const isSalesperson = user?.role === 'SALESPERSON';
 
   const [me, setMe]                     = useState<MeData | null>(null);
   const [tab, setTab]                   = useState<Tab>('my');
@@ -252,15 +254,17 @@ export default function LeadsScreen() {
                 <Text style={styles.headerSub}>Dashboard</Text>
               </View>
               <View style={styles.headerRight}>
-                <TouchableOpacity
-                  style={styles.agendaBtn}
-                  onPress={() => router.push('/(app)/agenda')}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Abrir agenda de seguimientos"
-                >
-                  <Ionicons name="calendar-outline" size={20} color={colors.navy} />
-                </TouchableOpacity>
+                {isSalesperson && (
+                  <TouchableOpacity
+                    style={styles.agendaBtn}
+                    onPress={() => router.push('/(app)/agenda')}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Abrir agenda de seguimientos"
+                  >
+                    <Ionicons name="calendar-outline" size={20} color={colors.navy} />
+                  </TouchableOpacity>
+                )}
                 <View style={styles.headerNameCol}>
                   <Text style={styles.headerName}>{me?.full_name ?? '—'}</Text>
                   <View style={styles.rolePill}>

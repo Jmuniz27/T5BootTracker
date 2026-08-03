@@ -1,6 +1,7 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import AgendaScreen from '../agenda';
+import { useAuth } from '../../../src/context/AuthContext';
 import { getMeetings } from '../../../src/api/meetings.api';
 import { fetchLeads } from '../../../src/api/leads.api';
 
@@ -14,6 +15,10 @@ jest.mock('expo-router', () => {
   };
 });
 
+jest.mock('../../../src/context/AuthContext', () => ({
+  useAuth: jest.fn(),
+}));
+
 jest.mock('react-native-calendars', () => ({ Calendar: () => null }));
 
 jest.mock('../../../src/api/meetings.api', () => ({
@@ -26,6 +31,7 @@ jest.mock('../../../src/api/leads.api', () => ({ fetchLeads: jest.fn() }));
 
 const mockMeetings = getMeetings as jest.Mock;
 const mockLeads = fetchLeads as jest.Mock;
+const mockUseAuth = useAuth as jest.Mock;
 
 function textOf(node: unknown): string {
   if (node == null) return '';
@@ -42,6 +48,7 @@ function todayIso(hour = 9): string {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUseAuth.mockReturnValue({ user: { role: 'SALESPERSON' }, logout: jest.fn() });
   mockLeads.mockResolvedValue({
     my_leads: [{ id: 'lead-1', name: 'Ana Torres' }],
     available_leads: [],
@@ -79,5 +86,15 @@ describe('AgendaScreen', () => {
       root = renderer.create(<AgendaScreen />);
     });
     expect(textOf(root?.toJSON())).toContain('Sin reuniones este día');
+  });
+
+  it('FINANCE ve acceso restringido y no dispara la carga de reuniones', async () => {
+    mockUseAuth.mockReturnValue({ user: { role: 'FINANCE' }, logout: jest.fn() });
+    let root: renderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      root = renderer.create(<AgendaScreen />);
+    });
+    expect(textOf(root?.toJSON())).toContain('Acceso restringido');
+    expect(mockMeetings).not.toHaveBeenCalled();
   });
 });
