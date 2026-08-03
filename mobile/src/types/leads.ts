@@ -26,6 +26,7 @@ export interface Lead {
 export interface LeadsResponse {
   my_leads: Lead[];
   available_leads: Lead[];
+  converted_leads?: Lead[];
 }
 
 export interface Interaction {
