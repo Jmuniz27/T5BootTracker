@@ -5,7 +5,6 @@ import { getUsers } from '../api/users.api'
 import { useAuthStore } from '../store/auth.store'
 import CustomSelect from '../components/CustomSelect'
 import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
-import SelfAssignmentToggle from '../components/leads/SelfAssignmentToggle'
 
 const PAGE_SIZE = 10
 
@@ -1012,6 +1011,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
     mutationFn: (newStatus) => updateLeadStatus(lead.id, { status: newStatus }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       onSuccess?.()
       onClose()
     },
@@ -1179,6 +1179,65 @@ function SortDropdown({ value, onChange }) {
   )
 }
 
+// ─── Vendor Filter (HST-025, admin) ───────────────────────────────────────────
+
+function VendorFilterDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const { data } = useQuery({
+    queryKey: ['users', 'salespersons'],
+    queryFn: getUsers,
+  })
+  const vendors = (data?.results ?? data ?? []).filter((u) => ['SALESPERSON', 'FINANCE'].includes(u.role))
+  const active = vendors.find((u) => u.id === value)
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
+          value ? 'border-[#213A8E] text-[#213A8E] bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        {active?.full_name ?? 'Todos los vendedores'}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 max-h-64 overflow-y-auto">
+          <button
+            onClick={() => { onChange(''); setOpen(false) }}
+            className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+              !value ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Todos los vendedores
+          </button>
+          {vendors.map((u) => (
+            <button
+              key={u.id}
+              onClick={() => { onChange(u.id); setOpen(false) }}
+              className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                value === u.id ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {u.full_name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Row Actions Dropdown ─────────────────────────────────────────────────────
 
 // ─── Cédula Validator ─────────────────────────────────────────────────────────
@@ -1226,6 +1285,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     mutationFn: ({ id, payload }) => convertLead(id, payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setResult(data)
     },
     onError: (err) => {
@@ -1400,7 +1460,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onAdminReassign, onViewHistory, onLogInteraction, onConvert, onChangeStatus }) {
+function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus }) {
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -1485,14 +1545,6 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
             >
               Convertir lead
-            </button>
-          )}
-          {isAdmin && (
-            <button
-              onClick={() => { onAdminReassign(); setOpen(false) }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              {lead.owner ? 'Liberar / Reasignar' : 'Asignar a'}
             </button>
           )}
           {!isAdmin && (isOwned ? (
@@ -1587,7 +1639,9 @@ export default function LeadsDashboard() {
   const [showCreate, setShowCreate]       = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState(null) // { duplicate, payload }
   const [toast, setToast]                 = useState(null) // { message, type }
-  const [activeTab, setActiveTab]         = useState('mine') // 'mine' | 'available'
+  // Vendedor/Finanzas: 'mine' | 'available'. Admin (HST-025): 'all' | 'assigned' | 'unassigned'.
+  const [activeTab, setActiveTab]         = useState(isAdmin ? 'all' : 'mine')
+  const [vendorFilter, setVendorFilter]   = useState('')
   const [flashedLeadId, setFlashedLeadId] = useState(null)
 
   const showToast = (message, type = 'success') => setToast({ message, type })
@@ -1598,11 +1652,12 @@ export default function LeadsDashboard() {
   }
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey])
+  useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey, vendorFilter])
 
   const queryParams = { page, page_size: PAGE_SIZE }
   if (search) queryParams.search = search
   if (statusFilter) queryParams.status = statusFilter
+  if (isAdmin && vendorFilter) queryParams.vendedor = vendorFilter
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['leads', queryParams],
@@ -1617,9 +1672,9 @@ export default function LeadsDashboard() {
     staleTime: 30000,
   })
 
-  // Control global de auto-asignación (CR-004). El endpoint es de lectura para
-  // cualquier autenticado, así que el vendedor también sabe si puede asignarse.
-  const { data: selfAssignSetting, isLoading: loadingSelfAssign } = useQuery({
+  // El control de auto-asignación (CR-004) vive en Usuarios; acá solo se lee
+  // para habilitar/deshabilitar "Asignarme" del vendedor.
+  const { data: selfAssignSetting } = useQuery({
     queryKey: ['self-assignment-setting'],
     queryFn: getSelfAssignmentSetting,
   })
@@ -1630,17 +1685,32 @@ export default function LeadsDashboard() {
 
   const myLeads        = data?.my_leads ?? []
   const availableLeads = data?.available_leads ?? []
+  // HST-025: particiones reales del admin (all/assigned/unassigned), ninguna
+  // es "de él" — a diferencia de my_leads/available_leads, que se mantienen
+  // sin cambios para admin solo por compatibilidad con mobile.
+  const allLeads        = data?.all_leads ?? []
+  const assignedLeads   = data?.assigned_leads ?? []
+  const unassignedLeads = data?.unassigned_leads ?? []
 
   const pagination     = data?.pagination ?? {}
   const statsPagination = statsData?.pagination ?? {}
-  const conversions    = myLeads.filter((l) => l.status === 'CONVERTED').length
-  const totalPages   = activeTab === 'mine'
-    ? (pagination.my_leads_total_pages ?? 1)
-    : (pagination.available_leads_total_pages ?? 1)
+  const conversions    = (isAdmin ? allLeads : myLeads).filter((l) => l.status === 'CONVERTED').length
 
-  const tabLeads = activeTab === 'mine'
-    ? myLeads.map((l) => ({ ...l, _isOwned: l.owner === currentUser?.id }))
-    : availableLeads.map((l) => ({ ...l, _isOwned: false }))
+  const ADMIN_TAB_TOTAL_PAGES = {
+    all:        pagination.all_leads_total_pages ?? 1,
+    assigned:   pagination.assigned_leads_total_pages ?? 1,
+    unassigned: pagination.unassigned_leads_total_pages ?? 1,
+  }
+  const totalPages = isAdmin
+    ? (ADMIN_TAB_TOTAL_PAGES[activeTab] ?? 1)
+    : (activeTab === 'mine' ? (pagination.my_leads_total_pages ?? 1) : (pagination.available_leads_total_pages ?? 1))
+
+  const ADMIN_TAB_LEADS = { all: allLeads, assigned: assignedLeads, unassigned: unassignedLeads }
+  const tabLeads = isAdmin
+    ? (ADMIN_TAB_LEADS[activeTab] ?? []).map((l) => ({ ...l, _isOwned: false }))
+    : (activeTab === 'mine'
+      ? myLeads.map((l) => ({ ...l, _isOwned: l.owner === currentUser?.id }))
+      : availableLeads.map((l) => ({ ...l, _isOwned: false })))
 
   const pageLeads = sortLeads(
     tabLeads.filter((l) => !companyFilter || l.is_company),
@@ -1651,6 +1721,7 @@ export default function LeadsDashboard() {
     mutationFn: assignLead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       showToast('Lead asignado correctamente.')
     },
     onError: (err) => {
@@ -1663,6 +1734,7 @@ export default function LeadsDashboard() {
     mutationFn: releaseLead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setReleaseTarget(null)
       showToast('Lead desasignado correctamente.')
     },
@@ -1676,6 +1748,7 @@ export default function LeadsDashboard() {
     mutationFn: ({ id, ownerId }) => adminReassignLead(id, ownerId),
     onSuccess: (_, { ownerId }) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setReassignTarget(null)
       showToast(ownerId ? 'Lead reasignado correctamente.' : 'Lead liberado correctamente.')
     },
@@ -1694,16 +1767,17 @@ export default function LeadsDashboard() {
         try {
           await assignLead(newLead.id)
           showToast('Lead creado y asignado a ti.')
-          setActiveTab('mine')
+          if (!isAdmin) setActiveTab('mine')
         } catch {
           showToast('Lead creado, pero no se pudo asignar. Búscalo en Disponibles.', 'error')
-          setActiveTab('available')
+          if (!isAdmin) setActiveTab('available')
         }
       } else {
         showToast('Lead creado. Puedes encontrarlo en Disponibles.')
-        setActiveTab('available')
+        if (!isAdmin) setActiveTab('available')
       }
       await queryClient.invalidateQueries({ queryKey: ['leads'] })
+      await queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setShowCreate(false)
       setDuplicateWarning(null)
       setPage(1)
@@ -1741,21 +1815,23 @@ export default function LeadsDashboard() {
         </button>
       </div>
 
-      {/* Control de auto-asignación — solo Administrador (CR-004) */}
-      {isAdmin && (
-        <SelfAssignmentToggle
-          setting={selfAssignSetting}
-          isLoading={loadingSelfAssign}
-          onResult={showToast}
-        />
-      )}
-
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 lg:mb-8">
-        <StatCard label="Total leads"    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
-        <StatCard label="Asignados a mí" value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
-        <StatCard label="Conversiones"   value={conversions} loading={isLoading} />
-        <StatCard label="No interesados" value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
+        {isAdmin ? (
+          <>
+            <StatCard label="Total leads"  value={statsPagination.all_leads_count ?? allLeads.length} loading={isLoading} />
+            <StatCard label="Asignados"    value={statsPagination.assigned_leads_count ?? assignedLeads.length} loading={isLoading} />
+            <StatCard label="Sin asignar"  value={statsPagination.unassigned_leads_count ?? unassignedLeads.length} loading={isLoading} />
+            <StatCard label="Conversiones" value={conversions} loading={isLoading} />
+          </>
+        ) : (
+          <>
+            <StatCard label="Total leads"    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
+            <StatCard label="Asignados a mí" value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
+            <StatCard label="Conversiones"   value={conversions} loading={isLoading} />
+            <StatCard label="No interesados" value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
+          </>
+        )}
       </div>
 
       {/* Leads Table */}
@@ -1792,32 +1868,73 @@ export default function LeadsDashboard() {
           </button>
           <SortDropdown value={sortKey} onChange={setSortKey} />
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
+          {isAdmin && <VendorFilterDropdown value={vendorFilter} onChange={setVendorFilter} />}
         </div>
 
         {/* Tabs */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
-          <button
-            data-testid="tab-mine"
-            onClick={() => { setActiveTab('mine'); setPage(1) }}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              activeTab === 'mine'
-                ? 'bg-[#213A8E] text-white shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Mis leads ({myLeads.length})
-          </button>
-          <button
-            data-testid="tab-available"
-            onClick={() => { setActiveTab('available'); setPage(1) }}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              activeTab === 'available'
-                ? 'bg-[#213A8E] text-white shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Disponibles ({availableLeads.length})
-          </button>
+          {isAdmin ? (
+            <>
+              <button
+                data-testid="tab-all"
+                onClick={() => { setActiveTab('all'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'all'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Todos ({statsPagination.all_leads_count ?? allLeads.length})
+              </button>
+              <button
+                data-testid="tab-assigned"
+                onClick={() => { setActiveTab('assigned'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'assigned'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Asignados ({statsPagination.assigned_leads_count ?? assignedLeads.length})
+              </button>
+              <button
+                data-testid="tab-unassigned"
+                onClick={() => { setActiveTab('unassigned'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'unassigned'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Sin asignar ({statsPagination.unassigned_leads_count ?? unassignedLeads.length})
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                data-testid="tab-mine"
+                onClick={() => { setActiveTab('mine'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'mine'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Mis leads ({myLeads.length})
+              </button>
+              <button
+                data-testid="tab-available"
+                onClick={() => { setActiveTab('available'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'available'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Disponibles ({availableLeads.length})
+              </button>
+            </>
+          )}
         </div>
 
         {/* Table */}
@@ -1878,7 +1995,26 @@ export default function LeadsDashboard() {
                   <LeadStatusBadge status={lead.status} lastOutcome={lead.last_outcome} />
                 </td>
                 <td className="py-3.5 px-3">
-                  {lead.owner ? (
+                  {isAdmin ? (
+                    <button
+                      onClick={() => setReassignTarget(lead)}
+                      aria-label={`Asignado a: ${lead.owner_name ?? 'sin asignar'}. Click para cambiar`}
+                      className="flex items-center gap-2 rounded-lg px-1 -mx-1 py-0.5 hover:bg-gray-50 transition-colors"
+                    >
+                      {lead.owner ? (
+                        <>
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
+                            {lead.owner_name?.charAt(0) ?? '?'}
+                          </div>
+                          <span className="text-gray-700 text-sm">{lead.owner_name}</span>
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                          Sin asignar
+                        </span>
+                      )}
+                    </button>
+                  ) : lead.owner ? (
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
                         {lead.owner_name?.charAt(0) ?? '?'}
@@ -1903,7 +2039,6 @@ export default function LeadsDashboard() {
                     onChangeStatus={() => setStatusLead(lead)}
                     onRelease={() => setReleaseTarget(lead)}
                     onAssign={() => assignMutation.mutate(lead.id)}
-                    onAdminReassign={() => setReassignTarget(lead)}
                     onConvert={() => setConvertTarget(lead)}
                   />
                 </td>
