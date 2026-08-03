@@ -5,7 +5,7 @@ import { useAuth } from '../../../src/context/AuthContext';
 
 jest.mock('../../../src/context/AuthContext', () => ({
   useAuth: jest.fn(),
-  SALESPERSON_ROLE: 'SALESPERSON',
+  isMobileRole: (role: string) => ['SALESPERSON', 'FINANCE'].includes(role),
 }));
 
 jest.mock('expo-router', () => ({
@@ -22,16 +22,16 @@ function textOf(node: unknown): string {
   return textOf((node as { children?: unknown }).children);
 }
 
-describe('AppLayout — solo vendedores', () => {
+describe('AppLayout — vendedores y finanzas', () => {
   afterEach(() => jest.clearAllMocks());
 
-  it('bloquea a un rol que no es vendedor', () => {
+  it('bloquea a un rol no autorizado (admin)', () => {
     mockUseAuth.mockReturnValue({ token: 't', user: { role: 'ADMINISTRATOR' }, logout: jest.fn() });
     let root: renderer.ReactTestRenderer | undefined;
     act(() => {
       root = renderer.create(<AppLayout />);
     });
-    expect(textOf(root?.toJSON())).toContain('solo para vendedores');
+    expect(textOf(root?.toJSON())).toContain('Acceso restringido');
   });
 
   it('deja pasar a un vendedor (sin pantalla de bloqueo)', () => {
@@ -40,6 +40,15 @@ describe('AppLayout — solo vendedores', () => {
     act(() => {
       root = renderer.create(<AppLayout />);
     });
-    expect(textOf(root?.toJSON())).not.toContain('solo para vendedores');
+    expect(textOf(root?.toJSON())).not.toContain('Acceso restringido');
+  });
+
+  it('deja pasar a finanzas (sin pantalla de bloqueo)', () => {
+    mockUseAuth.mockReturnValue({ token: 't', user: { role: 'FINANCE' }, logout: jest.fn() });
+    let root: renderer.ReactTestRenderer | undefined;
+    act(() => {
+      root = renderer.create(<AppLayout />);
+    });
+    expect(textOf(root?.toJSON())).not.toContain('Acceso restringido');
   });
 });

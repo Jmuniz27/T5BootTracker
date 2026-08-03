@@ -2,8 +2,12 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import * as SecureStore from 'expo-secure-store';
 import { api } from '../lib/api';
 
-// La app mobile es exclusiva para vendedores.
-export const SALESPERSON_ROLE = 'SALESPERSON';
+// La app mobile es para el equipo comercial: vendedores y finanzas.
+export const MOBILE_ALLOWED_ROLES = ['SALESPERSON', 'FINANCE'] as const;
+
+export function isMobileRole(role: string): boolean {
+  return (MOBILE_ALLOWED_ROLES as readonly string[]).includes(role);
+}
 
 export interface AuthUser {
   id: string;
@@ -47,12 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await SecureStore.setItemAsync('refresh_token', data.refresh);
     const { data: me } = await api.get<AuthUser>('/auth/me/');
 
-    // La app mobile es exclusiva para vendedores.
-    if (me.role !== SALESPERSON_ROLE) {
+    // La app mobile es para el equipo comercial: vendedores y finanzas.
+    if (!isMobileRole(me.role)) {
       await SecureStore.deleteItemAsync('access_token');
       await SecureStore.deleteItemAsync('refresh_token');
-      const err = new Error('Esta aplicación es solo para vendedores.');
-      (err as { code?: string }).code = 'NOT_SALESPERSON';
+      const err = new Error('Esta aplicación es solo para vendedores y finanzas.');
+      (err as { code?: string }).code = 'ROLE_NOT_ALLOWED';
       throw err;
     }
 
