@@ -13,7 +13,7 @@ function Field({ label, required, hint, error, children }) {
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {label}
         {required && <span className="text-red-500"> *</span>}
-        {hint && <span className="text-xs text-gray-400 font-normal"> ({hint})</span>}
+        {hint && <span className="text-xs text-gray-500 font-normal"> ({hint})</span>}
       </label>
       {children}
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
@@ -174,7 +174,7 @@ export default function UserFormFields({ register, errors, control, includePassw
             placeholder="Mínimo 8 caracteres"
             className={inputClass}
           />
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-500 mt-1">
             Se le comparte al usuario para su primer ingreso.
           </p>
         </Field>

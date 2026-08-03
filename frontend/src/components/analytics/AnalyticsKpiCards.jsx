@@ -44,7 +44,7 @@ function KpiCard({ label, value, footer, trend, isLoading }) {
         {trend}
       </div>
       <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
-      {footer && <p className="text-xs text-gray-400 mt-1">{footer}</p>}
+      {footer && <p className="text-xs text-gray-500 mt-1">{footer}</p>}
     </div>
   )
 }

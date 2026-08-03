@@ -113,7 +113,7 @@ export default function UsersPage() {
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-5">
           <div className="flex-1 min-w-[200px] relative">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
