@@ -82,17 +82,24 @@ class LeadListCreateView(APIView):
         responses={200: inline_serializer('LeadListResponse', fields={
             'my_leads':        LeadListSerializer(many=True),
             'available_leads': LeadListSerializer(many=True),
+            'converted_leads': LeadListSerializer(many=True),
             'pagination':      inline_serializer('LeadListPagination', fields={
                 'page':                        drf_serializers.IntegerField(),
                 'page_size':                   drf_serializers.IntegerField(),
                 'my_leads_count':              drf_serializers.IntegerField(),
                 'available_leads_count':       drf_serializers.IntegerField(),
+                'converted_leads_count':       drf_serializers.IntegerField(),
                 'my_leads_total_pages':        drf_serializers.IntegerField(),
                 'available_leads_total_pages': drf_serializers.IntegerField(),
+                'converted_leads_total_pages': drf_serializers.IntegerField(),
             }),
         })},
         summary='Listar leads',
-        description='Devuelve my_leads (asignados al usuario) y available_leads (sin asignar), paginados de forma independiente.',
+        description=(
+            'Devuelve my_leads (asignados al usuario), available_leads (sin asignar) y '
+            'converted_leads (todos los convertidos, visibles para cualquier vendedor; '
+            'owner_name indica quién lo convirtió), paginados de forma independiente.'
+        ),
         tags=['Leads'],
     )
     def get(self, request):
@@ -106,8 +113,6 @@ class LeadListCreateView(APIView):
         fecha_desde   = parse_date(params.get('fecha_desde', '') or '')
         fecha_hasta   = parse_date(params.get('fecha_hasta', '') or '')
 
-        if status_filter:
-            qs = qs.filter(status=status_filter)
         if source_filter:
             qs = qs.filter(source=source_filter)
         if is_company is not None:
@@ -130,6 +135,14 @@ class LeadListCreateView(APIView):
             except ValueError:
                 pass
 
+        # converted_leads es visible para cualquier vendedor y no depende del
+        # filtro de estado (ese aplica solo a my/available). owner_name señala
+        # quién convirtió el lead.
+        converted_leads_qs = qs.filter(status=Lead.Status.CONVERTED)
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
         only_mine = (params.get('my_leads', '').lower() in TRUTHY)
 
         if request.user.is_administrator:
@@ -146,19 +159,24 @@ class LeadListCreateView(APIView):
 
         my_paginator        = Paginator(my_leads_qs, page_size)
         available_paginator = Paginator(available_leads_qs, page_size)
+        converted_paginator = Paginator(converted_leads_qs, page_size)
         my_page        = my_paginator.get_page(page_number)
         available_page = available_paginator.get_page(page_number)
+        converted_page = converted_paginator.get_page(page_number)
 
         return Response({
             'my_leads':        LeadListSerializer(my_page.object_list, many=True).data,
             'available_leads': LeadListSerializer(available_page.object_list, many=True).data,
+            'converted_leads': LeadListSerializer(converted_page.object_list, many=True).data,
             'pagination': {
                 'page':                        page_number,
                 'page_size':                   page_size,
                 'my_leads_count':              my_paginator.count,
                 'available_leads_count':       available_paginator.count,
+                'converted_leads_count':       converted_paginator.count,
                 'my_leads_total_pages':        my_paginator.num_pages,
                 'available_leads_total_pages': available_paginator.num_pages,
+                'converted_leads_total_pages': converted_paginator.num_pages,
             },
         })
 
