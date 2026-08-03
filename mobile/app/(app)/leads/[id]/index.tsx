@@ -209,7 +209,13 @@ export default function LeadDetailScreen() {
                   style={s.actionGhost}
                   onPress={() => router.push({
                     pathname: '/(app)/leads/[id]/convert',
-                    params: { id: lead.id, name: lead.name, program: lead.program_interest ?? '' },
+                    params: {
+                      id: lead.id,
+                      name: lead.name,
+                      program: lead.program_interest ?? '',
+                      email: lead.email ?? '',
+                      phone: lead.phone ?? '',
+                    },
                   })}
                   activeOpacity={0.8}
                 >

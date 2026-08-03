@@ -19,13 +19,14 @@ import ProgramSelect from '../../../../src/components/ProgramSelect';
 
 export default function ConvertLeadScreen() {
   const router = useRouter();
-  const { id, name, program } = useLocalSearchParams<{ id: string; name?: string; program?: string }>();
+  const { id, name, program, email: emailParam, phone: phoneParam } =
+    useLocalSearchParams<{ id: string; name?: string; program?: string; email?: string; phone?: string }>();
 
   const [programs, setPrograms] = useState<Program[]>([]);
   const [programId, setProgramId] = useState('');
   const [cedula, setCedula] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState(emailParam ?? '');
+  const [phone, setPhone] = useState(phoneParam ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
