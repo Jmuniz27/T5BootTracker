@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -5,20 +6,26 @@ import {
   ScrollView,
   StyleSheet,
   SafeAreaView,
+  ActivityIndicator,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
-import { openDialer } from '../../../../src/lib/phone';
-import type { LeadStatus } from '../../../../src/types/leads';
+import { useQuickCall } from '../../../../src/hooks/use-quick-call';
+import { assignLead, releaseLead, updateLeadStatus } from '../../../../src/api/leads.api';
+import type { Lead, LeadStatus } from '../../../../src/types/leads';
 
-const STATUS_LABEL: Record<string, string> = {
-  NEW: 'Nuevo',
-  QUALIFIED: 'Calificado',
-  INTERESTED: 'Interesado',
-  NOT_INTERESTED: 'No interesado',
-  CONVERTED: 'Convertido',
+const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+  NEW:            { label: 'Nuevo',         bg: '#fefce8', color: '#a16207' },
+  QUALIFIED:      { label: 'Calificado',    bg: '#dbeafe', color: '#1d4ed8' },
+  INTERESTED:     { label: 'Interesado',    bg: '#dcfce7', color: '#15803d' },
+  NOT_INTERESTED: { label: 'No interesado', bg: '#fee2e2', color: '#dc2626' },
+  CONVERTED:      { label: 'Convertido',    bg: '#f3e8ff', color: '#7e22ce' },
 };
+
+const ASSIGNABLE: LeadStatus[] = ['NEW', 'QUALIFIED', 'INTERESTED', 'NOT_INTERESTED'];
 
 const SOURCE_LABEL: Record<string, string> = {
   INSTAGRAM: 'Instagram',
@@ -26,18 +33,6 @@ const SOURCE_LABEL: Record<string, string> = {
   LANDING_PAGE: 'Landing Page',
   MANUAL: 'Manual',
 };
-
-interface LeadDetail {
-  id: string;
-  name: string;
-  phone?: string;
-  email?: string | null;
-  status?: LeadStatus;
-  source?: string;
-  program_interest?: string;
-  is_company?: boolean;
-  interaction_count?: number;
-}
 
 function InfoRow({ icon, label, value }: { icon: any; label: string; value?: string | null }) {
   if (!value) return null;
@@ -52,19 +47,60 @@ function InfoRow({ icon, label, value }: { icon: any; label: string; value?: str
 
 export default function LeadDetailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id: string; lead?: string }>();
+  const params = useLocalSearchParams<{ id: string; lead?: string; owned?: string }>();
+  const { startCall } = useQuickCall();
 
-  let lead: LeadDetail = { id: params.id, name: '' };
+  let lead: Partial<Lead> & { id: string } = { id: params.id, name: '' };
   try {
     if (params.lead) lead = JSON.parse(params.lead);
   } catch {
     // sin datos: mostramos lo mínimo
   }
+  const owned = params.owned === '1';
 
-  const converted = lead.status === 'CONVERTED';
+  const [status, setStatus] = useState<LeadStatus | undefined>(lead.status);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const cfg = status ? STATUS_CONFIG[status] : null;
+  const isQualified = status === 'QUALIFIED';
+  const isConverted = status === 'CONVERTED';
 
   function go(path: '/(app)/leads/[id]/log-interaction' | '/(app)/leads/[id]/history' | '/(app)/leads/[id]/convert') {
     router.push({ pathname: path, params: { id: lead.id, name: lead.name } });
+  }
+
+  async function changeStatus(next: LeadStatus) {
+    setBusy(true);
+    try {
+      await updateLeadStatus(lead.id, { status: next });
+      setStatus(next);
+      setStatusOpen(false);
+    } catch {
+      // no-op: se mantiene el estado anterior
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assign() {
+    setBusy(true);
+    try {
+      await assignLead(lead.id);
+      router.back();
+    } catch {
+      setBusy(false);
+    }
+  }
+
+  async function release() {
+    setBusy(true);
+    try {
+      await releaseLead(lead.id);
+      router.back();
+    } catch {
+      setBusy(false);
+    }
   }
 
   return (
@@ -74,7 +110,7 @@ export default function LeadDetailScreen() {
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Lead</Text>
-        <View style={s.backBtn} />
+        <View style={s.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={s.body}>
@@ -85,8 +121,10 @@ export default function LeadDetailScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.name}>{lead.name}</Text>
-              {lead.status ? (
-                <Text style={s.status}>{STATUS_LABEL[lead.status] ?? lead.status}</Text>
+              {cfg ? (
+                <View style={[s.badge, { backgroundColor: cfg.bg }]}>
+                  <Text style={[s.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
+                </View>
               ) : null}
             </View>
           </View>
@@ -94,7 +132,7 @@ export default function LeadDetailScreen() {
           <View style={s.divider} />
 
           {lead.phone ? (
-            <TouchableOpacity style={s.infoRow} onPress={() => openDialer(lead.phone!)} activeOpacity={0.6}>
+            <TouchableOpacity style={s.infoRow} onPress={() => startCall(lead as Lead)} activeOpacity={0.6}>
               <Ionicons name="call-outline" size={16} color={colors.navy} />
               <Text style={s.infoLabel}>Teléfono</Text>
               <Text style={[s.infoValue, { color: colors.navy, textDecorationLine: 'underline' }]}>
@@ -113,24 +151,92 @@ export default function LeadDetailScreen() {
         </View>
 
         <View style={s.actions}>
-          <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/log-interaction')} activeOpacity={0.85}>
-            <Ionicons name="create-outline" size={18} color={colors.white} />
-            <Text style={s.actionPrimaryText}>Registrar interacción</Text>
-          </TouchableOpacity>
+          {owned ? (
+            <>
+              <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/log-interaction')} activeOpacity={0.85}>
+                <Ionicons name="create-outline" size={18} color={colors.white} />
+                <Text style={s.actionPrimaryText}>Registrar interacción</Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.8}>
-            <Ionicons name="time-outline" size={18} color={colors.navy} />
-            <Text style={s.actionGhostText}>Ver historial</Text>
-          </TouchableOpacity>
+              <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.8}>
+                <Ionicons name="time-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>Ver historial</Text>
+              </TouchableOpacity>
 
-          {!converted && (
-            <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/convert')} activeOpacity={0.8}>
-              <Ionicons name="ribbon-outline" size={18} color={colors.navy} />
-              <Text style={s.actionGhostText}>Convertir a bootcamper</Text>
-            </TouchableOpacity>
+              {!isConverted && (
+                <TouchableOpacity style={s.actionGhost} onPress={() => setStatusOpen(true)} activeOpacity={0.8}>
+                  <Ionicons name="flag-outline" size={18} color={colors.navy} />
+                  <Text style={s.actionGhostText}>Cambiar estado</Text>
+                </TouchableOpacity>
+              )}
+
+              {isQualified && (
+                <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/convert')} activeOpacity={0.8}>
+                  <Ionicons name="ribbon-outline" size={18} color={colors.navy} />
+                  <Text style={s.actionGhostText}>Convertir a bootcamper</Text>
+                </TouchableOpacity>
+              )}
+
+              {!isConverted && (
+                <TouchableOpacity style={s.actionDanger} onPress={release} disabled={busy} activeOpacity={0.8}>
+                  {busy ? (
+                    <ActivityIndicator size="small" color={colors.error} />
+                  ) : (
+                    <Text style={s.actionDangerText}>Desasignar</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {!isQualified && !isConverted && (
+                <Text style={s.hint}>Para convertir el lead, primero pásalo a “Calificado”.</Text>
+              )}
+            </>
+          ) : (
+            <>
+              <TouchableOpacity style={s.actionPrimary} onPress={assign} disabled={busy} activeOpacity={0.85}>
+                {busy ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <>
+                    <Ionicons name="add-outline" size={18} color={colors.white} />
+                    <Text style={s.actionPrimaryText}>Asignarme</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.8}>
+                <Ionicons name="time-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>Ver historial</Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </ScrollView>
+
+      {/* Cambiar estado */}
+      <Modal visible={statusOpen} transparent animationType="fade" onRequestClose={() => setStatusOpen(false)}>
+        <Pressable style={s.overlay} onPress={() => setStatusOpen(false)}>
+          <View style={s.sheet}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>Cambiar estado</Text>
+            {ASSIGNABLE.map((st) => {
+              const c = STATUS_CONFIG[st];
+              const active = status === st;
+              return (
+                <TouchableOpacity
+                  key={st}
+                  style={[s.statusOption, active && { borderColor: c.color, backgroundColor: c.bg }]}
+                  onPress={() => changeStatus(st)}
+                  disabled={busy}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.statusOptionText, active && { color: c.color, fontWeight: '700' }]}>{c.label}</Text>
+                  {busy && active && <ActivityIndicator size="small" color={c.color} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -155,6 +261,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerSpacer: { width: 36, height: 36 },
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
   body: { padding: 16, gap: 16 },
   card: {
@@ -174,7 +281,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   name: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
-  status: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, marginTop: 4 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
   divider: { height: 1, backgroundColor: '#f3f4f6', marginVertical: 14 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
   infoLabel: { fontSize: 13, color: colors.textMuted, width: 90 },
@@ -202,4 +310,39 @@ const s = StyleSheet.create({
     paddingVertical: 14,
   },
   actionGhostText: { color: colors.navy, fontWeight: '700', fontSize: 15 },
+  actionDanger: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  actionDangerText: { color: colors.error, fontWeight: '700', fontSize: 15 },
+  hint: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: 4 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingBottom: 36,
+    paddingHorizontal: 20,
+  },
+  handle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, textAlign: 'center', marginBottom: 16 },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginBottom: 8,
+    backgroundColor: '#f8f9fb',
+  },
+  statusOptionText: { fontSize: 14, fontWeight: '500', color: colors.textMuted },
 });
