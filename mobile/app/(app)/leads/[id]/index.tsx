@@ -192,22 +192,16 @@ export default function LeadDetailScreen() {
               )}
             </>
           ) : (
-            <>
-              <TouchableOpacity style={s.actionPrimary} onPress={assign} disabled={busy} activeOpacity={0.85}>
-                {busy ? (
-                  <ActivityIndicator size="small" color={colors.white} />
-                ) : (
-                  <>
-                    <Ionicons name="add-outline" size={18} color={colors.white} />
-                    <Text style={s.actionPrimaryText}>Asignarme</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.8}>
-                <Ionicons name="time-outline" size={18} color={colors.navy} />
-                <Text style={s.actionGhostText}>Ver historial</Text>
-              </TouchableOpacity>
-            </>
+            <TouchableOpacity style={s.actionPrimary} onPress={assign} disabled={busy} activeOpacity={0.85}>
+              {busy ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <>
+                  <Ionicons name="add-outline" size={18} color={colors.white} />
+                  <Text style={s.actionPrimaryText}>Asignarme</Text>
+                </>
+              )}
+            </TouchableOpacity>
           )}
         </View>
       </ScrollView>
