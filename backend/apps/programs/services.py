@@ -1,6 +1,7 @@
 """Business logic for the programs app."""
 import logging
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 
 from .models import Cohort
 
@@ -10,6 +11,27 @@ logger = logging.getLogger(__name__)
 def current_month():
     """Primer día del mes en curso — la granularidad del dominio es el mes."""
     return date.today().replace(day=1)
+
+
+def apply_discount(total_cost, discount_percentage):
+    """Precio a pagar tras aplicar un descuento porcentual al costo del programa.
+
+    Vive aquí porque el precio es del programa: quien concede el descuento (la
+    conversión de un lead) y quien lo cobra (los pagos) tienen que obtener
+    exactamente el mismo número, y con dos implementaciones no lo harían.
+
+    Se redondea a dos decimales con ROUND_HALF_UP: es dinero que alguien va a
+    transferir, así que no puede quedar con más precisión de la que existe.
+
+    Args:
+        total_cost: `Program.total_cost`.
+        discount_percentage: 0–100. Un 0 devuelve el costo intacto.
+
+    Returns:
+        Decimal con dos decimales.
+    """
+    factor = (Decimal('100') - Decimal(discount_percentage)) / Decimal('100')
+    return (Decimal(total_cost) * factor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
 def set_cohort_status(cohort, status, *, save=True):

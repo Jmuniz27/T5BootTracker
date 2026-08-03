@@ -7,7 +7,7 @@ import UsersPage from '../UsersPage';
 import { useAuthStore } from '../../store/auth.store';
 import { getUsers, toggleUserActive, createUser } from '../../api/users.api';
 
-import { getPrograms } from '../../api/leads.api';
+import { getPrograms, getSelfAssignmentSetting } from '../../api/leads.api';
 
 vi.mock('../../api/users.api', () => ({
   getUsers: vi.fn(),
@@ -19,6 +19,8 @@ vi.mock('../../api/users.api', () => ({
 
 vi.mock('../../api/leads.api', () => ({
   getPrograms: vi.fn(),
+  getSelfAssignmentSetting: vi.fn(),
+  updateSelfAssignmentSetting: vi.fn(),
 }));
 
 const PROGRAMA = { id: 'prog-1', name: 'Python Full Stack Abril 2026' };
@@ -73,6 +75,17 @@ const COORDINADOR = {
   coordinator_program_names: [PROGRAMA.name],
 };
 
+const BOOTCAMPER = {
+  id: 'boot-1',
+  email: 'bootcamper@espol.edu.ec',
+  first_name: 'Boot',
+  last_name: 'Camper',
+  full_name: 'Boot Camper',
+  role: 'BOOTCAMPER',
+  cedula: null,
+  is_active: true,
+};
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -103,10 +116,17 @@ describe('UsersPage', () => {
     useAuthStore.setState({ user: ADMIN });
     getUsers.mockResolvedValue({ results: [ADMIN, VENDEDOR, INACTIVO, COORDINADOR] });
     getPrograms.mockResolvedValue([PROGRAMA]);
+    getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
   });
 
   afterEach(() => {
     useAuthStore.setState({ accessToken: null, refreshToken: null, user: null });
+  });
+
+  it('muestra el control de auto-asignación de leads (CR-004)', async () => {
+    renderPage();
+
+    expect(await screen.findByRole('switch', { name: /auto-asignación/i })).toBeInTheDocument();
   });
 
   it('lista los usuarios con su rol y estado', async () => {
@@ -410,6 +430,51 @@ describe('UsersPage', () => {
         coordinator_scope: 'PROGRAM',
         coordinator_programs: [PROGRAMA.id, otro.id],
       });
+    });
+  });
+
+  describe('pestañas Administrativos / Bootcampers', () => {
+    beforeEach(() => {
+      getUsers.mockResolvedValue({ results: [ADMIN, VENDEDOR, INACTIVO, COORDINADOR, BOOTCAMPER] });
+    });
+
+    it('arranca en "Administrativos" y no muestra bootcampers', async () => {
+      renderPage();
+
+      await screen.findByText('Vendedor Uno');
+      expect(screen.getByTestId('tab-staff')).toHaveTextContent('Administrativos (4)');
+      expect(screen.getByTestId('tab-bootcampers')).toHaveTextContent('Bootcampers (1)');
+      expect(screen.queryByText('Boot Camper')).not.toBeInTheDocument();
+    });
+
+    it('la pestaña "Bootcampers" solo muestra bootcampers y oculta el filtro de rol', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      await user.click(screen.getByTestId('tab-bootcampers'));
+
+      expect(await screen.findByText('Boot Camper')).toBeInTheDocument();
+      expect(screen.queryByText('Vendedor Uno')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /todos los roles/i })).not.toBeInTheDocument();
+    });
+
+    it('el filtro de estado sigue funcionando dentro de "Bootcampers"', async () => {
+      const user = userEvent.setup();
+      getUsers.mockResolvedValue({
+        results: [ADMIN, VENDEDOR, INACTIVO, COORDINADOR, BOOTCAMPER, { ...BOOTCAMPER, id: 'boot-2', full_name: 'Boot Inactivo', is_active: false }],
+      });
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      await user.click(screen.getByTestId('tab-bootcampers'));
+      await screen.findByText('Boot Camper');
+
+      await user.click(screen.getByRole('button', { name: /todos los estados/i }));
+      await user.click(screen.getByRole('option', { name: 'Activos' }));
+
+      expect(screen.getByText('Boot Camper')).toBeInTheDocument();
+      expect(screen.queryByText('Boot Inactivo')).not.toBeInTheDocument();
     });
   });
 });

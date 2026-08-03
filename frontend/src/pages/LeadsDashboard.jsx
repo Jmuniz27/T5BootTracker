@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { useAuthStore } from '../store/auth.store'
 import CustomSelect from '../components/CustomSelect'
 import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
-import SelfAssignmentToggle from '../components/leads/SelfAssignmentToggle'
 import MeetingFormModal from '../components/MeetingFormModal'
 import { useMeetingMutations } from '../hooks/use-meetings'
 import { toDatetimeLocal } from '../lib/meetings'
@@ -19,13 +18,6 @@ const SOURCE_LABELS = {
   WHATSAPP: 'WhatsApp',
   LANDING_PAGE: 'Landing Page',
   MANUAL: 'Manual',
-}
-
-const SOURCE_ICON = {
-  INSTAGRAM: '📷',
-  WHATSAPP: '💬',
-  LANDING_PAGE: '🌐',
-  MANUAL: '✏️',
 }
 
 const AVATAR_COLORS = [
@@ -760,7 +752,7 @@ function ViewLeadModal({ lead, onClose }) {
           </div>
           <div>
             <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
-            <p className="text-gray-600">{SOURCE_ICON[lead.source]} {SOURCE_LABELS[lead.source] || lead.source}</p>
+            <p className="text-gray-600">{SOURCE_LABELS[lead.source] || lead.source}</p>
           </div>
           {lastInteraction?.notes && (
             <div>
@@ -889,6 +881,28 @@ function isValidEmail(value) {
   return domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.')
 }
 
+// Validación compartida por los modales de crear y editar lead.
+function validateLeadFields(form) {
+  const errs = {}
+  if (!form.name.trim()) errs.name = 'El nombre es requerido.'
+  const phone = form.phone.trim()
+  if (!phone) {
+    errs.phone = 'El teléfono es requerido.'
+  } else if (!/^(09\d{8}|0[2-7]\d{7})$/.test(phone)) {
+    errs.phone = 'Ingresa un teléfono ecuatoriano válido (ej. 0991234567 o 042345678).'
+  }
+  if (form.email.trim() && !isValidEmail(form.email.trim())) {
+    errs.email = 'Ingresa un email válido.'
+  }
+  return errs
+}
+
+function leadFieldClass(errors, key) {
+  return `w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+    errors[key] ? 'border-red-400' : 'border-gray-200'
+  }`
+}
+
 function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, isAdmin = false }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
@@ -896,24 +910,9 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
 
   const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
 
-  const validate = () => {
-    const errs = {}
-    if (!form.name.trim()) errs.name = 'El nombre es requerido.'
-    const phone = form.phone.trim()
-    if (!phone) {
-      errs.phone = 'El teléfono es requerido.'
-    } else if (!/^(09\d{8}|0[2-7]\d{7})$/.test(phone)) {
-      errs.phone = 'Ingresa un teléfono ecuatoriano válido (ej. 0991234567 o 042345678).'
-    }
-    if (form.email.trim() && !isValidEmail(form.email.trim())) {
-      errs.email = 'Ingresa un email válido.'
-    }
-    return errs
-  }
-
   const handleSubmit = (e) => {
     e.preventDefault()
-    const errs = validate()
+    const errs = validateLeadFields(form)
     if (Object.keys(errs).length) { setErrors(errs); return }
     const { autoAssign, ...payload } = form
     if (!payload.email) delete payload.email
@@ -921,10 +920,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
     onSubmit(payload, autoAssign)
   }
 
-  const inputClass = (key) =>
-    `w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
-      errors[key] ? 'border-red-400' : 'border-gray-200'
-    }`
+  const inputClass = (key) => leadFieldClass(errors, key)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -1051,6 +1047,154 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
   )
 }
 
+// ─── Edit Lead Modal ──────────────────────────────────────────────────────────
+
+function EditLeadModal({ lead, onClose, onSuccess }) {
+  const queryClient = useQueryClient()
+  const [form, setForm] = useState({
+    name: lead.name ?? '',
+    phone: lead.phone ?? '',
+    email: lead.email ?? '',
+    source: lead.source ?? 'MANUAL',
+    program_interest: lead.program_interest ?? '',
+    is_company: lead.is_company ?? false,
+  })
+  const [errors, setErrors] = useState({})
+  const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
+
+  const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
+
+  const mutation = useMutation({
+    mutationFn: (payload) => updateLead(lead.id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      onSuccess?.()
+      onClose()
+    },
+    onError: (err) => {
+      const msg = err.response?.data?.error ?? 'No se pudo guardar el lead.'
+      setErrors((prev) => ({ ...prev, server: msg }))
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    setErrors({})
+    const errs = validateLeadFields(form)
+    if (Object.keys(errs).length) { setErrors(errs); return }
+    mutation.mutate({
+      name: form.name.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim(),
+      source: form.source,
+      program_interest: form.program_interest,
+      is_company: form.is_company,
+    })
+  }
+
+  const inputClass = (key) => leadFieldClass(errors, key)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <div className="flex items-center justify-between mb-6 pr-8">
+          <h2 className="text-xl font-bold text-gray-900">Editar lead</h2>
+          <button
+            type="button"
+            onClick={() => setForm((prev) => ({ ...prev, is_company: !prev.is_company }))}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              form.is_company
+                ? 'bg-indigo-200 text-indigo-700 border-indigo-300'
+                : 'bg-indigo-50 text-indigo-300 border-indigo-100 hover:bg-indigo-100 hover:text-indigo-500 hover:border-indigo-200'
+            }`}
+          >
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+            </svg>
+            Empresa
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre completo<span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <input type="text" data-testid="edit-lead-name" value={form.name} onChange={set('name')} className={inputClass('name')} />
+            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Teléfono<span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <input type="tel" data-testid="edit-lead-phone" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={inputClass('phone')} />
+            {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input type="text" data-testid="edit-lead-email" value={form.email} onChange={set('email')} className={inputClass('email')} />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fuente</label>
+            <CustomSelect
+              testId="edit-lead-source"
+              value={form.source}
+              onChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
+              options={[
+                { value: 'MANUAL', label: 'Manual' },
+                { value: 'INSTAGRAM', label: 'Instagram' },
+                { value: 'WHATSAPP', label: 'WhatsApp' },
+                { value: 'LANDING_PAGE', label: 'Landing Page' },
+              ]}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
+            <CustomSelect
+              testId="edit-lead-program"
+              value={form.program_interest}
+              onChange={(val) => setForm((prev) => ({ ...prev, program_interest: val }))}
+              placeholder="Sin especificar"
+              options={programs.map((p) => ({ value: p.name, label: p.name }))}
+            />
+          </div>
+
+          {errors.server && (
+            <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{errors.server}</p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              data-testid="edit-lead-submit"
+              disabled={mutation.isPending}
+              className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
+            >
+              {mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ─── Update Status Modal ──────────────────────────────────────────────────────
 
 function UpdateStatusModal({ lead, onClose, onSuccess }) {
@@ -1061,6 +1205,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
     mutationFn: (newStatus) => updateLeadStatus(lead.id, { status: newStatus }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       onSuccess?.()
       onClose()
     },
@@ -1228,6 +1373,65 @@ function SortDropdown({ value, onChange }) {
   )
 }
 
+// ─── Vendor Filter (HST-025, admin) ───────────────────────────────────────────
+
+function VendorFilterDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const { data } = useQuery({
+    queryKey: ['users', 'salespersons'],
+    queryFn: getUsers,
+  })
+  const vendors = (data?.results ?? data ?? []).filter((u) => ['SALESPERSON', 'FINANCE'].includes(u.role))
+  const active = vendors.find((u) => u.id === value)
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
+          value ? 'border-[#213A8E] text-[#213A8E] bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        {active?.full_name ?? 'Todos los vendedores'}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 max-h-64 overflow-y-auto">
+          <button
+            onClick={() => { onChange(''); setOpen(false) }}
+            className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+              !value ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Todos los vendedores
+          </button>
+          {vendors.map((u) => (
+            <button
+              key={u.id}
+              onClick={() => { onChange(u.id); setOpen(false) }}
+              className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                value === u.id ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {u.full_name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Row Actions Dropdown ─────────────────────────────────────────────────────
 
 // ─── Cédula Validator ─────────────────────────────────────────────────────────
@@ -1271,10 +1475,19 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     queryFn: getPrograms,
   })
 
+  // Auto-selecciona el programa de interés del lead (sigue siendo editable).
+  useEffect(() => {
+    if (!programId && programs.length && lead.program_interest) {
+      const match = programs.find((p) => p.name === lead.program_interest)
+      if (match) setProgramId(match.id)
+    }
+  }, [programs, lead.program_interest, programId])
+
   const convertMutation = useMutation({
     mutationFn: ({ id, payload }) => convertLead(id, payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setResult(data)
     },
     onError: (err) => {
@@ -1449,7 +1662,8 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onAdminReassign, onViewHistory, onLogInteraction, onConvert, onChangeStatus }) {
+function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit }) {
+  const isConverted = lead.status === 'CONVERTED'
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -1512,7 +1726,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
           >
             Ver historial
           </button>
-          {isOwned && (
+          {isOwned && !isConverted && (
             <button
               onClick={() => { onLogInteraction(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1520,7 +1734,15 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Registrar interacción
             </button>
           )}
-          {isOwned && lead.status !== 'CONVERTED' && (
+          {isOwned && !isConverted && (
+            <button
+              onClick={() => { onEdit(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Editar lead
+            </button>
+          )}
+          {isOwned && !isConverted && (
             <button
               onClick={() => { onChangeStatus(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1536,15 +1758,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Convertir lead
             </button>
           )}
-          {isAdmin && (
-            <button
-              onClick={() => { onAdminReassign(); setOpen(false) }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              {lead.owner ? 'Liberar / Reasignar' : 'Asignar a'}
-            </button>
-          )}
-          {!isAdmin && (isOwned ? (
+          {!isAdmin && !isConverted && (isOwned ? (
             <button
               onClick={() => { onRelease(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1633,10 +1847,13 @@ export default function LeadsDashboard() {
   const [releaseTarget, setReleaseTarget] = useState(null)
   const [reassignTarget, setReassignTarget] = useState(null)
   const [convertTarget, setConvertTarget] = useState(null)
+  const [editLead, setEditLead]           = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState(null) // { duplicate, payload }
   const [toast, setToast]                 = useState(null) // { message, type }
-  const [activeTab, setActiveTab]         = useState('mine') // 'mine' | 'available'
+  // Vendedor/Finanzas: 'mine' | 'available' | 'converted'. Admin (HST-025): 'all' | 'assigned' | 'unassigned'.
+  const [activeTab, setActiveTab]         = useState(isAdmin ? 'all' : 'mine')
+  const [vendorFilter, setVendorFilter]   = useState('')
   const [flashedLeadId, setFlashedLeadId] = useState(null)
 
   const showToast = (message, type = 'success') => setToast({ message, type })
@@ -1647,11 +1864,12 @@ export default function LeadsDashboard() {
   }
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey])
+  useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey, vendorFilter])
 
   const queryParams = { page, page_size: PAGE_SIZE }
   if (search) queryParams.search = search
   if (statusFilter) queryParams.status = statusFilter
+  if (isAdmin && vendorFilter) queryParams.vendedor = vendorFilter
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['leads', queryParams],
@@ -1666,9 +1884,9 @@ export default function LeadsDashboard() {
     staleTime: 30000,
   })
 
-  // Control global de auto-asignación (CR-004). El endpoint es de lectura para
-  // cualquier autenticado, así que el vendedor también sabe si puede asignarse.
-  const { data: selfAssignSetting, isLoading: loadingSelfAssign } = useQuery({
+  // El control de auto-asignación (CR-004) vive en Usuarios; acá solo se lee
+  // para habilitar/deshabilitar "Asignarme" del vendedor.
+  const { data: selfAssignSetting } = useQuery({
     queryKey: ['self-assignment-setting'],
     queryFn: getSelfAssignmentSetting,
   })
@@ -1679,17 +1897,37 @@ export default function LeadsDashboard() {
 
   const myLeads        = data?.my_leads ?? []
   const availableLeads = data?.available_leads ?? []
+  // HST-025: particiones reales del admin (all/assigned/unassigned), ninguna
+  // es "de él" — a diferencia de my_leads/available_leads, que se mantienen
+  // sin cambios para admin solo por compatibilidad con mobile.
+  const allLeads        = data?.all_leads ?? []
+  const assignedLeads   = data?.assigned_leads ?? []
+  const unassignedLeads = data?.unassigned_leads ?? []
+  const convertedLeads  = data?.converted_leads ?? []
+  // Los convertidos viven en su propia pestaña; se sacan de "Mis leads".
+  const activeMyLeads   = myLeads.filter((l) => l.status !== 'CONVERTED')
 
   const pagination     = data?.pagination ?? {}
   const statsPagination = statsData?.pagination ?? {}
-  const conversions    = myLeads.filter((l) => l.status === 'CONVERTED').length
-  const totalPages   = activeTab === 'mine'
-    ? (pagination.my_leads_total_pages ?? 1)
-    : (pagination.available_leads_total_pages ?? 1)
+  const conversions    = isAdmin
+    ? allLeads.filter((l) => l.status === 'CONVERTED').length
+    : (statsPagination.converted_leads_count ?? convertedLeads.length)
 
-  const tabLeads = activeTab === 'mine'
-    ? myLeads.map((l) => ({ ...l, _isOwned: l.owner === currentUser?.id }))
-    : availableLeads.map((l) => ({ ...l, _isOwned: false }))
+  const withOwnership = (leads, owned) =>
+    leads.map((l) => ({ ...l, _isOwned: owned ?? l.owner === currentUser?.id }))
+
+  const TAB = {
+    // Vendedor/Finanzas
+    mine:      { totalPages: pagination.my_leads_total_pages,        leads: withOwnership(activeMyLeads) },
+    available: { totalPages: pagination.available_leads_total_pages, leads: withOwnership(availableLeads, false) },
+    converted: { totalPages: pagination.converted_leads_total_pages, leads: withOwnership(convertedLeads) },
+    // Administrador (HST-025)
+    all:        { totalPages: pagination.all_leads_total_pages,        leads: withOwnership(allLeads, false) },
+    assigned:   { totalPages: pagination.assigned_leads_total_pages,   leads: withOwnership(assignedLeads, false) },
+    unassigned: { totalPages: pagination.unassigned_leads_total_pages, leads: withOwnership(unassignedLeads, false) },
+  }
+  const totalPages = TAB[activeTab].totalPages ?? 1
+  const tabLeads   = TAB[activeTab].leads
 
   const pageLeads = sortLeads(
     tabLeads.filter((l) => !companyFilter || l.is_company),
@@ -1700,6 +1938,7 @@ export default function LeadsDashboard() {
     mutationFn: assignLead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       showToast('Lead asignado correctamente.')
     },
     onError: (err) => {
@@ -1712,6 +1951,7 @@ export default function LeadsDashboard() {
     mutationFn: releaseLead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setReleaseTarget(null)
       showToast('Lead desasignado correctamente.')
     },
@@ -1725,6 +1965,7 @@ export default function LeadsDashboard() {
     mutationFn: ({ id, ownerId }) => adminReassignLead(id, ownerId),
     onSuccess: (_, { ownerId }) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setReassignTarget(null)
       showToast(ownerId ? 'Lead reasignado correctamente.' : 'Lead liberado correctamente.')
     },
@@ -1743,16 +1984,17 @@ export default function LeadsDashboard() {
         try {
           await assignLead(newLead.id)
           showToast('Lead creado y asignado a ti.')
-          setActiveTab('mine')
+          if (!isAdmin) setActiveTab('mine')
         } catch {
           showToast('Lead creado, pero no se pudo asignar. Búscalo en Disponibles.', 'error')
-          setActiveTab('available')
+          if (!isAdmin) setActiveTab('available')
         }
       } else {
         showToast('Lead creado. Puedes encontrarlo en Disponibles.')
-        setActiveTab('available')
+        if (!isAdmin) setActiveTab('available')
       }
       await queryClient.invalidateQueries({ queryKey: ['leads'] })
+      await queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setShowCreate(false)
       setDuplicateWarning(null)
       setPage(1)
@@ -1790,21 +2032,23 @@ export default function LeadsDashboard() {
         </button>
       </div>
 
-      {/* Control de auto-asignación — solo Administrador (CR-004) */}
-      {isAdmin && (
-        <SelfAssignmentToggle
-          setting={selfAssignSetting}
-          isLoading={loadingSelfAssign}
-          onResult={showToast}
-        />
-      )}
-
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 lg:mb-8">
-        <StatCard label="Total leads"    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
-        <StatCard label="Asignados a mí" value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
-        <StatCard label="Conversiones"   value={conversions} loading={isLoading} />
-        <StatCard label="No interesados" value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
+        {isAdmin ? (
+          <>
+            <StatCard label="Total leads"  value={statsPagination.all_leads_count ?? allLeads.length} loading={isLoading} />
+            <StatCard label="Asignados"    value={statsPagination.assigned_leads_count ?? assignedLeads.length} loading={isLoading} />
+            <StatCard label="Sin asignar"  value={statsPagination.unassigned_leads_count ?? unassignedLeads.length} loading={isLoading} />
+            <StatCard label="Conversiones" value={conversions} loading={isLoading} />
+          </>
+        ) : (
+          <>
+            <StatCard label="Total leads"    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
+            <StatCard label="Asignados a mí" value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
+            <StatCard label="Conversiones"   value={conversions} loading={isLoading} />
+            <StatCard label="No interesados" value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
+          </>
+        )}
       </div>
 
       {/* Leads Table */}
@@ -1841,6 +2085,7 @@ export default function LeadsDashboard() {
           </button>
           <SortDropdown value={sortKey} onChange={setSortKey} />
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
+          {isAdmin && <VendorFilterDropdown value={vendorFilter} onChange={setVendorFilter} />}
         </div>
 
         {/* Tabs
@@ -1853,28 +2098,79 @@ export default function LeadsDashboard() {
             unassigned_leads, ya expuestos por el backend) queda pendiente de
             hacer en el frontend, pero no acá para no romper CB-225. */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
-          <button
-            data-testid="tab-mine"
-            onClick={() => { setActiveTab('mine'); setPage(1) }}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              activeTab === 'mine'
-                ? 'bg-[#213A8E] text-white shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Mis leads ({myLeads.length})
-          </button>
-          <button
-            data-testid="tab-available"
-            onClick={() => { setActiveTab('available'); setPage(1) }}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              activeTab === 'available'
-                ? 'bg-[#213A8E] text-white shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Disponibles ({availableLeads.length})
-          </button>
+          {isAdmin ? (
+            <>
+              <button
+                data-testid="tab-all"
+                onClick={() => { setActiveTab('all'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'all'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Todos ({statsPagination.all_leads_count ?? allLeads.length})
+              </button>
+              <button
+                data-testid="tab-assigned"
+                onClick={() => { setActiveTab('assigned'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'assigned'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Asignados ({statsPagination.assigned_leads_count ?? assignedLeads.length})
+              </button>
+              <button
+                data-testid="tab-unassigned"
+                onClick={() => { setActiveTab('unassigned'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'unassigned'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Sin asignar ({statsPagination.unassigned_leads_count ?? unassignedLeads.length})
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                data-testid="tab-mine"
+                onClick={() => { setActiveTab('mine'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'mine'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Mis leads ({activeMyLeads.length})
+              </button>
+              <button
+                data-testid="tab-available"
+                onClick={() => { setActiveTab('available'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'available'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Disponibles ({availableLeads.length})
+              </button>
+              <button
+                data-testid="tab-converted"
+                onClick={() => { setActiveTab('converted'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'converted'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Convertidos ({convertedLeads.length})
+              </button>
+            </>
+          )}
         </div>
 
         {/* Table */}
@@ -1935,7 +2231,26 @@ export default function LeadsDashboard() {
                   <LeadStatusBadge status={lead.status} lastOutcome={lead.last_outcome} />
                 </td>
                 <td className="py-3.5 px-3">
-                  {lead.owner ? (
+                  {isAdmin ? (
+                    <button
+                      onClick={() => setReassignTarget(lead)}
+                      aria-label={`Asignado a: ${lead.owner_name ?? 'sin asignar'}. Click para cambiar`}
+                      className="flex items-center gap-2 rounded-lg px-1 -mx-1 py-0.5 hover:bg-gray-50 transition-colors"
+                    >
+                      {lead.owner ? (
+                        <>
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
+                            {lead.owner_name?.charAt(0) ?? '?'}
+                          </div>
+                          <span className="text-gray-700 text-sm">{lead.owner_name}</span>
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                          Sin asignar
+                        </span>
+                      )}
+                    </button>
+                  ) : lead.owner ? (
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
                         {lead.owner_name?.charAt(0) ?? '?'}
@@ -1960,8 +2275,8 @@ export default function LeadsDashboard() {
                     onChangeStatus={() => setStatusLead(lead)}
                     onRelease={() => setReleaseTarget(lead)}
                     onAssign={() => assignMutation.mutate(lead.id)}
-                    onAdminReassign={() => setReassignTarget(lead)}
                     onConvert={() => setConvertTarget(lead)}
+                    onEdit={() => setEditLead(lead)}
                   />
                 </td>
               </tr>
@@ -2006,6 +2321,14 @@ export default function LeadsDashboard() {
           lead={statusLead}
           onClose={() => setStatusLead(null)}
           onSuccess={() => { flashLead(statusLead.id); showToast('Estado actualizado correctamente.') }}
+        />
+      )}
+
+      {editLead && (
+        <EditLeadModal
+          lead={editLead}
+          onClose={() => setEditLead(null)}
+          onSuccess={() => { flashLead(editLead.id); showToast('Lead actualizado correctamente.') }}
         />
       )}
 

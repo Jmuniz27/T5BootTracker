@@ -1,7 +1,7 @@
 import { Redirect, Stack } from 'expo-router';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth, SALESPERSON_ROLE } from '../../src/context/AuthContext';
+import { useAuth, isMobileRole } from '../../src/context/AuthContext';
 import { colors } from '../../src/theme/colors';
 
 export default function AppLayout() {
@@ -9,16 +9,16 @@ export default function AppLayout() {
 
   if (!token) return <Redirect href="/(auth)/login" />;
 
-  // La app mobile es exclusiva para vendedores. Un rol distinto (admin,
-  // coordinador, bootcamper) con sesión guardada queda bloqueado acá.
-  if (user && user.role !== SALESPERSON_ROLE) {
+  // La app mobile es para el equipo comercial (vendedores y finanzas). Un rol
+  // distinto (admin, coordinador, bootcamper) con sesión guardada queda bloqueado acá.
+  if (user && !isMobileRole(user.role)) {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.card}>
           <Ionicons name="lock-closed-outline" size={40} color={colors.navy} />
-          <Text style={styles.title}>Acceso solo para vendedores</Text>
+          <Text style={styles.title}>Acceso restringido</Text>
           <Text style={styles.msg}>
-            Esta aplicación es exclusiva para el equipo de ventas. Ingresa con una cuenta de vendedor.
+            Esta aplicación es para el equipo comercial (vendedores y finanzas). Ingresa con una cuenta autorizada.
           </Text>
           <TouchableOpacity style={styles.btn} onPress={logout} activeOpacity={0.85}>
             <Text style={styles.btnText}>Cerrar sesión</Text>

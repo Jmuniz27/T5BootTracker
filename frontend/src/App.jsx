@@ -15,7 +15,7 @@ import AgendaPage from './pages/AgendaPage'
 import PaymentsPage from './pages/PaymentsPage'
 import FinancePaymentsPage from './pages/FinancePaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
-import AdminFinancePage from './pages/AdminFinancePage'
+import AdminPortfoliosPage from './pages/AdminPortfoliosPage'
 import AdminFinanceDetailPage from './pages/AdminFinanceDetailPage'
 import ProgramsPage from './pages/ProgramsPage'
 import ProgramDetailPage from './pages/ProgramDetailPage'
@@ -24,9 +24,9 @@ import { useAuthStore } from './store/auth.store'
 function PaymentsRoute() {
   const user = useAuthStore((s) => s.user)
   if (user?.role === 'BOOTCAMPER') return <PaymentsPage />
-  // El administrador no tiene bootcampers propios: ve las carteras de Finanzas
+  // El administrador no tiene bootcampers propios: ve las carteras del equipo
   // en lugar de una lista que no le pertenece.
-  if (user?.role === 'ADMINISTRATOR') return <AdminFinancePage />
+  if (user?.role === 'ADMINISTRATOR') return <AdminPortfoliosPage />
   // El vendedor capta y convierte; el cobro es de Finanzas. La API le responde
   // 403 en cada endpoint de pagos, así que ni se le muestra la pantalla.
   if (user?.role === 'SALESPERSON') return <Navigate to="/dashboard" replace />
