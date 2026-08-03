@@ -17,6 +17,8 @@ import FinancePaymentsPage from './pages/FinancePaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
 import AdminFinancePage from './pages/AdminFinancePage'
 import AdminFinanceDetailPage from './pages/AdminFinanceDetailPage'
+import AdminSalespeoplePage from './pages/AdminSalespeoplePage'
+import AdminSalespersonDetailPage from './pages/AdminSalespersonDetailPage'
 import ProgramsPage from './pages/ProgramsPage'
 import ProgramDetailPage from './pages/ProgramDetailPage'
 import { useAuthStore } from './store/auth.store'
@@ -78,6 +80,22 @@ export default function App() {
             element={
               <AdminRoute>
                 <AnalyticsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/vendedores"
+            element={
+              <AdminRoute>
+                <AdminSalespeoplePage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/vendedores/:salespersonId"
+            element={
+              <AdminRoute>
+                <AdminSalespersonDetailPage />
               </AdminRoute>
             }
           />
