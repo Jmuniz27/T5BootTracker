@@ -151,7 +151,7 @@ describe('ProgramDetailPage', () => {
     expect(within(dialog).getByDisplayValue('3')).toBeInTheDocument();
   });
 
-  it('no pide el mes de finalización al crear', async () => {
+  it('pide el fin previsto y explica que se resella al finalizar', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('Cohorte 2');
@@ -159,8 +159,38 @@ describe('ProgramDetailPage', () => {
     await user.click(screen.getByRole('button', { name: /nueva cohorte/i }));
     const dialog = await screen.findByRole('dialog', { name: /nueva cohorte/i });
 
-    expect(within(dialog).queryByText(/mes de finalización \*/i)).not.toBeInTheDocument();
-    expect(within(dialog).getByText(/se guarda solo cuando marques/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/fin previsto/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/se resella con el mes real/i)).toBeInTheDocument();
+  });
+
+  it('rechaza un fin previsto anterior al inicio', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Cohorte 2');
+
+    await user.click(screen.getByRole('button', { name: /nueva cohorte/i }));
+    const dialog = await screen.findByRole('dialog', { name: /nueva cohorte/i });
+
+    const inicio = within(dialog).getByLabelText(/mes de inicio/i);
+    const fin = within(dialog).getByLabelText(/fin previsto/i);
+    await user.clear(inicio);
+    await user.type(inicio, '2026-10');
+    await user.clear(fin);
+    await user.type(fin, '2026-09');
+
+    await user.click(within(dialog).getByRole('button', { name: /crear cohorte/i }));
+
+    expect(await within(dialog).findByText(/no puede ser anterior/i)).toBeInTheDocument();
+    expect(createCohort).not.toHaveBeenCalled();
+  });
+
+  it('la tarjeta distingue el fin previsto del real', async () => {
+    renderPage();
+    await screen.findByText('Cohorte 2');
+
+    // La 2 sigue en curso: previsión. La 1 está finalizada: hecho.
+    expect(screen.getByText('Fin previsto')).toBeInTheDocument();
+    expect(screen.getByText('Finalizó')).toBeInTheDocument();
   });
 
   it('crea la cohorte mandando el mes con día 1', async () => {
@@ -172,15 +202,19 @@ describe('ProgramDetailPage', () => {
     await user.click(screen.getByRole('button', { name: /nueva cohorte/i }));
     const dialog = await screen.findByRole('dialog', { name: /nueva cohorte/i });
 
-    const mes = within(dialog).getByLabelText(/mes de inicio/i);
-    await user.clear(mes);
-    await user.type(mes, '2026-10');
+    const inicio = within(dialog).getByLabelText(/mes de inicio/i);
+    await user.clear(inicio);
+    await user.type(inicio, '2026-10');
+    const fin = within(dialog).getByLabelText(/fin previsto/i);
+    await user.clear(fin);
+    await user.type(fin, '2027-01');
 
     await user.click(within(dialog).getByRole('button', { name: /crear cohorte/i }));
 
     expect(createCohort.mock.calls[0][1]).toEqual({
       number: 3,
       start_month: '2026-10-01',
+      end_month: '2027-01-01',
       status: 'UPCOMING',
     });
   });

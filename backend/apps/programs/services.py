@@ -13,16 +13,20 @@ def current_month():
 
 
 def set_cohort_status(cohort, status, *, save=True):
-    """Mueve la cohorte de estado y mantiene `end_month` en consecuencia.
+    """Mueve la cohorte de estado y resella `end_month` al finalizarla.
 
     Los tres estados los decide el administrador a mano. Lo único automático es
-    el mes de finalización: al marcar FINISHED se sella con el mes en curso, y
-    si la cohorte se reabre se limpia, porque una cohorte que sigue viva no
-    tiene mes de fin.
+    el mes de fin: `end_month` se crea como **fin previsto** y al pasar a
+    FINISHED se reescribe con el mes en curso, así que nadie lo teclea al
+    cerrar la cohorte.
 
-    Se respeta un `end_month` ya sellado: reconfirmar FINISHED no reescribe el
-    mes original, para que corregir cualquier otro campo de una cohorte cerrada
-    no mueva su fecha de cierre.
+    Se resella sólo en la transición hacia FINISHED. Editar cualquier otro
+    campo de una cohorte ya cerrada no mueve su fecha de cierre, porque el
+    serializer sólo llama aquí cuando el estado cambia.
+
+    Reabrir una cohorte **no** vacía el campo: dejaría de haber rango para el
+    cálculo de porcentaje de tiempo transcurrido de los pagos. El valor vuelve
+    a leerse como fin previsto.
 
     Args:
         cohort: la instancia de `Cohort` a modificar.
@@ -33,21 +37,20 @@ def set_cohort_status(cohort, status, *, save=True):
     Returns:
         La misma instancia, ya mutada.
     """
+    previous = cohort.status
     cohort.status = status
 
-    if status == Cohort.Status.FINISHED:
-        if cohort.end_month is None:
-            cohort.end_month = current_month()
-            logger.info(
-                'Cohorte %s del programa %s finalizada en %s',
-                cohort.number, cohort.program_id, cohort.end_month,
-            )
-    elif cohort.end_month is not None:
+    if status == Cohort.Status.FINISHED and previous != Cohort.Status.FINISHED:
+        cohort.end_month = current_month()
         logger.info(
-            'Cohorte %s del programa %s reabierta: se limpia el mes de fin',
-            cohort.number, cohort.program_id,
+            'Cohorte %s del programa %s finalizada en %s',
+            cohort.number, cohort.program_id, cohort.end_month,
         )
-        cohort.end_month = None
+    elif previous == Cohort.Status.FINISHED and status != Cohort.Status.FINISHED:
+        logger.info(
+            'Cohorte %s del programa %s reabierta: %s queda como fin previsto',
+            cohort.number, cohort.program_id, cohort.end_month,
+        )
 
     if save:
         cohort.save()
