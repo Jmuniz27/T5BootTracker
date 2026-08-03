@@ -76,10 +76,10 @@ function getInitials(name: string): string {
 
 // ─── sub-components ──────────────────────────────────────────────────────────
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, isCompany }: { name: string; isCompany?: boolean }) {
   return (
     <View style={[styles.avatar, { backgroundColor: avatarColor(name) }]}>
-      <Text style={styles.avatarText}>{getInitials(name)}</Text>
+      <Ionicons name={isCompany ? 'business' : 'person'} size={20} color="#fff" />
     </View>
   );
 }
@@ -141,15 +141,16 @@ interface CardProps {
   onLogInteraction: (lead: Lead) => void;
   onChangeStatus: (lead: Lead) => void;
   onCall: (lead: Lead) => void;
+  onOpenDetail: (lead: Lead) => void;
 }
 
-function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction, onChangeStatus, onCall }: CardProps) {
+function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction, onChangeStatus, onCall, onOpenDetail }: CardProps) {
   const canChangeStatus = !isAvailable && lead.status !== 'CONVERTED';
   return (
     <View style={styles.card}>
-      {/* Top: avatar + info */}
-      <View style={styles.cardTop}>
-        <Avatar name={lead.name} />
+      {/* Top: avatar + info (tap → detalle) */}
+      <TouchableOpacity style={styles.cardTop} activeOpacity={0.6} onPress={() => onOpenDetail(lead)}>
+        <Avatar name={lead.name} isCompany={lead.is_company} />
         <View style={styles.cardInfo}>
           <View style={styles.cardNameRow}>
             <Text style={styles.cardName} numberOfLines={1}>{lead.name}</Text>
@@ -178,7 +179,8 @@ function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLog
             <Text style={styles.cardDetail}>{lead.interaction_count}</Text>
           </View>
         </View>
-      </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.border} />
+      </TouchableOpacity>
 
       {/* Divider */}
       <View style={styles.cardDivider} />
@@ -356,6 +358,10 @@ export default function LeadsScreen() {
     router.push({ pathname: '/(app)/leads/[id]/history', params: { id: lead.id } });
   }
 
+  function handleOpenDetail(lead: Lead) {
+    router.push({ pathname: '/(app)/leads/[id]', params: { id: lead.id, lead: JSON.stringify(lead) } });
+  }
+
   function handleLogInteraction(lead: Lead) {
     router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id, name: lead.name } });
   }
@@ -510,6 +516,7 @@ export default function LeadsScreen() {
             onLogInteraction={handleLogInteraction}
             onChangeStatus={handleChangeStatus}
             onCall={startCall}
+            onOpenDetail={handleOpenDetail}
           />
         )}
         ListEmptyComponent={
