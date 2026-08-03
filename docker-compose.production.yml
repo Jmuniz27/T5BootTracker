@@ -56,6 +56,21 @@ services:
     volumes:
       - media_data:/app/media
 
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    command: celery -A config.celery_app beat -l info
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - boottracker-network
+
   frontend:
     build:
       context: ./frontend
