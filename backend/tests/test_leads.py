@@ -676,3 +676,74 @@ class TestAdminPrivileges:
         client = make_client(admin_user)
         resp = client.patch(f'{LEADS_URL}{sample_lead.id}/assign/')
         assert resp.status_code == 403
+
+
+class TestAdminLeadPartitions:
+    """CB-223 / HST-025: particiones reales (all/assigned/unassigned) para el admin."""
+
+    def test_admin_gets_real_partitions_with_correct_counts(self, db, admin_user, sample_lead, assigned_lead):
+        client = make_client(admin_user)
+        resp = client.get(LEADS_URL)
+        assert resp.status_code == 200
+        data = resp.json()
+
+        all_ids        = {lead['id'] for lead in data['all_leads']}
+        assigned_ids   = {lead['id'] for lead in data['assigned_leads']}
+        unassigned_ids = {lead['id'] for lead in data['unassigned_leads']}
+
+        assert str(sample_lead.id) in all_ids
+        assert str(assigned_lead.id) in all_ids
+        assert str(assigned_lead.id) in assigned_ids
+        assert str(sample_lead.id) not in assigned_ids
+        assert str(sample_lead.id) in unassigned_ids
+        assert str(assigned_lead.id) not in unassigned_ids
+
+        pagination = data['pagination']
+        assert pagination['all_leads_count'] == 2
+        assert pagination['assigned_leads_count'] == 1
+        assert pagination['unassigned_leads_count'] == 1
+
+    def test_salesperson_response_has_no_admin_partition_keys(self, db, salesperson_user, sample_lead):
+        client = make_client(salesperson_user)
+        resp = client.get(LEADS_URL)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert 'all_leads' not in data
+        assert 'assigned_leads' not in data
+        assert 'unassigned_leads' not in data
+        assert 'all_leads_count' not in data['pagination']
+
+    def test_salesperson_contract_unchanged(self, db, salesperson_user, sample_lead, assigned_lead):
+        client = make_client(salesperson_user)
+        resp = client.get(LEADS_URL)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert 'my_leads' in data
+        assert 'available_leads' in data
+        my_ids = [lead['id'] for lead in data['my_leads']]
+        available_ids = [lead['id'] for lead in data['available_leads']]
+        assert str(assigned_lead.id) in my_ids
+        assert str(sample_lead.id) in available_ids
+
+    def test_vendedor_filter_still_admin_only_with_partitions(self, db, admin_user, salesperson_user, assigned_lead, sample_lead):
+        other = CustomUser.objects.create_user(
+            email='partitions_other@test.com', password='testpass123',
+            first_name='Other', last_name='Vendor', role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(admin_user)
+        resp = client.get(f'{LEADS_URL}?vendedor={other.id}')
+        assert resp.status_code == 200
+        data = resp.json()
+        all_ids = {lead['id'] for lead in data['all_leads']}
+        assert str(assigned_lead.id) not in all_ids
+        assert str(sample_lead.id) not in all_ids
+
+    def test_vendedor_filter_ignored_for_salesperson_even_with_partitions(self, db, salesperson_user, assigned_lead):
+        other = CustomUser.objects.create_user(
+            email='partitions_intruder@test.com', password='testpass123',
+            first_name='Intruder', last_name='Vendor', role=CustomUser.Role.SALESPERSON,
+        )
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}?vendedor={other.id}')
+        assert resp.status_code == 200
+        assert 'all_leads' not in resp.json()

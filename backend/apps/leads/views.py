@@ -82,6 +82,9 @@ class LeadListCreateView(APIView):
         responses={200: inline_serializer('LeadListResponse', fields={
             'my_leads':        LeadListSerializer(many=True),
             'available_leads': LeadListSerializer(many=True),
+            'all_leads':        LeadListSerializer(many=True, required=False),
+            'assigned_leads':   LeadListSerializer(many=True, required=False),
+            'unassigned_leads': LeadListSerializer(many=True, required=False),
             'pagination':      inline_serializer('LeadListPagination', fields={
                 'page':                        drf_serializers.IntegerField(),
                 'page_size':                   drf_serializers.IntegerField(),
@@ -89,10 +92,22 @@ class LeadListCreateView(APIView):
                 'available_leads_count':       drf_serializers.IntegerField(),
                 'my_leads_total_pages':        drf_serializers.IntegerField(),
                 'available_leads_total_pages': drf_serializers.IntegerField(),
+                'all_leads_count':              drf_serializers.IntegerField(required=False),
+                'assigned_leads_count':         drf_serializers.IntegerField(required=False),
+                'unassigned_leads_count':       drf_serializers.IntegerField(required=False),
+                'all_leads_total_pages':        drf_serializers.IntegerField(required=False),
+                'assigned_leads_total_pages':   drf_serializers.IntegerField(required=False),
+                'unassigned_leads_total_pages': drf_serializers.IntegerField(required=False),
             }),
         })},
         summary='Listar leads',
-        description='Devuelve my_leads (asignados al usuario) y available_leads (sin asignar), paginados de forma independiente.',
+        description=(
+            'Vendedor: devuelve my_leads (asignados al usuario) y available_leads (sin asignar), '
+            'paginados de forma independiente. Administrador: además devuelve all_leads '
+            '(todos), assigned_leads (con vendedor) y unassigned_leads (sin asignar), cada uno '
+            'paginado de forma independiente — my_leads/available_leads se mantienen para no '
+            'romper clientes existentes (mobile), pero para admin no reflejan una partición real.'
+        ),
         tags=['Leads'],
     )
     def get(self, request):
@@ -133,6 +148,10 @@ class LeadListCreateView(APIView):
         only_mine = (params.get('my_leads', '').lower() in TRUTHY)
 
         if request.user.is_administrator:
+            # CB-223 / HST-025: my_leads/available_leads se mantienen tal cual
+            # (contrato existente, no romper mobile), pero para admin no son
+            # una partición real — se agregan all_leads/assigned_leads/
+            # unassigned_leads con la vista real que el admin necesita.
             my_leads_qs        = qs
             available_leads_qs = qs.none()
         elif only_mine:
@@ -149,7 +168,7 @@ class LeadListCreateView(APIView):
         my_page        = my_paginator.get_page(page_number)
         available_page = available_paginator.get_page(page_number)
 
-        return Response({
+        data = {
             'my_leads':        LeadListSerializer(my_page.object_list, many=True).data,
             'available_leads': LeadListSerializer(available_page.object_list, many=True).data,
             'pagination': {
@@ -160,7 +179,33 @@ class LeadListCreateView(APIView):
                 'my_leads_total_pages':        my_paginator.num_pages,
                 'available_leads_total_pages': available_paginator.num_pages,
             },
-        })
+        }
+
+        if request.user.is_administrator:
+            all_leads_qs        = qs
+            assigned_leads_qs   = qs.filter(owner__isnull=False)
+            unassigned_leads_qs = qs.filter(owner__isnull=True)
+
+            all_paginator        = Paginator(all_leads_qs, page_size)
+            assigned_paginator   = Paginator(assigned_leads_qs, page_size)
+            unassigned_paginator = Paginator(unassigned_leads_qs, page_size)
+            all_page        = all_paginator.get_page(page_number)
+            assigned_page   = assigned_paginator.get_page(page_number)
+            unassigned_page = unassigned_paginator.get_page(page_number)
+
+            data['all_leads']        = LeadListSerializer(all_page.object_list, many=True).data
+            data['assigned_leads']   = LeadListSerializer(assigned_page.object_list, many=True).data
+            data['unassigned_leads'] = LeadListSerializer(unassigned_page.object_list, many=True).data
+            data['pagination'].update({
+                'all_leads_count':              all_paginator.count,
+                'assigned_leads_count':         assigned_paginator.count,
+                'unassigned_leads_count':       unassigned_paginator.count,
+                'all_leads_total_pages':        all_paginator.num_pages,
+                'assigned_leads_total_pages':   assigned_paginator.num_pages,
+                'unassigned_leads_total_pages': unassigned_paginator.num_pages,
+            })
+
+        return Response(data)
 
     @extend_schema(
         request=LeadWriteSerializer,
