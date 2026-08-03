@@ -51,6 +51,17 @@ class Lead(models.Model):
         related_name='leads',
         verbose_name='Vendedor asignado',
     )
+    # Queda apuntando al usuario que creó la conversión. Sin esto no hay forma
+    # fiable de saber qué vendedor trajo a un bootcamper: coincidir por correo
+    # falla porque la conversión reutiliza usuarios y genera correos de relleno.
+    bootcamper       = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='source_leads',
+        verbose_name='Bootcamper resultante',
+    )
     program          = models.ForeignKey(
         'programs.Program',
         on_delete=models.SET_NULL,
