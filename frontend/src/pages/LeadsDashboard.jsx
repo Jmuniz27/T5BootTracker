@@ -782,8 +782,9 @@ function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
     queryKey: ['users', 'salespersons'],
     queryFn: getUsers,
   })
-  const salespeople = (data?.results ?? data ?? []).filter(
-    (u) => u.role === 'SALESPERSON' && u.id !== lead.owner,
+  // Finanzas también trabaja leads, así que puede recibir uno reasignado.
+  const assignees = (data?.results ?? data ?? []).filter(
+    (u) => ['SALESPERSON', 'FINANCE'].includes(u.role) && u.id !== lead.owner,
   )
 
   return (
@@ -803,7 +804,7 @@ function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
           className="w-full mb-6 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
         >
           <option value="">Liberar al pool (sin asignar)</option>
-          {salespeople.map((u) => (
+          {assignees.map((u) => (
             <option key={u.id} value={u.id}>{u.full_name}</option>
           ))}
         </select>

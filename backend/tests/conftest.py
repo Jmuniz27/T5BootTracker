@@ -34,6 +34,30 @@ def bootcamper_user(db):
 
 
 @pytest.fixture
+def finance_user(db):
+    """Finanzas: hace todo lo del vendedor y además monitorea los pagos."""
+    return CustomUser.objects.create_user(
+        email='finance@test.com',
+        password='testpass123',
+        first_name='Fina',
+        last_name='Nzas',
+        role=CustomUser.Role.FINANCE,
+    )
+
+
+@pytest.fixture
+def other_finance_user(db):
+    """Segunda persona de Finanzas, para probar carreras y carteras ajenas."""
+    return CustomUser.objects.create_user(
+        email='finance2@test.com',
+        password='testpass123',
+        first_name='Otra',
+        last_name='Finanzas',
+        role=CustomUser.Role.FINANCE,
+    )
+
+
+@pytest.fixture
 def admin_user(db):
     user = CustomUser.objects.create_user(
         email='admin@test.com',

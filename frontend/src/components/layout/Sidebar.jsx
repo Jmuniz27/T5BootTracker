@@ -58,6 +58,7 @@ export default function Sidebar({ onClose }) {
   const user = useAuthStore((s) => s.user)
   const isBootcamper = user?.role === 'BOOTCAMPER'
   const isAdmin = user?.role === 'ADMINISTRATOR'
+  const isSalesperson = user?.role === 'SALESPERSON'
 
   const handleLogout = () => {
     logout()
@@ -67,6 +68,8 @@ export default function Sidebar({ onClose }) {
   const visibleItems = isBootcamper
     ? NAV_ITEMS.filter((item) => item.to === '/payments')
     : NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
+      // El cobro es de Finanzas: el vendedor no tiene nada que hacer en pagos.
+      .filter((item) => item.to !== '/payments' || !isSalesperson)
 
   return (
     <aside className="w-56 h-full min-h-screen bg-white border-r border-gray-200 flex flex-col">
