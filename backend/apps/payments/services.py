@@ -132,6 +132,93 @@ class PaymentProgressService:
             })
         return data
 
+    def get_bootcamper_summaries(self, bootcampers) -> list[dict]:
+        """Una tarjeta por (bootcamper, programa) para el pool de bootcampers.
+
+        `get_monitoring_summaries` arranca de los pagos, así que un bootcamper
+        recién convertido —que todavía no subió ningún comprobante— no aparece
+        en su resultado, y en el pool tiene que verse igual. Por eso aquí el par
+        sale de la unión de dos fuentes:
+
+          - `Enrollment`, que existe desde la conversión aunque no haya pagos;
+          - los pagos, que cubren a quien fue dado de alta sin inscripción
+            (datos sembrados o cargados a mano antes de que existiera el pool).
+
+        Args:
+            bootcampers: iterable de `CustomUser` con rol BOOTCAMPER.
+
+        Returns:
+            Lista de dicts con la misma forma que `get_monitoring_summaries`,
+            ordenada por bootcamper más reciente y luego por programa. Cuatro
+            consultas en total, sin N+1.
+        """
+        from .models import Payment
+        from apps.programs.models import Enrollment, Program
+
+        by_id = {bootcamper.id: bootcamper for bootcamper in bootcampers}
+        if not by_id:
+            return []
+
+        totals = {
+            (row['bootcamper_id'], row['program_id']): row
+            for row in (
+                Payment.objects
+                .filter(bootcamper_id__in=by_id)
+                .values('bootcamper_id', 'program_id')
+                .annotate(
+                    total_paid=Sum(
+                        'confirmed_amount',
+                        filter=Q(status=Payment.Status.APPROVED),
+                    ),
+                    pending_payments=Count('id', filter=Q(status=Payment.Status.PENDING)),
+                    payment_count=Count('id'),
+                )
+            )
+        }
+
+        pairs = set(totals)
+        pairs.update(
+            Enrollment.objects
+            .filter(bootcamper_id__in=by_id)
+            .values_list('bootcamper_id', 'bootcamp_id')
+        )
+        if not pairs:
+            return []
+
+        programs = {
+            program.id: program
+            for program in Program.objects.filter(id__in={pid for _, pid in pairs})
+        }
+
+        ordered = sorted(
+            pairs,
+            key=lambda pair: (
+                -by_id[pair[0]].created_at.timestamp(),
+                programs[pair[1]].name,
+            ),
+        )
+
+        data = []
+        for bootcamper_id, program_id in ordered:
+            bootcamper = by_id[bootcamper_id]
+            program    = programs[program_id]
+            row        = totals.get((bootcamper_id, program_id), {})
+            summary    = self._build_summary(
+                program,
+                row.get('total_paid') or Decimal('0.00'),
+                row.get('pending_payments') or 0,
+                row.get('payment_count') or 0,
+            )
+            data.append({
+                'bootcamper_id':   str(bootcamper.id),
+                'bootcamper_name': bootcamper.get_full_name(),
+                'email':           bootcamper.email,
+                'program_id':      str(program.id),
+                'program_name':    program.name,
+                **summary,
+            })
+        return data
+
     def _build_summary(self, program, total_paid, pending_count, payment_count) -> dict:
         total_cost  = program.total_cost
         deficit     = max(total_cost - total_paid, Decimal('0.00'))
