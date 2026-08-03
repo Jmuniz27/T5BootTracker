@@ -7,6 +7,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils.timezone import now, timedelta
 from apps.authentication.models import CustomUser
 from apps.leads.models import Lead, Interaction
+from apps.programs.services import set_cohort_status
 
 # Semilla fija: el comando reparte estados y programas con `random`, y sin
 # fijarla cada ejecución produce datos distintos. Eso vuelve no reproducibles
@@ -179,6 +180,27 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(self.style.SUCCESS('  Programs created/updated.'))
+
+        # Cohortes: una por estado, para poder probar el filtro sin crearlas a mano.
+        from apps.programs.models import Cohort
+        first_of_month = today.replace(day=1)
+        cohort_seed = [
+            (program1, 1, first_of_month - dt_timedelta(days=210), Cohort.Status.FINISHED),
+            (program1, 2, first_of_month - dt_timedelta(days=30),  Cohort.Status.IN_PROGRESS),
+            (program1, 3, first_of_month + dt_timedelta(days=60),  Cohort.Status.UPCOMING),
+            (program2, 1, first_of_month + dt_timedelta(days=30),  Cohort.Status.UPCOMING),
+        ]
+        for program, number, start_month, cohort_status in cohort_seed:
+            cohort, created = Cohort.objects.get_or_create(
+                program=program,
+                number=number,
+                defaults={'start_month': start_month, 'status': cohort_status},
+            )
+            # La finalizada necesita mes de fin; se sella igual que por la API.
+            if created and cohort_status == Cohort.Status.FINISHED:
+                set_cohort_status(cohort, Cohort.Status.FINISHED)
+
+        self.stdout.write(self.style.SUCCESS('  Cohorts created/updated.'))
 
         # Converted bootcamper with payments
         conv_boot, _ = CustomUser.objects.get_or_create(

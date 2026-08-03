@@ -60,9 +60,16 @@ services:
       - boottracker-network
     volumes:
       - media_data:/app/media
+      - /opt/boot-tracker/google-credentials.json:/app/google-credentials.json:ro
     healthcheck:
       # /health/ verifica ademas que la BD conteste (config/health.py).
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=5).status==200 else 1)\""]
+      #
+      # El X-Forwarded-Proto es obligatorio: production.py tiene
+      # SECURE_SSL_REDIRECT=True, asi que sin ese header Django responde con un
+      # redirect a https:// y la sonda muere con un error de handshake TLS
+      # (dentro del contenedor no hay TLS: lo termina el nginx del host).
+      # SECURE_PROXY_SSL_HEADER hace que Django lo acepte como prueba de HTTPS.
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; r=urllib.request.Request('http://127.0.0.1:8000/health/', headers={'X-Forwarded-Proto':'https','Host':'127.0.0.1'}); sys.exit(0 if urllib.request.urlopen(r, timeout=5).status==200 else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -84,6 +91,7 @@ services:
       - boottracker-network
     volumes:
       - media_data:/app/media
+      - /opt/boot-tracker/google-credentials.json:/app/google-credentials.json:ro
     healthcheck:
       # `inspect ping` pregunta al worker por el broker: si Redis se cae o el
       # worker queda colgado, deja de responder aunque el proceso siga vivo.
