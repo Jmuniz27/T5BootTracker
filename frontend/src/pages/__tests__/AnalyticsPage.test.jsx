@@ -83,11 +83,11 @@ describe('AnalyticsPage', () => {
     renderPage();
 
     await screen.findByText('20%');
-    await user.type(screen.getByLabelText(/campaña/i), 'verano');
+    await user.type(screen.getByLabelText('Desde'), '2026-01-15');
 
     await waitFor(() => {
       expect(getAnalyticsKpis).toHaveBeenLastCalledWith(
-        expect.objectContaining({ campaign: 'verano' }),
+        expect.objectContaining({ fecha_desde: '2026-01-15' }),
       );
     });
   });

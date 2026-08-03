@@ -1,3 +1,25 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/**
+ * CB-114 — Respeto de `prefers-reduced-motion`.
+ *
+ * Se aplica de forma global en vez de utilidad por utilidad: cubre tambien las
+ * `transition-colors` y `animate-pulse` que ya existian antes del issue, y hace
+ * imposible que una animacion nueva se olvide de contemplarlo.
+ *
+ * No se usa `animation: none`, porque eso dejaria un elemento que anima desde
+ * `opacity: 0` invisible para siempre. Con una duracion casi nula la animacion
+ * salta directo a su estado final.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

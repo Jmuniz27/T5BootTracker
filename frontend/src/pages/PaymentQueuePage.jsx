@@ -4,6 +4,7 @@ import { getPaymentQueue, getPrograms } from '../api/payments.api'
 import PaymentDetailModal from '../components/PaymentDetailModal'
 import Toast from '../components/Toast'
 import CustomSelect from '../components/CustomSelect'
+import Skeleton from '../components/ui/Skeleton'
 
 const STATUS_COLORS = {
   PENDING: 'bg-yellow-100 text-yellow-700',
@@ -32,7 +33,7 @@ function QueueRow({ payment, onClick }) {
     >
       <td className="py-3.5 px-4">
         <p className="text-sm font-medium text-gray-900">{payment.bootcamper_name}</p>
-        <p className="text-xs text-gray-400">{payment.bootcamper}</p>
+        <p className="text-xs text-gray-500">{payment.bootcamper}</p>
       </td>
       <td className="py-3.5 px-4 text-sm text-gray-700">{payment.program_name}</td>
       <td className="py-3.5 px-4 text-sm text-gray-700">
@@ -45,8 +46,8 @@ function QueueRow({ payment, onClick }) {
         </span>
       </td>
       <td className="py-3.5 px-4">
-        <button className="p-1.5 bg-[#1D3176] hover:bg-[#162560] text-white rounded-lg transition-colors" title="Ver detalle">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button className="p-1.5 bg-[#213A8E] hover:bg-[#1a2f72] text-white rounded-lg transition-colors" title="Ver detalle">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
@@ -58,10 +59,10 @@ function QueueRow({ payment, onClick }) {
 
 function SkeletonQueueRow() {
   return (
-    <tr className="animate-pulse">
+    <tr aria-busy="true">
       {[...Array(6)].map((_, i) => (
         <td key={i} className="py-3.5 px-4">
-          <div className="h-3.5 bg-gray-200 rounded w-24" />
+          <Skeleton className="h-3.5 w-24" />
         </td>
       ))}
     </tr>
@@ -103,7 +104,7 @@ export default function PaymentQueuePage() {
         {/* Filters */}
         <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 sm:mb-5 items-center">
           <div className="relative flex-1 min-w-[180px] max-w-xs">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input

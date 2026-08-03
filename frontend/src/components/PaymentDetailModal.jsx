@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getPayment, approvePayment, rejectPayment, notifyCoordinator } from '../api/payments.api'
+import { useModalA11y } from '../hooks/use-modal-a11y'
+import Spinner from './ui/Spinner'
+import Skeleton from './ui/Skeleton'
 
 function confidenceColor(pct) {
   if (pct >= 80) return 'text-green-600'
@@ -20,6 +23,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
   const [rejectReason, setRejectReason] = useState('')
   const [copied, setCopied] = useState(false)
   const qc = useQueryClient()
+  const dialogRef = useModalA11y(onClose)
 
   const { data: payment, isLoading } = useQuery({
     queryKey: ['payment-detail', paymentId],
@@ -61,7 +65,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
     return (
       <>
         {/* Tabs */}
-        <div className="flex border-b border-gray-100 px-4 sm:px-6 flex-shrink-0">
+        <div role="tablist" aria-label="Secciones del pago" className="flex border-b border-gray-100 px-4 sm:px-6 flex-shrink-0">
           {[
             { id: 'details', label: 'Campos OCR' },
             { id: 'raw',     label: 'Texto crudo' },
@@ -69,11 +73,13 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
           ].map((t) => (
             <button
               key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
               data-testid={`payment-tab-${t.id}`}
               onClick={() => setTab(t.id)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E] ${
                 tab === t.id
-                  ? 'border-[#1D3176] text-[#1D3176]'
+                  ? 'border-[#213A8E] text-[#213A8E]'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -82,7 +88,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
           ))}
         </div>
 
-        <div className="px-6 py-5 overflow-y-auto h-[60vh]">
+        <div key={tab} className="px-6 py-5 overflow-y-auto flex-1 min-h-0 animate-fade-in">
           {/* OCR Fields */}
           {tab === 'details' && (
             <div className="space-y-1">
@@ -96,7 +102,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                 <div key={label} className="flex items-center justify-between py-3 border-b border-gray-50">
                   <span className="text-sm text-gray-500 w-52">{label}</span>
                   <div className="flex items-center gap-4">
-                    <span className="text-sm font-medium text-gray-900">{value || <span className="text-gray-400">—</span>}</span>
+                    <span className="text-sm font-medium text-gray-900">{value || <span className="text-gray-500">—</span>}</span>
                     <ConfidenceBadge value={confidence[conf]} />
                   </div>
                 </div>
@@ -111,9 +117,9 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                 <p className="text-sm text-gray-500">Texto extraído por OCR — copia para pegar en otro sistema.</p>
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-1.5 text-xs font-medium text-[#1D3176] hover:underline"
+                  className="flex items-center gap-1.5 text-xs font-medium text-[#213A8E] hover:underline"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                   {copied ? 'Copiado!' : 'Copiar'}
@@ -152,7 +158,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-medium text-gray-600 mb-1">Nro. transacción (opcional)</label>
                     <input
                       type="text"
@@ -164,14 +170,15 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   </div>
                 </div>
                 {approveMutation.isError && (
-                  <p className="text-red-500 text-xs">{approveMutation.error?.response?.data?.error || 'Error al aprobar.'}</p>
+                  <p className="text-red-500 text-xs animate-shake">{approveMutation.error?.response?.data?.error || 'Error al aprobar.'}</p>
                 )}
                 <button
                   data-testid="approve-submit"
                   disabled={!approveData.confirmed_amount || approveMutation.isPending}
                   onClick={() => approveMutation.mutate(approveData)}
-                  className="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-60 transition-colors"
+                  className="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
                 >
+                  {approveMutation.isPending && <Spinner />}
                   {approveMutation.isPending ? 'Aprobando...' : 'Aprobar pago'}
                 </button>
               </div>
@@ -190,14 +197,15 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   />
                 </div>
                 {rejectMutation.isError && (
-                  <p className="text-red-500 text-xs">{rejectMutation.error?.response?.data?.error || 'Error al rechazar.'}</p>
+                  <p className="text-red-500 text-xs animate-shake">{rejectMutation.error?.response?.data?.error || 'Error al rechazar.'}</p>
                 )}
                 <button
                   data-testid="reject-submit"
                   disabled={!rejectReason.trim() || rejectMutation.isPending}
                   onClick={() => rejectMutation.mutate({ rejection_reason: rejectReason })}
-                  className="w-full bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition-colors"
+                  className="w-full bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
                 >
+                  {rejectMutation.isPending && <Spinner />}
                   {rejectMutation.isPending ? 'Rechazando...' : 'Rechazar pago'}
                 </button>
               </div>
@@ -206,12 +214,12 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-gray-700">Notificar coordinador</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">Envía una alerta al coordinador del programa.</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Envía una alerta al coordinador del programa.</p>
                   </div>
                   <button
                     disabled={notifyMutation.isPending}
                     onClick={() => notifyMutation.mutate()}
-                    className="text-sm text-[#1D3176] font-medium border border-[#1D3176] px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition-colors"
+                    className="text-sm text-[#213A8E] font-medium border border-[#213A8E] px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition-colors"
                   >
                     {notifyMutation.isPending ? 'Enviando...' : 'Notificar'}
                   </button>
@@ -225,8 +233,16 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Detalle del pago"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden focus:outline-none animate-zoom-in"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
           <div>
@@ -235,16 +251,20 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
               <p className="text-xs text-gray-500 mt-0.5">{payment.bootcamper_name} · {payment.program_name}</p>
             )}
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="text-gray-500 hover:text-gray-700 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {isLoading && (
-          <div className="p-6 space-y-3 animate-pulse overflow-y-auto">
-            {[...Array(6)].map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
+          <div aria-busy="true" className="p-6 space-y-3 overflow-y-auto">
+            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
           </div>
         )}
         {!isLoading && payment && renderTabs()}

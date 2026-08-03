@@ -32,7 +32,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         FINANCE       = 'FINANCE',       'Finanzas'
 
     class CoordinatorScope(models.TextChoices):
-        """Alcance de un coordinador: general o atado a un programa.
+        """Alcance de un coordinador: general o atado a programas concretos.
 
         Sólo aplica a usuarios con rol COORDINATOR; en el resto queda vacío.
         Determina a qué notificaciones se le copia (ver
@@ -66,13 +66,11 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         default='',
         verbose_name='Alcance del coordinador',
     )
-    coordinator_program = models.ForeignKey(
+    coordinator_programs = models.ManyToManyField(
         'programs.Program',
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name='coordinator_users',
-        verbose_name='Programa asignado',
+        verbose_name='Programas asignados',
     )
     is_active  = models.BooleanField(default=True)
     is_staff   = models.BooleanField(default=False)

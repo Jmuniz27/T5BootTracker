@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getMyHistory, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
 import CustomSelect from '../components/CustomSelect'
+import { useModalA11y } from '../hooks/use-modal-a11y'
+import Skeleton from '../components/ui/Skeleton'
+import Spinner from '../components/ui/Spinner'
 
 const STATUS_LABELS = {
   DRAFT: 'En revisión',
@@ -18,35 +21,54 @@ const STATUS_COLORS = {
 }
 
 function dropZoneClass(dragOver, file) {
-  if (dragOver) return 'border-[#1D3176] bg-blue-50'
+  if (dragOver) return 'border-[#213A8E] bg-blue-50'
   if (file) return 'border-green-400 bg-green-50'
-  return 'border-gray-300 hover:border-[#1D3176] hover:bg-gray-50'
+  return 'border-gray-300 hover:border-[#213A8E] hover:bg-gray-50'
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
+const TOAST_AUTO_DISMISS_MS = 4000
+
 function Toast({ message, type = 'success', onClose }) {
-  useEffect(() => {
-    const t = setTimeout(onClose, 4000)
-    return () => clearTimeout(t)
-  }, [onClose])
   const isError = type === 'error'
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  // CB-75: dependia de `onClose`, asi que un padre que pasara una arrow inline
+  // reiniciaba los 4s en cada render y el toast podia no cerrarse nunca.
+  useEffect(() => {
+    const timer = setTimeout(() => onCloseRef.current?.(), TOAST_AUTO_DISMISS_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
-    <div className="fixed top-5 right-5 z-50 flex items-center gap-3 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-lg">
+    <div
+      role={isError ? 'alert' : 'status'}
+      aria-live={isError ? 'assertive' : 'polite'}
+      className="fixed top-5 right-5 z-[70] flex items-center gap-3 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-lg animate-slide-in-right"
+    >
       <span className={`flex items-center justify-center w-6 h-6 rounded-full ${isError ? 'bg-red-500' : 'bg-green-500'}`}>
         {isError ? (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
           </svg>
         ) : (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>
         )}
       </span>
       <span className="text-sm font-medium">{message}</span>
-      <button onClick={onClose} className="text-gray-400 hover:text-white ml-2">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <button
+        onClick={onClose}
+        aria-label="Cerrar notificación"
+        className="text-gray-300 hover:text-white ml-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
@@ -59,18 +81,18 @@ function Toast({ message, type = 'success', onClose }) {
 function StatCard({ label, value, sub, loading }) {
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-200 p-5 min-w-[160px] animate-pulse">
-        <div className="h-3 bg-gray-200 rounded w-20 mb-3" />
-        <div className="h-8 bg-gray-200 rounded w-24 mb-2" />
-        <div className="h-3 bg-gray-100 rounded w-32" />
+      <div aria-busy="true" aria-label={`Cargando ${label}`} className="bg-white rounded-2xl border border-gray-200 p-5 min-w-[160px]">
+        <Skeleton className="h-3 w-20 mb-3" />
+        <Skeleton className="h-8 w-24 mb-2" />
+        <Skeleton className="h-3 w-32" />
       </div>
     )
   }
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5 min-w-[160px]">
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 min-w-[160px] transition-shadow duration-200 hover:shadow-md">
       <p className="text-sm text-gray-500 mb-1">{label}</p>
       <p className="text-3xl font-bold text-gray-900 mb-1">{value}</p>
-      <p className="text-xs text-gray-400">{sub}</p>
+      <p className="text-xs text-gray-500">{sub}</p>
     </div>
   )
 }
@@ -84,6 +106,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef(null)
   const qc = useQueryClient()
+  const dialogRef = useModalA11y(onClose)
 
   const mutation = useMutation({
     mutationFn: uploadPayment,
@@ -121,12 +144,24 @@ function UploadModal({ programs, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Subir comprobante"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md focus:outline-none animate-zoom-in"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
           <h2 className="text-lg font-semibold text-gray-900">📄 Subir comprobante</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="text-gray-500 hover:text-gray-700 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -163,20 +198,20 @@ function UploadModal({ programs, onClose, onSuccess }) {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setFile(null) }}
-                    className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                    className="text-xs text-gray-500 hover:text-red-500 transition-colors"
                   >
                     Quitar
                   </button>
                 </>
               ) : (
                 <>
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
                   <p className="text-sm text-gray-600">
-                    <span className="font-medium text-[#1D3176]">Haz clic para subir</span> o arrastra el archivo
+                    <span className="font-medium text-[#213A8E]">Haz clic para subir</span> o arrastra el archivo
                   </p>
-                  <p className="text-xs text-gray-400">PNG, JPG o PDF (máx. 10 MB)</p>
+                  <p className="text-xs text-gray-500">PNG, JPG o PDF (máx. 10 MB)</p>
                 </>
               )}
               <input
@@ -214,8 +249,9 @@ function UploadModal({ programs, onClose, onSuccess }) {
             type="submit"
             data-testid="upload-submit"
             disabled={mutation.isPending}
-            className="w-full bg-[#1D3176] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#16265d] disabled:opacity-60 transition-colors"
+            className="w-full bg-[#213A8E] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#1a2f72] disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
           >
+            {mutation.isPending && <Spinner />}
             {mutation.isPending ? 'Subiendo...' : 'Subir comprobante'}
           </button>
         </form>
@@ -229,8 +265,8 @@ function UploadModal({ programs, onClose, onSuccess }) {
 function ReceiptPreview({ url, type }) {
   if (!url) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-400 text-sm">
-        <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
+        <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
         Comprobante no disponible
@@ -242,7 +278,7 @@ function ReceiptPreview({ url, type }) {
       <object data={url} type="application/pdf" className="w-full h-full rounded-lg">
         <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm gap-2 p-4 text-center">
           No se puede previsualizar el PDF aquí.
-          <a href={url} target="_blank" rel="noopener noreferrer" className="text-[#1D3176] font-medium hover:underline">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="text-[#213A8E] font-medium hover:underline">
             Abrir comprobante en pestaña nueva
           </a>
         </div>
@@ -318,7 +354,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
 
   const confColor = (field) => {
     const v = confidence[field]
-    if (v == null) return 'text-gray-400'
+    if (v == null) return 'text-gray-500'
     if (v >= 0.8) return 'text-green-600'
     if (v >= 0.5) return 'text-yellow-600'
     return 'text-red-500'
@@ -348,9 +384,19 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   if (mutation.isPending) submitLabel = isEdit ? 'Reenviando...' : 'Confirmando...'
   else submitLabel = isEdit ? 'Reenviar pago' : 'Confirmar pago'
 
+  const dialogRef = useModalA11y(onClose)
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={isEdit ? 'Editar y reenviar pago' : 'Revisar comprobante de transferencia'}
+        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto focus:outline-none animate-zoom-in"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
@@ -362,8 +408,12 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
                 : 'Compara tu comprobante con los datos escaneados y corrige lo necesario antes de confirmar'}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="text-gray-500 hover:text-gray-700 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -381,13 +431,13 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
           {/* Datos extraídos */}
           <div className="px-6 py-5 space-y-4">
           {(ocrLoading || ocrProcessing) ? (
-            <div data-testid="ocr-processing" className="flex flex-col items-center justify-center py-20 text-center">
-              <svg className="w-10 h-10 text-[#1D3176] animate-spin" fill="none" viewBox="0 0 24 24">
+            <div data-testid="ocr-processing" aria-busy="true" className="flex flex-col items-center justify-center py-20 text-center">
+              <svg className="w-10 h-10 text-[#213A8E] animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
               <p className="text-sm font-medium text-gray-700 mt-4">Escaneando texto…</p>
-              <p className="text-xs text-gray-400 mt-1 max-w-xs">
+              <p className="text-xs text-gray-500 mt-1 max-w-xs">
                 Estamos leyendo los datos de tu comprobante. Esto puede tardar unos segundos.
               </p>
             </div>
@@ -423,7 +473,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
                     value={fields[key]}
                     onChange={(e) => handleFieldChange(key, e.target.value)}
                     placeholder={placeholder}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3176] focus:border-transparent"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent"
                   />
                 </div>
               ))}
@@ -431,7 +481,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
           )}
 
           {mutation.isError && (
-            <p className="text-red-500 text-sm">
+            <p className="text-red-500 text-sm animate-shake">
               {mutation.error?.response?.data?.error || 'Error al confirmar el pago.'}
             </p>
           )}
@@ -449,8 +499,9 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
               data-testid="confirm-payment-submit"
               disabled={mutation.isPending || ocrLoading || ocrProcessing}
               onClick={() => mutation.mutate(fields)}
-              className="flex-1 bg-[#1D3176] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#16265d] disabled:opacity-60 transition-colors"
+              className="flex-1 bg-[#213A8E] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#1a2f72] disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
             >
+              {mutation.isPending && <Spinner />}
               {submitLabel}
             </button>
           </div>
@@ -472,16 +523,16 @@ function PaymentRow({ payment, onReview, onEdit, onDelete }) {
 
   return (
     <div className="flex items-center gap-4 py-4 border-b border-gray-100 last:border-0">
-      <div className="w-10 h-10 rounded-full bg-[#1D3176] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+      <div className="w-10 h-10 rounded-full bg-[#213A8E] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
         {initial}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">{payment.program_name}</p>
         <div className="flex items-center gap-1 mt-0.5">
-          <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          <span className="text-xs text-gray-400">{date || '—'}</span>
+          <span className="text-xs text-gray-500">{date || '—'}</span>
         </div>
       </div>
       <div className="flex flex-col items-end gap-1">
@@ -492,7 +543,7 @@ function PaymentRow({ payment, onReview, onEdit, onDelete }) {
           {payment.status === 'DRAFT' && (
             <button
               onClick={() => onReview(payment)}
-              className="text-xs text-[#1D3176] font-medium hover:underline"
+              className="text-xs text-[#213A8E] font-medium hover:underline"
             >
               Revisar
             </button>
@@ -500,7 +551,7 @@ function PaymentRow({ payment, onReview, onEdit, onDelete }) {
           {payment.status === 'REJECTED' && (
             <button
               onClick={() => onEdit(payment)}
-              className="text-xs text-[#1D3176] font-medium hover:underline"
+              className="text-xs text-[#213A8E] font-medium hover:underline"
             >
               Editar
             </button>
@@ -509,9 +560,9 @@ function PaymentRow({ payment, onReview, onEdit, onDelete }) {
             <button
               onClick={() => onDelete(payment)}
               aria-label="Eliminar pago"
-              className="text-gray-400 hover:text-red-500 transition-colors"
+              className="text-gray-500 hover:text-red-500 transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
@@ -534,14 +585,14 @@ function PaymentRow({ payment, onReview, onEdit, onDelete }) {
 
 function SkeletonPaymentRow() {
   return (
-    <div className="flex items-center gap-4 py-4 border-b border-gray-100 animate-pulse">
-      <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0" />
+    <div aria-busy="true" className="flex items-center gap-4 py-4 border-b border-gray-100">
+      <Skeleton className="w-10 h-10 flex-shrink-0" rounded="rounded-full" />
       <div className="flex-1 space-y-2">
-        <div className="h-3 bg-gray-200 rounded w-40" />
-        <div className="h-3 bg-gray-100 rounded w-24" />
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-3 w-24" />
       </div>
-      <div className="h-5 bg-gray-200 rounded-full w-20" />
-      <div className="h-4 bg-gray-200 rounded w-16" />
+      <Skeleton className="h-5 w-20" rounded="rounded-full" />
+      <Skeleton className="h-4 w-16" />
     </div>
   )
 }
@@ -549,9 +600,18 @@ function SkeletonPaymentRow() {
 // ─── Delete Confirm Modal ─────────────────────────────────────────────────────
 
 function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
+  const dialogRef = useModalA11y(onClose)
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Eliminar pago"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 focus:outline-none animate-zoom-in"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="text-lg font-semibold text-gray-900">Eliminar pago</h2>
         <p className="text-sm text-gray-500 mt-2">
           ¿Seguro que quieres eliminar el comprobante de{' '}
@@ -570,8 +630,9 @@ function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
             type="button"
             disabled={isPending}
             onClick={onConfirm}
-            className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-red-700 disabled:opacity-60 transition-colors"
+            className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-red-700 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
           >
+            {isPending && <Spinner />}
             {isPending ? 'Eliminando...' : 'Eliminar'}
           </button>
         </div>
@@ -656,9 +717,9 @@ export default function PaymentsPage() {
         <button
           data-testid="upload-button"
           onClick={() => setShowUpload(true)}
-          className="flex items-center gap-2 bg-[#1D3176] text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#16265d] transition-colors"
+          className="flex items-center gap-2 bg-[#213A8E] text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#1a2f72] transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           Upload payment
@@ -700,13 +761,13 @@ export default function PaymentsPage() {
               </svg>
             </button>
             {showSortMenu && (
-              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 min-w-[180px] py-1">
+              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 min-w-[180px] py-1 animate-fade-in">
                 {SORT_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => { setSort(opt.value); setShowSortMenu(false) }}
                     className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                      sort === opt.value ? 'text-[#1D3176] font-medium' : 'text-gray-700'
+                      sort === opt.value ? 'text-[#213A8E] font-medium' : 'text-gray-700'
                     }`}
                   >
                     {opt.label}
@@ -726,7 +787,7 @@ export default function PaymentsPage() {
             <p className="text-sm text-gray-500">No tienes pagos registrados aún.</p>
             <button
               onClick={() => setShowUpload(true)}
-              className="mt-3 text-sm text-[#1D3176] font-medium hover:underline"
+              className="mt-3 text-sm text-[#213A8E] font-medium hover:underline"
             >
               Subir tu primer comprobante
             </button>
