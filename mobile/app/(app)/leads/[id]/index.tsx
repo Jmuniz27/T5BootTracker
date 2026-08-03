@@ -25,7 +25,8 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }
   CONVERTED:      { label: 'Convertido',    bg: '#f3e8ff', color: '#7e22ce' },
 };
 
-const ASSIGNABLE: LeadStatus[] = ['NEW', 'QUALIFIED', 'INTERESTED', 'NOT_INTERESTED'];
+// "Nuevo" no es una opción manual: un lead nace en NEW y avanza desde ahí.
+const ASSIGNABLE: LeadStatus[] = ['QUALIFIED', 'INTERESTED', 'NOT_INTERESTED'];
 
 const SOURCE_LABEL: Record<string, string> = {
   INSTAGRAM: 'Instagram',
