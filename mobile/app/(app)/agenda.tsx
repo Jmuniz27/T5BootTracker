@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  SectionList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
@@ -10,55 +10,40 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Calendar } from 'react-native-calendars';
 import { colors } from '../../src/theme/colors';
-import { getUpcomingFollowUps, type FollowUpRecord } from '../../src/lib/follow-up-store';
+import { getFollowUps, type FollowUpRecord } from '../../src/lib/follow-up-store';
+import { buildMarkedDates, followUpsForDay } from '../../src/lib/agenda-helpers';
 
-interface Section {
-  title: string;
-  data: FollowUpRecord[];
-}
-
-function startOfDay(d: Date): number {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-// Etiqueta de día: Hoy / Mañana / "jueves 30 jul".
-function dayLabel(iso: string): string {
-  const date = new Date(iso);
-  const today = startOfDay(new Date());
-  const target = startOfDay(date);
-  const diffDays = Math.round((target - today) / 86_400_000);
-  if (diffDays === 0) return 'Hoy';
-  if (diffDays === 1) return 'Mañana';
-  return date.toLocaleDateString('es-EC', { weekday: 'long', day: '2-digit', month: 'short' });
+function todayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
 }
 
-function groupByDay(records: FollowUpRecord[]): Section[] {
-  const sections: Section[] = [];
-  for (const record of records) {
-    const title = dayLabel(record.date);
-    const last = sections[sections.length - 1];
-    if (last && last.title === title) last.data.push(record);
-    else sections.push({ title, data: [record] });
-  }
-  return sections;
+// 'YYYY-MM-DD' → "Hoy" / "jueves 30 jul".
+function prettyDate(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  if (key === todayKey()) return 'Hoy';
+  return date.toLocaleDateString('es-EC', { weekday: 'long', day: '2-digit', month: 'short' });
 }
 
 export default function AgendaScreen() {
   const router = useRouter();
-  const [sections, setSections] = useState<Section[]>([]);
+  const [records, setRecords] = useState<FollowUpRecord[]>([]);
+  const [selected, setSelected] = useState<string>(todayKey());
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      getUpcomingFollowUps()
-        .then((records) => {
-          if (active) setSections(groupByDay(records));
+      getFollowUps()
+        .then((r) => {
+          if (active) setRecords(r);
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -68,6 +53,9 @@ export default function AgendaScreen() {
       };
     }, []),
   );
+
+  const marked = buildMarkedDates(records, selected);
+  const dayItems = followUpsForDay(records, selected);
 
   return (
     <SafeAreaView style={s.screen}>
@@ -82,45 +70,56 @@ export default function AgendaScreen() {
       {loading ? (
         <ActivityIndicator style={s.loader} color={colors.navy} size="large" />
       ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={s.list}
-          renderSectionHeader={({ section }) => (
-            <Text style={s.sectionTitle}>{section.title.toUpperCase()}</Text>
-          )}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={s.row}
-              activeOpacity={0.7}
-              onPress={() =>
-                router.push({
-                  pathname: '/(app)/leads/[id]/history',
-                  params: { id: item.leadId },
-                })
-              }
-            >
-              <View style={s.timePill}>
-                <Ionicons name="time-outline" size={13} color={colors.navy} />
-                <Text style={s.timeText}>{timeLabel(item.date)}</Text>
-              </View>
-              <View style={s.rowInfo}>
-                <Text style={s.rowTitle}>Seguimiento</Text>
-                <Text style={s.rowLead} numberOfLines={1}>{item.leadName}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.border} />
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={
-            <View style={s.empty}>
-              <Ionicons name="calendar-outline" size={40} color={colors.border} />
-              <Text style={s.emptyTitle}>Sin seguimientos</Text>
-              <Text style={s.emptyText}>
-                Agenda un recordatorio al registrar una interacción y aparecerá aquí.
-              </Text>
+        <ScrollView contentContainerStyle={s.body}>
+          <View style={s.calendarCard}>
+            <Calendar
+              current={selected}
+              firstDay={1}
+              markedDates={marked}
+              onDayPress={(day: { dateString: string }) => setSelected(day.dateString)}
+              theme={{
+                todayTextColor: colors.navy,
+                arrowColor: colors.navy,
+                selectedDayBackgroundColor: colors.navy,
+                selectedDayTextColor: '#ffffff',
+                dotColor: colors.navy,
+                textMonthFontWeight: '700',
+                textDayFontSize: 14,
+                textMonthFontSize: 16,
+              }}
+            />
+          </View>
+
+          <Text style={s.sectionTitle}>{prettyDate(selected).toUpperCase()}</Text>
+
+          {dayItems.length === 0 ? (
+            <View style={s.emptyDay}>
+              <Ionicons name="calendar-clear-outline" size={28} color={colors.border} />
+              <Text style={s.emptyText}>Sin seguimientos este día</Text>
             </View>
-          }
-        />
+          ) : (
+            dayItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={s.row}
+                activeOpacity={0.7}
+                onPress={() =>
+                  router.push({ pathname: '/(app)/leads/[id]/history', params: { id: item.leadId } })
+                }
+              >
+                <View style={s.timePill}>
+                  <Ionicons name="time-outline" size={13} color={colors.navy} />
+                  <Text style={s.timeText}>{timeLabel(item.date)}</Text>
+                </View>
+                <View style={s.rowInfo}>
+                  <Text style={s.rowTitle}>Seguimiento</Text>
+                  <Text style={s.rowLead} numberOfLines={1}>{item.leadName}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.border} />
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -148,15 +147,25 @@ const s = StyleSheet.create({
   },
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
   loader: { marginTop: 60 },
-  list: { padding: 16, paddingBottom: 40 },
+  body: { padding: 16, paddingBottom: 40 },
+  calendarCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 8,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.textMuted,
     letterSpacing: 0.5,
-    marginTop: 12,
     marginBottom: 8,
   },
+  emptyDay: { paddingVertical: 32, alignItems: 'center', gap: 8 },
+  emptyText: { fontSize: 13, color: colors.textMuted },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -181,7 +190,4 @@ const s = StyleSheet.create({
   rowInfo: { flex: 1 },
   rowTitle: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   rowLead: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-  empty: { paddingVertical: 64, alignItems: 'center', gap: 8 },
-  emptyTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-  emptyText: { fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingHorizontal: 32 },
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import AgendaScreen from '../agenda';
-import { getUpcomingFollowUps } from '../../../src/lib/follow-up-store';
+import { getFollowUps } from '../../../src/lib/follow-up-store';
 
 jest.mock('expo-router', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -13,13 +13,16 @@ jest.mock('expo-router', () => {
   };
 });
 
+// react-native-calendars usa módulos nativos/XDate; lo stubeamos en tests.
+jest.mock('react-native-calendars', () => ({ Calendar: () => null }));
+
 jest.mock('../../../src/lib/follow-up-store', () => ({
-  getUpcomingFollowUps: jest.fn(),
+  getFollowUps: jest.fn(),
 }));
 
-const mocked = getUpcomingFollowUps as jest.Mock;
+const mocked = getFollowUps as jest.Mock;
 
-// Extrae todo el texto renderizado del árbol de react-test-renderer.
+// Extrae todo el texto renderizado del árbol.
 function textOf(node: unknown): string {
   if (node == null) return '';
   if (typeof node === 'string') return node;
@@ -27,16 +30,22 @@ function textOf(node: unknown): string {
   return textOf((node as { children?: unknown }).children);
 }
 
+function todayIso(hour = 9): string {
+  const d = new Date();
+  d.setHours(hour, 0, 0, 0);
+  return d.toISOString();
+}
+
 describe('AgendaScreen', () => {
   afterEach(() => jest.clearAllMocks());
 
-  it('renderiza los seguimientos cargados', async () => {
+  it('muestra los seguimientos del día seleccionado (hoy)', async () => {
     mocked.mockResolvedValue([
       {
         id: 'a',
         leadId: 'lead-1',
         leadName: 'Ana Torres',
-        date: new Date(Date.now() + 86_400_000).toISOString(),
+        date: todayIso(),
         notificationId: null,
         eventId: null,
       },
@@ -50,12 +59,12 @@ describe('AgendaScreen', () => {
     expect(mocked).toHaveBeenCalled();
   });
 
-  it('muestra el estado vacío sin seguimientos', async () => {
+  it('muestra el vacío del día cuando no hay seguimientos', async () => {
     mocked.mockResolvedValue([]);
     let root: renderer.ReactTestRenderer | undefined;
     await act(async () => {
       root = renderer.create(<AgendaScreen />);
     });
-    expect(textOf(root?.toJSON())).toContain('Sin seguimientos');
+    expect(textOf(root?.toJSON())).toContain('Sin seguimientos este día');
   });
 });
