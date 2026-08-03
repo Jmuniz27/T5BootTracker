@@ -16,6 +16,7 @@ import PaymentsPage from './pages/PaymentsPage'
 import FinancePaymentsPage from './pages/FinancePaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
 import AdminPortfoliosPage from './pages/AdminPortfoliosPage'
+import AdminSalespersonActivityPage from './pages/AdminSalespersonActivityPage'
 import AdminFinanceDetailPage from './pages/AdminFinanceDetailPage'
 import ProgramsPage from './pages/ProgramsPage'
 import ProgramDetailPage from './pages/ProgramDetailPage'
@@ -70,6 +71,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminFinanceDetailPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/analytics/vendedor/:salespersonId"
+            element={
+              <AdminRoute>
+                <AdminSalespersonActivityPage />
               </AdminRoute>
             }
           />

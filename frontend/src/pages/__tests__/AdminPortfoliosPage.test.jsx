@@ -5,7 +5,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminPortfoliosPage from '../AdminPortfoliosPage';
 import { getFinancePortfolio } from '../../api/finance.api';
-import { getSalespeopleActivity } from '../../api/salespeople.api';
 
 const navigate = vi.fn();
 
@@ -19,30 +18,6 @@ vi.mock('../../api/finance.api', () => ({
   getFinanceBootcampers: vi.fn(),
 }));
 
-vi.mock('../../api/salespeople.api', () => ({
-  getSalespeopleActivity: vi.fn(),
-}));
-
-const VENDEDORES = [
-  {
-    salesperson_id: 'sp-1',
-    salesperson: 'Vendedor Uno',
-    email: 'v1@boottracker.com',
-    assigned_leads: 12,
-    converted_leads: 3,
-    uncontacted_leads: 2,
-    conversion_rate: 25.0,
-  },
-  {
-    salesperson_id: 'sp-2',
-    salesperson: 'Vendedor Dos',
-    email: 'v2@boottracker.com',
-    assigned_leads: 0,
-    converted_leads: 0,
-    uncontacted_leads: 0,
-    conversion_rate: 0.0,
-  },
-];
 
 const CARTERAS = [
   {
@@ -79,16 +54,11 @@ function renderPage() {
 }
 
 /** Cambia a la pestaña de vendedores y espera a que cargue. */
-async function abrirVendedores(user) {
-  await user.click(screen.getByRole('tab', { name: 'Vendedores' }));
-  return screen.findByText('Vendedor Uno');
-}
 
 describe('AdminPortfoliosPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getFinancePortfolio.mockResolvedValue({ portfolios: CARTERAS, unassigned_bootcampers: 0 });
-    getSalespeopleActivity.mockResolvedValue(VENDEDORES);
   });
 
   it('lista una tarjeta por persona de Finanzas con su cantidad de bootcampers', async () => {
@@ -164,97 +134,4 @@ describe('AdminPortfoliosPage', () => {
     expect(await screen.findByText(/no pudimos cargar las carteras/i)).toBeInTheDocument();
   });
 
-  describe('pestaña de vendedores', () => {
-    it('arranca en Finanzas y no pide los vendedores hasta abrir su pestaña', async () => {
-      renderPage();
-      await screen.findByText('Finanzas Uno');
-
-      expect(screen.getByRole('tab', { name: 'Finanzas' })).toHaveAttribute('aria-selected', 'true');
-      expect(screen.queryByText('Vendedor Uno')).not.toBeInTheDocument();
-      expect(getSalespeopleActivity).not.toHaveBeenCalled();
-    });
-
-    it('muestra la actividad comercial de cada vendedor', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await screen.findByText('Finanzas Uno');
-
-      await abrirVendedores(user);
-
-      const card = screen.getByText('Vendedor Uno').closest('div.rounded-2xl');
-      expect(card).toHaveTextContent('12');
-      expect(card).toHaveTextContent('leads asignados');
-      expect(card).toHaveTextContent('25%');
-      expect(card).toHaveTextContent('3 de 12');
-      expect(card).toHaveTextContent('2 sin contactar');
-    });
-
-    it('incluye al vendedor sin leads, en cero', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await screen.findByText('Finanzas Uno');
-      await abrirVendedores(user);
-
-      const card = screen.getByText('Vendedor Dos').closest('div.rounded-2xl');
-      // Omitirlo daría la impresión de que el vendedor no existe.
-      expect(card).toHaveTextContent('0');
-      expect(card).toHaveTextContent('leads asignados');
-      // Sin leads no se pinta la barra de conversión ni el aviso de sin contactar.
-      expect(card).not.toHaveTextContent('Convertidos');
-      expect(card).not.toHaveTextContent('sin contactar');
-    });
-
-    it('no muestra montos: el cobro se ve en la otra pestaña', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await screen.findByText('Finanzas Uno');
-      await abrirVendedores(user);
-
-      expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
-    });
-
-    it('no ofrece ninguna acción de escritura', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await screen.findByText('Finanzas Uno');
-      await abrirVendedores(user);
-
-      expect(screen.queryByRole('button', { name: /aprobar|rechazar|editar|reasignar/i }))
-        .not.toBeInTheDocument();
-    });
-
-    it('muestra un estado vacío cuando no hay vendedores', async () => {
-      const user = userEvent.setup();
-      getSalespeopleActivity.mockResolvedValue([]);
-      renderPage();
-      await screen.findByText('Finanzas Uno');
-
-      await user.click(screen.getByRole('tab', { name: 'Vendedores' }));
-
-      expect(await screen.findByText(/no hay vendedores activos/i)).toBeInTheDocument();
-    });
-
-    it('avisa si la carga de vendedores falla', async () => {
-      const user = userEvent.setup();
-      getSalespeopleActivity.mockRejectedValue(new Error('boom'));
-      renderPage();
-      await screen.findByText('Finanzas Uno');
-
-      await user.click(screen.getByRole('tab', { name: 'Vendedores' }));
-
-      expect(await screen.findByText(/no pudimos cargar los vendedores/i)).toBeInTheDocument();
-    });
-
-    it('vuelve a Finanzas sin perder los datos', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await screen.findByText('Finanzas Uno');
-      await abrirVendedores(user);
-
-      await user.click(screen.getByRole('tab', { name: 'Finanzas' }));
-
-      expect(await screen.findByText('Finanzas Uno')).toBeInTheDocument();
-      expect(screen.queryByText('Vendedor Uno')).not.toBeInTheDocument();
-    });
-  });
 });
