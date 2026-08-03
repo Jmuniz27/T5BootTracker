@@ -60,6 +60,7 @@ services:
       - boottracker-network
     volumes:
       - media_data:/app/media
+      - /opt/boot-tracker/google-credentials.json:/app/google-credentials.json:ro
     healthcheck:
       # /health/ verifica ademas que la BD conteste (config/health.py).
       #
@@ -90,6 +91,7 @@ services:
       - boottracker-network
     volumes:
       - media_data:/app/media
+      - /opt/boot-tracker/google-credentials.json:/app/google-credentials.json:ro
     healthcheck:
       # `inspect ping` pregunta al worker por el broker: si Redis se cae o el
       # worker queda colgado, deja de responder aunque el proceso siga vivo.
