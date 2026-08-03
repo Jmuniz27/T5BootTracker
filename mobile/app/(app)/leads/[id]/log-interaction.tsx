@@ -17,13 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
 import { logInteraction } from '../../../../src/api/leads.api';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import {
-  FOLLOW_UP_PRESETS,
-  presetToDate,
-  scheduleFollowUp,
-  type FollowUpPresetKey,
-} from '../../../../src/lib/follow-up';
-import { addFollowUp } from '../../../../src/lib/follow-up-store';
+import { FOLLOW_UP_PRESETS, presetToDate, type FollowUpPresetKey } from '../../../../src/lib/follow-up';
+import { createMeeting } from '../../../../src/api/meetings.api';
 
 type FollowUpChoice = FollowUpPresetKey | 'custom' | null;
 
@@ -87,7 +82,7 @@ export default function LogInteractionScreen() {
   const [customDate, setCustomDate] = useState<Date | null>(null);
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
   const [pickerDraft, setPickerDraft] = useState<Date>(() => presetToDate(1));
-  const [addToCalendar, setAddToCalendar] = useState(false);
+  const [notifyLead, setNotifyLead] = useState(true);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -147,25 +142,23 @@ export default function LogInteractionScreen() {
         duration_minutes: duration ? parseInt(duration, 10) : null,
       });
 
-      // Recordatorio de seguimiento (push + calendario opcional). No bloquea el
-      // guardado: si falla el permiso, la interacción ya quedó registrada.
+      // Si se eligió fecha, se agenda una reunión en el servidor (aparece en la
+      // Agenda + se sincroniza a Google + invita al lead). Best-effort: la
+      // interacción ya quedó guardada aunque la reunión falle.
       const followUpDate = followUp ? resolveFollowUpDate() : null;
       if (followUpDate) {
-        const scheduled = await scheduleFollowUp({
-          leadName,
-          date: followUpDate,
-          addToCalendar,
-          notes: notes.trim() || undefined,
-        });
-        // Guarda el seguimiento en la agenda local (in-app).
-        await addFollowUp({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          leadId: id,
-          leadName,
-          date: followUpDate.toISOString(),
-          notificationId: scheduled.notificationId,
-          eventId: scheduled.eventId,
-        }).catch(() => {});
+        try {
+          await createMeeting({
+            title: `Seguimiento: ${leadName}`,
+            description: notes.trim() || undefined,
+            start_time: followUpDate.toISOString(),
+            end_time: new Date(followUpDate.getTime() + 30 * 60 * 1000).toISOString(),
+            lead: id,
+            notify_lead: notifyLead,
+          });
+        } catch {
+          // La interacción se guardó; solo falló agendar la reunión.
+        }
       }
 
       showToast();
@@ -312,15 +305,15 @@ export default function LogInteractionScreen() {
             </View>
           </SectionCard>
 
-          {/* Agendar seguimiento en el calendario */}
+          {/* Agendar próxima reunión con el lead */}
           <SectionCard>
             <View style={s.followUpHeader}>
               <Ionicons name="calendar-outline" size={16} color={colors.navy} />
-              <Text style={s.sectionTitle}>Agendar en calendario</Text>
+              <Text style={s.sectionTitle}>Agendar próxima reunión</Text>
               <Text style={s.optional}>(opcional)</Text>
             </View>
             <Text style={s.followUpHint}>
-              Se guarda en tu Agenda y te avisamos con una notificación.
+              Aparece en tu Agenda y se sincroniza con Google Calendar.
             </Text>
 
             <View style={s.followUpChips}>
@@ -379,14 +372,14 @@ export default function LogInteractionScreen() {
             {followUp !== null && (
               <TouchableOpacity
                 style={s.calRow}
-                onPress={() => setAddToCalendar((v) => !v)}
+                onPress={() => setNotifyLead((v) => !v)}
                 activeOpacity={0.7}
               >
-                <View style={[s.checkbox, addToCalendar && s.checkboxOn]}>
-                  {addToCalendar && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                <View style={[s.checkbox, notifyLead && s.checkboxOn]}>
+                  {notifyLead && <Ionicons name="checkmark" size={14} color={colors.white} />}
                 </View>
-                <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-                <Text style={s.calRowText}>Agregar al calendario del dispositivo</Text>
+                <Ionicons name="mail-outline" size={16} color={colors.textMuted} />
+                <Text style={s.calRowText}>Invitar al lead por correo</Text>
               </TouchableOpacity>
             )}
 
