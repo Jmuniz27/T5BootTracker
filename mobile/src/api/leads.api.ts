@@ -33,7 +33,6 @@ export interface InteractionPayload {
   interest_level?: number | null;
   notes?: string;
   duration_minutes?: number | null;
-  discount_offered?: number | null;
 }
 
 export async function logInteraction(leadId: string, payload: InteractionPayload) {
