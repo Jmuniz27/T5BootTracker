@@ -153,6 +153,7 @@ export default function LeadsScreen() {
   const [showFilters, setShowFilters]   = useState(false);
   const [myLeads, setMyLeads]           = useState<Lead[]>([]);
   const [available, setAvailable]       = useState<Lead[]>([]);
+  const [convertedLeads, setConvertedLeads] = useState<Lead[]>([]);
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
   const [error, setError]               = useState<string | null>(null);
@@ -182,6 +183,7 @@ export default function LeadsScreen() {
       const data = await fetchLeads(Object.keys(params).length ? params : undefined);
       setMyLeads(data.my_leads);
       setAvailable(data.available_leads);
+      setConvertedLeads(data.converted_leads ?? data.my_leads.filter((l) => l.status === 'CONVERTED'));
       setError(null);
     } catch {
       setError('No pudimos cargar los leads. Intenta de nuevo.');
@@ -224,8 +226,7 @@ export default function LeadsScreen() {
   }
 
   const activeMy = myLeads.filter((l) => l.status !== 'CONVERTED');
-  const converted = myLeads.filter((l) => l.status === 'CONVERTED');
-  const displayed = tab === 'available' ? available : tab === 'converted' ? converted : activeMy;
+  const displayed = tab === 'available' ? available : tab === 'converted' ? convertedLeads : activeMy;
 
   if (loading) {
     return (
@@ -287,7 +288,7 @@ export default function LeadsScreen() {
                 <Text style={styles.statLabel}>Disponibles</Text>
               </View>
               <View style={styles.statCard}>
-                <Text style={styles.statValue}>{converted.length}</Text>
+                <Text style={styles.statValue}>{convertedLeads.length}</Text>
                 <Text style={styles.statLabel}>Convertidos</Text>
               </View>
             </View>
@@ -348,7 +349,7 @@ export default function LeadsScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.tabText, tab === 'converted' && styles.tabTextActive]} numberOfLines={1}>
-                  Convertidos ({converted.length})
+                  Convertidos ({convertedLeads.length})
                 </Text>
               </TouchableOpacity>
             </View>

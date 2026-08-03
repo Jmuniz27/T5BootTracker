@@ -162,47 +162,45 @@ export default function LeadDetailScreen() {
             label="Interacciones"
             value={lead.interaction_count != null ? String(lead.interaction_count) : undefined}
           />
+          {isConverted ? (
+            <InfoRow icon="ribbon-outline" label="Convertido por" value={lead.owner_name} />
+          ) : null}
         </View>
 
         <View style={s.actions}>
-          {owned ? (
+          {isConverted ? (
+            <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.85}>
+              <Ionicons name="time-outline" size={18} color={colors.white} />
+              <Text style={s.actionPrimaryText}>Ver historial</Text>
+            </TouchableOpacity>
+          ) : owned ? (
             <>
-              {!isConverted && (
-                <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/log-interaction')} activeOpacity={0.85}>
-                  <Ionicons name="create-outline" size={18} color={colors.white} />
-                  <Text style={s.actionPrimaryText}>Registrar interacción</Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity
-                style={isConverted ? s.actionPrimary : s.actionGhost}
-                onPress={() => go('/(app)/leads/[id]/history')}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="time-outline" size={18} color={isConverted ? colors.white : colors.navy} />
-                <Text style={isConverted ? s.actionPrimaryText : s.actionGhostText}>Ver historial</Text>
+              <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/log-interaction')} activeOpacity={0.85}>
+                <Ionicons name="create-outline" size={18} color={colors.white} />
+                <Text style={s.actionPrimaryText}>Registrar interacción</Text>
               </TouchableOpacity>
 
-              {!isConverted && (
-                <TouchableOpacity style={s.actionGhost} onPress={() => setStatusOpen(true)} activeOpacity={0.8}>
-                  <Ionicons name="flag-outline" size={18} color={colors.navy} />
-                  <Text style={s.actionGhostText}>Cambiar estado</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.8}>
+                <Ionicons name="time-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>Ver historial</Text>
+              </TouchableOpacity>
 
-              {!isConverted && (
-                <TouchableOpacity
-                  style={s.actionGhost}
-                  onPress={() => router.push({
-                    pathname: '/(app)/leads/[id]/edit',
-                    params: { id: lead.id, lead: JSON.stringify(lead) },
-                  })}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="pencil-outline" size={18} color={colors.navy} />
-                  <Text style={s.actionGhostText}>Editar información</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity style={s.actionGhost} onPress={() => setStatusOpen(true)} activeOpacity={0.8}>
+                <Ionicons name="flag-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>Cambiar estado</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.actionGhost}
+                onPress={() => router.push({
+                  pathname: '/(app)/leads/[id]/edit',
+                  params: { id: lead.id, lead: JSON.stringify(lead) },
+                })}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="pencil-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>Editar información</Text>
+              </TouchableOpacity>
 
               {isQualified && (
                 <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/convert')} activeOpacity={0.8}>
@@ -211,17 +209,15 @@ export default function LeadDetailScreen() {
                 </TouchableOpacity>
               )}
 
-              {!isConverted && (
-                <TouchableOpacity style={s.actionDanger} onPress={release} disabled={busy} activeOpacity={0.8}>
-                  {busy ? (
-                    <ActivityIndicator size="small" color={colors.error} />
-                  ) : (
-                    <Text style={s.actionDangerText}>Desasignar</Text>
-                  )}
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity style={s.actionDanger} onPress={release} disabled={busy} activeOpacity={0.8}>
+                {busy ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <Text style={s.actionDangerText}>Desasignar</Text>
+                )}
+              </TouchableOpacity>
 
-              {!isQualified && !isConverted && (
+              {!isQualified && (
                 <Text style={s.hint}>Para convertir el lead, primero pásalo a “Calificado”.</Text>
               )}
             </>
