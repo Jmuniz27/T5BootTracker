@@ -231,4 +231,15 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
+    # Sin esto hereda DEFAULT_AUTHENTICATION_CLASSES, que es sólo JWT. El Swagger
+    # se abre desde el navegador, que manda la cookie de sesión y no un header
+    # Authorization, así que /api/docs/ devolvía 401 incluso a un administrador
+    # ya logueado en /admin/ — la doc quedaba inalcanzable en producción.
+    #
+    # No afecta al permiso: en production.py, SERVE_PERMISSIONS sigue exigiendo
+    # IsAdminUser. Esto sólo agrega una forma de acreditar quién sos.
+    'SERVE_AUTHENTICATION': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
 }
