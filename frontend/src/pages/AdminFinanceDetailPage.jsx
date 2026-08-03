@@ -1,10 +1,10 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getSalespersonBootcampers } from '../api/salespeople.api'
+import { getFinanceBootcampers } from '../api/finance.api'
 import StatCard from '../components/StatCard'
 
 /**
- * Los bootcampers de un vendedor, vistos por el administrador.
+ * Los bootcampers de una persona de Finanzas, vistos por el administrador.
  *
  * Pantalla de sólo lectura por diseño: no hay aprobar, rechazar, reasignar ni
  * editar, y las tarjetas no navegan a ninguna pantalla que permita actuar. El
@@ -76,14 +76,14 @@ function SkeletonCard() {
   )
 }
 
-export default function AdminSalespersonDetailPage() {
-  const { salespersonId } = useParams()
+export default function AdminFinanceDetailPage() {
+  const { financeId } = useParams()
   const navigate = useNavigate()
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['salesperson-bootcampers', salespersonId],
-    queryFn: () => getSalespersonBootcampers(salespersonId),
-    enabled: Boolean(salespersonId),
+    queryKey: ['finance-bootcampers', financeId],
+    queryFn: () => getFinanceBootcampers(financeId),
+    enabled: Boolean(financeId),
   })
 
   const bootcampers = data?.bootcampers ?? []
@@ -102,7 +102,7 @@ export default function AdminSalespersonDetailPage() {
       <div className="p-6 sm:p-8">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
           {error?.response?.status === 404
-            ? 'Ese usuario no existe o no es un vendedor.'
+            ? 'Ese usuario no existe o no es de Finanzas.'
             : 'No pudimos cargar la cartera. Intenta de nuevo.'}
         </div>
       </div>
@@ -115,15 +115,15 @@ export default function AdminSalespersonDetailPage() {
         onClick={() => navigate('/payments')}
         className="text-sm text-gray-500 hover:text-[#1D3176] transition-colors mb-4"
       >
-        ← Vendedores
+        ← Finanzas
       </button>
 
       <header className="mb-6">
         <h1 className="text-xl font-semibold text-gray-900">
-          {data?.salesperson ?? 'Cargando…'}
+          {data?.finance_name ?? 'Cargando…'}
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Bootcampers asignados. Esta vista es sólo de consulta.
+          Bootcampers que monitorea. Esta vista es sólo de consulta.
         </p>
       </header>
 
@@ -150,7 +150,7 @@ export default function AdminSalespersonDetailPage() {
       {!isLoading && bootcampers.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
           <p className="text-sm text-gray-500">
-            Este vendedor todavía no tiene bootcampers asignados.
+            Todavía no tomó ningún bootcamper del pool.
           </p>
         </div>
       )}

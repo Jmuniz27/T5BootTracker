@@ -196,9 +196,9 @@ class TestPaymentMyHistory:
 
 class TestPaymentQueue:
     def test_queue_returns_pending_only(
-        self, db, salesperson_user, pending_payment, approved_payment
+        self, db, finance_user, pending_payment, approved_payment
     ):
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         resp = client.get(QUEUE_URL)
         assert resp.status_code == 200
         data = resp.json()
@@ -206,18 +206,18 @@ class TestPaymentQueue:
         assert data[0]["status"] == Payment.Status.PENDING
 
     def test_queue_filtered_by_program(
-        self, db, salesperson_user, pending_payment, program
+        self, db, finance_user, pending_payment, program
     ):
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         resp = client.get(f"{QUEUE_URL}?program_id={program.id}")
         assert resp.status_code == 200
         assert len(resp.json()) == 1
 
     def test_queue_response_includes_new_ocr_fields(
-        self, db, salesperson_user, pending_payment
+        self, db, finance_user, pending_payment
     ):
         """ocr_payment_date and ocr_confidence must be present in queue list items."""
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         resp = client.get(QUEUE_URL)
         assert resp.status_code == 200
         data = resp.json()
@@ -227,10 +227,10 @@ class TestPaymentQueue:
         assert "ocr_confidence" in item
 
     def test_queue_response_includes_billing_fields(
-        self, db, salesperson_user, pending_payment
+        self, db, finance_user, pending_payment
     ):
         """CB-123: billing fields must be present in queue list items."""
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         resp = client.get(QUEUE_URL)
         assert resp.status_code == 200
         data = resp.json()
@@ -247,8 +247,8 @@ class TestPaymentQueue:
 
 
 class TestPaymentApprove:
-    def test_approve_payment_success(self, db, salesperson_user, pending_payment):
-        client = make_client(salesperson_user)
+    def test_approve_payment_success(self, db, finance_user, pending_payment):
+        client = make_client(finance_user)
         with patch("apps.payments.tasks.send_payment_status_notification.delay"):
             resp = client.patch(
                 APPROVE_URL.format(id=pending_payment.id),
@@ -263,12 +263,12 @@ class TestPaymentApprove:
         pending_payment.refresh_from_db()
         assert pending_payment.status == Payment.Status.APPROVED
         assert pending_payment.confirmed_amount == Decimal("350.00")
-        assert pending_payment.validated_by == salesperson_user
+        assert pending_payment.validated_by == finance_user
 
     def test_approve_already_approved_fails(
-        self, db, salesperson_user, approved_payment
+        self, db, finance_user, approved_payment
     ):
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         resp = client.patch(
             APPROVE_URL.format(id=approved_payment.id),
             {
@@ -281,8 +281,8 @@ class TestPaymentApprove:
 
 
 class TestPaymentReject:
-    def test_reject_payment_success(self, db, salesperson_user, pending_payment):
-        client = make_client(salesperson_user)
+    def test_reject_payment_success(self, db, finance_user, pending_payment):
+        client = make_client(finance_user)
         with patch("apps.payments.tasks.send_payment_status_notification.delay"):
             resp = client.patch(
                 REJECT_URL.format(id=pending_payment.id),
@@ -296,8 +296,8 @@ class TestPaymentReject:
         assert pending_payment.status == Payment.Status.REJECTED
         assert "ilegible" in pending_payment.rejection_reason
 
-    def test_reject_empty_reason_fails(self, db, salesperson_user, pending_payment):
-        client = make_client(salesperson_user)
+    def test_reject_empty_reason_fails(self, db, finance_user, pending_payment):
+        client = make_client(finance_user)
         resp = client.patch(
             REJECT_URL.format(id=pending_payment.id),
             {
@@ -380,23 +380,40 @@ class TestPaymentOCRStatus:
 
 class TestPaymentMonitoring:
     def test_monitoring_without_program_id_returns_all(
-        self, db, salesperson_user, approved_payment
+        self, db, finance_user, approved_payment
     ):
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         resp = client.get(MONITORING_URL)
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
     def test_monitoring_returns_bootcamper_summaries(
-        self, db, salesperson_user, program, approved_payment
+        self, db, finance_user, program, approved_payment, converted_bootcamper
     ):
-        client = make_client(salesperson_user)
+        converted_bootcamper.finance_owner = finance_user
+        converted_bootcamper.save(update_fields=["finance_owner"])
+
+        client = make_client(finance_user)
         resp = client.get(f"{MONITORING_URL}?program_id={program.id}")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data) >= 1
         assert "total_paid" in data[0]
         assert "is_critical" in data[0]
+
+    def test_monitoring_hides_bootcampers_of_other_finance_users(
+        self, db, finance_user, other_finance_user, program, approved_payment,
+        converted_bootcamper,
+    ):
+        """La cartera es de quien la tomó: nadie más la ve desde el monitoreo."""
+        converted_bootcamper.finance_owner = other_finance_user
+        converted_bootcamper.save(update_fields=["finance_owner"])
+
+        client = make_client(finance_user)
+        resp = client.get(f"{MONITORING_URL}?program_id={program.id}")
+
+        assert resp.status_code == 200
+        assert resp.json() == []
 
 
 class TestPaymentConfirm:
@@ -530,10 +547,10 @@ class TestPaymentConfirm:
 
 class TestPaymentQueueExcludesDraft:
     def test_queue_does_not_include_draft_payments(
-        self, db, salesperson_user, draft_payment, pending_payment
+        self, db, finance_user, draft_payment, pending_payment
     ):
         """DRAFT payments must not appear in the vendor review queue."""
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         resp = client.get(QUEUE_URL)
         assert resp.status_code == 200
         ids = [item["id"] for item in resp.json()]
@@ -542,8 +559,8 @@ class TestPaymentQueueExcludesDraft:
 
 
 class TestPaymentDraftCannotBeApproved:
-    def test_approve_draft_payment_fails(self, db, salesperson_user, draft_payment):
-        client = make_client(salesperson_user)
+    def test_approve_draft_payment_fails(self, db, finance_user, draft_payment):
+        client = make_client(finance_user)
         resp = client.patch(
             APPROVE_URL.format(id=draft_payment.id),
             {"confirmed_amount": "150.00"},
@@ -555,12 +572,12 @@ class TestPaymentDraftCannotBeApproved:
 
 class TestPaymentDetailIncludesRawText:
     def test_detail_includes_ocr_raw_text(
-        self, db, salesperson_user, pending_payment
+        self, db, finance_user, pending_payment
     ):
         """GET /payments/{id}/ must include ocr_raw_text for copy-paste by vendor."""
         pending_payment.ocr_raw_text = "Banco Pichincha\nTransferencia\nMonto: $350.00"
         pending_payment.save()
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         resp = client.get(PAYMENT_URL.format(id=pending_payment.id))
         assert resp.status_code == 200
         data = resp.json()
@@ -568,10 +585,10 @@ class TestPaymentDetailIncludesRawText:
         assert "Banco Pichincha" in data["ocr_raw_text"]
 
     def test_queue_list_does_not_include_raw_text(
-        self, db, salesperson_user, pending_payment
+        self, db, finance_user, pending_payment
     ):
         """The queue list endpoint must NOT include ocr_raw_text to keep payloads slim."""
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         resp = client.get(QUEUE_URL)
         assert resp.status_code == 200
         for item in resp.json():
@@ -580,9 +597,9 @@ class TestPaymentDetailIncludesRawText:
 
 class TestNotifyCoordinator:
     def test_notify_coordinator_dispatches_task(
-        self, db, salesperson_user, converted_bootcamper, program
+        self, db, finance_user, converted_bootcamper, program
     ):
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         with patch(
             "apps.notifications.tasks.send_late_payment_alert.delay"
         ) as mock_delay:
