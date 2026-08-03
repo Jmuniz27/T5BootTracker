@@ -188,10 +188,13 @@ CELERY_TIMEZONE = TIME_ZONE
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = True
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@espol.edu.ec')
+# El From tiene que ser la misma cuenta que se autentica por SMTP: Gmail reescribe el
+# remitente (o manda a spam) cuando no coinciden. Por eso el default cae en
+# EMAIL_HOST_USER en vez de una direccion fija que puede quedar desincronizada.
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@localhost')
 
 # Logging
 LOGGING = {
@@ -228,4 +231,15 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
+    # Sin esto hereda DEFAULT_AUTHENTICATION_CLASSES, que es sólo JWT. El Swagger
+    # se abre desde el navegador, que manda la cookie de sesión y no un header
+    # Authorization, así que /api/docs/ devolvía 401 incluso a un administrador
+    # ya logueado en /admin/ — la doc quedaba inalcanzable en producción.
+    #
+    # No afecta al permiso: en production.py, SERVE_PERMISSIONS sigue exigiendo
+    # IsAdminUser. Esto sólo agrega una forma de acreditar quién sos.
+    'SERVE_AUTHENTICATION': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
 }

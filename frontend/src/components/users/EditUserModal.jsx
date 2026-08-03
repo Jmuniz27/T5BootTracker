@@ -5,24 +5,32 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateUser } from '../../api/users.api'
 import { isValidCedula } from '../../utils/cedula'
 import { ROLE_OPTIONS } from './roles'
+import {
+  coordinatorScopeFields,
+  coordinatorScopePayload,
+  refineCoordinatorScope,
+} from './coordinatorScope'
 import ModalShell from './ModalShell'
 import UserFormFields from './UserFormFields'
 import { applyServerErrors } from './apiErrors'
 
-const schema = z.object({
-  first_name: z.string().trim().min(1, 'El nombre es requerido'),
-  last_name: z.string().trim().min(1, 'El apellido es requerido'),
-  email: z.string().trim().email('Ingresa un email válido'),
-  role: z.enum(
-    ROLE_OPTIONS.map((r) => r.value),
-    { message: 'Selecciona un rol' },
-  ),
-  cedula: z
-    .string()
-    .trim()
-    .refine((v) => v === '' || isValidCedula(v), 'Cédula ecuatoriana inválida'),
-  phone: z.string().trim(),
-})
+const schema = z
+  .object({
+    first_name: z.string().trim().min(1, 'El nombre es requerido'),
+    last_name: z.string().trim().min(1, 'El apellido es requerido'),
+    email: z.string().trim().email('Ingresa un email válido'),
+    role: z.enum(
+      ROLE_OPTIONS.map((r) => r.value),
+      { message: 'Selecciona un rol' },
+    ),
+    cedula: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || isValidCedula(v), 'Cédula ecuatoriana inválida'),
+    phone: z.string().trim(),
+    ...coordinatorScopeFields,
+  })
+  .superRefine(refineCoordinatorScope)
 
 export default function EditUserModal({ user, onClose, onSuccess, onError }) {
   const queryClient = useQueryClient()
@@ -42,6 +50,8 @@ export default function EditUserModal({ user, onClose, onSuccess, onError }) {
       role: user.role ?? '',
       cedula: user.cedula ?? '',
       phone: user.phone ?? '',
+      coordinator_scope: user.coordinator_scope ?? '',
+      coordinator_program: user.coordinator_program ?? '',
     },
   })
 
@@ -59,7 +69,12 @@ export default function EditUserModal({ user, onClose, onSuccess, onError }) {
   })
 
   const onSubmit = (values) =>
-    mutation.mutate({ ...values, cedula: values.cedula || null, phone: values.phone || null })
+    mutation.mutate({
+      ...values,
+      cedula: values.cedula || null,
+      phone: values.phone || null,
+      ...coordinatorScopePayload(values),
+    })
 
   return (
     <ModalShell title="Editar usuario" subtitle={user.email} onClose={onClose}>
