@@ -1796,7 +1796,12 @@ export default function LeadsDashboard() {
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
         </div>
 
-        {/* Tabs */}
+        {/* Tabs
+            CB-QA: para el Admin, el backend (LeadListCreateView.get) manda
+            TODOS los leads (asignados + sin asignar) dentro de my_leads y deja
+            available_leads siempre vacío — no hay una separación real que
+            "Mis leads" / "Disponibles" pueda describir. Se muestra una sola
+            pestaña con una etiqueta que no promete algo que el dato no tiene. */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
           <button
             data-testid="tab-mine"
@@ -1807,19 +1812,21 @@ export default function LeadsDashboard() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Mis leads ({myLeads.length})
+            {isAdmin ? `Todos los leads (${myLeads.length})` : `Mis leads (${myLeads.length})`}
           </button>
-          <button
-            data-testid="tab-available"
-            onClick={() => { setActiveTab('available'); setPage(1) }}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              activeTab === 'available'
-                ? 'bg-[#213A8E] text-white shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Disponibles ({availableLeads.length})
-          </button>
+          {!isAdmin && (
+            <button
+              data-testid="tab-available"
+              onClick={() => { setActiveTab('available'); setPage(1) }}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                activeTab === 'available'
+                  ? 'bg-[#213A8E] text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Disponibles ({availableLeads.length})
+            </button>
+          )}
         </div>
 
         {/* Table */}
