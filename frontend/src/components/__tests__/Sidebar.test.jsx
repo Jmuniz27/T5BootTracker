@@ -33,6 +33,34 @@ describe('Sidebar — visibilidad del enlace de Usuarios', () => {
   );
 });
 
+describe('Sidebar — visibilidad del enlace de Pagos', () => {
+  afterEach(() => {
+    useAuthStore.setState({ accessToken: null, refreshToken: null, user: null });
+  });
+
+  it.each(['ADMINISTRATOR', 'FINANCE', 'BOOTCAMPER'])(
+    'muestra "Payment" para el rol %s',
+    (role) => {
+      useAuthStore.setState({ user: { id: 'u1', role } });
+      renderSidebar();
+      expect(screen.getByRole('link', { name: /payment/i })).toHaveAttribute('href', '/payments');
+    },
+  );
+
+  it('oculta "Payment" al Vendedor', () => {
+    // El cobro es de Finanzas; la API le responde 403 en cada endpoint de pagos.
+    useAuthStore.setState({ user: { id: 'u1', role: 'SALESPERSON' } });
+    renderSidebar();
+    expect(screen.queryByRole('link', { name: /payment/i })).not.toBeInTheDocument();
+  });
+
+  it('deja el Dashboard al Vendedor', () => {
+    useAuthStore.setState({ user: { id: 'u1', role: 'SALESPERSON' } });
+    renderSidebar();
+    expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/dashboard');
+  });
+});
+
 describe('Sidebar — visibilidad del enlace de Analítica (HST-024)', () => {
   afterEach(() => {
     useAuthStore.setState({ accessToken: null, refreshToken: null, user: null });

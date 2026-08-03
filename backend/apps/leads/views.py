@@ -17,7 +17,7 @@ from rest_framework.views import APIView
 from apps.authentication.models import CustomUser
 from apps.programs.models import Program
 from .models import Lead, Interaction, LeadAssignmentSetting
-from .permissions import IsAdministrator, IsSalesperson, IsSalespersonOrAdmin
+from .permissions import COMMERCIAL_ROLES, IsAdministrator, IsCommercial, IsCommercialOrAdmin
 from .serializers import (
     LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
     InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
@@ -38,7 +38,7 @@ TRUTHY            = {'true', '1', 'yes', 'on'}
 
 class LeadListCreateView(APIView):
     """GET returns paginated my_leads + available_leads. POST creates a new lead."""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsCommercialOrAdmin]
 
     def _annotated_qs(self):
         latest = Interaction.objects.filter(lead=OuterRef('pk')).order_by('-created_at')
@@ -202,7 +202,7 @@ class LeadListCreateView(APIView):
 
 class LeadAssignView(APIView):
     """PATCH /leads/{id}/assign/ — self-assignment with optimistic locking."""
-    permission_classes = [IsSalesperson]
+    permission_classes = [IsCommercial]
 
     @extend_schema(
         responses={
@@ -247,7 +247,7 @@ class LeadAssignView(APIView):
 
 class LeadReleaseView(APIView):
     """PATCH /leads/{id}/release/ — release ownership."""
-    permission_classes = [IsSalesperson]
+    permission_classes = [IsCommercial]
 
     @extend_schema(
         responses={200: LeadListSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
@@ -295,10 +295,13 @@ class LeadAdminReassignView(APIView):
         owner_id = request.data.get('owner_id')
         if owner_id:
             try:
-                new_owner = CustomUser.objects.get(pk=uuid.UUID(str(owner_id)), role=CustomUser.Role.SALESPERSON)
+                # Finanzas también trabaja leads, así que puede recibir uno.
+                new_owner = CustomUser.objects.get(
+                    pk=uuid.UUID(str(owner_id)), role__in=COMMERCIAL_ROLES,
+                )
             except (CustomUser.DoesNotExist, ValueError):
                 return Response(
-                    {'error': 'owner_id debe ser un Vendedor existente.', 'code': 'INVALID_OWNER'},
+                    {'error': 'owner_id debe ser un Vendedor o Finanzas existente.', 'code': 'INVALID_OWNER'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -350,7 +353,7 @@ class LeadAssignmentSettingView(APIView):
 
 class LeadDetailView(APIView):
     """GET/PATCH/DELETE /leads/{id}/ — detail, partial update, soft delete."""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsCommercialOrAdmin]
 
     @extend_schema(
         responses={200: LeadDetailSerializer, 404: OpenApiResponse(description='Lead no encontrado')},
@@ -400,7 +403,7 @@ class LeadDetailView(APIView):
 
 class InteractionListCreateView(APIView):
     """GET/POST /leads/{id}/interactions/"""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsCommercialOrAdmin]
 
     @extend_schema(
         responses={200: InteractionSerializer(many=True)},
@@ -440,7 +443,7 @@ class InteractionListCreateView(APIView):
 
 class InteractionDetailView(APIView):
     """PATCH /leads/{pk}/interactions/{interaction_pk}/ — edit an existing interaction."""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsCommercialOrAdmin]
 
     @extend_schema(
         request=InteractionSerializer,
@@ -464,7 +467,7 @@ class InteractionDetailView(APIView):
 
 class ConvertLeadView(APIView):
     """POST /api/leads/{id}/convert/ — convert a lead to a bootcamper."""
-    permission_classes = [IsSalesperson]
+    permission_classes = [IsCommercial]
 
     @extend_schema(
         request=ConvertLeadSerializer,
@@ -501,7 +504,7 @@ class ConvertLeadView(APIView):
 
 class ReturningBootcamperView(APIView):
     """POST /api/leads/returning-bootcamper/ — create a lead for an existing bootcamper."""
-    permission_classes = [IsSalesperson]
+    permission_classes = [IsCommercial]
 
     @extend_schema(
         request=ReturningBootcamperSerializer,

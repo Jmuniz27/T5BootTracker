@@ -11,10 +11,10 @@ import LeadsDashboard from './pages/LeadsDashboard'
 import UsersPage from './pages/UsersPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import PaymentsPage from './pages/PaymentsPage'
-import SalespersonPaymentsPage from './pages/SalespersonPaymentsPage'
+import FinancePaymentsPage from './pages/FinancePaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
-import AdminSalespeoplePage from './pages/AdminSalespeoplePage'
-import AdminSalespersonDetailPage from './pages/AdminSalespersonDetailPage'
+import AdminFinancePage from './pages/AdminFinancePage'
+import AdminFinanceDetailPage from './pages/AdminFinanceDetailPage'
 import ProgramsPage from './pages/ProgramsPage'
 import ProgramDetailPage from './pages/ProgramDetailPage'
 import { useAuthStore } from './store/auth.store'
@@ -22,10 +22,13 @@ import { useAuthStore } from './store/auth.store'
 function PaymentsRoute() {
   const user = useAuthStore((s) => s.user)
   if (user?.role === 'BOOTCAMPER') return <PaymentsPage />
-  // El administrador no tiene bootcampers propios: ve las carteras de los
-  // vendedores en lugar de una lista que no le pertenece.
-  if (user?.role === 'ADMINISTRATOR') return <AdminSalespeoplePage />
-  return <SalespersonPaymentsPage />
+  // El administrador no tiene bootcampers propios: ve las carteras de Finanzas
+  // en lugar de una lista que no le pertenece.
+  if (user?.role === 'ADMINISTRATOR') return <AdminFinancePage />
+  // El vendedor capta y convierte; el cobro es de Finanzas. La API le responde
+  // 403 en cada endpoint de pagos, así que ni se le muestra la pantalla.
+  if (user?.role === 'SALESPERSON') return <Navigate to="/dashboard" replace />
+  return <FinancePaymentsPage />
 }
 
 function DashboardRoute() {
@@ -60,10 +63,10 @@ export default function App() {
           <Route path="/payments" element={<PaymentsRoute />} />
           <Route path="/payments/:bootcamperId/:programId" element={<BootcamperPaymentDetailPage />} />
           <Route
-            path="/payments/vendedor/:salespersonId"
+            path="/payments/finanzas/:financeId"
             element={
               <AdminRoute>
-                <AdminSalespersonDetailPage />
+                <AdminFinanceDetailPage />
               </AdminRoute>
             }
           />

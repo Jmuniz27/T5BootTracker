@@ -1,6 +1,9 @@
 """URL configuration for payments app."""
 from django.urls import path
 from .views import (
+    BootcamperPoolView,
+    BootcamperAssignView,
+    BootcamperReleaseView,
     PaymentUploadView,
     PaymentMyStatusView,
     PaymentMyHistoryView,
@@ -22,6 +25,9 @@ urlpatterns = [
     path('my-history/',                               PaymentMyHistoryView.as_view(),    name='payment-my-history'),
     path('my-payments/<uuid:pk>/ocr-status/',         PaymentOCRStatusView.as_view(),    name='payment-ocr-status'),
     path('my-payments/<uuid:pk>/confirm/',            PaymentConfirmView.as_view(),      name='payment-confirm'),
+    path('bootcampers/',                              BootcamperPoolView.as_view(),      name='bootcamper-pool'),
+    path('bootcampers/<uuid:bootcamper_id>/assign/',  BootcamperAssignView.as_view(),    name='bootcamper-assign'),
+    path('bootcampers/<uuid:bootcamper_id>/release/', BootcamperReleaseView.as_view(),   name='bootcamper-release'),
     path('queue/',                                    PaymentQueueView.as_view(),        name='payment-queue'),
     path('monitoring/',                               PaymentMonitoringView.as_view(),   name='payment-monitoring'),
     path('notify-coordinator/<uuid:bootcamper_id>/',  NotifyCoordinatorView.as_view(),   name='payment-notify-coordinator'),
