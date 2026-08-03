@@ -71,6 +71,37 @@ class TestLeadList:
         resp = client.get(LEADS_URL)
         assert resp.status_code == 403
 
+    def test_converted_leads_visible_to_all_with_converter_name(self, db, salesperson_user):
+        other = CustomUser.objects.create_user(
+            email='other.sales@test.com',
+            password='testpass123',
+            first_name='Zahid',
+            last_name='Diaz',
+            role=CustomUser.Role.SALESPERSON,
+        )
+        converted = Lead.objects.create(
+            name='Converted Lead',
+            phone='0993334444',
+            status=Lead.Status.CONVERTED,
+            owner=other,
+        )
+
+        client = make_client(salesperson_user)
+        data = client.get(LEADS_URL).json()
+
+        converted_ids = [lead['id'] for lead in data['converted_leads']]
+        assert str(converted.id) in converted_ids
+        # No es mío ni está disponible: solo aparece en converted_leads.
+        assert str(converted.id) not in [lead['id'] for lead in data['my_leads']]
+        assert str(converted.id) not in [lead['id'] for lead in data['available_leads']]
+        row = next(lead for lead in data['converted_leads'] if lead['id'] == str(converted.id))
+        assert row['owner_name'] == 'Zahid Diaz'
+
+    def test_converted_leads_excludes_active_leads(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+        data = client.get(LEADS_URL).json()
+        assert str(assigned_lead.id) not in [lead['id'] for lead in data['converted_leads']]
+
 
 class TestLeadCreate:
     def test_lead_create_manual_with_is_company(self, db, salesperson_user):

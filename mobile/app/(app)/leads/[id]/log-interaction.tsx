@@ -16,12 +16,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
 import { logInteraction } from '../../../../src/api/leads.api';
+import { createMeeting } from '../../../../src/api/meetings.api';
 import {
-  FOLLOW_UP_PRESETS,
-  presetToDate,
-  scheduleFollowUp,
-  type FollowUpPresetKey,
-} from '../../../../src/lib/follow-up';
+  emptyMeetingForm,
+  formToPayload,
+  type MeetingFormValues,
+} from '../../../../src/lib/meeting-form';
+import MeetingFormModal from '../../../../src/components/MeetingFormModal';
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
@@ -73,13 +74,40 @@ export default function LogInteractionScreen() {
   const [stars, setStars]           = useState<number | null>(null);
   const [notes, setNotes]           = useState('');
   const [duration, setDuration]     = useState('');
-  const [followUp, setFollowUp]     = useState<FollowUpPresetKey | null>(null);
-  const [addToCalendar, setAddToCalendar] = useState(false);
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const [meetingSaving, setMeetingSaving] = useState(false);
+  const [meetingScheduled, setMeetingScheduled] = useState(false);
+  const [meetingInitial, setMeetingInitial] = useState<MeetingFormValues>(emptyMeetingForm());
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const canSubmit = type !== null && outcome !== null && !loading;
+
+  function openMeeting() {
+    const f = emptyMeetingForm();
+    f.title = `Seguimiento: ${leadName}`;
+    f.lead = id;
+    f.leadName = leadName;
+    f.description = notes.trim();
+    setMeetingInitial(f);
+    setMeetingOpen(true);
+  }
+
+  async function handleSaveMeeting(values: MeetingFormValues) {
+    const payload = formToPayload(values);
+    if (!payload) return;
+    setMeetingSaving(true);
+    try {
+      await createMeeting(payload);
+      setMeetingOpen(false);
+      setMeetingScheduled(true);
+    } catch {
+      setError('No pudimos agendar la reunión. Intenta de nuevo.');
+    } finally {
+      setMeetingSaving(false);
+    }
+  }
 
   function showToast() {
     Animated.sequence([
@@ -101,20 +129,6 @@ export default function LogInteractionScreen() {
         notes: notes.trim() || undefined,
         duration_minutes: duration ? parseInt(duration, 10) : null,
       });
-
-      // Recordatorio de seguimiento (push + calendario opcional). No bloquea el
-      // guardado: si falla el permiso, la interacción ya quedó registrada.
-      if (followUp) {
-        const preset = FOLLOW_UP_PRESETS.find((p) => p.key === followUp);
-        if (preset) {
-          await scheduleFollowUp({
-            leadName,
-            date: presetToDate(preset.days),
-            addToCalendar,
-            notes: notes.trim() || undefined,
-          });
-        }
-      }
 
       showToast();
     } catch {
@@ -260,47 +274,29 @@ export default function LogInteractionScreen() {
             </View>
           </SectionCard>
 
-          {/* Recordatorio de seguimiento */}
+          {/* Agendar próxima reunión con el lead */}
           <SectionCard>
-            <SectionTitle optional>Recordatorio de seguimiento</SectionTitle>
-            <View style={s.followUpChips}>
-              <TouchableOpacity
-                style={[s.followUpChip, followUp === null && s.followUpChipActive]}
-                onPress={() => setFollowUp(null)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.followUpChipText, followUp === null && s.followUpChipTextActive]}>
-                  Sin recordatorio
-                </Text>
-              </TouchableOpacity>
-              {FOLLOW_UP_PRESETS.map((p) => {
-                const active = followUp === p.key;
-                return (
-                  <TouchableOpacity
-                    key={p.key}
-                    style={[s.followUpChip, active && s.followUpChipActive]}
-                    onPress={() => setFollowUp(p.key)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[s.followUpChipText, active && s.followUpChipTextActive]}>
-                      {p.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={s.followUpHeader}>
+              <Ionicons name="calendar-outline" size={16} color={colors.navy} />
+              <Text style={s.sectionTitle}>Agendar próxima reunión</Text>
+              <Text style={s.optional}>(opcional)</Text>
             </View>
+            <Text style={s.followUpHint}>
+              Aparece en tu Agenda y se sincroniza con Google Calendar.
+            </Text>
 
-            {followUp !== null && (
-              <TouchableOpacity
-                style={s.calRow}
-                onPress={() => setAddToCalendar((v) => !v)}
-                activeOpacity={0.7}
-              >
-                <View style={[s.checkbox, addToCalendar && s.checkboxOn]}>
-                  {addToCalendar && <Ionicons name="checkmark" size={14} color={colors.white} />}
-                </View>
-                <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-                <Text style={s.calRowText}>Agregar al calendario del dispositivo</Text>
+            {meetingScheduled ? (
+              <View style={s.selectedRow}>
+                <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+                <Text style={s.selectedText}>Reunión agendada</Text>
+                <TouchableOpacity onPress={openMeeting} hitSlop={8}>
+                  <Text style={s.selectedEdit}>Otra</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={s.scheduleBtn} onPress={openMeeting} activeOpacity={0.85}>
+                <Ionicons name="add" size={18} color={colors.navy} />
+                <Text style={s.scheduleBtnText}>Agendar reunión</Text>
               </TouchableOpacity>
             )}
           </SectionCard>
@@ -318,6 +314,18 @@ export default function LogInteractionScreen() {
         <Ionicons name="checkmark-circle" size={18} color={colors.white} />
         <Text style={s.toastText}>Interacción guardada</Text>
       </Animated.View>
+
+      <MeetingFormModal
+        visible={meetingOpen}
+        initial={meetingInitial}
+        editingId={null}
+        leads={[{ id, name: leadName }]}
+        saving={meetingSaving}
+        deleting={false}
+        onSave={handleSaveMeeting}
+        onDelete={() => {}}
+        onClose={() => setMeetingOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -326,6 +334,16 @@ export default function LogInteractionScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f8f9fb' },
+  scheduleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#eff2fb',
+    borderRadius: 12,
+    paddingVertical: 13,
+  },
+  scheduleBtnText: { fontSize: 14, fontWeight: '700', color: colors.navy },
   // Header
   header: {
     flexDirection: 'row',
@@ -445,8 +463,13 @@ const s = StyleSheet.create({
     minHeight: 110,
   },
   // Follow-up reminder
+  followUpHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  followUpHint: { fontSize: 12, color: colors.textMuted, marginTop: -4 },
   followUpChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   followUpChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 20,
@@ -454,6 +477,17 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: '#f8f9fb',
   },
+  selectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#eff2fb',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  selectedText: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.navy },
+  selectedEdit: { fontSize: 13, fontWeight: '700', color: colors.navy, textDecorationLine: 'underline' },
   followUpChipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
   followUpChipText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   followUpChipTextActive: { color: colors.white },
