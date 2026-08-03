@@ -141,6 +141,10 @@ class ConvertLeadSerializer(serializers.Serializer):
     """Validate lead-to-bootcamper conversion input."""
     cedula     = serializers.CharField(max_length=10)
     program_id = serializers.UUIDField()
+    # Opcional: hay programas sin cohortes creadas todavía, y exigirla bloquearía
+    # la conversión. Cuando viene, el servicio comprueba que sea de ese programa
+    # y que no esté finalizada.
+    cohort_id  = serializers.UUIDField(required=False, allow_null=True)
     email      = serializers.EmailField(required=False, allow_blank=True)
     phone      = serializers.CharField(required=False, allow_blank=True)
     # Sólo el porcentaje: el precio final lo calcula el backend. Si el cliente

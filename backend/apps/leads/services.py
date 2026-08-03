@@ -12,7 +12,7 @@ from rest_framework import status
 from apps.authentication.models import CustomUser
 from apps.authentication.validators import validate_cedula_ecuatoriana
 from apps.programs.models import Program, Enrollment
-from apps.programs.services import apply_discount
+from apps.programs.services import apply_discount, resolve_assignable_cohort
 from apps.notifications.tasks import send_conversion_notification
 from .models import Interaction, Lead, LeadAssignmentSetting
 
@@ -69,6 +69,9 @@ def convert_lead_to_bootcamper(lead, validated_data):
         # 3. LANZAR NOTFOUND (404)
         raise NotFound({'error': 'Programa no encontrado.', 'code': 'PROGRAM_NOT_FOUND'})
 
+    # Antes de crear nada: si la cohorte no sirve, la conversión no debe empezar.
+    cohort = resolve_assignable_cohort(program, validated_data.get('cohort_id'))
+
     email = validated_data.get('email') or lead.email
     phone = validated_data.get('phone') or lead.phone
 
@@ -113,7 +116,10 @@ def convert_lead_to_bootcamper(lead, validated_data):
         Enrollment.objects.create(
             bootcamper=bootcamper,
             bootcamp=program,
-            start_date=program.start_date,
+            cohort=cohort,
+            # Con cohorte manda su mes de inicio: es cuando esta persona empieza
+            # de verdad, y puede no coincidir con el arranque del programa.
+            start_date=cohort.start_month if cohort else program.start_date,
             discount_percentage=discount,
             agreed_price=agreed_price,
         )
@@ -145,6 +151,8 @@ def convert_lead_to_bootcamper(lead, validated_data):
         # registrado, sin volver a consultar la inscripción.
         'discount_percentage': str(discount),
         'agreed_price': str(agreed_price),
+        'cohort_id': str(cohort.id) if cohort else None,
+        'cohort_number': cohort.number if cohort else None,
     }
 
 
