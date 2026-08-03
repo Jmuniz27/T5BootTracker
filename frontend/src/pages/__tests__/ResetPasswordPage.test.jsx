@@ -1,20 +1,36 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ResetPasswordPage from '../ResetPasswordPage';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
+function renderPage(initialEntries) {
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={initialEntries}>
+        <ResetPasswordPage />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
 describe('ResetPasswordPage', () => {
-  it('renders without crashing', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <ResetPasswordPage />
-        </BrowserRouter>
-      </QueryClientProvider>
-    );
+  it('shows an invalid link message when there is no token', () => {
+    renderPage(['/reset-password']);
     expect(screen.getByText(/Enlace inválido/i)).toBeInTheDocument();
+  });
+
+  it('renders password fields with a visibility toggle when a token is present', () => {
+    renderPage(['/reset-password?token=abc']);
+
+    const [passwordInput] = screen.getAllByPlaceholderText('••••••••');
+    expect(passwordInput).toHaveAttribute('type', 'password');
+
+    const [toggleButton] = screen.getAllByRole('button', { name: /mostrar contraseña/i });
+    fireEvent.click(toggleButton);
+
+    expect(passwordInput).toHaveAttribute('type', 'text');
   });
 });
