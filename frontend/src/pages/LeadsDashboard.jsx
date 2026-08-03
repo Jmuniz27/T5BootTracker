@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
+import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
 import CustomSelect from '../components/CustomSelect'
 import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
@@ -1455,10 +1456,47 @@ function cedulaInputBorderClass(hasError, cedula) {
 
 // ─── Convert Lead Modal ───────────────────────────────────────────────────────
 
+const CONVERT_MONTHS = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+]
+
+/**
+ * "2026-09-01" -> "septiembre 2026".
+ *
+ * Se parte la cadena en vez de usar new Date(): esa forma la interpreta en UTC y
+ * en husos negativos -como el de Ecuador- devuelve el mes anterior.
+ */
+function formatCohortMonth(value) {
+  if (!value) return '-'
+  const [year, month] = value.split('-')
+  return `${CONVERT_MONTHS[Number(month) - 1] ?? month} ${year}`
+}
+
+function formatMoney(value) {
+  const n = parseFloat(value)
+  if (Number.isNaN(n)) return '-'
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+/**
+ * Espejo de `apply_discount` en backend/apps/programs/services.py. Sólo para
+ * mostrar: el precio que se guarda lo calcula el backend, acá no se envía nunca.
+ */
+function previewDiscountedPrice(totalCost, discountPercentage) {
+  const cost = parseFloat(totalCost)
+  const pct = parseFloat(discountPercentage)
+  if (Number.isNaN(cost)) return null
+  const safePct = Number.isNaN(pct) ? 0 : Math.min(Math.max(pct, 0), 100)
+  return (cost * (100 - safePct)) / 100
+}
+
 function ConvertLeadModal({ lead, onClose, onSuccess }) {
   const queryClient = useQueryClient()
   const [cedula, setCedula]   = useState('')
   const [programId, setProgramId] = useState('')
+  const [cohortId, setCohortId]   = useState('')
+  const [discount, setDiscount]   = useState('0')
   const [email, setEmail]     = useState(lead.email || '')
   const [phone, setPhone]     = useState(lead.phone || '')
   const [errors, setErrors]   = useState({})
@@ -1468,6 +1506,28 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     queryKey: ['programs'],
     queryFn: getPrograms,
   })
+
+  // Cohortes del programa elegido. El backend sólo admite inscribir en próximas
+  // o en curso, así que las finalizadas se filtran acá y no se ofrecen: es la
+  // misma regla de `resolve_assignable_cohort`, para no proponer algo que va a
+  // ser rechazado.
+  const { data: cohorts = [], isLoading: loadingCohorts } = useQuery({
+    queryKey: ['cohorts', programId],
+    queryFn: () => getCohorts(programId),
+    enabled: Boolean(programId),
+  })
+  const assignableCohorts = cohorts.filter(
+    (c) => c.status === 'UPCOMING' || c.status === 'IN_PROGRESS',
+  )
+
+  const selectedProgram = programs.find((p) => p.id === programId)
+  const discountedPrice = selectedProgram
+    ? previewDiscountedPrice(selectedProgram.total_cost, discount)
+    : null
+
+  // Al cambiar de programa la cohorte elegida deja de ser válida: pertenecía al
+  // programa anterior y el backend la rechazaría por no corresponder.
+  useEffect(() => { setCohortId('') }, [programId])
 
   // Auto-selecciona el programa de interés del lead (sigue siendo editable).
   useEffect(() => {
@@ -1495,6 +1555,10 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     if (!cedula.trim()) errs.cedula = 'La cédula es requerida.'
     else if (!validateCedulaEcuatoriana(cedula)) errs.cedula = 'Cédula ecuatoriana inválida.'
     if (!programId) errs.programId = 'Selecciona un programa.'
+    const pct = Number(discount)
+    if (discount !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
+      errs.discount = 'El descuento va de 0 a 100.'
+    }
     return errs
   }
 
@@ -1504,6 +1568,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
     const payload = { cedula, program_id: programId }
+    if (cohortId) payload.cohort_id = cohortId
+    // Se manda el porcentaje y nunca el precio: la cuenta la hace el backend.
+    if (Number(discount) > 0) payload.discount_percentage = discount
     if (email) payload.email = email
     if (phone) payload.phone = phone
     convertMutation.mutate({ id: lead.id, payload })
@@ -1568,7 +1635,11 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           Convirtiendo a <span className="font-semibold text-gray-800">{lead.name}</span> en Bootcamper.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* noValidate: con `max` en el descuento, el navegador bloquea el envío
+            antes de que corra la validación de abajo y muestra un tooltip nativo
+            en inglés. El resto del formulario ya usa mensajes propios en
+            español, así que la validación es toda nuestra. */}
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           {/* Cédula */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1602,6 +1673,61 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               options={programs.map((p) => ({ value: p.id, label: `${p.name} — starts ${p.start_date} · $${p.total_cost}` }))}
             />
             {errors.programId && <p className="text-xs text-red-500 mt-1">{errors.programId}</p>}
+          </div>
+
+          {/* Cohorte — sólo tiene sentido con un programa elegido */}
+          {programId && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Cohorte <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+              </label>
+              {loadingCohorts && <p className="text-sm text-gray-400">Cargando cohortes…</p>}
+              {!loadingCohorts && assignableCohorts.length === 0 && (
+                <p className="text-sm text-gray-400">
+                  Este programa no tiene cohortes próximas ni en curso.
+                </p>
+              )}
+              {!loadingCohorts && assignableCohorts.length > 0 && (
+                <CustomSelect
+                  testId="convert-cohort"
+                  value={cohortId}
+                  onChange={(val) => setCohortId(val)}
+                  placeholder="Selecciona una cohorte"
+                  options={assignableCohorts.map((c) => ({
+                    value: c.id,
+                    label: `Cohorte ${c.number} — ${c.status_label} · inicia ${formatCohortMonth(c.start_month)}`,
+                  }))}
+                />
+              )}
+              {errors.cohortId && <p className="text-xs text-red-500 mt-1">{errors.cohortId}</p>}
+            </div>
+          )}
+
+          {/* Descuento */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="convert-discount">
+              Descuento <span className="text-xs text-gray-400 font-normal">(%)</span>
+            </label>
+            <input
+              id="convert-discount"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              data-testid="convert-discount"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+            {errors.discount && <p className="text-xs text-red-500 mt-1">{errors.discount}</p>}
+            {selectedProgram && (
+              <p className="text-xs text-gray-500 mt-1">
+                Pagará <span className="font-semibold text-gray-700">{formatMoney(discountedPrice)}</span>
+                {Number(discount) > 0 && (
+                  <> en vez de <span className="line-through">{formatMoney(selectedProgram.total_cost)}</span></>
+                )}
+              </p>
+            )}
           </div>
 
           {/* Email */}
