@@ -1,7 +1,8 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import AgendaScreen from '../agenda';
-import { getFollowUps } from '../../../src/lib/follow-up-store';
+import { getMeetings } from '../../../src/api/meetings.api';
+import { fetchLeads } from '../../../src/api/leads.api';
 
 jest.mock('expo-router', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -13,16 +14,19 @@ jest.mock('expo-router', () => {
   };
 });
 
-// react-native-calendars usa módulos nativos/XDate; lo stubeamos en tests.
 jest.mock('react-native-calendars', () => ({ Calendar: () => null }));
 
-jest.mock('../../../src/lib/follow-up-store', () => ({
-  getFollowUps: jest.fn(),
+jest.mock('../../../src/api/meetings.api', () => ({
+  getMeetings: jest.fn(),
+  createMeeting: jest.fn(),
+  updateMeeting: jest.fn(),
+  deleteMeeting: jest.fn(),
 }));
+jest.mock('../../../src/api/leads.api', () => ({ fetchLeads: jest.fn() }));
 
-const mocked = getFollowUps as jest.Mock;
+const mockMeetings = getMeetings as jest.Mock;
+const mockLeads = fetchLeads as jest.Mock;
 
-// Extrae todo el texto renderizado del árbol.
 function textOf(node: unknown): string {
   if (node == null) return '';
   if (typeof node === 'string') return node;
@@ -36,18 +40,27 @@ function todayIso(hour = 9): string {
   return d.toISOString();
 }
 
-describe('AgendaScreen', () => {
-  afterEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockLeads.mockResolvedValue({
+    my_leads: [{ id: 'lead-1', name: 'Ana Torres' }],
+    available_leads: [],
+  });
+});
 
-  it('muestra los seguimientos del día seleccionado (hoy)', async () => {
-    mocked.mockResolvedValue([
+describe('AgendaScreen', () => {
+  it('muestra las reuniones del día seleccionado (hoy)', async () => {
+    mockMeetings.mockResolvedValue([
       {
-        id: 'a',
-        leadId: 'lead-1',
-        leadName: 'Ana Torres',
-        date: todayIso(),
-        notificationId: null,
-        eventId: null,
+        id: 'm1',
+        title: 'Llamada con Ana',
+        description: '',
+        start_time: todayIso(),
+        end_time: todayIso(10),
+        lead: 'lead-1',
+        assigned_to: 'u1',
+        google_event_id: null,
+        created_at: todayIso(),
       },
     ]);
 
@@ -55,16 +68,16 @@ describe('AgendaScreen', () => {
     await act(async () => {
       root = renderer.create(<AgendaScreen />);
     });
-    expect(textOf(root?.toJSON())).toContain('Ana Torres');
-    expect(mocked).toHaveBeenCalled();
+    expect(textOf(root?.toJSON())).toContain('Llamada con Ana');
+    expect(mockMeetings).toHaveBeenCalled();
   });
 
-  it('muestra el vacío del día cuando no hay seguimientos', async () => {
-    mocked.mockResolvedValue([]);
+  it('muestra el vacío del día cuando no hay reuniones', async () => {
+    mockMeetings.mockResolvedValue([]);
     let root: renderer.ReactTestRenderer | undefined;
     await act(async () => {
       root = renderer.create(<AgendaScreen />);
     });
-    expect(textOf(root?.toJSON())).toContain('Sin seguimientos este día');
+    expect(textOf(root?.toJSON())).toContain('Sin reuniones este día');
   });
 });
