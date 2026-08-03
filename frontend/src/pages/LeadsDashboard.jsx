@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { useAuthStore } from '../store/auth.store'
 import CustomSelect from '../components/CustomSelect'
 import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
+import MeetingFormModal from '../components/MeetingFormModal'
+import { useMeetingMutations } from '../hooks/use-meetings'
+import { toDatetimeLocal } from '../lib/meetings'
 
 const PAGE_SIZE = 10
 
@@ -535,7 +538,27 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
   const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors)
 
+  // Agendar reunión (meetings API) — mismo modal que la Agenda, lead prefijado.
+  const { create: createMeeting } = useMeetingMutations()
+  const [meetingOpen, setMeetingOpen] = useState(false)
+  const [meetingInitial, setMeetingInitial] = useState(null)
+
+  function openMeeting() {
+    const start = new Date()
+    const end = new Date(start.getTime() + 30 * 60000)
+    setMeetingInitial({
+      title: `Seguimiento: ${lead.name}`,
+      description: form.notes ?? '',
+      start: toDatetimeLocal(start),
+      end: toDatetimeLocal(end),
+      lead: lead.id,
+      notify_lead: true,
+    })
+    setMeetingOpen(true)
+  }
+
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
@@ -648,9 +671,29 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
           >
             {mutation.isPending ? 'Guardando...' : 'Guardar interacción'}
           </button>
+
+          <button
+            type="button"
+            onClick={openMeeting}
+            className="w-full py-2.5 rounded-xl border border-[#213A8E] text-[#213A8E] font-semibold hover:bg-[#213A8E]/5 transition-colors"
+          >
+            + Agendar reunión
+          </button>
         </form>
       </div>
     </div>
+
+    <MeetingFormModal
+      open={meetingOpen}
+      editingId={null}
+      initial={meetingInitial}
+      leads={[{ id: lead.id, name: lead.name }]}
+      saving={createMeeting.isPending}
+      onSave={(payload) => createMeeting.mutate(payload, { onSuccess: () => setMeetingOpen(false) })}
+      onDelete={() => {}}
+      onClose={() => setMeetingOpen(false)}
+    />
+    </>
   )
 }
 
@@ -845,6 +888,28 @@ function isValidEmail(value) {
   return domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.')
 }
 
+// Validación compartida por los modales de crear y editar lead.
+function validateLeadFields(form) {
+  const errs = {}
+  if (!form.name.trim()) errs.name = 'El nombre es requerido.'
+  const phone = form.phone.trim()
+  if (!phone) {
+    errs.phone = 'El teléfono es requerido.'
+  } else if (!/^(09\d{8}|0[2-7]\d{7})$/.test(phone)) {
+    errs.phone = 'Ingresa un teléfono ecuatoriano válido (ej. 0991234567 o 042345678).'
+  }
+  if (form.email.trim() && !isValidEmail(form.email.trim())) {
+    errs.email = 'Ingresa un email válido.'
+  }
+  return errs
+}
+
+function leadFieldClass(errors, key) {
+  return `w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+    errors[key] ? 'border-red-400' : 'border-gray-200'
+  }`
+}
+
 function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
@@ -852,24 +917,9 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
 
   const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
 
-  const validate = () => {
-    const errs = {}
-    if (!form.name.trim()) errs.name = 'El nombre es requerido.'
-    const phone = form.phone.trim()
-    if (!phone) {
-      errs.phone = 'El teléfono es requerido.'
-    } else if (!/^(09\d{8}|0[2-7]\d{7})$/.test(phone)) {
-      errs.phone = 'Ingresa un teléfono ecuatoriano válido (ej. 0991234567 o 042345678).'
-    }
-    if (form.email.trim() && !isValidEmail(form.email.trim())) {
-      errs.email = 'Ingresa un email válido.'
-    }
-    return errs
-  }
-
   const handleSubmit = (e) => {
     e.preventDefault()
-    const errs = validate()
+    const errs = validateLeadFields(form)
     if (Object.keys(errs).length) { setErrors(errs); return }
     const { autoAssign, ...payload } = form
     if (!payload.email) delete payload.email
@@ -877,10 +927,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
     onSubmit(payload, autoAssign)
   }
 
-  const inputClass = (key) =>
-    `w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
-      errors[key] ? 'border-red-400' : 'border-gray-200'
-    }`
+  const inputClass = (key) => leadFieldClass(errors, key)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -993,6 +1040,154 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
               {isLoading ? 'Creando…' : 'Crear lead'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── Edit Lead Modal ──────────────────────────────────────────────────────────
+
+function EditLeadModal({ lead, onClose, onSuccess }) {
+  const queryClient = useQueryClient()
+  const [form, setForm] = useState({
+    name: lead.name ?? '',
+    phone: lead.phone ?? '',
+    email: lead.email ?? '',
+    source: lead.source ?? 'MANUAL',
+    program_interest: lead.program_interest ?? '',
+    is_company: lead.is_company ?? false,
+  })
+  const [errors, setErrors] = useState({})
+  const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
+
+  const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
+
+  const mutation = useMutation({
+    mutationFn: (payload) => updateLead(lead.id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      onSuccess?.()
+      onClose()
+    },
+    onError: (err) => {
+      const msg = err.response?.data?.error ?? 'No se pudo guardar el lead.'
+      setErrors((prev) => ({ ...prev, server: msg }))
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    setErrors({})
+    const errs = validateLeadFields(form)
+    if (Object.keys(errs).length) { setErrors(errs); return }
+    mutation.mutate({
+      name: form.name.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim(),
+      source: form.source,
+      program_interest: form.program_interest,
+      is_company: form.is_company,
+    })
+  }
+
+  const inputClass = (key) => leadFieldClass(errors, key)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <div className="flex items-center justify-between mb-6 pr-8">
+          <h2 className="text-xl font-bold text-gray-900">Editar lead</h2>
+          <button
+            type="button"
+            onClick={() => setForm((prev) => ({ ...prev, is_company: !prev.is_company }))}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              form.is_company
+                ? 'bg-indigo-200 text-indigo-700 border-indigo-300'
+                : 'bg-indigo-50 text-indigo-300 border-indigo-100 hover:bg-indigo-100 hover:text-indigo-500 hover:border-indigo-200'
+            }`}
+          >
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+            </svg>
+            Empresa
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre completo<span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <input type="text" data-testid="edit-lead-name" value={form.name} onChange={set('name')} className={inputClass('name')} />
+            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Teléfono<span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <input type="tel" data-testid="edit-lead-phone" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={inputClass('phone')} />
+            {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input type="text" data-testid="edit-lead-email" value={form.email} onChange={set('email')} className={inputClass('email')} />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fuente</label>
+            <CustomSelect
+              testId="edit-lead-source"
+              value={form.source}
+              onChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
+              options={[
+                { value: 'MANUAL', label: 'Manual' },
+                { value: 'INSTAGRAM', label: 'Instagram' },
+                { value: 'WHATSAPP', label: 'WhatsApp' },
+                { value: 'LANDING_PAGE', label: 'Landing Page' },
+              ]}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
+            <CustomSelect
+              testId="edit-lead-program"
+              value={form.program_interest}
+              onChange={(val) => setForm((prev) => ({ ...prev, program_interest: val }))}
+              placeholder="Sin especificar"
+              options={programs.map((p) => ({ value: p.name, label: p.name }))}
+            />
+          </div>
+
+          {errors.server && (
+            <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{errors.server}</p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              data-testid="edit-lead-submit"
+              disabled={mutation.isPending}
+              className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
+            >
+              {mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
             </button>
           </div>
         </form>
@@ -1281,6 +1476,14 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     queryFn: getPrograms,
   })
 
+  // Auto-selecciona el programa de interés del lead (sigue siendo editable).
+  useEffect(() => {
+    if (!programId && programs.length && lead.program_interest) {
+      const match = programs.find((p) => p.name === lead.program_interest)
+      if (match) setProgramId(match.id)
+    }
+  }, [programs, lead.program_interest, programId])
+
   const convertMutation = useMutation({
     mutationFn: ({ id, payload }) => convertLead(id, payload),
     onSuccess: (data) => {
@@ -1460,7 +1663,8 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus }) {
+function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit }) {
+  const isConverted = lead.status === 'CONVERTED'
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -1523,7 +1727,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
           >
             Ver historial
           </button>
-          {isOwned && (
+          {isOwned && !isConverted && (
             <button
               onClick={() => { onLogInteraction(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1531,7 +1735,15 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Registrar interacción
             </button>
           )}
-          {isOwned && lead.status !== 'CONVERTED' && (
+          {isOwned && !isConverted && (
+            <button
+              onClick={() => { onEdit(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Editar lead
+            </button>
+          )}
+          {isOwned && !isConverted && (
             <button
               onClick={() => { onChangeStatus(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1547,7 +1759,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Convertir lead
             </button>
           )}
-          {!isAdmin && (isOwned ? (
+          {!isAdmin && !isConverted && (isOwned ? (
             <button
               onClick={() => { onRelease(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1636,10 +1848,11 @@ export default function LeadsDashboard() {
   const [releaseTarget, setReleaseTarget] = useState(null)
   const [reassignTarget, setReassignTarget] = useState(null)
   const [convertTarget, setConvertTarget] = useState(null)
+  const [editLead, setEditLead]           = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState(null) // { duplicate, payload }
   const [toast, setToast]                 = useState(null) // { message, type }
-  // Vendedor/Finanzas: 'mine' | 'available'. Admin (HST-025): 'all' | 'assigned' | 'unassigned'.
+  // Vendedor/Finanzas: 'mine' | 'available' | 'converted'. Admin (HST-025): 'all' | 'assigned' | 'unassigned'.
   const [activeTab, setActiveTab]         = useState(isAdmin ? 'all' : 'mine')
   const [vendorFilter, setVendorFilter]   = useState('')
   const [flashedLeadId, setFlashedLeadId] = useState(null)
@@ -1691,26 +1904,31 @@ export default function LeadsDashboard() {
   const allLeads        = data?.all_leads ?? []
   const assignedLeads   = data?.assigned_leads ?? []
   const unassignedLeads = data?.unassigned_leads ?? []
+  const convertedLeads  = data?.converted_leads ?? []
+  // Los convertidos viven en su propia pestaña; se sacan de "Mis leads".
+  const activeMyLeads   = myLeads.filter((l) => l.status !== 'CONVERTED')
 
   const pagination     = data?.pagination ?? {}
   const statsPagination = statsData?.pagination ?? {}
-  const conversions    = (isAdmin ? allLeads : myLeads).filter((l) => l.status === 'CONVERTED').length
+  const conversions    = isAdmin
+    ? allLeads.filter((l) => l.status === 'CONVERTED').length
+    : (statsPagination.converted_leads_count ?? convertedLeads.length)
 
-  const ADMIN_TAB_TOTAL_PAGES = {
-    all:        pagination.all_leads_total_pages ?? 1,
-    assigned:   pagination.assigned_leads_total_pages ?? 1,
-    unassigned: pagination.unassigned_leads_total_pages ?? 1,
+  const withOwnership = (leads, owned) =>
+    leads.map((l) => ({ ...l, _isOwned: owned ?? l.owner === currentUser?.id }))
+
+  const TAB = {
+    // Vendedor/Finanzas
+    mine:      { totalPages: pagination.my_leads_total_pages,        leads: withOwnership(activeMyLeads) },
+    available: { totalPages: pagination.available_leads_total_pages, leads: withOwnership(availableLeads, false) },
+    converted: { totalPages: pagination.converted_leads_total_pages, leads: withOwnership(convertedLeads) },
+    // Administrador (HST-025)
+    all:        { totalPages: pagination.all_leads_total_pages,        leads: withOwnership(allLeads, false) },
+    assigned:   { totalPages: pagination.assigned_leads_total_pages,   leads: withOwnership(assignedLeads, false) },
+    unassigned: { totalPages: pagination.unassigned_leads_total_pages, leads: withOwnership(unassignedLeads, false) },
   }
-  const totalPages = isAdmin
-    ? (ADMIN_TAB_TOTAL_PAGES[activeTab] ?? 1)
-    : (activeTab === 'mine' ? (pagination.my_leads_total_pages ?? 1) : (pagination.available_leads_total_pages ?? 1))
-
-  const ADMIN_TAB_LEADS = { all: allLeads, assigned: assignedLeads, unassigned: unassignedLeads }
-  const tabLeads = isAdmin
-    ? (ADMIN_TAB_LEADS[activeTab] ?? []).map((l) => ({ ...l, _isOwned: false }))
-    : (activeTab === 'mine'
-      ? myLeads.map((l) => ({ ...l, _isOwned: l.owner === currentUser?.id }))
-      : availableLeads.map((l) => ({ ...l, _isOwned: false })))
+  const totalPages = TAB[activeTab].totalPages ?? 1
+  const tabLeads   = TAB[activeTab].leads
 
   const pageLeads = sortLeads(
     tabLeads.filter((l) => !companyFilter || l.is_company),
@@ -1920,7 +2138,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Mis leads ({myLeads.length})
+                Mis leads ({activeMyLeads.length})
               </button>
               <button
                 data-testid="tab-available"
@@ -1932,6 +2150,17 @@ export default function LeadsDashboard() {
                 }`}
               >
                 Disponibles ({availableLeads.length})
+              </button>
+              <button
+                data-testid="tab-converted"
+                onClick={() => { setActiveTab('converted'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'converted'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Convertidos ({convertedLeads.length})
               </button>
             </>
           )}
@@ -2040,6 +2269,7 @@ export default function LeadsDashboard() {
                     onRelease={() => setReleaseTarget(lead)}
                     onAssign={() => assignMutation.mutate(lead.id)}
                     onConvert={() => setConvertTarget(lead)}
+                    onEdit={() => setEditLead(lead)}
                   />
                 </td>
               </tr>
@@ -2084,6 +2314,14 @@ export default function LeadsDashboard() {
           lead={statusLead}
           onClose={() => setStatusLead(null)}
           onSuccess={() => { flashLead(statusLead.id); showToast('Estado actualizado correctamente.') }}
+        />
+      )}
+
+      {editLead && (
+        <EditLeadModal
+          lead={editLead}
+          onClose={() => setEditLead(null)}
+          onSuccess={() => { flashLead(editLead.id); showToast('Lead actualizado correctamente.') }}
         />
       )}
 
