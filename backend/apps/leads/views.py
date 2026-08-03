@@ -417,12 +417,21 @@ class LeadDetailView(APIView):
     permission_classes = [IsCommercialOrAdmin]
 
     @extend_schema(
-        responses={200: LeadDetailSerializer, 404: OpenApiResponse(description='Lead no encontrado')},
+        responses={
+            200: LeadDetailSerializer,
+            403: OpenApiResponse(description='No tienes permiso para ver este lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
         summary='Detalle de lead',
         tags=['Leads'],
     )
     def get(self, request, pk):
         lead = get_object_or_404(Lead.objects.annotate(interaction_count=Count('interactions')), pk=pk)
+        if not request.user.is_administrator and lead.owner is not None and lead.owner != request.user:
+            return Response(
+                {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return Response(LeadDetailSerializer(lead).data)
 
     @extend_schema(
@@ -541,6 +550,7 @@ class ConvertLeadView(APIView):
                 'lead_status':        drf_serializers.CharField(),
             }),
             400: OpenApiResponse(description='Estado inválido o cédula inválida'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
             404: OpenApiResponse(description='Lead o programa no encontrado'),
             409: OpenApiResponse(description='Email ya asociado a otro rol'),
         },
@@ -554,6 +564,11 @@ class ConvertLeadView(APIView):
     )
     def post(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
+        if not request.user.is_administrator and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede convertir este lead.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         serializer = ConvertLeadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
