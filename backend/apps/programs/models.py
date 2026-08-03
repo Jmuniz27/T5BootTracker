@@ -142,6 +142,18 @@ class Enrollment(models.Model):
         on_delete=models.CASCADE,
         related_name='enrollments'
     )
+    # La edición concreta a la que entra. Opcional porque las inscripciones que
+    # existían no la tienen y porque un programa puede no tener cohortes todavía;
+    # cuando viene, la conversión exige que sea de ese programa y que no esté
+    # finalizada. SET_NULL: borrar una cohorte no puede borrar a la persona.
+    cohort = models.ForeignKey(
+        'Cohort',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='enrollments',
+        verbose_name='Cohorte',
+    )
     start_date = models.DateField(verbose_name='Fecha de inicio')
     # El descuento que el vendedor concedió al convertir. Se guarda el
     # porcentaje **además** del precio resultante: con sólo el monto final no hay

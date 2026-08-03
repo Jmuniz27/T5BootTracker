@@ -3,6 +3,8 @@ import logging
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
+from rest_framework.exceptions import NotFound, ValidationError
+
 from .models import Cohort
 
 logger = logging.getLogger(__name__)
@@ -11,6 +13,60 @@ logger = logging.getLogger(__name__)
 def current_month():
     """Primer día del mes en curso — la granularidad del dominio es el mes."""
     return date.today().replace(day=1)
+
+
+#: Estados en los que una cohorte todavía admite inscripciones. Una finalizada
+#: no: meter a alguien en una edición que ya cerró deja una inscripción que
+#: nunca va a cursar y ensucia el cobro.
+ASSIGNABLE_COHORT_STATUSES = (Cohort.Status.UPCOMING, Cohort.Status.IN_PROGRESS)
+
+
+def resolve_assignable_cohort(program, cohort_id):
+    """Devuelve la cohorte a la que se puede inscribir, o None si no se pidió.
+
+    Tres cosas se validan aquí, y no en el serializer, porque dependen del
+    programa elegido en la misma petición:
+
+      - que la cohorte exista;
+      - que sea **de ese programa** — una cohorte 1 existe en varios programas,
+        así que un id suelto no basta para saber que es la correcta;
+      - que su estado admita inscripciones.
+
+    Args:
+        program: el `Program` elegido en la conversión.
+        cohort_id: UUID o None.
+
+    Returns:
+        La instancia de `Cohort`, o None si no se envió ninguna.
+
+    Raises:
+        NotFound: la cohorte no existe.
+        ValidationError: no pertenece al programa, o ya está finalizada.
+    """
+    if not cohort_id:
+        return None
+
+    try:
+        cohort = Cohort.objects.select_related('program').get(pk=cohort_id)
+    except Cohort.DoesNotExist:
+        raise NotFound({'error': 'Cohorte no encontrada.', 'code': 'COHORT_NOT_FOUND'})
+
+    if cohort.program_id != program.id:
+        raise ValidationError({
+            'error': f'La cohorte {cohort.number} no pertenece a {program.name}.',
+            'code': 'COHORT_PROGRAM_MISMATCH',
+        })
+
+    if cohort.status not in ASSIGNABLE_COHORT_STATUSES:
+        raise ValidationError({
+            'error': (
+                f'La cohorte {cohort.number} está {cohort.get_status_display().lower()}: '
+                'sólo se puede inscribir en cohortes próximas o en curso.'
+            ),
+            'code': 'COHORT_NOT_ASSIGNABLE',
+        })
+
+    return cohort
 
 
 def apply_discount(total_cost, discount_percentage):
