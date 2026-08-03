@@ -54,14 +54,14 @@ def crear_bootcamper_con_pago(program, indice):
 
 @pytest.mark.django_db
 class TestMonitoringQueryCount:
-    def test_monitoring_no_escala_con_bootcampers(self, salesperson_user, program):
+    def test_monitoring_no_escala_con_bootcampers(self, finance_user, program):
         """El costo del endpoint no depende del número de bootcampers (T1.5).
 
         La vista agrega por (bootcamper, programa) con values()/annotate() en
         una sola consulta más una de usuarios, así que pasar de 2 a 6
         bootcampers no puede añadir queries.
         """
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         url = f"{MONITORING_URL}?program_id={program.id}"
 
         for i in range(2):
@@ -91,13 +91,13 @@ class TestMonitoringQueryCount:
             "reintrodujo el N+1 que T1.5 eliminó (PERF-1)."
         )
 
-    def test_monitoring_repite_la_consulta_del_programa(self, salesperson_user, program):
+    def test_monitoring_repite_la_consulta_del_programa(self, finance_user, program):
         """El programa se consulta una sola vez por request (T1.5).
 
         Antes `get_payment_summary` releía el programa por cada bootcamper;
         ahora la vista lo carga una vez y el servicio lo recibe ya resuelto.
         """
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
 
         for i in range(3):
             crear_bootcamper_con_pago(program, i)

@@ -6,7 +6,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.leads.permissions import IsAdministrator, IsSalespersonOrAdmin
+from apps.leads.permissions import IsAdministrator, IsCommercialOrAdmin
 from .models import Cohort, Program, CoordinatorEmailConfig
 from .serializers import (
     CohortSerializer, CohortWriteSerializer,
@@ -21,7 +21,7 @@ class ProgramListCreateView(APIView):
     def get_permissions(self):
         """GET is readable by salesperson and admin; POST is admin-only."""
         if self.request.method == 'GET':
-            return [IsSalespersonOrAdmin()]
+            return [IsCommercialOrAdmin()]
         return [IsAdministrator()]
 
     @extend_schema(
@@ -57,7 +57,7 @@ class CohortListCreateView(APIView):
 
     def get_permissions(self):
         if self.request.method == 'GET':
-            return [IsSalespersonOrAdmin()]
+            return [IsCommercialOrAdmin()]
         return [IsAdministrator()]
 
     @extend_schema(
@@ -112,7 +112,7 @@ class CohortDetailView(APIView):
 
     def get_permissions(self):
         if self.request.method == 'GET':
-            return [IsSalespersonOrAdmin()]
+            return [IsCommercialOrAdmin()]
         return [IsAdministrator()]
 
     def _get_cohort(self, pk, cohort_id):

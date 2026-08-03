@@ -1,12 +1,13 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getSalespeoplePortfolio } from '../api/salespeople.api'
+import { getFinancePortfolio } from '../api/finance.api'
 
 /**
- * Lo que ve el administrador al entrar a pagos: una tarjeta por vendedor.
+ * Lo que ve el administrador al entrar a pagos: una tarjeta por persona de
+ * Finanzas, más el recuento de los que siguen en el pool.
  *
- * El administrador no tiene bootcampers propios, así que la pantalla del
- * vendedor no le aplica — mira las carteras ajenas, y sólo mira.
+ * El administrador no tiene bootcampers propios, así que la pantalla de
+ * Finanzas no le aplica — mira las carteras ajenas, y sólo mira.
  */
 
 function fmtMoney(value) {
@@ -15,7 +16,7 @@ function fmtMoney(value) {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function SalespersonCard({ person, onClick }) {
+function FinanceCard({ person, onClick }) {
   const count = person.bootcamper_count ?? 0
   const critical = person.critical_count ?? 0
   const expected = parseFloat(person.expected_amount) || 0
@@ -30,7 +31,7 @@ function SalespersonCard({ person, onClick }) {
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900 group-hover:text-[#1D3176] transition-colors truncate">
-            {person.salesperson}
+            {person.finance_name}
           </p>
           <p className="text-xs text-gray-400 truncate">{person.email}</p>
         </div>
@@ -80,25 +81,28 @@ function SkeletonCard() {
   )
 }
 
-export default function AdminSalespeoplePage() {
+export default function AdminFinancePage() {
   const navigate = useNavigate()
-  const { data: salespeople = [], isLoading, isError } = useQuery({
-    queryKey: ['salespeople-portfolio'],
-    queryFn: getSalespeoplePortfolio,
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['finance-portfolio'],
+    queryFn: getFinancePortfolio,
   })
+
+  const portfolios = data?.portfolios ?? []
+  const unassigned = data?.unassigned_bootcampers ?? 0
 
   return (
     <div className="p-6 sm:p-8">
       <header className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Vendedores</h1>
+        <h1 className="text-xl font-semibold text-gray-900">Finanzas</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Abre un vendedor para ver los bootcampers que tiene asignados. Sólo consulta.
+          Abre una persona de Finanzas para ver los bootcampers que monitorea. Sólo consulta.
         </p>
       </header>
 
       {isError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-          No pudimos cargar los vendedores. Intenta de nuevo.
+          No pudimos cargar las carteras. Intenta de nuevo.
         </div>
       )}
 
@@ -110,19 +114,29 @@ export default function AdminSalespeoplePage() {
         </div>
       )}
 
-      {!isLoading && !isError && salespeople.length === 0 && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
-          <p className="text-sm text-gray-500">No hay vendedores activos.</p>
+      {/* Lo que nadie está cobrando es justo lo que el administrador necesita ver. */}
+      {!isLoading && !isError && unassigned > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-4 flex items-center gap-3">
+          <span className="text-2xl font-bold text-amber-700">{unassigned}</span>
+          <p className="text-sm text-amber-800">
+            bootcamper{unassigned === 1 ? '' : 's'} sin responsable de cobro, esperando en el pool.
+          </p>
         </div>
       )}
 
-      {!isLoading && salespeople.length > 0 && (
+      {!isLoading && !isError && portfolios.length === 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
+          <p className="text-sm text-gray-500">No hay personas de Finanzas activas.</p>
+        </div>
+      )}
+
+      {!isLoading && portfolios.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {salespeople.map((person) => (
-            <SalespersonCard
-              key={person.salesperson_id}
+          {portfolios.map((person) => (
+            <FinanceCard
+              key={person.finance_id}
               person={person}
-              onClick={() => navigate(`/payments/vendedor/${person.salesperson_id}`)}
+              onClick={() => navigate(`/payments/finanzas/${person.finance_id}`)}
             />
           ))}
         </div>

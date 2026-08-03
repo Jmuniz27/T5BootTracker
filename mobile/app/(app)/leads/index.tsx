@@ -17,10 +17,9 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
-import { fetchLeads, assignLead, releaseLead, updateLeadStatus } from '../../../src/api/leads.api';
+import { fetchLeads } from '../../../src/api/leads.api';
 import { api } from '../../../src/lib/api';
 import { useAuth } from '../../../src/context/AuthContext';
-import { useQuickCall } from '../../../src/hooks/use-quick-call';
 import type { Lead, LeadStatus } from '../../../src/types/leads';
 
 interface MeData {
@@ -46,9 +45,6 @@ const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: stri
   NOT_INTERESTED: { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
   CONVERTED:      { bg: '#f3e8ff', color: '#7e22ce', label: 'Convertido' },
 };
-
-// Estados que un vendedor puede asignar manualmente — CONVERTED queda excluido.
-const ASSIGNABLE_STATUSES: LeadStatus[] = ['NEW', 'QUALIFIED', 'INTERESTED', 'NOT_INTERESTED'];
 
 const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
   { value: null,             label: 'Todos' },
@@ -76,29 +72,21 @@ function getInitials(name: string): string {
 
 // ─── sub-components ──────────────────────────────────────────────────────────
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, isCompany }: { name: string; isCompany?: boolean }) {
   return (
     <View style={[styles.avatar, { backgroundColor: avatarColor(name) }]}>
-      <Text style={styles.avatarText}>{getInitials(name)}</Text>
+      <Ionicons name={isCompany ? 'business' : 'person'} size={20} color="#fff" />
     </View>
   );
 }
 
 // El badge usa `status` como fuente de verdad (igual que el web) — last_outcome ya no decide el color.
-// Si se pasa onPress, el badge es tappable (abre el selector de "Cambiar estado").
-function StatusBadge({ status, onPress }: { status: LeadStatus; onPress?: () => void }) {
+function StatusBadge({ status }: { status: LeadStatus }) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.NEW;
-  const badge = (
+  return (
     <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
       <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
-      {onPress && <Ionicons name="chevron-down" size={10} color={cfg.color} style={{ marginLeft: 2 }} />}
     </View>
-  );
-  if (!onPress) return badge;
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7} hitSlop={6}>
-      {badge}
-    </TouchableOpacity>
   );
 }
 
@@ -134,133 +122,29 @@ function StatusChips({
 
 interface CardProps {
   lead: Lead;
-  isAvailable: boolean;
-  onAssign: (id: string) => void;
-  onRelease: (id: string) => void;
-  onViewHistory: (lead: Lead) => void;
-  onLogInteraction: (lead: Lead) => void;
-  onChangeStatus: (lead: Lead) => void;
-  onCall: (lead: Lead) => void;
+  onOpenDetail: (lead: Lead) => void;
 }
 
-function LeadCard({ lead, isAvailable, onAssign, onRelease, onViewHistory, onLogInteraction, onChangeStatus, onCall }: CardProps) {
-  const canChangeStatus = !isAvailable && lead.status !== 'CONVERTED';
+// Tarjeta minimalista: solo ícono + nombre + estado. Toda la info y acciones
+// viven en la pantalla de detalle (tap sobre la tarjeta).
+function LeadCard({ lead, onOpenDetail }: CardProps) {
   return (
-    <View style={styles.card}>
-      {/* Top: avatar + info */}
-      <View style={styles.cardTop}>
-        <Avatar name={lead.name} />
-        <View style={styles.cardInfo}>
-          <View style={styles.cardNameRow}>
-            <Text style={styles.cardName} numberOfLines={1}>{lead.name}</Text>
-            <StatusBadge status={lead.status} onPress={canChangeStatus ? () => onChangeStatus(lead) : undefined} />
-          </View>
-          {lead.email ? (
-            <View style={styles.cardRow}>
-              <Ionicons name="mail-outline" size={12} color={colors.textMuted} />
-              <Text style={styles.cardDetail} numberOfLines={1}>{lead.email}</Text>
-            </View>
-          ) : null}
-          <View style={styles.cardRow}>
-            <TouchableOpacity
-              style={styles.phoneBtn}
-              onPress={() => onCall(lead)}
-              activeOpacity={0.6}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={`Llamar a ${lead.name}`}
-            >
-              <Ionicons name="call-outline" size={12} color={colors.navy} />
-              <Text style={styles.phoneLink}>{lead.phone}</Text>
-            </TouchableOpacity>
-            <Text style={styles.cardDot}>·</Text>
-            <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} />
-            <Text style={styles.cardDetail}>{lead.interaction_count}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Divider */}
-      <View style={styles.cardDivider} />
-
-      {/* Bottom: action buttons */}
-      <View style={styles.cardFooter}>
-        {isAvailable ? (
-          <TouchableOpacity style={[styles.btnPrimary, styles.btnFull]} onPress={() => onAssign(lead.id)} activeOpacity={0.85}>
-            <Ionicons name="add-outline" size={15} color="#fff" />
-            <Text style={styles.btnPrimaryText}>Asignarme</Text>
-          </TouchableOpacity>
-        ) : (
-          <>
-            <TouchableOpacity style={styles.btnGhost} onPress={() => onViewHistory(lead)} activeOpacity={0.7}>
-              <Ionicons name="time-outline" size={14} color={colors.navy} />
-              <Text style={styles.btnGhostText}>Historial</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.btnPrimary, { flex: 1 }]} onPress={() => onLogInteraction(lead)} activeOpacity={0.85}>
-              <Text style={styles.btnPrimaryText}>Registrar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.btnOutline} onPress={() => onRelease(lead.id)} activeOpacity={0.7}>
-              <Text style={styles.btnOutlineText}>Desasignar</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function ChangeStatusModal({
-  lead,
-  saving,
-  onClose,
-  onSelect,
-}: {
-  lead: Lead;
-  saving: boolean;
-  onClose: () => void;
-  onSelect: (status: LeadStatus) => void;
-}) {
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.menuOverlay} onPress={onClose}>
-        <View style={styles.statusSheet}>
-          <View style={styles.menuHandle} />
-          <Text style={styles.statusSheetTitle}>Cambiar estado</Text>
-          <Text style={styles.statusSheetSubtitle} numberOfLines={1}>{lead.name}</Text>
-          <View style={styles.statusOptionList}>
-            {ASSIGNABLE_STATUSES.map((value) => {
-              const cfg = STATUS_CONFIG[value];
-              const active = lead.status === value;
-              return (
-                <TouchableOpacity
-                  key={value}
-                  style={[styles.statusOption, active && { borderColor: cfg.color, backgroundColor: cfg.bg }]}
-                  onPress={() => onSelect(value)}
-                  disabled={saving}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.statusOptionText, active && { color: cfg.color, fontWeight: '700' }]}>
-                    {cfg.label}
-                  </Text>
-                  {saving && active && <ActivityIndicator size="small" color={cfg.color} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      </Pressable>
-    </Modal>
+    <TouchableOpacity style={styles.card} activeOpacity={0.6} onPress={() => onOpenDetail(lead)}>
+      <Avatar name={lead.name} isCompany={lead.is_company} />
+      <Text style={styles.cardName} numberOfLines={1}>{lead.name}</Text>
+      <StatusBadge status={lead.status} />
+      <Ionicons name="chevron-forward" size={16} color={colors.border} />
+    </TouchableOpacity>
   );
 }
 
 // ─── screen ──────────────────────────────────────────────────────────────────
 
-type Tab = 'my' | 'available';
+type Tab = 'my' | 'available' | 'converted';
 
 export default function LeadsScreen() {
   const router = useRouter();
   const { logout } = useAuth();
-  const { startCall } = useQuickCall();
 
   const [me, setMe]                     = useState<MeData | null>(null);
   const [tab, setTab]                   = useState<Tab>('my');
@@ -269,12 +153,11 @@ export default function LeadsScreen() {
   const [showFilters, setShowFilters]   = useState(false);
   const [myLeads, setMyLeads]           = useState<Lead[]>([]);
   const [available, setAvailable]       = useState<Lead[]>([]);
+  const [convertedLeads, setConvertedLeads] = useState<Lead[]>([]);
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
   const [error, setError]               = useState<string | null>(null);
   const [menuOpen, setMenuOpen]         = useState(false);
-  const [statusLead, setStatusLead]     = useState<Lead | null>(null);
-  const [statusSaving, setStatusSaving] = useState(false);
   const slideAnim                        = useRef(new Animated.Value(300)).current;
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -300,6 +183,7 @@ export default function LeadsScreen() {
       const data = await fetchLeads(Object.keys(params).length ? params : undefined);
       setMyLeads(data.my_leads);
       setAvailable(data.available_leads);
+      setConvertedLeads(data.converted_leads ?? data.my_leads.filter((l) => l.status === 'CONVERTED'));
       setError(null);
     } catch {
       setError('No pudimos cargar los leads. Intenta de nuevo.');
@@ -334,51 +218,15 @@ export default function LeadsScreen() {
     setRefreshing(false);
   }
 
-  async function handleAssign(leadId: string) {
-    try {
-      await assignLead(leadId);
-      await loadLeads(search, statusFilter);
-    } catch {
-      setError('No pudimos asignar el lead. Puede que ya haya sido tomado.');
-    }
+  function handleOpenDetail(lead: Lead) {
+    router.push({
+      pathname: '/(app)/leads/[id]',
+      params: { id: lead.id, lead: JSON.stringify(lead), owned: tab === 'available' ? '0' : '1' },
+    });
   }
 
-  async function handleRelease(leadId: string) {
-    try {
-      await releaseLead(leadId);
-      await loadLeads(search, statusFilter);
-    } catch {
-      setError('No pudimos desasignar el lead. Intenta de nuevo.');
-    }
-  }
-
-  function handleViewHistory(lead: Lead) {
-    router.push({ pathname: '/(app)/leads/[id]/history', params: { id: lead.id } });
-  }
-
-  function handleLogInteraction(lead: Lead) {
-    router.push({ pathname: '/(app)/leads/[id]/log-interaction', params: { id: lead.id, name: lead.name } });
-  }
-
-  function handleChangeStatus(lead: Lead) {
-    setStatusLead(lead);
-  }
-
-  async function handleSelectStatus(newStatus: LeadStatus) {
-    if (!statusLead) return;
-    setStatusSaving(true);
-    try {
-      await updateLeadStatus(statusLead.id, { status: newStatus });
-      setStatusLead(null);
-      await loadLeads(search, statusFilter);
-    } catch {
-      setError('No pudimos actualizar el estado. Intenta de nuevo.');
-    } finally {
-      setStatusSaving(false);
-    }
-  }
-
-  const displayed = tab === 'my' ? myLeads : available;
+  const activeMy = myLeads.filter((l) => l.status !== 'CONVERTED');
+  const displayed = tab === 'available' ? available : tab === 'converted' ? convertedLeads : activeMy;
 
   if (loading) {
     return (
@@ -432,7 +280,7 @@ export default function LeadsScreen() {
             {/* Stat cards */}
             <View style={styles.statRow}>
               <View style={styles.statCard}>
-                <Text style={styles.statValue}>{myLeads.length}</Text>
+                <Text style={styles.statValue}>{activeMy.length}</Text>
                 <Text style={styles.statLabel}>Mis leads</Text>
               </View>
               <View style={styles.statCard}>
@@ -440,7 +288,7 @@ export default function LeadsScreen() {
                 <Text style={styles.statLabel}>Disponibles</Text>
               </View>
               <View style={styles.statCard}>
-                <Text style={styles.statValue}>{myLeads.filter((l) => l.status === 'CONVERTED').length}</Text>
+                <Text style={styles.statValue}>{convertedLeads.length}</Text>
                 <Text style={styles.statLabel}>Convertidos</Text>
               </View>
             </View>
@@ -482,8 +330,8 @@ export default function LeadsScreen() {
                 onPress={() => setTab('my')}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]}>
-                  Mis leads ({myLeads.length})
+                <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]} numberOfLines={1}>
+                  Mis leads ({activeMy.length})
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -491,8 +339,17 @@ export default function LeadsScreen() {
                 onPress={() => setTab('available')}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.tabText, tab === 'available' && styles.tabTextActive]}>
+                <Text style={[styles.tabText, tab === 'available' && styles.tabTextActive]} numberOfLines={1}>
                   Disponibles ({available.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, tab === 'converted' && styles.tabActive]}
+                onPress={() => setTab('converted')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabText, tab === 'converted' && styles.tabTextActive]} numberOfLines={1}>
+                  Convertidos ({convertedLeads.length})
                 </Text>
               </TouchableOpacity>
             </View>
@@ -501,16 +358,7 @@ export default function LeadsScreen() {
           </>
         }
         renderItem={({ item }) => (
-          <LeadCard
-            lead={item}
-            isAvailable={tab === 'available'}
-            onAssign={handleAssign}
-            onRelease={handleRelease}
-            onViewHistory={handleViewHistory}
-            onLogInteraction={handleLogInteraction}
-            onChangeStatus={handleChangeStatus}
-            onCall={startCall}
-          />
+          <LeadCard lead={item} onOpenDetail={handleOpenDetail} />
         )}
         ListEmptyComponent={
           <View style={styles.emptyState}>
@@ -519,6 +367,8 @@ export default function LeadsScreen() {
             <Text style={styles.emptyText}>
               {tab === 'my'
                 ? 'No tienes leads asignados.'
+                : tab === 'converted'
+                ? 'Aún no has convertido ningún lead.'
                 : 'No hay leads disponibles para asignarte.'}
             </Text>
           </View>
@@ -566,15 +416,16 @@ export default function LeadsScreen() {
         </Pressable>
       </Modal>
 
-      {/* Change status modal */}
-      {statusLead && (
-        <ChangeStatusModal
-          lead={statusLead}
-          saving={statusSaving}
-          onClose={() => setStatusLead(null)}
-          onSelect={handleSelectStatus}
-        />
-      )}
+      {/* FAB: nuevo lead */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => router.push('/(app)/leads/new')}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Nuevo lead"
+      >
+        <Ionicons name="add" size={28} color={colors.white} />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -625,6 +476,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff2fb',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.navy,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
   headerNameCol: {
     alignItems: 'flex-end',
@@ -764,6 +631,7 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     paddingVertical: 9,
+    paddingHorizontal: 2,
     alignItems: 'center',
     borderRadius: 10,
   },
@@ -771,7 +639,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.textMuted,
   },
@@ -780,9 +648,13 @@ const styles = StyleSheet.create({
   },
   // Cards
   card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     backgroundColor: colors.white,
     borderRadius: 16,
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.border,
@@ -792,17 +664,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
-  cardTop: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  cardDivider: {
-    height: 1,
-    backgroundColor: '#f3f4f6',
-    marginBottom: 12,
-  },
   avatar: {
     width: 44,
     height: 44,
@@ -811,26 +672,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexShrink: 0,
   },
-  avatarText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  cardInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  cardNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
   cardName: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '700',
     color: colors.textPrimary,
-    flex: 1,
   },
   badge: {
     flexDirection: 'row',
@@ -843,81 +689,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: '600',
-  },
-  cardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  cardDetail: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  phoneBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  phoneLink: {
-    fontSize: 12,
-    color: colors.navy,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-  cardDot: {
-    fontSize: 12,
-    color: colors.border,
-    marginHorizontal: 2,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  btnPrimary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: colors.navy,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  btnFull: {
-    flex: 1,
-  },
-  btnPrimaryText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  btnGhost: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#eff2fb',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  btnGhostText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.navy,
-  },
-  btnOutline: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnOutlineText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
   },
   // Error / Empty
   errorText: {
@@ -1009,45 +780,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#dc2626',
-  },
-  // Change status modal
-  statusSheet: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 8,
-    paddingBottom: 36,
-    paddingHorizontal: 20,
-  },
-  statusSheetTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  statusSheetSubtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  statusOptionList: {
-    gap: 8,
-  },
-  statusOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    backgroundColor: '#f8f9fb',
-  },
-  statusOptionText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textMuted,
   },
 });
