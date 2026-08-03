@@ -7,7 +7,7 @@ export default function ResetSuccessPage() {
   return (
     <AuthLayout>
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Password reset</h1>
-      <p className="text-gray-400 text-sm mb-20">
+      <p className="text-gray-500 text-sm mb-20">
         Your password has been successfully reset. Click confirm to sign in with your new
         password.
       </p>

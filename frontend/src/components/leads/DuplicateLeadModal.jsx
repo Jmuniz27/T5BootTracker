@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useModalA11y } from '../../hooks/use-modal-a11y'
 
 function Row({ label, value }) {
   if (!value) return null
@@ -16,24 +16,22 @@ function Row({ label, value }) {
  * decida, y al confirmar se reenvía la creación con confirm_duplicate.
  */
 export default function DuplicateLeadModal({ duplicate, isLoading, onConfirm, onClose }) {
-  useEffect(() => {
-    const onKeyDown = (e) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+  const dialogRef = useModalA11y(onClose)
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 animate-fade-in" onClick={onClose}>
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Posible lead duplicado"
-        className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[460px] shadow-xl"
+        className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[460px] shadow-xl focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3 mb-4">
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-amber-100 text-amber-600 shrink-0">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
             </svg>
           </span>

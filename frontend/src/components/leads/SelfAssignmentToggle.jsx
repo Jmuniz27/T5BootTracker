@@ -48,7 +48,7 @@ export default function SelfAssignmentToggle({ setting, isLoading, onResult }) {
             : 'Solo el Administrador puede asignar leads. El botón “Asignarme” está deshabilitado.'}
         </p>
         {setting?.updated_by_name && updatedAt && (
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-500 mt-1">
             Último cambio: {setting.updated_by_name} · {updatedAt}
           </p>
         )}

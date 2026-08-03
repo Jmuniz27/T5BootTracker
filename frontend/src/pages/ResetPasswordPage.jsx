@@ -57,7 +57,7 @@ export default function ResetPasswordPage() {
   return (
     <AuthLayout backTo="/login" backLabel="Volver al inicio">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Nueva contraseña</h1>
-      <p className="text-gray-400 text-sm mb-6">Ingresa tu nueva contraseña</p>
+      <p className="text-gray-500 text-sm mb-6">Ingresa tu nueva contraseña</p>
 
       <form onSubmit={handleSubmit((d) => mutate(d))} noValidate>
         <div className="mb-4">

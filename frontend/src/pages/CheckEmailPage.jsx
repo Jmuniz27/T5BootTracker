@@ -39,7 +39,7 @@ export default function CheckEmailPage() {
   return (
     <AuthLayout backTo="/forgot-password" backLabel="Volver">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h1>
-      <p className="text-gray-400 text-sm mb-8">
+      <p className="text-gray-500 text-sm mb-8">
         We sent a reset link to{' '}
         <span className="font-semibold text-gray-700">{displayEmail}</span>.{' '}
         Enter the 5 digit code mentioned in the email.
@@ -67,7 +67,7 @@ export default function CheckEmailPage() {
         Verify code
       </button>
 
-      <p className="text-center text-sm text-gray-400">
+      <p className="text-center text-sm text-gray-500">
         Haven&apos;t got the email yet?{' '}
         <button
           onClick={() => resend({ email })}

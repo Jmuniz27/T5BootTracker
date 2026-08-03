@@ -60,7 +60,7 @@ export default function UsersTable({ users, isLoading, isError, currentUserId, o
 
           {!isLoading && !isError && users.length === 0 && (
             <tr>
-              <td colSpan={COLUMNS.length} className="text-center text-gray-400 py-10">
+              <td colSpan={COLUMNS.length} className="text-center text-gray-500 py-10">
                 No se encontraron usuarios.
               </td>
             </tr>
@@ -82,7 +82,7 @@ export default function UsersTable({ users, isLoading, isError, currentUserId, o
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate">
                           {user.full_name}
-                          {isSelf && <span className="ml-2 text-xs text-gray-400 font-normal">(tú)</span>}
+                          {isSelf && <span className="ml-2 text-xs text-gray-500 font-normal">(tú)</span>}
                         </p>
                         <p className="text-xs text-gray-500 truncate">{user.email}</p>
                       </div>

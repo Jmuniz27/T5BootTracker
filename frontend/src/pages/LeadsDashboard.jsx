@@ -211,7 +211,7 @@ function Toast({ message, type = 'success', onClose }) {
         )}
       </span>
       <span className="text-sm font-medium">{message}</span>
-      <button onClick={onClose} className="text-gray-400 hover:text-white ml-2">
+      <button onClick={onClose} className="text-gray-300 hover:text-white ml-2">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -254,7 +254,7 @@ function ViewHistoryModal({ lead, onClose }) {
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[500px] max-h-[85vh] flex flex-col shadow-xl relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -274,7 +274,7 @@ function ViewHistoryModal({ lead, onClose }) {
           ))}
 
           {!isLoading && interactions.length === 0 && (
-            <p className="text-center text-gray-400 py-10 text-sm">Aún no hay interacciones.</p>
+            <p className="text-center text-gray-500 py-10 text-sm">Aún no hay interacciones.</p>
           )}
 
           {!isLoading && interactions.map((interaction) => (
@@ -297,7 +297,7 @@ function ViewHistoryModal({ lead, onClose }) {
                   {interaction.duration_minutes != null && (
                     <>
                       <span className="text-gray-300">|</span>
-                      <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-500">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -332,8 +332,8 @@ function ViewHistoryModal({ lead, onClose }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
                   </svg>
                 </button>
-                <p className="text-xs text-gray-400">{formatDate(interaction.created_at)}</p>
-                <p className="text-xs text-gray-400">{formatTime(interaction.created_at)}</p>
+                <p className="text-xs text-gray-500">{formatDate(interaction.created_at)}</p>
+                <p className="text-xs text-gray-500">{formatTime(interaction.created_at)}</p>
               </div>
             </div>
           ))}
@@ -404,7 +404,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
       <div className="bg-white rounded-2xl p-8 w-[520px] max-h-[90vh] overflow-y-auto shadow-xl relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -449,14 +449,14 @@ function EditInteractionModal({ lead, interaction, onClose }) {
 
           <div className="grid grid-cols-2 gap-4 items-start">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nivel de interés <span className="text-xs text-gray-400 font-normal">(opcional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nivel de interés <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
               <InteractiveStarRating
                 value={form.interest_level}
                 onChange={(v) => setForm((prev) => ({ ...prev, interest_level: v }))}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Duración <span className="text-xs text-gray-400 font-normal">(opcional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duración <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -473,7 +473,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notas <span className="text-xs text-gray-400 font-normal">(opcional)</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notas <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
             <textarea
               value={form.notes}
               onChange={set('notes')}
@@ -539,7 +539,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-xl relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -593,7 +593,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
           <div className="grid grid-cols-2 gap-4 items-start">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nivel de interés <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+                Nivel de interés <span className="text-xs text-gray-500 font-normal">(opcional)</span>
               </label>
               <InteractiveStarRating
                 value={form.interest_level}
@@ -603,7 +603,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Duración <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+                Duración <span className="text-xs text-gray-500 font-normal">(opcional)</span>
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -623,7 +623,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
           {/* Notas */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notas <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+              Notas <span className="text-xs text-gray-500 font-normal">(opcional)</span>
             </label>
             <textarea
               data-testid="interaction-notes"
@@ -669,7 +669,7 @@ function ViewLeadModal({ lead, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-sm shadow-xl relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -684,13 +684,13 @@ function ViewLeadModal({ lead, onClose }) {
           <div>
             {rating !== null ? (
               <>
-                <p className="text-xs text-gray-400 mb-0.5">Última calificación:</p>
+                <p className="text-xs text-gray-500 mb-0.5">Última calificación:</p>
                 <p className="text-3xl font-bold text-gray-900 leading-none mb-1">{rating.toFixed(1)}</p>
                 <StarRating value={rating} />
-                <p className="text-xs text-gray-400 mt-1">Basado en última interacción</p>
+                <p className="text-xs text-gray-500 mt-1">Basado en última interacción</p>
               </>
             ) : (
-              <p className="text-sm text-gray-400 mt-4">Sin interacciones aún</p>
+              <p className="text-sm text-gray-500 mt-4">Sin interacciones aún</p>
             )}
           </div>
         </div>
@@ -702,13 +702,13 @@ function ViewLeadModal({ lead, onClose }) {
             <p className="font-semibold text-gray-700 mb-1">Contacto:</p>
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-gray-600">
-                <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
                 <span>{lead.email || '—'}</span>
               </div>
               <div className="flex items-center gap-2 text-gray-600">
-                <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>
                 <span>{lead.phone}</span>
@@ -882,7 +882,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -963,12 +963,12 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
                 onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
                 className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
               />
-              <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-400'}`}>
+              <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
                 Asignarme este lead
               </span>
             </label>
             {!canSelfAssign && (
-              <p className="text-xs text-gray-400 mt-1 ml-7">
+              <p className="text-xs text-gray-500 mt-1 ml-7">
                 La asignación la realiza el Administrador.
               </p>
             )}
@@ -1021,7 +1021,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[400px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -1297,7 +1297,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[500px] shadow-xl relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -1503,12 +1503,12 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               <button
                 onClick={() => { onAssign(); setOpen(false) }}
                 disabled={!selfAssignEnabled}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-500 disabled:hover:bg-transparent disabled:cursor-not-allowed"
               >
                 Asignarme
               </button>
               {!selfAssignEnabled && (
-                <p className="px-4 pb-2 text-xs text-gray-400 leading-snug">
+                <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
                   La asignación la realiza el Administrador.
                 </p>
               )}
@@ -1761,7 +1761,7 @@ export default function LeadsDashboard() {
         {/* Search + controls */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-5">
           <div className="flex-1 relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
@@ -1839,7 +1839,7 @@ export default function LeadsDashboard() {
 
             {!isLoading && !isError && pageLeads.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-gray-400 py-10">
+                <td colSpan={7} className="text-center text-gray-500 py-10">
                   No se encontraron leads.
                 </td>
               </tr>
