@@ -12,6 +12,11 @@ export async function fetchLeads(filters?: LeadFilters): Promise<LeadsResponse> 
   return data;
 }
 
+export async function getLead(leadId: string) {
+  const { data } = await api.get(`/leads/${leadId}/`);
+  return data;
+}
+
 export async function assignLead(leadId: string) {
   const { data } = await api.patch(`/leads/${leadId}/assign/`);
   return data;
@@ -23,6 +28,11 @@ export async function releaseLead(leadId: string) {
 }
 
 export async function updateLeadStatus(leadId: string, payload: { status: LeadStatus }) {
+  const { data } = await api.patch(`/leads/${leadId}/`, payload);
+  return data;
+}
+
+export async function updateLead(leadId: string, payload: Partial<LeadInput>) {
   const { data } = await api.patch(`/leads/${leadId}/`, payload);
   return data;
 }

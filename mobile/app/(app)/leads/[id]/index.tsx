@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,11 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
 import { useQuickCall } from '../../../../src/hooks/use-quick-call';
-import { assignLead, releaseLead, updateLeadStatus } from '../../../../src/api/leads.api';
+import { assignLead, releaseLead, updateLeadStatus, getLead } from '../../../../src/api/leads.api';
 import type { Lead, LeadStatus } from '../../../../src/types/leads';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
@@ -50,18 +50,32 @@ export default function LeadDetailScreen() {
   const params = useLocalSearchParams<{ id: string; lead?: string; owned?: string }>();
   const { startCall } = useQuickCall();
 
-  let lead: Partial<Lead> & { id: string } = { id: params.id, name: '' };
-  try {
-    if (params.lead) lead = JSON.parse(params.lead);
-  } catch {
-    // sin datos: mostramos lo mínimo
+  function parseInitial(): Partial<Lead> & { id: string } {
+    try {
+      if (params.lead) return JSON.parse(params.lead);
+    } catch {
+      return { id: params.id, name: '' };
+    }
+    return { id: params.id, name: '' };
   }
+
+  const [lead, setLead] = useState<Partial<Lead> & { id: string }>(parseInitial);
   const owned = params.owned === '1';
 
-  const [status, setStatus] = useState<LeadStatus | undefined>(lead.status);
   const [statusOpen, setStatusOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getLead(params.id)
+        .then((fresh) => { if (active && fresh?.id) setLead((prev) => ({ ...prev, ...fresh })); })
+        .catch(() => {});
+      return () => { active = false; };
+    }, [params.id]),
+  );
+
+  const status = lead.status;
   const cfg = status ? STATUS_CONFIG[status] : null;
   const isQualified = status === 'QUALIFIED';
   const isConverted = status === 'CONVERTED';
@@ -74,10 +88,10 @@ export default function LeadDetailScreen() {
     setBusy(true);
     try {
       await updateLeadStatus(lead.id, { status: next });
-      setStatus(next);
+      setLead((prev) => ({ ...prev, status: next }));
       setStatusOpen(false);
     } catch {
-      // no-op: se mantiene el estado anterior
+      setStatusOpen(false);
     } finally {
       setBusy(false);
     }
@@ -173,6 +187,20 @@ export default function LeadDetailScreen() {
                 <TouchableOpacity style={s.actionGhost} onPress={() => setStatusOpen(true)} activeOpacity={0.8}>
                   <Ionicons name="flag-outline" size={18} color={colors.navy} />
                   <Text style={s.actionGhostText}>Cambiar estado</Text>
+                </TouchableOpacity>
+              )}
+
+              {!isConverted && (
+                <TouchableOpacity
+                  style={s.actionGhost}
+                  onPress={() => router.push({
+                    pathname: '/(app)/leads/[id]/edit',
+                    params: { id: lead.id, lead: JSON.stringify(lead) },
+                  })}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="pencil-outline" size={18} color={colors.navy} />
+                  <Text style={s.actionGhostText}>Editar información</Text>
                 </TouchableOpacity>
               )}
 
