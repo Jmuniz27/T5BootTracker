@@ -96,13 +96,9 @@ export default function MeetingFormModal({
     });
   }
 
-  // iOS: la rueda solo actualiza el borrador; el botón confirma/avanza.
+  // iOS: la rueda (fecha + hora juntas) solo actualiza el borrador; "Listo" confirma.
   function onIosChange(_event: DateTimePickerEvent, date?: Date) {
     if (date) setDraft(date);
-  }
-  function confirmIos() {
-    if (pickerMode === 'date') setPickerMode('time');
-    else commitPicked(draft);
   }
 
   // Android: cada diálogo nativo confirma un paso (fecha → hora).
@@ -218,12 +214,10 @@ export default function MeetingFormModal({
         <Modal transparent visible animationType="fade" onRequestClose={() => setPickerTarget(null)}>
           <Pressable style={s.overlay} onPress={() => setPickerTarget(null)}>
             <Pressable style={s.pickerSheet} onPress={() => {}}>
-              <Text style={s.pickerTitle}>
-                {pickerTarget === 'start' ? 'Inicio' : 'Fin'} · {pickerMode === 'date' ? 'Fecha' : 'Hora'}
-              </Text>
-              <DateTimePicker value={draft} mode={pickerMode} display="spinner" onChange={onIosChange} />
-              <TouchableOpacity style={s.pickerDone} onPress={confirmIos} activeOpacity={0.85}>
-                <Text style={s.pickerDoneText}>{pickerMode === 'date' ? 'Siguiente' : 'Listo'}</Text>
+              <Text style={s.pickerTitle}>{pickerTarget === 'start' ? 'Inicio' : 'Fin'}</Text>
+              <DateTimePicker value={draft} mode="datetime" display="spinner" onChange={onIosChange} />
+              <TouchableOpacity style={s.pickerDone} onPress={() => commitPicked(draft)} activeOpacity={0.85}>
+                <Text style={s.pickerDoneText}>Listo</Text>
               </TouchableOpacity>
             </Pressable>
           </Pressable>
