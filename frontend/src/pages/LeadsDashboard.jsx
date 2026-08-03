@@ -20,13 +20,6 @@ const SOURCE_LABELS = {
   MANUAL: 'Manual',
 }
 
-const SOURCE_ICON = {
-  INSTAGRAM: '📷',
-  WHATSAPP: '💬',
-  LANDING_PAGE: '🌐',
-  MANUAL: '✏️',
-}
-
 const AVATAR_COLORS = [
   'bg-[#213A8E]',
   'bg-violet-500',
@@ -759,7 +752,7 @@ function ViewLeadModal({ lead, onClose }) {
           </div>
           <div>
             <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
-            <p className="text-gray-600">{SOURCE_ICON[lead.source]} {SOURCE_LABELS[lead.source] || lead.source}</p>
+            <p className="text-gray-600">{SOURCE_LABELS[lead.source] || lead.source}</p>
           </div>
           {lastInteraction?.notes && (
             <div>
