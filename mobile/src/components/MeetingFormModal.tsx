@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Pressable,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -55,10 +56,22 @@ export default function MeetingFormModal({
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
   const [draft, setDraft] = useState<Date>(new Date());
 
-  // Reinicia el form cada vez que se abre.
+  // Animaciones: el fondo hace fade-in y la hoja sube por separado.
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetY = useRef(new Animated.Value(600)).current;
+
+  // Reinicia el form y anima la entrada cada vez que se abre.
   useEffect(() => {
-    if (visible) setForm(initial);
-  }, [visible, initial]);
+    if (visible) {
+      setForm(initial);
+      backdropOpacity.setValue(0);
+      sheetY.setValue(600);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 260, useNativeDriver: true }),
+        Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
+      ]).start();
+    }
+  }, [visible, initial, backdropOpacity, sheetY]);
 
   const set = <K extends keyof MeetingFormValues>(k: K, v: MeetingFormValues[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -99,9 +112,10 @@ export default function MeetingFormModal({
     !form.title.trim() || !form.lead || form.end.getTime() <= form.start.getTime();
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={s.overlay}>
-        <View style={s.sheet}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
+      <View style={s.root}>
+        <Animated.View style={[s.backdrop, { opacity: backdropOpacity }]} />
+        <Animated.View style={[s.sheet, { transform: [{ translateY: sheetY }] }]}>
           <View style={s.header}>
             <TouchableOpacity onPress={onClose} hitSlop={8}>
               <Text style={s.cancel}>Cancelar</Text>
@@ -178,7 +192,7 @@ export default function MeetingFormModal({
               </TouchableOpacity>
             )}
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
 
       {pickerTarget && (
@@ -219,6 +233,8 @@ export default function MeetingFormModal({
 }
 
 const s = StyleSheet.create({
+  root: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: '#f8f9fb',
