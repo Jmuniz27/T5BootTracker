@@ -152,7 +152,7 @@ export default function LeadDetailScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Editar información del lead"
               >
-                <Ionicons name="pencil" size={16} color={colors.navy} />
+                <Ionicons name="pencil" size={16} color={colors.white} />
               </TouchableOpacity>
             )}
           </View>
@@ -309,7 +309,7 @@ const s = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#eff2fb',
+    backgroundColor: colors.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },
