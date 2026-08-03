@@ -6,6 +6,9 @@ import { useAuthStore } from '../store/auth.store'
 import CustomSelect from '../components/CustomSelect'
 import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
 import SelfAssignmentToggle from '../components/leads/SelfAssignmentToggle'
+import MeetingFormModal from '../components/MeetingFormModal'
+import { useMeetingMutations } from '../hooks/use-meetings'
+import { toDatetimeLocal } from '../lib/meetings'
 
 const PAGE_SIZE = 10
 
@@ -536,7 +539,27 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
   const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors)
 
+  // Agendar reunión (meetings API) — mismo modal que la Agenda, lead prefijado.
+  const { create: createMeeting } = useMeetingMutations()
+  const [meetingOpen, setMeetingOpen] = useState(false)
+  const [meetingInitial, setMeetingInitial] = useState(null)
+
+  function openMeeting() {
+    const start = new Date()
+    const end = new Date(start.getTime() + 30 * 60000)
+    setMeetingInitial({
+      title: `Seguimiento: ${lead.name}`,
+      description: form.notes ?? '',
+      start: toDatetimeLocal(start),
+      end: toDatetimeLocal(end),
+      lead: lead.id,
+      notify_lead: true,
+    })
+    setMeetingOpen(true)
+  }
+
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
@@ -649,9 +672,29 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
           >
             {mutation.isPending ? 'Guardando...' : 'Guardar interacción'}
           </button>
+
+          <button
+            type="button"
+            onClick={openMeeting}
+            className="w-full py-2.5 rounded-xl border border-[#213A8E] text-[#213A8E] font-semibold hover:bg-[#213A8E]/5 transition-colors"
+          >
+            + Agendar reunión
+          </button>
         </form>
       </div>
     </div>
+
+    <MeetingFormModal
+      open={meetingOpen}
+      editingId={null}
+      initial={meetingInitial}
+      leads={[{ id: lead.id, name: lead.name }]}
+      saving={createMeeting.isPending}
+      onSave={(payload) => createMeeting.mutate(payload, { onSuccess: () => setMeetingOpen(false) })}
+      onDelete={() => {}}
+      onClose={() => setMeetingOpen(false)}
+    />
+    </>
   )
 }
 
