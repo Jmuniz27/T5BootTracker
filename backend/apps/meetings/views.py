@@ -1,8 +1,15 @@
+import logging
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 from rest_framework import viewsets
+from .tasks import process_google_calendar_webhook
 from .models import Meeting
 from .serializers import MeetingSerializer
 from .permissions import IsAdminOrMeetingOwner
 from .tasks import sync_create_meeting_to_google, sync_update_meeting_to_google, sync_delete_meeting_from_google, send_meeting_invitation
+
+logger = logging.getLogger(__name__)
 
 class MeetingViewSet(viewsets.ModelViewSet):
     serializer_class = MeetingSerializer
@@ -45,3 +52,14 @@ class MeetingViewSet(viewsets.ModelViewSet):
         if google_id:
             sync_delete_meeting_from_google.delay(google_id)
         instance.delete()
+
+class GoogleCalendarWebhookView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        resource_state = request.headers.get('X-Goog-Resource-State')
+
+        if resource_state == 'exists':
+            process_google_calendar_webhook.delay()
+
+        return Response({"status": "ok"}, status=200)

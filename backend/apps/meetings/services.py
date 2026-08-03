@@ -1,3 +1,4 @@
+import uuid
 import os
 import logging
 from google.oauth2 import service_account
@@ -37,3 +38,21 @@ class GoogleCalendarService:
 
     def delete_event(self, event_id: str) -> None:
         self.service.events().delete(calendarId=self.calendar_id, eventId=event_id).execute()
+
+    def watch_calendar(self, webhook_url):
+        """Suscribe la URL al calendario para recibir notificaciones push."""
+        channel_id = str(uuid.uuid4())
+        body = {
+            'id': channel_id,
+            'type': 'web_hook',
+            'address': webhook_url
+        }
+        try:
+            response = self.service.events().watch(
+                calendarId=self.calendar_id,
+                body=body
+            ).execute()
+            return response
+        except Exception as e:
+            print(f"Error al suscribir webhook: {e}")
+            return None
