@@ -181,6 +181,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
               )}
               <input
                 ref={fileRef}
+                data-testid="upload-file-input"
                 type="file"
                 accept=".jpg,.jpeg,.png,.pdf"
                 className="hidden"
@@ -194,6 +195,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Programa</label>
             <CustomSelect
+              testId="upload-program"
               value={programId}
               onChange={setProgramId}
               placeholder="Selecciona un programa"
@@ -210,6 +212,7 @@ function UploadModal({ programs, onClose, onSuccess }) {
 
           <button
             type="submit"
+            data-testid="upload-submit"
             disabled={mutation.isPending}
             className="w-full bg-[#1D3176] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#16265d] disabled:opacity-60 transition-colors"
           >
@@ -378,7 +381,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
           {/* Datos extraídos */}
           <div className="px-6 py-5 space-y-4">
           {(ocrLoading || ocrProcessing) ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div data-testid="ocr-processing" className="flex flex-col items-center justify-center py-20 text-center">
               <svg className="w-10 h-10 text-[#1D3176] animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -396,7 +399,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
                 </p>
               )}
               {timedOut && !ocrReady && (
-                <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                <p data-testid="ocr-timeout" className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
                   No se pudieron extraer los datos automáticamente. Complétalos manualmente antes de confirmar.
                 </p>
               )}
@@ -443,6 +446,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
             </button>
             <button
               type="button"
+              data-testid="confirm-payment-submit"
               disabled={mutation.isPending || ocrLoading || ocrProcessing}
               onClick={() => mutation.mutate(fields)}
               className="flex-1 bg-[#1D3176] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#16265d] disabled:opacity-60 transition-colors"
@@ -650,6 +654,7 @@ export default function PaymentsPage() {
           <p className="text-sm text-gray-500 mt-1">Upload proof of payment and track your transactions</p>
         </div>
         <button
+          data-testid="upload-button"
           onClick={() => setShowUpload(true)}
           className="flex items-center gap-2 bg-[#1D3176] text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#16265d] transition-colors"
         >

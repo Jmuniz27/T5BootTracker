@@ -1,0 +1,4 @@
+# Salida de cada corrida — no se versiona.
+*.jtl
+*.log
+informe-html/

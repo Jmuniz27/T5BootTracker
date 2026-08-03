@@ -56,10 +56,39 @@ class TestLogin:
         assert resp.json()['code'] == 'INVALID_CREDENTIALS'
 
     def test_login_inactive_user(self, inactive_user):
+        """Quien conoce la contraseña sí merece saber que la cuenta está desactivada."""
         client = APIClient()
         resp = client.post(LOGIN_URL, {'email': 'inactive@test.com', 'password': 'validpass123'}, format='json')
         assert resp.status_code == 403
         assert resp.json()['code'] == 'ACCOUNT_INACTIVE'
+
+    def test_login_inactive_user_with_wrong_password_does_not_leak(self, inactive_user):
+        """Sin la contraseña correcta, una cuenta desactivada es indistinguible
+        de una inexistente (SEC-3: enumeración de usuarios).
+
+        Antes se consultaba `is_active` antes de validar la contraseña, así que
+        bastaba con probar cualquier clave para saber si un email existía.
+        """
+        client = APIClient()
+        resp = client.post(
+            LOGIN_URL, {'email': 'inactive@test.com', 'password': 'wrongpass'}, format='json'
+        )
+        assert resp.status_code == 401
+        assert resp.json()['code'] == 'INVALID_CREDENTIALS'
+
+    def test_login_unknown_email_matches_inactive_response(self, inactive_user):
+        """La respuesta para un email inexistente es idéntica a la de una cuenta
+        desactivada con contraseña incorrecta: mismo código y mismo mensaje."""
+        client = APIClient()
+        cache.clear()  # el login está limitado a 5/min por el scope 'auth'
+        desconocido = client.post(
+            LOGIN_URL, {'email': 'nadie@test.com', 'password': 'wrongpass'}, format='json'
+        )
+        desactivado = client.post(
+            LOGIN_URL, {'email': 'inactive@test.com', 'password': 'wrongpass'}, format='json'
+        )
+        assert desconocido.status_code == desactivado.status_code == 401
+        assert desconocido.json() == desactivado.json()
 
 
 class TestLogout:

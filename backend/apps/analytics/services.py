@@ -275,3 +275,106 @@ class AnalyticsService:
                 'vínculo de Enrollment/Payment a Lead ni a campaña.'
             ),
         }
+
+    # ──────────────────────────────────────────────────────────────────────
+    # 5. Métricas de gestión de leads por vendedor (CR-006)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def get_lead_management_metrics(self, *, fecha_desde=None, fecha_hasta=None, segment=None, campaign=None) -> dict:
+        """Tiempo de retención y de primer contacto por vendedor (CR-006).
+
+        Retención: para un lead liberado es `released_at - assigned_at`; para uno
+        aún asignado, el tiempo transcurrido hasta ahora. Primer contacto:
+        la interacción más antigua del lead menos `assigned_at`. `unassigned_leads`
+        cuenta los que siguen sin dueño y por tanto faltan por asignar.
+
+        `first_interaction_at` se resuelve con un Subquery anotado (no en un bucle
+        por lead) para no reintroducir el N+1 de PERF-1.
+        """
+        first_interaction_sq = (
+            Interaction.objects.filter(lead=OuterRef('pk'))
+            .order_by('created_at')
+            .values('created_at')[:1]
+        )
+        qs = (
+            self._leads_base_qs(fecha_desde, fecha_hasta, segment, campaign)
+            .filter(assigned_at__isnull=False)
+            .annotate(first_interaction_at=Subquery(first_interaction_sq))
+            .values_list(
+                'owner_id', 'owner__first_name', 'owner__last_name',
+                'assigned_at', 'released_at', 'first_interaction_at',
+            )
+        )
+
+        # Leads que esperan que alguien los tome. `owner__isnull` y no
+        # `assigned_at__isnull`: un lead liberado por el Administrador conserva su
+        # assigned_at pero vuelve a la pila, así que también falta asignarlo.
+        unassigned_leads = (
+            self._leads_base_qs(fecha_desde, fecha_hasta, segment, campaign)
+            .filter(owner__isnull=True)
+            .count()
+        )
+
+        reference = timezone.now()
+        by_owner: dict = {}
+        retention_all: list = []
+        contact_all: list = []
+
+        for owner_id, first_name, last_name, assigned_at, released_at, first_interaction_at in qs:
+            # Un lead liberado y nunca reasignado conserva owner=None: sus horas
+            # cuentan en el total global, pero no hay vendedor al que atribuirlas.
+            end = released_at or reference
+            retention_hours = (end - assigned_at).total_seconds() / 3600
+            retention_all.append(retention_hours)
+
+            contact_hours = None
+            if first_interaction_at and first_interaction_at >= assigned_at:
+                contact_hours = (first_interaction_at - assigned_at).total_seconds() / 3600
+                contact_all.append(contact_hours)
+
+            if owner_id is None:
+                continue
+
+            bucket = by_owner.setdefault(owner_id, {
+                'salesperson_id': str(owner_id),
+                'salesperson': f'{first_name or ""} {last_name or ""}'.strip() or 'Sin nombre',
+                'active_leads': 0,
+                '_retention': [],
+                '_contact': [],
+            })
+            bucket['_retention'].append(retention_hours)
+            if contact_hours is not None:
+                bucket['_contact'].append(contact_hours)
+            if released_at is None:
+                bucket['active_leads'] += 1
+
+        by_salesperson = [
+            {
+                'salesperson_id': b['salesperson_id'],
+                'salesperson': b['salesperson'],
+                'active_leads': b['active_leads'],
+                'avg_retention_hours': self._mean_hours(b['_retention']),
+                'avg_time_to_first_contact_hours': self._mean_hours(b['_contact']),
+            }
+            for b in by_owner.values()
+        ]
+        by_salesperson.sort(key=lambda row: row['salesperson'])
+
+        return {
+            'filters_applied': {
+                'fecha_desde': fecha_desde.isoformat() if fecha_desde else None,
+                'fecha_hasta': fecha_hasta.isoformat() if fecha_hasta else None,
+                'segment': segment,
+                'campaign': campaign,
+            },
+            'leads_considered': len(retention_all),
+            'unassigned_leads': unassigned_leads,
+            'avg_retention_hours': self._mean_hours(retention_all),
+            'avg_time_to_first_contact_hours': self._mean_hours(contact_all),
+            'by_salesperson': by_salesperson,
+        }
+
+    @staticmethod
+    def _mean_hours(values):
+        """Promedio redondeado a 1 decimal; None si no hay datos (0 sería engañoso)."""
+        return round(statistics.mean(values), 1) if values else None
