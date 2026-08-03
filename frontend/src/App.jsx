@@ -10,6 +10,7 @@ import ResetSuccessPage from './pages/ResetSuccessPage'
 import LeadsDashboard from './pages/LeadsDashboard'
 import UsersPage from './pages/UsersPage'
 import AnalyticsPage from './pages/AnalyticsPage'
+import AgendaPage from './pages/AgendaPage'
 import PaymentsPage from './pages/PaymentsPage'
 import SalespersonPaymentsPage from './pages/SalespersonPaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
@@ -48,7 +49,8 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardRoute />} />
           <Route path="/my-leads" element={<div className="p-8 text-gray-400">My leads — coming soon</div>} />
-          <Route path="/schedule" element={<div className="p-8 text-gray-400">Schedule — coming soon</div>} />
+          <Route path="/schedule" element={<AgendaPage />} />
+          <Route path="/agenda" element={<AgendaPage />} />
           <Route path="/payments" element={<PaymentsRoute />} />
           <Route path="/payments/:bootcamperId/:programId" element={<BootcamperPaymentDetailPage />} />
           <Route
