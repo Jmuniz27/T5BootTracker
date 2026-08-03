@@ -773,37 +773,41 @@ function ReleaseLeadModal({ onKeep, onRelease, isLoading }) {
 
 function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
   const [ownerId, setOwnerId] = useState('')
+  const hasOwner = Boolean(lead.owner)
 
-  let submitLabel = 'Liberar'
+  let submitLabel = hasOwner ? 'Liberar' : 'Asignar'
   if (isLoading) submitLabel = 'Guardando…'
-  else if (ownerId) submitLabel = 'Reasignar'
+  else if (ownerId) submitLabel = hasOwner ? 'Reasignar' : 'Asignar'
 
   const { data } = useQuery({
     queryKey: ['users', 'salespersons'],
     queryFn: getUsers,
   })
-  const salespeople = (data?.results ?? data ?? []).filter(
-    (u) => u.role === 'SALESPERSON' && u.id !== lead.owner,
+  // Finanzas también trabaja leads, así que puede recibir uno reasignado.
+  const assignees = (data?.results ?? data ?? []).filter(
+    (u) => ['SALESPERSON', 'FINANCE'].includes(u.role) && u.id !== lead.owner,
   )
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[440px] shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-gray-900 mb-1">Liberar o reasignar lead</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-1">
+          {hasOwner ? 'Liberar o reasignar lead' : 'Asignar lead'}
+        </h2>
         <p className="text-sm text-gray-500 mb-5">
           Vendedor actual: <strong>{lead.owner_name ?? 'Sin asignar'}</strong>
         </p>
 
         <label className="block text-xs font-medium text-gray-600 mb-1.5">
-          Reasignar a (opcional)
+          {hasOwner ? 'Reasignar a (opcional)' : 'Asignar a'}
         </label>
         <select
           value={ownerId}
           onChange={(e) => setOwnerId(e.target.value)}
           className="w-full mb-6 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
         >
-          <option value="">Liberar al pool (sin asignar)</option>
-          {salespeople.map((u) => (
+          <option value="">{hasOwner ? 'Liberar al pool (sin asignar)' : 'Seleccionar vendedor'}</option>
+          {assignees.map((u) => (
             <option key={u.id} value={u.id}>{u.full_name}</option>
           ))}
         </select>
@@ -818,7 +822,7 @@ function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
           </button>
           <button
             onClick={() => onSubmit(ownerId || null)}
-            disabled={isLoading}
+            disabled={isLoading || (!hasOwner && !ownerId)}
             className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
           >
             {submitLabel}
@@ -1483,12 +1487,12 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Convertir lead
             </button>
           )}
-          {isAdmin && lead.owner && (
+          {isAdmin && (
             <button
               onClick={() => { onAdminReassign(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Liberar / Reasignar
+              {lead.owner ? 'Liberar / Reasignar' : 'Asignar a'}
             </button>
           )}
           {!isAdmin && (isOwned ? (

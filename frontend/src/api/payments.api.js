@@ -42,6 +42,19 @@ export const notifyCoordinator = (bootcamperId, programId) =>
 export const getMonitoring = (params = {}) =>
   client.get('/payments/monitoring/', { params }).then((r) => r.data)
 
+// ── Pool de bootcampers ───────────────────────────────────────────────────────
+// Misma mecánica que el pool de leads: al convertirse, un bootcamper queda sin
+// responsable de cobro y quien es de Finanzas se lo asigna para monitorearlo.
+
+export const getBootcamperPool = (params = {}) =>
+  client.get('/payments/bootcampers/', { params }).then((r) => r.data)
+
+export const assignBootcamper = (bootcamperId) =>
+  client.patch(`/payments/bootcampers/${bootcamperId}/assign/`).then((r) => r.data)
+
+export const releaseBootcamper = (bootcamperId) =>
+  client.patch(`/payments/bootcampers/${bootcamperId}/release/`).then((r) => r.data)
+
 // ── Editar / eliminar pagos propios (CB-117 T6) ───────────────────────────────
 // Contrato ASUMIDO — pendiente de implementación en backend:
 //   PATCH  /payments/my-payments/<id>/  → el bootcamper corrige un pago REJECTED

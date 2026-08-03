@@ -1,0 +1,194 @@
+import React from 'react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import FinancePaymentsPage from '../FinancePaymentsPage';
+import {
+  assignBootcamper,
+  getBootcamperPool,
+  releaseBootcamper,
+} from '../../api/payments.api';
+
+const navigate = vi.fn();
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => navigate };
+});
+
+vi.mock('../../api/payments.api', () => ({
+  getBootcamperPool: vi.fn(),
+  assignBootcamper: vi.fn(),
+  releaseBootcamper: vi.fn(),
+  getPrograms: vi.fn(),
+}));
+
+const MIA = {
+  bootcamper_id: 'bc-1',
+  bootcamper_name: 'Ana Torres',
+  email: 'ana@test.com',
+  program_id: 'prog-1',
+  program_name: 'Python Full Stack',
+  total_cost: '1200.00',
+  total_paid: '600.00',
+  pending_payments: 1,
+  payment_status: 'AT_RISK',
+};
+
+const EN_POOL = {
+  bootcamper_id: 'bc-2',
+  bootcamper_name: 'Luis Vera',
+  email: 'luis@test.com',
+  program_id: 'prog-1',
+  program_name: 'Python Full Stack',
+  total_cost: '1200.00',
+  total_paid: '0.00',
+  pending_payments: 0,
+  payment_status: 'CRITICAL',
+};
+
+function poolResponse({ mine = [MIA], available = [EN_POOL] } = {}) {
+  return {
+    my_bootcampers: mine,
+    available_bootcampers: available,
+    pagination: {
+      page: 1,
+      page_size: 100,
+      my_bootcampers_count: mine.length,
+      available_bootcampers_count: available.length,
+      my_bootcampers_total_pages: 1,
+      available_bootcampers_total_pages: 1,
+    },
+  };
+}
+
+function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <FinancePaymentsPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+/** La tarjeta que contiene el nombre dado. */
+function cardFor(name) {
+  return screen.getByText(name).closest('.rounded-2xl');
+}
+
+describe('FinancePaymentsPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getBootcamperPool.mockResolvedValue(poolResponse());
+  });
+
+  it('separa la cartera propia del pool disponible', async () => {
+    renderPage();
+
+    expect(await screen.findByText('Mis bootcampers')).toBeInTheDocument();
+    expect(screen.getByText('Disponibles')).toBeInTheDocument();
+    expect(screen.getByText('Ana Torres')).toBeInTheDocument();
+    expect(screen.getByText('Luis Vera')).toBeInTheDocument();
+  });
+
+  it('ofrece asignarse los del pool y liberar los propios', async () => {
+    renderPage();
+    await screen.findByText('Ana Torres');
+
+    expect(within(cardFor('Luis Vera')).getByRole('button', { name: /asignarme/i })).toBeInTheDocument();
+    expect(within(cardFor('Ana Torres')).getByRole('button', { name: /liberar/i })).toBeInTheDocument();
+    // El propio no se ofrece de nuevo, ni el del pool se puede liberar.
+    expect(within(cardFor('Ana Torres')).queryByRole('button', { name: /asignarme/i })).not.toBeInTheDocument();
+    expect(within(cardFor('Luis Vera')).queryByRole('button', { name: /liberar/i })).not.toBeInTheDocument();
+  });
+
+  it('toma un bootcamper del pool', async () => {
+    const user = userEvent.setup();
+    assignBootcamper.mockResolvedValue([EN_POOL]);
+    renderPage();
+    await screen.findByText('Luis Vera');
+
+    await user.click(within(cardFor('Luis Vera')).getByRole('button', { name: /asignarme/i }));
+
+    expect(assignBootcamper.mock.calls[0][0]).toBe('bc-2');
+    expect(await screen.findByText(/bootcamper asignado/i)).toBeInTheDocument();
+  });
+
+  it('avisa cuando otra persona se lo llevó primero', async () => {
+    const user = userEvent.setup();
+    assignBootcamper.mockRejectedValue({
+      response: {
+        status: 409,
+        data: { error: 'Este bootcamper ya lo está monitoreando otra persona.' },
+      },
+    });
+    renderPage();
+    await screen.findByText('Luis Vera');
+
+    await user.click(within(cardFor('Luis Vera')).getByRole('button', { name: /asignarme/i }));
+
+    expect(
+      await screen.findByText('Este bootcamper ya lo está monitoreando otra persona.'),
+    ).toBeInTheDocument();
+  });
+
+  it('devuelve un bootcamper al pool', async () => {
+    const user = userEvent.setup();
+    releaseBootcamper.mockResolvedValue([MIA]);
+    renderPage();
+    await screen.findByText('Ana Torres');
+
+    await user.click(within(cardFor('Ana Torres')).getByRole('button', { name: /liberar/i }));
+
+    expect(releaseBootcamper.mock.calls[0][0]).toBe('bc-1');
+    expect(await screen.findByText(/devuelto al pool/i)).toBeInTheDocument();
+  });
+
+  it('abre el detalle de pagos al tocar la tarjeta', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByText('Ana Torres'));
+
+    expect(navigate).toHaveBeenCalledWith('/payments/bc-1/prog-1', { state: { bc: MIA } });
+  });
+
+  it('las estadísticas cuentan sólo la cartera propia', async () => {
+    renderPage();
+    await screen.findByText('Ana Torres');
+
+    // Luis está en crítico pero sigue en el pool: no es responsabilidad de nadie.
+    const criticos = screen.getByText('Críticos').closest('div');
+    expect(criticos).toHaveTextContent('0');
+  });
+
+  it('invita a tomar del pool cuando no monitorea a nadie', async () => {
+    getBootcamperPool.mockResolvedValue(poolResponse({ mine: [] }));
+    renderPage();
+
+    expect(await screen.findByText(/todavía no monitoreás a nadie/i)).toBeInTheDocument();
+  });
+
+  it('avisa cuando el pool está vacío', async () => {
+    getBootcamperPool.mockResolvedValue(poolResponse({ available: [] }));
+    renderPage();
+
+    expect(await screen.findByText(/no hay bootcampers esperando/i)).toBeInTheDocument();
+  });
+
+  it('busca contra el backend en vez de filtrar la página', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Ana Torres');
+
+    await user.type(screen.getByPlaceholderText(/buscar bootcamper/i), 'ana');
+
+    // Paginado en el servidor: filtrar sólo lo ya traído escondería resultados.
+    expect(getBootcamperPool).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: 'ana' }),
+    );
+  });
+});
