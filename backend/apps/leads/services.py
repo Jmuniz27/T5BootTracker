@@ -1,6 +1,7 @@
 """Business logic for leads app."""
 import logging
 import secrets
+from decimal import Decimal
 
 from django.db import transaction, IntegrityError
 from django.db.models import Q
@@ -11,6 +12,7 @@ from rest_framework import status
 from apps.authentication.models import CustomUser
 from apps.authentication.validators import validate_cedula_ecuatoriana
 from apps.programs.models import Program, Enrollment
+from apps.programs.services import apply_discount
 from apps.notifications.tasks import send_conversion_notification
 from .models import Interaction, Lead, LeadAssignmentSetting
 
@@ -104,12 +106,16 @@ def convert_lead_to_bootcamper(lead, validated_data):
             # 5. LANZAR CONFLICTERROR (409)
             raise ConflictError({'error': 'Esta cédula ya está registrada en el sistema.', 'code': 'CEDULA_ALREADY_EXISTS'})
 
+    discount = validated_data.get('discount_percentage') or Decimal('0.00')
+    agreed_price = apply_discount(program.total_cost, discount)
+
     try:
         Enrollment.objects.create(
             bootcamper=bootcamper,
             bootcamp=program,
             start_date=program.start_date,
-            agreed_price=program.total_cost
+            discount_percentage=discount,
+            agreed_price=agreed_price,
         )
     except IntegrityError:
         raise ConflictError({'error': 'El bootcamper ya está inscrito en este programa.', 'code': 'ALREADY_ENROLLED'})
@@ -135,6 +141,10 @@ def convert_lead_to_bootcamper(lead, validated_data):
         'temporary_password': temporary_password,
         'is_returning': is_returning,
         'lead_status': lead.status,
+        # Se devuelven para que el vendedor confirme en pantalla lo que quedó
+        # registrado, sin volver a consultar la inscripción.
+        'discount_percentage': str(discount),
+        'agreed_price': str(agreed_price),
     }
 
 

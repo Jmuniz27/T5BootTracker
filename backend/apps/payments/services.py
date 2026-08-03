@@ -48,7 +48,7 @@ class PaymentProgressService:
             payment_count            – total number of payments submitted
         """
         from .models import Payment
-        from apps.programs.models import Program
+        from apps.programs.models import Enrollment, Program
 
         program = Program.objects.get(id=program_id)
 
@@ -63,7 +63,23 @@ class PaymentProgressService:
         total_paid    = agg['total_paid'] or Decimal('0.00')
         pending_count = payments.filter(status=Payment.Status.PENDING).count()
 
-        return self._build_summary(program, total_paid, pending_count, payments.count())
+        # El precio real de esta persona sale de su inscripción, que es donde
+        # quedó registrado el descuento.
+        enrollment = (
+            Enrollment.objects
+            .filter(bootcamper_id=bootcamper_id, bootcamp_id=program_id)
+            .only('agreed_price', 'discount_percentage')
+            .first()
+        )
+
+        return self._build_summary(
+            program,
+            total_paid,
+            pending_count,
+            payments.count(),
+            agreed_price=enrollment.agreed_price if enrollment else None,
+            discount_percentage=enrollment.discount_percentage if enrollment else None,
+        )
 
     def get_monitoring_summaries(self, programs, status_filter=None) -> list[dict]:
         """Bulk version of get_payment_summary for PaymentMonitoringView (PERF-1).
@@ -99,6 +115,12 @@ class PaymentProgressService:
             )
         }
 
+        # Una consulta para todos los precios acordados: uno por fila
+        # reintroduciría el N+1 que este método existe para evitar.
+        enrollments = self._enrollment_map(
+            {row['bootcamper_id'] for row in rows}, set(program_map),
+        )
+
         # Mismo orden que la versión por iteración: programas en el orden
         # recibido y, dentro de cada uno, bootcampers según el ordering del
         # modelo de usuario.
@@ -114,11 +136,16 @@ class PaymentProgressService:
         for row in visible:
             bootcamper = bootcampers[row['bootcamper_id']]
             program = program_map[row['program_id']]
+            price, discount = enrollments.get(
+                (row['bootcamper_id'], row['program_id']), (None, None),
+            )
             summary = self._build_summary(
                 program,
                 row['total_paid'] or Decimal('0.00'),
                 row['pending_payments'],
                 row['payment_count'],
+                agreed_price=price,
+                discount_percentage=discount,
             )
             if status_filter and summary['payment_status'] != status_filter:
                 continue
@@ -176,12 +203,22 @@ class PaymentProgressService:
             )
         }
 
+        # La misma consulta que ya daba los pares ahora trae el precio acordado:
+        # no se agrega ninguna consulta al camino.
+        enrollments = {
+            (bootcamper_id, program_id): (price, discount)
+            for bootcamper_id, program_id, price, discount in (
+                Enrollment.objects
+                .filter(bootcamper_id__in=by_id)
+                .values_list(
+                    'bootcamper_id', 'bootcamp_id',
+                    'agreed_price', 'discount_percentage',
+                )
+            )
+        }
+
         pairs = set(totals)
-        pairs.update(
-            Enrollment.objects
-            .filter(bootcamper_id__in=by_id)
-            .values_list('bootcamper_id', 'bootcamp_id')
-        )
+        pairs.update(enrollments)
         if not pairs:
             return []
 
@@ -203,11 +240,14 @@ class PaymentProgressService:
             bootcamper = by_id[bootcamper_id]
             program    = programs[program_id]
             row        = totals.get((bootcamper_id, program_id), {})
+            price, discount = enrollments.get((bootcamper_id, program_id), (None, None))
             summary    = self._build_summary(
                 program,
                 row.get('total_paid') or Decimal('0.00'),
                 row.get('pending_payments') or 0,
                 row.get('payment_count') or 0,
+                agreed_price=price,
+                discount_percentage=discount,
             )
             data.append({
                 'bootcamper_id':   str(bootcamper.id),
@@ -219,8 +259,48 @@ class PaymentProgressService:
             })
         return data
 
-    def _build_summary(self, program, total_paid, pending_count, payment_count) -> dict:
-        total_cost  = program.total_cost
+    @staticmethod
+    def _enrollment_map(bootcamper_ids, program_ids):
+        """{(bootcamper, programa): (precio acordado, descuento)} en una consulta.
+
+        Es la única fuente del precio real: el descuento se concede al convertir
+        y queda en la inscripción, no en el programa.
+        """
+        from apps.programs.models import Enrollment
+
+        if not bootcamper_ids or not program_ids:
+            return {}
+
+        return {
+            (bootcamper_id, program_id): (price, discount)
+            for bootcamper_id, program_id, price, discount in (
+                Enrollment.objects
+                .filter(bootcamper_id__in=bootcamper_ids, bootcamp_id__in=program_ids)
+                .values_list(
+                    'bootcamper_id', 'bootcamp_id',
+                    'agreed_price', 'discount_percentage',
+                )
+            )
+        }
+
+    def _build_summary(
+        self, program, total_paid, pending_count, payment_count,
+        agreed_price=None, discount_percentage=None,
+    ) -> dict:
+        """Métricas de avance de pago de un par bootcamper/programa.
+
+        `agreed_price` es lo que esta persona debe de verdad: el costo del
+        programa menos el descuento que se le concedió al convertir. Todo lo que
+        sigue —déficit, porcentaje pagado, esperado a la fecha y la alerta del
+        10%— se calcula sobre él, no sobre `program.total_cost`. Con el precio
+        del programa, un descuento haría saltar la alerta por una deuda que no
+        existe.
+
+        Cae al costo del programa cuando no hay inscripción: hay pagos que
+        existen sin ella (datos viejos, o cargados a mano), y quedarse sin
+        denominador rompería el cálculo entero.
+        """
+        total_cost  = agreed_price if agreed_price is not None else program.total_cost
         deficit     = max(total_cost - total_paid, Decimal('0.00'))
         is_critical = deficit > total_cost * CRITICAL_DEFICIT_THRESHOLD
 
@@ -243,7 +323,12 @@ class PaymentProgressService:
             payment_status = 'AT_RISK'
 
         return {
+            # `total_cost` conserva su nombre porque lo consumen el frontend, el
+            # móvil y las plantillas de correo; su valor es ahora el precio
+            # acordado. Los dos campos siguientes dejan ver la diferencia.
             'total_cost':              total_cost,
+            'program_cost':            program.total_cost,
+            'discount_percentage':     discount_percentage or Decimal('0.00'),
             'total_paid':              total_paid,
             'pending_payments':        pending_count,
             'deficit':                 deficit,
