@@ -11,7 +11,7 @@ const fmtCount = (value) =>
 function TableStateRow({ children }) {
   return (
     <tr>
-      <td colSpan={4} className="px-5 py-8 text-center text-gray-400">
+      <td colSpan={4} className="px-5 py-8 text-center text-gray-500">
         {children}
       </td>
     </tr>
@@ -33,7 +33,7 @@ function SummaryCard({ label, value, footer, isLoading }) {
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
       <p className="text-sm text-gray-500">{label}</p>
       <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
-      {footer && <p className="text-xs text-gray-400 mt-1">{footer}</p>}
+      {footer && <p className="text-xs text-gray-500 mt-1">{footer}</p>}
     </div>
   )
 }

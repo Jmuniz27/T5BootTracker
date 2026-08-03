@@ -311,7 +311,6 @@ class PaymentMonitoringView(APIView):
         tags=['Pagos — Vendedor/Admin'],
     )
     def get(self, request):
-        from apps.authentication.models import CustomUser
         from apps.programs.models import Program
 
         program_id    = request.query_params.get('program_id')
@@ -325,25 +324,7 @@ class PaymentMonitoringView(APIView):
         else:
             programs = list(Program.objects.filter(is_active=True))
 
-        svc  = PaymentProgressService()
-        data = []
-        for program in programs:
-            bootcampers = CustomUser.objects.filter(
-                role=CustomUser.Role.BOOTCAMPER,
-                payments__program=program,
-            ).distinct()
-            for bc in bootcampers:
-                summary = svc.get_payment_summary(str(bc.id), str(program.id))
-                if status_filter and summary.get('payment_status') != status_filter:
-                    continue
-                data.append({
-                    'bootcamper_id':   str(bc.id),
-                    'bootcamper_name': bc.get_full_name(),
-                    'email':           bc.email,
-                    'program_id':      str(program.id),
-                    'program_name':    program.name,
-                    **summary,
-                })
+        data = PaymentProgressService().get_monitoring_summaries(programs, status_filter)
         return Response(data)
 
 

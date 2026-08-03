@@ -23,7 +23,9 @@ const schema = z
       ROLE_OPTIONS.map((r) => r.value),
       { message: 'Selecciona un rol' },
     ),
-    password: z.string().min(8, 'Mínimo 8 caracteres'),
+    // Sin `min` aquí: el coordinador no lleva contraseña y el mínimo se exige
+    // más abajo, sólo para los roles que sí inician sesión.
+    password: z.string(),
     cedula: z
       .string()
       .trim()
@@ -32,6 +34,17 @@ const schema = z
     ...coordinatorScopeFields,
   })
   .superRefine(refineCoordinatorScope)
+  .superRefine((values, ctx) => {
+    if (values.role === 'COORDINATOR') return
+
+    if (values.password.length < 8) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['password'],
+        message: 'Mínimo 8 caracteres',
+      })
+    }
+  })
 
 export default function CreateUserModal({ onClose, onSuccess, onError }) {
   const queryClient = useQueryClient()
@@ -53,7 +66,7 @@ export default function CreateUserModal({ onClose, onSuccess, onError }) {
       cedula: '',
       phone: '',
       coordinator_scope: '',
-      coordinator_program: '',
+      coordinator_programs: [],
     },
   })
 
@@ -76,6 +89,10 @@ export default function CreateUserModal({ onClose, onSuccess, onError }) {
       // El backend rechaza cadena vacía en campos únicos/opcionales — manda null.
       cedula: values.cedula || null,
       phone: values.phone || null,
+      // El campo se oculta al elegir Coordinador, pero si ya se había escrito
+      // algo el valor sigue en el formulario: se descarta aquí para no crearle
+      // una credencial que por diseño no debe tener.
+      password: values.role === 'COORDINATOR' ? '' : values.password,
       ...coordinatorScopePayload(values),
     })
 
