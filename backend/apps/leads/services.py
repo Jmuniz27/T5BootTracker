@@ -60,6 +60,12 @@ def register_interaction(lead, user, validated_data):
 
 @transaction.atomic
 def convert_lead_to_bootcamper(lead, validated_data):
+    if lead.status != Lead.Status.QUALIFIED:
+        raise ValidationError({
+            'error': 'Solo se puede convertir un lead en estado Calificado.',
+            'code': 'LEAD_NOT_QUALIFIED',
+        })
+
     if not validate_cedula_ecuatoriana(validated_data['cedula']):
         raise ValidationError({'error': 'La cédula ingresada no es válida.', 'code': 'INVALID_CEDULA'})
 
@@ -90,8 +96,9 @@ def convert_lead_to_bootcamper(lead, validated_data):
     if bootcamper is None:
         temporary_password = secrets.token_urlsafe(12)
         try:
-            first_name = lead.name.split()[0] if lead.name else 'Bootcamper'
-            last_name = ' '.join(lead.name.split()[1:]) if len(lead.name.split()) > 1 else 'N/A'
+            parts = lead.name.split() if lead.name else []
+            first_name = parts[0] if parts else 'Bootcamper'
+            last_name = ' '.join(parts[1:])
 
             bootcamper = CustomUser.objects.create_user(
                 email=email or f'bootcamper_{validated_data["cedula"]}@placeholder.com',

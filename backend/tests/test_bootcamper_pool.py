@@ -12,6 +12,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.authentication.models import CustomUser
+from apps.leads.models import Lead
 from apps.payments.models import Payment
 
 POOL_URL    = "/api/payments/bootcampers/"
@@ -301,6 +302,9 @@ class TestRoleSeparation:
 
         lead_id = created.json()["id"]
         assert client.patch(f"/api/leads/{lead_id}/assign/").status_code == 200
+        assert client.patch(
+            f"/api/leads/{lead_id}/", {"status": Lead.Status.QUALIFIED}, format="json"
+        ).status_code == 200
 
         converted = client.post(
             f"/api/leads/{lead_id}/convert/",

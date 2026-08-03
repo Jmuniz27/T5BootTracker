@@ -552,7 +552,7 @@ class ConvertLeadView(APIView):
             400: OpenApiResponse(description='Estado inválido o cédula inválida'),
             403: OpenApiResponse(description='No eres el dueño del lead'),
             404: OpenApiResponse(description='Lead o programa no encontrado'),
-            409: OpenApiResponse(description='Email ya asociado a otro rol'),
+            409: OpenApiResponse(description='Email ya asociado a otro rol, cédula ya registrada o bootcamper ya inscrito en el programa'),
         },
         summary='Convertir lead a bootcamper',
         description=(
