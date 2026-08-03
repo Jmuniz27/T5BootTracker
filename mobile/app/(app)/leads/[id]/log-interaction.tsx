@@ -289,9 +289,7 @@ export default function LogInteractionScreen() {
               <View style={s.selectedRow}>
                 <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
                 <Text style={s.selectedText}>Reunión agendada</Text>
-                <TouchableOpacity onPress={openMeeting} hitSlop={8}>
-                  <Text style={s.selectedEdit}>Otra</Text>
-                </TouchableOpacity>
+                <Ionicons name="calendar" size={16} color={colors.navy} />
               </View>
             ) : (
               <TouchableOpacity style={s.scheduleBtn} onPress={openMeeting} activeOpacity={0.85}>
@@ -487,7 +485,6 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   selectedText: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.navy },
-  selectedEdit: { fontSize: 13, fontWeight: '700', color: colors.navy, textDecorationLine: 'underline' },
   followUpChipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
   followUpChipText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   followUpChipTextActive: { color: colors.white },
