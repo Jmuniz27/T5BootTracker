@@ -176,6 +176,25 @@ class TestConvertLead:
         }, format='json')
         assert resp.status_code == 403
 
+    def test_salesperson_cannot_convert_another_sellers_lead(self, db, salesperson_user, program):
+        other = CustomUser.objects.create_user(
+            email='other_convert@test.com', password='testpass123',
+            first_name='Other', last_name='Seller', role=CustomUser.Role.SALESPERSON,
+        )
+        lead = Lead.objects.create(
+            name='No Tuyo', phone='0998888888',
+            status=Lead.Status.QUALIFIED, owner=other,
+        )
+        client = make_client(salesperson_user)
+        resp = client.post(CONVERT_URL.format(id=lead.id), {
+            'cedula': '1713175071', 'program_id': str(program.id),
+        }, format='json')
+        assert resp.status_code == 403
+        assert resp.json()['code'] == 'NOT_OWNER'
+        lead.refresh_from_db()
+        assert lead.status == Lead.Status.QUALIFIED
+
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ReturningBootcamperView tests

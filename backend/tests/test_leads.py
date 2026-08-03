@@ -119,12 +119,23 @@ class TestLeadDetail:
         assert 'interaction_count' in data
         assert 'last_contact' in data
 
-    def test_salesperson_can_view_another_sellers_lead(self, db, assigned_lead):
+    def test_salesperson_cannot_view_another_sellers_lead(self, db, assigned_lead):
         other = CustomUser.objects.create_user(
             email='peek@test.com', password='testpass123',
             first_name='Peek', last_name='Er', role=CustomUser.Role.SALESPERSON,
         )
         client = make_client(other)
+        resp = client.get(f'{LEADS_URL}{assigned_lead.id}/')
+        assert resp.status_code == 403
+        assert resp.json()['code'] == 'FORBIDDEN'
+
+    def test_salesperson_can_view_unassigned_lead_detail(self, db, salesperson_user, sample_lead):
+        client = make_client(salesperson_user)
+        resp = client.get(f'{LEADS_URL}{sample_lead.id}/')
+        assert resp.status_code == 200
+
+    def test_admin_can_view_any_lead_detail(self, db, admin_user, assigned_lead):
+        client = make_client(admin_user)
         resp = client.get(f'{LEADS_URL}{assigned_lead.id}/')
         assert resp.status_code == 200
 
