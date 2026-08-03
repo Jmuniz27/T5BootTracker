@@ -139,17 +139,20 @@ def make_coordinator(db):
     """Factory de cuentas con rol COORDINATOR y un alcance dado."""
     from apps.authentication.models import CustomUser
 
-    def _make(email, scope, program=None, is_active=True):
-        return CustomUser.objects.create_user(
+    def _make(email, scope, *programs, is_active=True):
+        user = CustomUser.objects.create_user(
             email=email,
             password='testpass123',
             first_name='Coord',
             last_name='Test',
             role=CustomUser.Role.COORDINATOR,
             coordinator_scope=scope,
-            coordinator_program=program,
             is_active=is_active,
         )
+        # M2M: se asigna después de crear, cuando ya hay pk.
+        if programs:
+            user.coordinator_programs.set([p for p in programs if p is not None])
+        return user
 
     return _make
 
@@ -185,9 +188,38 @@ class TestCoordinatorAccountRecipients:
         make_coordinator('mine@espol.edu.ec', CustomUser.CoordinatorScope.PROGRAM, program)
         make_coordinator('other@espol.edu.ec', CustomUser.CoordinatorScope.PROGRAM, other)
 
+
         send_late_payment_alert(converted_bootcamper.id, program.id)
 
         assert mail.outbox[0].to == ['mine@espol.edu.ec']
+
+    def test_coordinator_of_several_programs_is_alerted_once_per_program(
+        self, db, program, converted_bootcamper, make_coordinator
+    ):
+        """Coordinar varios programas no debe duplicar a la persona en el TO.
+
+        El join del M2M repite una fila por programa coincidente; sin distinct()
+        el mismo correo entraría dos veces.
+        """
+        from apps.authentication.models import CustomUser
+        from apps.programs.models import Program
+
+        other = Program.objects.create(
+            name='Otro programa coordinado',
+            start_date=program.start_date,
+            end_date=program.end_date,
+            total_cost=program.total_cost,
+        )
+        make_coordinator(
+            'ambos@espol.edu.ec',
+            CustomUser.CoordinatorScope.PROGRAM,
+            program,
+            other,
+        )
+
+        send_late_payment_alert(converted_bootcamper.id, program.id)
+
+        assert mail.outbox[0].to == ['ambos@espol.edu.ec']
 
     def test_inactive_coordinator_is_skipped(
         self, db, coordinator_config, converted_bootcamper, make_coordinator
