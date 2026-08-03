@@ -101,11 +101,29 @@ class Command(BaseCommand):
         v2.set_password('vendedor1234')
         v2.save()
 
+        f1, _ = CustomUser.objects.get_or_create(
+            email='finanzas1@boottracker.com',
+            defaults={'first_name': 'Finanzas', 'last_name': 'Uno', 'role': CustomUser.Role.FINANCE},
+        )
+        f1.set_password('finanzas1234')
+        f1.save()
+
+        f2, _ = CustomUser.objects.get_or_create(
+            email='finanzas2@boottracker.com',
+            defaults={'first_name': 'Finanzas', 'last_name': 'Dos', 'role': CustomUser.Role.FINANCE},
+        )
+        f2.set_password('finanzas1234')
+        f2.save()
+
         bootcamper, _ = CustomUser.objects.get_or_create(
             email='bootcamper@boottracker.com',
             defaults={'first_name': 'Boot', 'last_name': 'Camper', 'role': CustomUser.Role.BOOTCAMPER},
         )
         bootcamper.set_password('boot1234')
+        # Este ya tiene responsable de cobro; el convertido queda en el pool,
+        # para que se vean los dos lados de la página de Finanzas.
+        bootcamper.finance_owner = f1
+        bootcamper.finance_assigned_at = now()
         bootcamper.save()
 
         self.stdout.write(self.style.SUCCESS('  Users created/updated.'))
@@ -266,9 +284,14 @@ class Command(BaseCommand):
         self.stdout.write('  admin@boottracker.com            / admin1234     ADMINISTRATOR')
         self.stdout.write('  vendedor1@boottracker.com        / vendedor1234  SALESPERSON')
         self.stdout.write('  vendedor2@boottracker.com        / vendedor1234  SALESPERSON')
+        self.stdout.write('  finanzas1@boottracker.com        / finanzas1234  FINANCE')
+        self.stdout.write('  finanzas2@boottracker.com        / finanzas1234  FINANCE')
         self.stdout.write('  bootcamper@boottracker.com       / boot1234      BOOTCAMPER')
         self.stdout.write('  bootcamper.conv@boottracker.com  / boot1234      BOOTCAMPER')
         self.stdout.write(
-            '\n  Nota: no existe rol "finance". La validacion de pagos la realiza el '
-            'SALESPERSON (y el ADMINISTRATOR). El ADMINISTRATOR tiene acceso total + Django admin.'
+            '\n  Nota: el SALESPERSON trabaja el dashboard de leads (crear, asignarse, '
+            'convertir) y no ve pagos. FINANCE hace lo mismo y ademas monitorea los pagos '
+            'de los bootcampers que se asigna desde el pool. bootcamper@ ya esta asignado a '
+            'finanzas1@; bootcamper.conv@ sigue en el pool. El ADMINISTRATOR tiene acceso '
+            'total + Django admin.'
         )

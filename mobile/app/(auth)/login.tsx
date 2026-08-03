@@ -120,7 +120,9 @@ export default function LoginScreen() {
       router.replace('/(app)/leads');
     } catch (err: any) {
       const status = err?.response?.status;
-      if (status === 403) {
+      if (err?.code === 'NOT_SALESPERSON') {
+        setError('Esta aplicación es solo para vendedores.');
+      } else if (status === 403) {
         setError(err.response?.data?.error ?? 'Cuenta desactivada. Contacte al administrador.');
       } else if (status === 401) {
         setError('Credenciales inválidas. Verifica e intenta de nuevo.');

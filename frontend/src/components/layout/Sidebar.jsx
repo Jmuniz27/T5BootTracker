@@ -12,6 +12,16 @@ const NAV_ITEMS = [
     ),
   },
   {
+    to: '/agenda',
+    label: 'Agenda',
+    salespersonOnly: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+  {
     to: '/payments',
     label: 'Payment',
     icon: (
@@ -58,6 +68,7 @@ export default function Sidebar({ onClose }) {
   const user = useAuthStore((s) => s.user)
   const isBootcamper = user?.role === 'BOOTCAMPER'
   const isAdmin = user?.role === 'ADMINISTRATOR'
+  const isSalesperson = user?.role === 'SALESPERSON'
 
   const handleLogout = () => {
     logout()
@@ -66,7 +77,13 @@ export default function Sidebar({ onClose }) {
 
   const visibleItems = isBootcamper
     ? NAV_ITEMS.filter((item) => item.to === '/payments')
-    : NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
+    : NAV_ITEMS.filter((item) => {
+        if (item.adminOnly && !isAdmin) return false
+        if (item.salespersonOnly && !isSalesperson) return false
+        // El cobro es de Finanzas: el vendedor no tiene nada que hacer en pagos.
+        if (item.to === '/payments' && isSalesperson) return false
+        return true
+      })
 
   return (
     <aside className="w-56 h-full min-h-screen bg-white border-r border-gray-200 flex flex-col">

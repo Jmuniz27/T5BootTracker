@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
+import SalespersonRoute from './components/SalespersonRoute'
 import AppLayout from './components/layout/AppLayout'
 import LoginPage from './pages/LoginPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
@@ -10,16 +11,26 @@ import ResetSuccessPage from './pages/ResetSuccessPage'
 import LeadsDashboard from './pages/LeadsDashboard'
 import UsersPage from './pages/UsersPage'
 import AnalyticsPage from './pages/AnalyticsPage'
+import AgendaPage from './pages/AgendaPage'
 import PaymentsPage from './pages/PaymentsPage'
-import SalespersonPaymentsPage from './pages/SalespersonPaymentsPage'
+import FinancePaymentsPage from './pages/FinancePaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
+import AdminFinancePage from './pages/AdminFinancePage'
+import AdminFinanceDetailPage from './pages/AdminFinanceDetailPage'
 import ProgramsPage from './pages/ProgramsPage'
 import ProgramDetailPage from './pages/ProgramDetailPage'
 import { useAuthStore } from './store/auth.store'
 
 function PaymentsRoute() {
   const user = useAuthStore((s) => s.user)
-  return user?.role === 'BOOTCAMPER' ? <PaymentsPage /> : <SalespersonPaymentsPage />
+  if (user?.role === 'BOOTCAMPER') return <PaymentsPage />
+  // El administrador no tiene bootcampers propios: ve las carteras de Finanzas
+  // en lugar de una lista que no le pertenece.
+  if (user?.role === 'ADMINISTRATOR') return <AdminFinancePage />
+  // El vendedor capta y convierte; el cobro es de Finanzas. La API le responde
+  // 403 en cada endpoint de pagos, así que ni se le muestra la pantalla.
+  if (user?.role === 'SALESPERSON') return <Navigate to="/dashboard" replace />
+  return <FinancePaymentsPage />
 }
 
 function DashboardRoute() {
@@ -50,9 +61,18 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardRoute />} />
           <Route path="/my-leads" element={<div className="p-8 text-gray-500">My leads — coming soon</div>} />
-          <Route path="/schedule" element={<div className="p-8 text-gray-500">Schedule — coming soon</div>} />
+          <Route path="/schedule" element={<SalespersonRoute><AgendaPage /></SalespersonRoute>} />
+          <Route path="/agenda" element={<SalespersonRoute><AgendaPage /></SalespersonRoute>} />
           <Route path="/payments" element={<PaymentsRoute />} />
           <Route path="/payments/:bootcamperId/:programId" element={<BootcamperPaymentDetailPage />} />
+          <Route
+            path="/payments/finanzas/:financeId"
+            element={
+              <AdminRoute>
+                <AdminFinanceDetailPage />
+              </AdminRoute>
+            }
+          />
           <Route
             path="/analytics"
             element={
