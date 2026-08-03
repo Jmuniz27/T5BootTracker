@@ -13,6 +13,8 @@ import AnalyticsPage from './pages/AnalyticsPage'
 import PaymentsPage from './pages/PaymentsPage'
 import SalespersonPaymentsPage from './pages/SalespersonPaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
+import ProgramsPage from './pages/ProgramsPage'
+import ProgramDetailPage from './pages/ProgramDetailPage'
 import { useAuthStore } from './store/auth.store'
 
 function PaymentsRoute() {
@@ -64,6 +66,22 @@ export default function App() {
             element={
               <AdminRoute>
                 <UsersPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/programs"
+            element={
+              <AdminRoute>
+                <ProgramsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/programs/:programId"
+            element={
+              <AdminRoute>
+                <ProgramDetailPage />
               </AdminRoute>
             }
           />

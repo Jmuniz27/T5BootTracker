@@ -145,7 +145,10 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '200/hour',
         'user': '2000/hour',
-        'auth': '5/min',   # applied to login + password-reset views
+        # Applied to login + password-reset views. Overridable por env para
+        # entornos de prueba automatizada (la suite E2E hace muchos logins
+        # legítimos por minuto desde una sola IP); producción usa el default.
+        'auth': os.environ.get('AUTH_THROTTLE_RATE', '5/min'),
     },
 }
 
@@ -185,10 +188,20 @@ CELERY_TIMEZONE = TIME_ZONE
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = True
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@espol.edu.ec')
+# El From tiene que ser la misma cuenta que se autentica por SMTP: Gmail reescribe el
+# remitente (o manda a spam) cuando no coinciden. Por eso cae en EMAIL_HOST_USER en
+# vez de una direccion fija que puede quedar desincronizada.
+#
+# El `or` va fuera del .get() a proposito: con un default, .get() solo actua si la
+# clave NO EXISTE. Un DEFAULT_FROM_EMAIL= vacio en el .env —que es exactamente como
+# se documenta dejarlo— existe, asi que devolvia '' y el envio moria con
+# ValueError: Invalid address "".
+DEFAULT_FROM_EMAIL = (
+    os.environ.get('DEFAULT_FROM_EMAIL') or EMAIL_HOST_USER or 'noreply@localhost'
+)
 
 # Logging
 LOGGING = {
@@ -225,4 +238,15 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
+    # Sin esto hereda DEFAULT_AUTHENTICATION_CLASSES, que es sólo JWT. El Swagger
+    # se abre desde el navegador, que manda la cookie de sesión y no un header
+    # Authorization, así que /api/docs/ devolvía 401 incluso a un administrador
+    # ya logueado en /admin/ — la doc quedaba inalcanzable en producción.
+    #
+    # No afecta al permiso: en production.py, SERVE_PERMISSIONS sigue exigiendo
+    # IsAdminUser. Esto sólo agrega una forma de acreditar quién sos.
+    'SERVE_AUTHENTICATION': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
 }

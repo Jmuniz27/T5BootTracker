@@ -38,14 +38,20 @@ jobs:
       - name: Wait for backend — run Django system check
         run: docker compose exec -T backend python manage.py check
 
+      # Detecta cambios en modelos sin su migración: si falta, el deploy
+      # arranca contra un esquema que no coincide con el código.
+      - name: Check for missing migrations
+        run: docker compose exec -T backend python manage.py makemigrations --check --dry-run
+
       - name: Run tests
         run: docker compose exec -T backend pytest --tb=short -q
 
       - name: Run linter
         run: docker compose exec -T backend python -m ruff check . --select E,F,W --ignore E501
 
+      # Bloqueante desde el hardening de S6: con continue-on-error, los
+      # hallazgos de seguridad se registraban y nadie los veía.
       - name: Security scan (bandit)
-        continue-on-error: true
         run: docker compose exec -T backend bandit -r apps/ -ll
 
       - name: Type check (mypy)
@@ -113,6 +119,134 @@ jobs:
       - name: Run tests
         working-directory: mobile
         run: npm run test -- --passWithNoTests
+
+  # Pruebas de aceptación (Given/When/Then por HST) contra la stack completa.
+  #
+  # Levanta su propia stack en vez de colgarse de backend-ci: ese job hace
+  # `down -v` al terminar y mezclar ambos haría que un fallo de aceptación se
+  # lea como un fallo de backend en la lista de checks.
+  #
+  # A propósito NO figura en el `needs:` de build-push: un E2E inestable no
+  # puede bloquear despliegues en semana de entrega. Se vuelve check requerido
+  # recién tras ~10 corridas verdes seguidas.
+  e2e-ci:
+    name: E2E — Pruebas de aceptación (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create .env for docker compose
+        run: |
+          cat <<EOF > .env
+          SECRET_KEY=ci-secret-key-not-for-production
+          DEBUG=True
+          DB_NAME=boottracker_test
+          DB_USER=boottracker
+          DB_PASSWORD=boottracker123
+          DB_HOST=db
+          DB_PORT=5432
+          REDIS_URL=redis://redis:6379/0
+          FRONTEND_URL=http://localhost:5173
+          AUTH_THROTTLE_RATE=100/min
+          EOF
+        # Los emails no salen a la red: manage.py usa config.settings.local por
+        # defecto y ese módulo fija el backend de consola.
+        # AUTH_THROTTLE_RATE sube el límite de 5/min del login solo en este
+        # entorno: la suite hace muchos logins legítimos desde una sola IP.
+
+      - name: Build and start services
+        run: docker compose up -d --build db redis backend celery frontend
+
+      # Tres compuertas explícitas, sin sleeps ciegos.
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 60); do
+            if docker compose exec -T backend python manage.py check >/dev/null 2>&1; then
+              echo "backend listo"; exit 0
+            fi
+            sleep 2
+          done
+          echo "El backend no arrancó a tiempo:"; docker compose logs backend; exit 1
+
+      - name: Migrate and seed
+        run: |
+          docker compose exec -T backend python manage.py migrate --noinput
+          docker compose exec -T backend python manage.py seed_dev
+
+      - name: Wait for frontend
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5173 >/dev/null; then echo "frontend listo"; exit 0; fi
+            sleep 2
+          done
+          echo "El frontend no respondió a tiempo:"; docker compose logs frontend; exit 1
+
+      # Sin un worker consumiendo, la subida del comprobante agota el
+      # presupuesto de OCR y el escenario de pagos falla por entorno, no por código.
+      - name: Wait for Celery worker
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose exec -T celery celery -A config.celery_app inspect ping >/dev/null 2>&1; then
+              echo "celery listo"; exit 0
+            fi
+            sleep 2
+          done
+          echo "El worker de Celery no respondió a tiempo:"; docker compose logs celery; exit 1
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run acceptance tests
+        working-directory: e2e
+        run: npm test
+        env:
+          E2E_BASE_URL: http://localhost:5173
+          E2E_API_URL: http://localhost:8000
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+            e2e/reports/
+          retention-days: 14
+
+      - name: Collect service logs on failure
+        if: failure()
+        run: docker compose logs --no-color backend celery frontend > e2e-service-logs.txt || true
+
+      - name: Upload service logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-service-logs
+          path: e2e-service-logs.txt
+          retention-days: 14
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
 
   # Construir y publicar está separado de desplegar a propósito: el primer arranque en el
   # servidor se hace a mano (Fase 4) y necesita las imágenes en GHCR antes de que exista
