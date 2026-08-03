@@ -842,7 +842,7 @@ function isValidEmail(value) {
   return domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.')
 }
 
-function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true }) {
+function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, isAdmin = false }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
@@ -953,26 +953,32 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
             />
           </div>
 
-          <div>
-            <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-              <input
-                type="checkbox"
-                data-testid="create-lead-autoassign"
-                checked={form.autoAssign && canSelfAssign}
-                disabled={!canSelfAssign}
-                onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
-                className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
-              />
-              <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
-                Asignarme este lead
-              </span>
-            </label>
-            {!canSelfAssign && (
-              <p className="text-xs text-gray-500 mt-1 ml-7">
-                La asignación la realiza el Administrador.
-              </p>
-            )}
-          </div>
+          {/* CB-QA: un Administrador nunca puede ser owner de un lead (ver
+              LeadAssignView, permission_classes=[IsSalesperson] en el backend),
+              así que este checkbox ni se le muestra — antes se veía habilitado
+              y al tildarlo la asignación fallaba en silencio tras crear el lead. */}
+          {!isAdmin && (
+            <div>
+              <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                <input
+                  type="checkbox"
+                  data-testid="create-lead-autoassign"
+                  checked={form.autoAssign && canSelfAssign}
+                  disabled={!canSelfAssign}
+                  onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
+                  className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
+                />
+                <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
+                  Asignarme este lead
+                </span>
+              </label>
+              {!canSelfAssign && (
+                <p className="text-xs text-gray-500 mt-1 ml-7">
+                  La asignación la realiza el Administrador.
+                </p>
+              )}
+            </div>
+          )}
 
 
           <div className="flex gap-3 pt-2">
@@ -1972,12 +1978,14 @@ export default function LeadsDashboard() {
           onSubmit={(data, autoAssign) => { autoAssignRef.current = autoAssign; createMutation.mutate(data) }}
           isLoading={createMutation.isPending}
           canSelfAssign={selfAssignEnabled}
+          isAdmin={isAdmin}
         />
       )}
 
       {duplicateWarning && (
         <DuplicateLeadModal
           duplicate={duplicateWarning.duplicate}
+          payload={duplicateWarning.payload}
           isLoading={createMutation.isPending}
           onClose={() => setDuplicateWarning(null)}
           onConfirm={() =>
