@@ -16,17 +16,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
 import { logInteraction } from '../../../../src/api/leads.api';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { FOLLOW_UP_PRESETS, presetToDate, type FollowUpPresetKey } from '../../../../src/lib/follow-up';
 import { createMeeting } from '../../../../src/api/meetings.api';
-
-type FollowUpChoice = FollowUpPresetKey | 'custom' | null;
-
-function formatDateTime(d: Date): string {
-  const day = d.toLocaleDateString('es-EC', { weekday: 'short', day: '2-digit', month: 'short' });
-  const time = d.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
-  return `${day} · ${time}`;
-}
+import {
+  emptyMeetingForm,
+  formToPayload,
+  type MeetingFormValues,
+} from '../../../../src/lib/meeting-form';
+import MeetingFormModal from '../../../../src/components/MeetingFormModal';
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
@@ -78,46 +74,38 @@ export default function LogInteractionScreen() {
   const [stars, setStars]           = useState<number | null>(null);
   const [notes, setNotes]           = useState('');
   const [duration, setDuration]     = useState('');
-  const [followUp, setFollowUp]     = useState<FollowUpChoice>(null);
-  const [customDate, setCustomDate] = useState<Date | null>(null);
-  const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
-  const [pickerDraft, setPickerDraft] = useState<Date>(() => presetToDate(1));
-  const [notifyLead, setNotifyLead] = useState(true);
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const [meetingSaving, setMeetingSaving] = useState(false);
+  const [meetingScheduled, setMeetingScheduled] = useState(false);
+  const [meetingInitial, setMeetingInitial] = useState<MeetingFormValues>(emptyMeetingForm());
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const canSubmit = type !== null && outcome !== null && !loading;
 
-  // Resuelve la fecha del recordatorio según el chip elegido (preset o personalizada).
-  function resolveFollowUpDate(): Date | null {
-    if (followUp === 'custom') return customDate;
-    const preset = FOLLOW_UP_PRESETS.find((p) => p.key === followUp);
-    return preset ? presetToDate(preset.days) : null;
+  function openMeeting() {
+    const f = emptyMeetingForm();
+    f.title = `Seguimiento: ${leadName}`;
+    f.lead = id;
+    f.leadName = leadName;
+    f.description = notes.trim();
+    setMeetingInitial(f);
+    setMeetingOpen(true);
   }
 
-  function openCustomPicker() {
-    setPickerDraft(customDate ?? presetToDate(1));
-    setPickerMode('date');
-  }
-
-  // Flujo en dos pasos (fecha → hora) para que funcione igual en iOS y Android.
-  function onPickerChange(event: DateTimePickerEvent, date?: Date) {
-    if (event.type === 'dismissed' || !date) {
-      setPickerMode(null);
-      return;
-    }
-    if (pickerMode === 'date') {
-      const d = new Date(pickerDraft);
-      d.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-      setPickerDraft(d);
-      setPickerMode('time');
-    } else {
-      const d = new Date(pickerDraft);
-      d.setHours(date.getHours(), date.getMinutes(), 0, 0);
-      setCustomDate(d);
-      setFollowUp('custom');
-      setPickerMode(null);
+  async function handleSaveMeeting(values: MeetingFormValues) {
+    const payload = formToPayload(values);
+    if (!payload) return;
+    setMeetingSaving(true);
+    try {
+      await createMeeting(payload);
+      setMeetingOpen(false);
+      setMeetingScheduled(true);
+    } catch {
+      setError('No pudimos agendar la reunión. Intenta de nuevo.');
+    } finally {
+      setMeetingSaving(false);
     }
   }
 
@@ -141,25 +129,6 @@ export default function LogInteractionScreen() {
         notes: notes.trim() || undefined,
         duration_minutes: duration ? parseInt(duration, 10) : null,
       });
-
-      // Si se eligió fecha, se agenda una reunión en el servidor (aparece en la
-      // Agenda + se sincroniza a Google + invita al lead). Best-effort: la
-      // interacción ya quedó guardada aunque la reunión falle.
-      const followUpDate = followUp ? resolveFollowUpDate() : null;
-      if (followUpDate) {
-        try {
-          await createMeeting({
-            title: `Seguimiento: ${leadName}`,
-            description: notes.trim() || undefined,
-            start_time: followUpDate.toISOString(),
-            end_time: new Date(followUpDate.getTime() + 30 * 60 * 1000).toISOString(),
-            lead: id,
-            notify_lead: notifyLead,
-          });
-        } catch {
-          // La interacción se guardó; solo falló agendar la reunión.
-        }
-      }
 
       showToast();
     } catch {
@@ -316,79 +285,19 @@ export default function LogInteractionScreen() {
               Aparece en tu Agenda y se sincroniza con Google Calendar.
             </Text>
 
-            <View style={s.followUpChips}>
-              <TouchableOpacity
-                style={[s.followUpChip, followUp === null && s.followUpChipActive]}
-                onPress={() => setFollowUp(null)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.followUpChipText, followUp === null && s.followUpChipTextActive]}>
-                  Sin recordatorio
-                </Text>
-              </TouchableOpacity>
-              {FOLLOW_UP_PRESETS.map((p) => {
-                const active = followUp === p.key;
-                return (
-                  <TouchableOpacity
-                    key={p.key}
-                    style={[s.followUpChip, active && s.followUpChipActive]}
-                    onPress={() => setFollowUp(p.key)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[s.followUpChipText, active && s.followUpChipTextActive]}>
-                      {p.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-              <TouchableOpacity
-                style={[s.followUpChip, followUp === 'custom' && s.followUpChipActive]}
-                onPress={openCustomPicker}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name="create-outline"
-                  size={13}
-                  color={followUp === 'custom' ? colors.white : colors.textMuted}
-                />
-                <Text style={[s.followUpChipText, followUp === 'custom' && s.followUpChipTextActive]}>
-                  Otra fecha
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {followUp !== null && resolveFollowUpDate() && (
+            {meetingScheduled ? (
               <View style={s.selectedRow}>
-                <Ionicons name="time-outline" size={15} color={colors.navy} />
-                <Text style={s.selectedText}>{formatDateTime(resolveFollowUpDate()!)}</Text>
-                {followUp === 'custom' && (
-                  <TouchableOpacity onPress={openCustomPicker} hitSlop={8}>
-                    <Text style={s.selectedEdit}>Cambiar</Text>
-                  </TouchableOpacity>
-                )}
+                <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+                <Text style={s.selectedText}>Reunión agendada</Text>
+                <TouchableOpacity onPress={openMeeting} hitSlop={8}>
+                  <Text style={s.selectedEdit}>Otra</Text>
+                </TouchableOpacity>
               </View>
-            )}
-
-            {followUp !== null && (
-              <TouchableOpacity
-                style={s.calRow}
-                onPress={() => setNotifyLead((v) => !v)}
-                activeOpacity={0.7}
-              >
-                <View style={[s.checkbox, notifyLead && s.checkboxOn]}>
-                  {notifyLead && <Ionicons name="checkmark" size={14} color={colors.white} />}
-                </View>
-                <Ionicons name="mail-outline" size={16} color={colors.textMuted} />
-                <Text style={s.calRowText}>Invitar al lead por correo</Text>
+            ) : (
+              <TouchableOpacity style={s.scheduleBtn} onPress={openMeeting} activeOpacity={0.85}>
+                <Ionicons name="add" size={18} color={colors.navy} />
+                <Text style={s.scheduleBtnText}>Agendar reunión</Text>
               </TouchableOpacity>
-            )}
-
-            {pickerMode && (
-              <DateTimePicker
-                value={pickerDraft}
-                mode={pickerMode}
-                onChange={onPickerChange}
-              />
             )}
           </SectionCard>
 
@@ -405,6 +314,18 @@ export default function LogInteractionScreen() {
         <Ionicons name="checkmark-circle" size={18} color={colors.white} />
         <Text style={s.toastText}>Interacción guardada</Text>
       </Animated.View>
+
+      <MeetingFormModal
+        visible={meetingOpen}
+        initial={meetingInitial}
+        editingId={null}
+        leads={[{ id, name: leadName }]}
+        saving={meetingSaving}
+        deleting={false}
+        onSave={handleSaveMeeting}
+        onDelete={() => {}}
+        onClose={() => setMeetingOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -413,6 +334,16 @@ export default function LogInteractionScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f8f9fb' },
+  scheduleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#eff2fb',
+    borderRadius: 12,
+    paddingVertical: 13,
+  },
+  scheduleBtnText: { fontSize: 14, fontWeight: '700', color: colors.navy },
   // Header
   header: {
     flexDirection: 'row',
