@@ -192,9 +192,16 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 # El From tiene que ser la misma cuenta que se autentica por SMTP: Gmail reescribe el
-# remitente (o manda a spam) cuando no coinciden. Por eso el default cae en
-# EMAIL_HOST_USER en vez de una direccion fija que puede quedar desincronizada.
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@localhost')
+# remitente (o manda a spam) cuando no coinciden. Por eso cae en EMAIL_HOST_USER en
+# vez de una direccion fija que puede quedar desincronizada.
+#
+# El `or` va fuera del .get() a proposito: con un default, .get() solo actua si la
+# clave NO EXISTE. Un DEFAULT_FROM_EMAIL= vacio en el .env —que es exactamente como
+# se documenta dejarlo— existe, asi que devolvia '' y el envio moria con
+# ValueError: Invalid address "".
+DEFAULT_FROM_EMAIL = (
+    os.environ.get('DEFAULT_FROM_EMAIL') or EMAIL_HOST_USER or 'noreply@localhost'
+)
 
 # Logging
 LOGGING = {
