@@ -1,5 +1,8 @@
+from datetime import timedelta
 from icalendar import Calendar, Event
 from django.core.mail import EmailMessage
+from django.utils import timezone
+from django.conf import settings
 from celery import shared_task
 from .models import Meeting
 from .services import GoogleCalendarService
@@ -91,3 +94,57 @@ def send_meeting_invitation(meeting_id):
     except Exception as e:
         logger.error(f"Error enviando correo de invitación para la reunión {meeting_id}: {e}")
 
+
+logger = logging.getLogger(__name__)
+
+@shared_task
+def process_google_calendar_webhook():
+    """Busca eventos modificados recientemente en Google y actualiza la BD."""
+    try:
+        service = GoogleCalendarService()
+        now = timezone.now()
+        ten_minutes_ago = now - timedelta(minutes=10)
+
+        events_result = service.service.events().list(
+            calendarId=service.calendar_id,
+            updatedMin=ten_minutes_ago.isoformat(),
+            singleEvents=True,
+            showDeleted=True
+        ).execute()
+
+        events = events_result.get('items', [])
+
+        for event in events:
+            google_event_id = event['id']
+            try:
+                meeting = Meeting.objects.get(google_event_id=google_event_id)
+
+                if event.get('status') == 'cancelled':
+                    meeting.delete()
+                    continue
+
+                start = event['start'].get('dateTime', event['start'].get('date'))
+                end = event['end'].get('dateTime', event['end'].get('date'))
+
+                meeting.start_time = start
+                meeting.end_time = end
+                meeting.save()
+
+            except Meeting.DoesNotExist:
+                pass # El evento no existe en nuestra BD local
+
+    except Exception as e:
+        logger.error(f"Error procesando webhook: {e}")
+
+@shared_task
+def renew_google_calendar_subscription():
+    """Tarea programada que renueva la suscripción al webhook."""
+    try:
+        service = GoogleCalendarService()
+        webhook_url = f"{settings.WEBHOOK_DOMAIN}/api/meetings/webhook/google-calendar/"
+        response = service.watch_calendar(webhook_url)
+
+        if response:
+            logger.info(f"Webhook renovado: {response.get('id')}")
+    except Exception as e:
+        logger.error(f"Error renovando webhook: {e}")

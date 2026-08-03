@@ -3,6 +3,7 @@ Production Django settings for ESPOL server.
 """
 import os
 from .base import * # noqa
+from celery.schedules import crontab
 
 DEBUG = False
 
@@ -63,3 +64,16 @@ LOGGING = {
 SPECTACULAR_SETTINGS['SERVE_PERMISSIONS'] = [  # noqa
     'rest_framework.permissions.IsAdminUser'
 ]
+
+
+# Dominio público para el webhook de Google
+WEBHOOK_DOMAIN = os.environ.get('WEBHOOK_DOMAIN', 'https://boottracker.taws.espol.edu.ec')
+
+# Configuración de Celery Beat (Tareas programadas)
+CELERY_BEAT_SCHEDULE = {
+    'renovar-webhook-google-calendar': {
+        'task': 'apps.meetings.tasks.renew_google_calendar_subscription',
+        # Se ejecuta cada 5 días a la medianoche
+        'schedule': crontab(minute=0, hour=0, day_of_month='*/5'),
+    },
+}
