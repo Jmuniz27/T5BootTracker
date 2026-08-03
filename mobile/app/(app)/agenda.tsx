@@ -12,8 +12,27 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
 import { colors } from '../../src/theme/colors';
-import { getFollowUps, type FollowUpRecord } from '../../src/lib/follow-up-store';
+import { fetchLeads } from '../../src/api/leads.api';
+import {
+  getMeetings,
+  createMeeting,
+  updateMeeting,
+  deleteMeeting,
+  type Meeting,
+} from '../../src/api/meetings.api';
 import { buildMarkedDates, followUpsForDay } from '../../src/lib/agenda-helpers';
+import {
+  emptyMeetingForm,
+  meetingToForm,
+  formToPayload,
+  type MeetingFormValues,
+} from '../../src/lib/meeting-form';
+import MeetingFormModal from '../../src/components/MeetingFormModal';
+
+interface LeadOption { id: string; name: string; }
+
+// Meeting + campo `date` para reusar los helpers de la agenda.
+type Dated = Meeting & { date: string };
 
 function todayKey(): string {
   const d = new Date();
@@ -24,7 +43,6 @@ function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
 }
 
-// 'YYYY-MM-DD' → "Hoy" / "jueves 30 jul".
 function prettyDate(key: string): string {
   const [y, m, d] = key.split('-').map(Number);
   const date = new Date(y, m - 1, d);
@@ -34,44 +52,111 @@ function prettyDate(key: string): string {
 
 export default function AgendaScreen() {
   const router = useRouter();
-  const [records, setRecords] = useState<FollowUpRecord[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [leads, setLeads] = useState<LeadOption[]>([]);
   const [selected, setSelected] = useState<string>(todayKey());
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formInitial, setFormInitial] = useState<MeetingFormValues>(emptyMeetingForm());
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [ms, leadData] = await Promise.all([getMeetings(), fetchLeads()]);
+      setMeetings(ms);
+      setLeads([...leadData.my_leads, ...leadData.available_leads].map((l) => ({ id: l.id, name: l.name })));
+      setError(null);
+    } catch {
+      setError('No pudimos cargar las reuniones. Revisa tu conexión.');
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      getFollowUps()
-        .then((r) => {
-          if (active) setRecords(r);
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
+      load().finally(() => {
+        if (active) setLoading(false);
+      });
       return () => {
         active = false;
       };
-    }, []),
+    }, [load]),
   );
 
+  const records: Dated[] = meetings.map((m) => ({ ...m, date: m.start_time }));
   const marked = buildMarkedDates(records, selected);
-  const dayItems = followUpsForDay(records, selected);
+  const dayItems = followUpsForDay(records, selected) as Dated[];
+  const leadNameById = Object.fromEntries(leads.map((l) => [l.id, l.name]));
+
+  function openCreate() {
+    const base = emptyMeetingForm();
+    const [y, m, d] = selected.split('-').map(Number);
+    base.start = new Date(y, m - 1, d, base.start.getHours(), 0, 0, 0);
+    base.end = new Date(base.start.getTime() + 30 * 60 * 1000);
+    setEditingId(null);
+    setFormInitial(base);
+    setModalOpen(true);
+  }
+
+  function openEdit(m: Meeting) {
+    setEditingId(m.id);
+    setFormInitial(meetingToForm(m, leadNameById[m.lead] ?? ''));
+    setModalOpen(true);
+  }
+
+  async function handleSave(values: MeetingFormValues) {
+    const payload = formToPayload(values);
+    if (!payload) return;
+    setSaving(true);
+    try {
+      if (editingId) await updateMeeting(editingId, payload);
+      else await createMeeting(payload);
+      setModalOpen(false);
+      await load();
+    } catch {
+      setError('No pudimos guardar la reunión. Intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!editingId) return;
+    setDeleting(true);
+    try {
+      await deleteMeeting(editingId);
+      setModalOpen(false);
+      await load();
+    } catch {
+      setError('No pudimos eliminar la reunión. Intenta de nuevo.');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
-    <SafeAreaView style={s.screen}>
-      <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} hitSlop={8} onPress={() => router.back()}>
+    <SafeAreaView style={st.screen}>
+      <View style={st.header}>
+        <TouchableOpacity style={st.backBtn} hitSlop={8} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Agenda</Text>
-        <View style={s.backBtn} />
+        <Text style={st.headerTitle}>Agenda</Text>
+        <TouchableOpacity style={st.newBtn} onPress={openCreate} activeOpacity={0.85}>
+          <Ionicons name="add" size={20} color={colors.white} />
+        </TouchableOpacity>
       </View>
 
       {loading ? (
-        <ActivityIndicator style={s.loader} color={colors.navy} size="large" />
+        <ActivityIndicator style={st.loader} color={colors.navy} size="large" />
       ) : (
-        <ScrollView contentContainerStyle={s.body}>
-          <View style={s.calendarCard}>
+        <ScrollView contentContainerStyle={st.body}>
+          {error ? <Text style={st.error}>{error}</Text> : null}
+
+          <View style={st.calendarCard}>
             <Calendar
               current={selected}
               firstDay={1}
@@ -84,36 +169,27 @@ export default function AgendaScreen() {
                 selectedDayTextColor: '#ffffff',
                 dotColor: colors.navy,
                 textMonthFontWeight: '700',
-                textDayFontSize: 14,
-                textMonthFontSize: 16,
               }}
             />
           </View>
 
-          <Text style={s.sectionTitle}>{prettyDate(selected).toUpperCase()}</Text>
+          <Text style={st.sectionTitle}>{prettyDate(selected).toUpperCase()}</Text>
 
           {dayItems.length === 0 ? (
-            <View style={s.emptyDay}>
+            <View style={st.emptyDay}>
               <Ionicons name="calendar-clear-outline" size={28} color={colors.border} />
-              <Text style={s.emptyText}>Sin seguimientos este día</Text>
+              <Text style={st.emptyText}>Sin reuniones este día</Text>
             </View>
           ) : (
             dayItems.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={s.row}
-                activeOpacity={0.7}
-                onPress={() =>
-                  router.push({ pathname: '/(app)/leads/[id]/history', params: { id: item.leadId } })
-                }
-              >
-                <View style={s.timePill}>
+              <TouchableOpacity key={item.id} style={st.row} activeOpacity={0.7} onPress={() => openEdit(item)}>
+                <View style={st.timePill}>
                   <Ionicons name="time-outline" size={13} color={colors.navy} />
-                  <Text style={s.timeText}>{timeLabel(item.date)}</Text>
+                  <Text style={st.timeText}>{timeLabel(item.start_time)}</Text>
                 </View>
-                <View style={s.rowInfo}>
-                  <Text style={s.rowTitle}>Seguimiento</Text>
-                  <Text style={s.rowLead} numberOfLines={1}>{item.leadName}</Text>
+                <View style={st.rowInfo}>
+                  <Text style={st.rowTitle} numberOfLines={1}>{item.title || 'Reunión'}</Text>
+                  <Text style={st.rowLead} numberOfLines={1}>{leadNameById[item.lead] ?? ''}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.border} />
               </TouchableOpacity>
@@ -121,11 +197,23 @@ export default function AgendaScreen() {
           )}
         </ScrollView>
       )}
+
+      <MeetingFormModal
+        visible={modalOpen}
+        initial={formInitial}
+        editingId={editingId}
+        leads={leads}
+        saving={saving}
+        deleting={deleting}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        onClose={() => setModalOpen(false)}
+      />
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
+const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f8f9fb' },
   header: {
     flexDirection: 'row',
@@ -146,8 +234,26 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  newBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   loader: { marginTop: 60 },
   body: { padding: 16, paddingBottom: 40 },
+  error: {
+    color: colors.error,
+    fontSize: 13,
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
   calendarCard: {
     backgroundColor: colors.white,
     borderRadius: 16,
@@ -188,6 +294,6 @@ const s = StyleSheet.create({
   },
   timeText: { fontSize: 12, fontWeight: '700', color: colors.navy },
   rowInfo: { flex: 1 },
-  rowTitle: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
-  rowLead: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  rowTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  rowLead: { fontSize: 12, color: colors.textMuted },
 });
