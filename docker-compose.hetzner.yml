@@ -60,6 +60,21 @@ services:
       - boottracker-network
     volumes:
       - media_data:/app/media
+      - /opt/boot-tracker/google-credentials.json:/app/google-credentials.json:ro
+    healthcheck:
+      # /health/ verifica ademas que la BD conteste (config/health.py).
+      #
+      # El X-Forwarded-Proto es obligatorio: production.py tiene
+      # SECURE_SSL_REDIRECT=True, asi que sin ese header Django responde con un
+      # redirect a https:// y la sonda muere con un error de handshake TLS
+      # (dentro del contenedor no hay TLS: lo termina el nginx del host).
+      # SECURE_PROXY_SSL_HEADER hace que Django lo acepte como prueba de HTTPS.
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; r=urllib.request.Request('http://127.0.0.1:8000/health/', headers={'X-Forwarded-Proto':'https','Host':'127.0.0.1'}); sys.exit(0 if urllib.request.urlopen(r, timeout=5).status==200 else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # collectstatic + migrate antes de gunicorn: el arranque puede tardar.
+      start_period: 90s
 
   celery:
     image: ghcr.io/jmuniz27/boot-tracker-backend:${IMAGE_TAG:-latest}
@@ -76,6 +91,27 @@ services:
       - boottracker-network
     volumes:
       - media_data:/app/media
+      - /opt/boot-tracker/google-credentials.json:/app/google-credentials.json:ro
+    healthcheck:
+      # `inspect ping` pregunta al worker por el broker: si Redis se cae o el
+      # worker queda colgado, deja de responder aunque el proceso siga vivo.
+      test: ["CMD-SHELL", "celery -A config.celery_app inspect ping -d celery@$$HOSTNAME"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+
+  # No hay servicio `celery-beat` a propósito.
+  #
+  # Ninguna tarea del proyecto necesita ejecutarse sola: las cinco existentes se
+  # disparan por una acción del usuario (reset de contraseña, conversión de lead,
+  # aprobación/rechazo de pago, invitación a reunión). La que más se parece a una
+  # tarea programada, `send_late_payment_alert`, es explícitamente manual: la
+  # lanza un vendedor desde NotifyCoordinatorView (apps/payments/views.py).
+  #
+  # Si en el futuro alguna tarea pasa a ser periódica, hay que agregar el
+  # servicio aquí Y un CELERY_BEAT_SCHEDULE en config/settings/base.py — el
+  # worker por sí solo no ejecuta nada programado.
 
   frontend:
     image: ghcr.io/jmuniz27/boot-tracker-frontend:${IMAGE_TAG:-latest}
@@ -88,6 +124,12 @@ services:
       - backend
     networks:
       - boottracker-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
 volumes:
   postgres_data:

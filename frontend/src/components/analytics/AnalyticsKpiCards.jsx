@@ -71,7 +71,7 @@ export default function AnalyticsKpiCards({ filters = {} }) {
   const velocity = toVelocityCard(data)
   const payment = toPaymentCard(data)
 
-  const segmentFilterActive = Boolean(filters.segment || filters.campaign)
+  const segmentFilterActive = Boolean(filters.segment)
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-6">
@@ -104,7 +104,7 @@ export default function AnalyticsKpiCards({ filters = {} }) {
         value={fmt(payment.value, '%')}
         footer={
           segmentFilterActive
-            ? 'No responde a segmento/campaña'
+            ? 'No responde a segmento'
             : `${currency.format(payment.collected)} de ${currency.format(payment.expected)}`
         }
       />

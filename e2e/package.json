@@ -1,0 +1,16 @@
+{
+  "name": "boot-tracker-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Suite de pruebas de aceptación (Given/When/Then por HST) sobre el sistema desplegado localmente",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0"
+  }
+}

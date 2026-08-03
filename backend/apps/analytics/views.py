@@ -66,6 +66,7 @@ class LeadManagementMetricsView(APIView):
         responses={200: inline_serializer('LeadManagementMetricsResponse', fields={
             'filters_applied':                 drf_serializers.DictField(),
             'leads_considered':                drf_serializers.IntegerField(),
+            'unassigned_leads':                drf_serializers.IntegerField(),
             'avg_retention_hours':             drf_serializers.FloatField(allow_null=True),
             'avg_time_to_first_contact_hours': drf_serializers.FloatField(allow_null=True),
             'by_salesperson':                  drf_serializers.ListField(),
@@ -74,7 +75,9 @@ class LeadManagementMetricsView(APIView):
         description=(
             'Tiempo de retención (assigned_at → released_at, o hasta ahora si sigue asignado) '
             'y tiempo entre asignación y primer contacto, global y por vendedor. Solo considera '
-            'leads que fueron asignados alguna vez. Los promedios son null cuando no hay datos.'
+            'leads que fueron asignados alguna vez. Los promedios son null cuando no hay datos. '
+            'unassigned_leads cuenta aparte los leads sin dueño (owner=None, incluidos los '
+            'liberados), que son los que faltan por asignar.'
         ),
         tags=['Analytics'],
     )
