@@ -1844,11 +1844,14 @@ export default function LeadsDashboard() {
         </div>
 
         {/* Tabs
-            CB-QA: para el Admin, el backend (LeadListCreateView.get) manda
-            TODOS los leads (asignados + sin asignar) dentro de my_leads y deja
-            available_leads siempre vacío — no hay una separación real que
-            "Mis leads" / "Disponibles" pueda describir. Se muestra una sola
-            pestaña con una etiqueta que no promete algo que el dato no tiene. */}
+            CB-QA: se evaluó ocultar "Disponibles" para el Admin porque el
+            backend (LeadListCreateView.get) manda todos los leads dentro de
+            my_leads y deja available_leads vacío para ese rol. Se revierte:
+            CB-223/CB-225 agregaron el flujo "Asignar a" sobre leads sin dueño
+            para el Admin, y sus tests asumen que ambas pestañas siguen
+            existiendo — separar la vista real de Admin (all/assigned/
+            unassigned_leads, ya expuestos por el backend) queda pendiente de
+            hacer en el frontend, pero no acá para no romper CB-225. */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
           <button
             data-testid="tab-mine"
@@ -1859,21 +1862,19 @@ export default function LeadsDashboard() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {isAdmin ? `Todos los leads (${myLeads.length})` : `Mis leads (${myLeads.length})`}
+            Mis leads ({myLeads.length})
           </button>
-          {!isAdmin && (
-            <button
-              data-testid="tab-available"
-              onClick={() => { setActiveTab('available'); setPage(1) }}
-              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                activeTab === 'available'
-                  ? 'bg-[#213A8E] text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Disponibles ({availableLeads.length})
-            </button>
-          )}
+          <button
+            data-testid="tab-available"
+            onClick={() => { setActiveTab('available'); setPage(1) }}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === 'available'
+                ? 'bg-[#213A8E] text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Disponibles ({availableLeads.length})
+          </button>
         </div>
 
         {/* Table */}
