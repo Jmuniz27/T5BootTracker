@@ -69,8 +69,8 @@ const COORDINADOR = {
   cedula: null,
   is_active: true,
   coordinator_scope: 'PROGRAM',
-  coordinator_program: PROGRAMA.id,
-  coordinator_program_name: PROGRAMA.name,
+  coordinator_programs: [PROGRAMA.id],
+  coordinator_program_names: [PROGRAMA.name],
 };
 
 function renderPage() {
@@ -226,7 +226,7 @@ describe('UsersPage', () => {
       cedula: null,
       phone: null,
       coordinator_scope: '',
-      coordinator_program: null,
+      coordinator_programs: [],
     });
     expect(await screen.findByText(/creado correctamente/i)).toBeInTheDocument();
   });
@@ -277,7 +277,7 @@ describe('UsersPage', () => {
       expect(createUser).not.toHaveBeenCalled();
     });
 
-    it('exige el programa cuando el alcance es por programa', async () => {
+    it('exige al menos un programa cuando el alcance es por programa', async () => {
       const user = userEvent.setup();
       renderPage();
       await screen.findByText('Vendedor Uno');
@@ -288,7 +288,7 @@ describe('UsersPage', () => {
 
       await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
 
-      expect(await within(dialog).findByText(/selecciona el programa/i)).toBeInTheDocument();
+      expect(await within(dialog).findByText(/selecciona al menos un programa/i)).toBeInTheDocument();
       expect(createUser).not.toHaveBeenCalled();
     });
 
@@ -307,7 +307,7 @@ describe('UsersPage', () => {
       expect(createUser.mock.calls[0][0]).toMatchObject({
         role: 'COORDINATOR',
         coordinator_scope: 'GENERAL',
-        coordinator_program: null,
+        coordinator_programs: [],
       });
     });
 
@@ -321,15 +321,14 @@ describe('UsersPage', () => {
       await user.click(within(dialog).getByRole('button', { name: /seleccionar alcance/i }));
       await user.click(within(dialog).getByText(/por programa/i));
 
-      await user.click(await within(dialog).findByRole('button', { name: /seleccionar programa/i }));
-      await user.click(await within(dialog).findByText(PROGRAMA.name));
+      await user.click(await within(dialog).findByLabelText(PROGRAMA.name));
 
       await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
 
       expect(createUser.mock.calls[0][0]).toMatchObject({
         role: 'COORDINATOR',
         coordinator_scope: 'PROGRAM',
-        coordinator_program: PROGRAMA.id,
+        coordinator_programs: [PROGRAMA.id],
       });
     });
 
@@ -340,6 +339,62 @@ describe('UsersPage', () => {
       const row = within(rowFor('Coord Tres'));
       expect(row.getByText('Coordinador')).toBeInTheDocument();
       expect(row.getByText(PROGRAMA.name)).toBeInTheDocument();
+    });
+
+    it('no pide contraseña al coordinador', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
+      const dialog = await screen.findByRole('dialog', { name: /nuevo usuario/i });
+
+      expect(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i)).toBeInTheDocument();
+
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
+      await user.click(within(dialog).getByText('Coordinador'));
+
+      expect(
+        within(dialog).queryByPlaceholderText(/mínimo 8 caracteres/i),
+      ).not.toBeInTheDocument();
+    });
+
+    it('descarta la contraseña escrita antes de pasar a coordinador', async () => {
+      const user = userEvent.setup();
+      createUser.mockResolvedValue({ ...COORDINADOR, full_name: 'Nueva Coord' });
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      // openCoordinatorForm escribe la contraseña y después cambia el rol.
+      const dialog = await openCoordinatorForm(user);
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar alcance/i }));
+      await user.click(within(dialog).getByText(/todos los programas/i));
+      await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+      expect(createUser.mock.calls[0][0].password).toBe('');
+    });
+
+    it('permite marcar varios programas', async () => {
+      const user = userEvent.setup();
+      const otro = { id: 'prog-2', name: 'Data Science Junio 2026' };
+      getPrograms.mockResolvedValue([PROGRAMA, otro]);
+      createUser.mockResolvedValue({ ...COORDINADOR, full_name: 'Nueva Coord' });
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      const dialog = await openCoordinatorForm(user);
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar alcance/i }));
+      await user.click(within(dialog).getByText(/por programa/i));
+
+      await user.click(await within(dialog).findByLabelText(PROGRAMA.name));
+      await user.click(await within(dialog).findByLabelText(otro.name));
+
+      await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+      expect(createUser.mock.calls[0][0]).toMatchObject({
+        coordinator_scope: 'PROGRAM',
+        coordinator_programs: [PROGRAMA.id, otro.id],
+      });
     });
   });
 });

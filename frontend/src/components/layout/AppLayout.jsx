@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import SessionTimeoutWarning from '../SessionTimeoutWarning'
+import PageTransition from '../ui/PageTransition'
 import { useIdleTimeout } from '../../hooks/use-idle-timeout'
 import { forceLogout } from '../../api/client'
 import { useAuthStore } from '../../store/auth.store'
@@ -32,15 +33,20 @@ export default function AppLayout() {
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          aria-hidden="true"
+          className="fixed inset-0 bg-black/40 z-30 lg:hidden animate-fade-in"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar: drawer on mobile, static on lg+ */}
+      {/* Sidebar: drawer on mobile, static on lg+.
+          CB-75: cerrado en mobile se ocultaba solo con translate, asi que sus
+          enlaces seguian en el orden de tabulacion y el teclado entraba a un
+          menu invisible. `invisible` los saca del arbol de foco y `lg:visible`
+          lo restituye en desktop, donde el sidebar siempre esta a la vista. */}
       <div
-        className={`fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 lg:z-auto ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 z-40 transition-[transform,visibility] duration-200 ease-in-out lg:static lg:translate-x-0 lg:z-auto lg:visible ${
+          sidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'
         }`}
       >
         <Sidebar onClose={() => setSidebarOpen(false)} />
@@ -51,10 +57,11 @@ export default function AppLayout() {
         <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 sm:px-6 gap-3 shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-            aria-label="Open menu"
+            className="lg:hidden p-2 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
+            aria-label="Abrir menú"
+            aria-expanded={sidebarOpen}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
@@ -77,7 +84,9 @@ export default function AppLayout() {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </main>
       </div>
     </div>

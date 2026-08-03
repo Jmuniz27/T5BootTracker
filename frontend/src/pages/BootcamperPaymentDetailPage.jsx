@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { getMonitoring, getPaymentQueue, notifyCoordinator } from '../api/payments.api'
 import PaymentDetailModal from '../components/PaymentDetailModal'
 import Toast from '../components/Toast'
+import Skeleton from '../components/ui/Skeleton'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ function ProgressBar({ value, barClass, label, sublabel }) {
       <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-500 ${barClass}`} style={{ width: `${clamped}%` }} />
       </div>
-      {sublabel && <p className="text-xs text-gray-400 mt-0.5">{sublabel}</p>}
+      {sublabel && <p className="text-xs text-gray-500 mt-0.5">{sublabel}</p>}
     </div>
   )
 }
@@ -104,9 +105,9 @@ function PaymentRow({ payment, onViewDetail }) {
       <div>
         <p className="text-sm font-medium text-gray-900">
           {payment.ocr_amount ? fmt(payment.ocr_amount) : 'Sin monto'}
-          {payment.ocr_bank_name && <span className="text-gray-400 font-normal"> · {payment.ocr_bank_name}</span>}
+          {payment.ocr_bank_name && <span className="text-gray-500 font-normal"> · {payment.ocr_bank_name}</span>}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">{date || 'Sin fecha'}</p>
+        <p className="text-xs text-gray-500 mt-0.5">{date || 'Sin fecha'}</p>
       </div>
       <div className="flex items-center gap-3">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_COLORS[payment.status]}`}>
@@ -114,7 +115,7 @@ function PaymentRow({ payment, onViewDetail }) {
         </span>
         <button
           onClick={() => onViewDetail(payment)}
-          className="flex items-center gap-1.5 text-xs font-medium text-[#1D3176] border border-[#1D3176]/30 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+          className="flex items-center gap-1.5 text-xs font-medium text-[#213A8E] border border-[#213A8E]/30 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -160,12 +161,29 @@ export default function BootcamperPaymentDetailPage() {
     onSuccess: () => setToast({ message: 'Coordinador notificado.' }),
   })
 
+  // CB-114: el spinner centrado dejaba la pantalla practicamente en blanco.
+  // El skeleton anticipa el layout real, asi que la vista no salta al cargar.
   if (!bc) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-[#1D3176] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-gray-400">Cargando...</p>
+      <div aria-busy="true" aria-label="Cargando detalle del pago" className="p-4 sm:p-6 lg:p-8 animate-fade-in">
+        <Skeleton className="h-4 w-32 mb-6" />
+        <div className="flex items-center gap-4 mb-6">
+          <Skeleton className="w-14 h-14" rounded="rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-3.5 w-64" />
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="rounded-2xl border border-gray-200 bg-white p-5">
+              <Skeleton className="h-3 w-24 mb-3" />
+              <Skeleton className="h-8 w-20" />
+            </div>
+          ))}
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" rounded="rounded-xl" />)}
         </div>
       </div>
     )
@@ -205,7 +223,7 @@ export default function BootcamperPaymentDetailPage() {
           />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{bc.bootcamper_name}</h1>
-            <p className="text-sm text-gray-400 mt-0.5">{bc.email} · {bc.program_name}</p>
+            <p className="text-sm text-gray-500 mt-0.5">{bc.email} · {bc.program_name}</p>
           </div>
         </div>
         <span className={`px-3 py-1.5 rounded-full text-sm font-medium flex-shrink-0 ${cfg.bg} ${cfg.text}`}>
@@ -231,26 +249,26 @@ export default function BootcamperPaymentDetailPage() {
               </div>
               <div className="flex-1 space-y-4">
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Total pagado</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total pagado</p>
                   <p className="text-2xl font-bold text-gray-900">{fmt(totalPaid)}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs text-gray-400">Costo total</p>
+                    <p className="text-xs text-gray-500">Costo total</p>
                     <p className="text-base font-semibold text-gray-700">{fmt(totalCost)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-400">Adeudado</p>
+                    <p className="text-xs text-gray-500">Adeudado</p>
                     <p className={`text-base font-semibold ${deficitColor(deficit, bc.is_critical)}`}>
                       {deficit > 0 ? fmt(deficit) : 'Sin deuda'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-400">Pagos aprobados</p>
+                    <p className="text-xs text-gray-500">Pagos aprobados</p>
                     <p className="text-base font-semibold text-gray-700">{bc.payment_count ?? 0}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-400">Pendientes</p>
+                    <p className="text-xs text-gray-500">Pendientes</p>
                     <p className={`text-base font-semibold ${bc.pending_payments > 0 ? 'text-amber-600' : 'text-gray-700'}`}>
                       {bc.pending_payments ?? 0}
                     </p>
@@ -336,7 +354,7 @@ export default function BootcamperPaymentDetailPage() {
 
           {loadingPayments && (
             <div className="space-y-2">
-              {[1, 2].map((i) => <div key={i} className="h-16 bg-white border border-gray-200 rounded-xl animate-pulse" />)}
+              {[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" rounded="rounded-xl" />)}
             </div>
           )}
           {!loadingPayments && payments.length === 0 && (
@@ -344,7 +362,7 @@ export default function BootcamperPaymentDetailPage() {
               <svg className="w-10 h-10 text-gray-200 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <p className="text-sm text-gray-400">Sin pagos pendientes de revisión.</p>
+              <p className="text-sm text-gray-500">Sin pagos pendientes de revisión.</p>
             </div>
           )}
           {!loadingPayments && payments.length > 0 && (

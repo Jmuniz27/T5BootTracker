@@ -31,9 +31,14 @@ class Cohort(models.Model):
     `Enrollment` siguen colgando de `Program`); la cohorte sólo identifica la
     edición y en qué mes arrancó o terminó.
 
-    Los tres estados son manuales: nada se deriva de las fechas. Lo único
-    automático es `end_month`, que se llena al marcar la cohorte finalizada
-    (ver `apps.programs.services.set_cohort_status`).
+    Los tres estados son manuales: nada se deriva de las fechas.
+
+    `end_month` es obligatorio y arranca como **fin previsto**; al marcar la
+    cohorte finalizada se resella con el mes real (ver
+    `apps.programs.services.set_cohort_status`). Es obligatorio porque el
+    cálculo de porcentaje de tiempo transcurrido de los pagos necesita un rango
+    también mientras la cohorte está en curso: sin fin previsto, una cohorte
+    activa no tendría denominador.
     """
 
     class Status(models.TextChoices):
@@ -52,9 +57,9 @@ class Cohort(models.Model):
     # Se guardan como fecha con día 1: el dominio es un mes, no un día. La
     # normalización vive en save() para que también aplique al admin y al seed.
     start_month = models.DateField(verbose_name='Mes de inicio')
-    end_month   = models.DateField(
-        null=True, blank=True, verbose_name='Mes de finalización',
-    )
+    # Obligatorio: arranca como fin previsto y se resella con el mes real al
+    # finalizar. Ver el docstring de la clase.
+    end_month   = models.DateField(verbose_name='Mes de fin previsto')
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

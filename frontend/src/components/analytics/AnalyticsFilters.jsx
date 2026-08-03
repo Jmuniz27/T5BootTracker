@@ -9,7 +9,7 @@ const SEGMENT_OPTIONS = [
   { value: 'MANUAL', label: 'Manual' },
 ]
 
-const EMPTY = { fecha_desde: '', fecha_hasta: '', segment: '', campaign: '' }
+const EMPTY = { fecha_desde: '', fecha_hasta: '', segment: '' }
 
 const inputClass =
   'w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200'
@@ -28,7 +28,7 @@ export default function AnalyticsFilters({ filters, onChange }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 mb-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label htmlFor="analytics-desde" className="block text-sm font-medium text-gray-700 mb-1">
             Desde
@@ -64,20 +64,6 @@ export default function AnalyticsFilters({ filters, onChange }) {
             onChange={set('segment')}
             options={SEGMENT_OPTIONS}
             placeholder="Todos los segmentos"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="analytics-campana" className="block text-sm font-medium text-gray-700 mb-1">
-            Campaña
-          </label>
-          <input
-            id="analytics-campana"
-            type="text"
-            value={filters.campaign}
-            onChange={(e) => set('campaign')(e.target.value)}
-            placeholder="Nombre de campaña"
-            className={inputClass}
           />
         </div>
       </div>

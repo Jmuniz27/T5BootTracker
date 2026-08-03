@@ -22,11 +22,13 @@ def first_of_this_month():
     return datetime.date.today().replace(day=1)
 
 
-def make_cohort(program, number=1, start_month=None, status=Cohort.Status.UPCOMING):
+def make_cohort(program, number=1, start_month=None, end_month=None, status=Cohort.Status.UPCOMING):
+    start = start_month or first_of_this_month()
     return Cohort.objects.create(
         program=program,
         number=number,
-        start_month=start_month or first_of_this_month(),
+        start_month=start,
+        end_month=end_month or (start + datetime.timedelta(days=90)).replace(day=1),
         status=status,
     )
 
@@ -113,7 +115,7 @@ class TestCohortPermissions:
     def test_salesperson_cannot_create(self, db, salesperson_user, program):
         resp = make_client(salesperson_user).post(
             cohorts_url(program),
-            {"number": 1, "start_month": str(first_of_this_month())},
+            {"number": 1, "start_month": str(first_of_this_month()), "end_month": "2027-01-01"},
             format="json",
         )
         assert resp.status_code == 403
@@ -135,14 +137,16 @@ class TestCohortCreate:
     def test_admin_creates_cohort_defaulting_to_upcoming(self, db, admin_user, program):
         resp = make_client(admin_user).post(
             cohorts_url(program),
-            {"number": 1, "start_month": str(first_of_this_month())},
+            {"number": 1, "start_month": str(first_of_this_month()), "end_month": "2027-01-01"},
             format="json",
         )
         assert resp.status_code == 201
         body = resp.json()
         assert body["status"] == Cohort.Status.UPCOMING
         assert body["status_label"] == "Próximamente"
-        assert body["end_month"] is None
+        # end_month arranca como fin previsto, tal cual se mandó.
+        assert body["end_month"] == "2027-01-01"
+
 
     def test_start_month_is_required(self, db, admin_user, program):
         resp = make_client(admin_user).post(
@@ -155,7 +159,7 @@ class TestCohortCreate:
         """El dominio es el mes: el día que manden es irrelevante."""
         resp = make_client(admin_user).post(
             cohorts_url(program),
-            {"number": 1, "start_month": "2026-09-17"},
+            {"number": 1, "start_month": "2026-09-17", "end_month": "2027-02-20"},
             format="json",
         )
         assert resp.status_code == 201
@@ -165,7 +169,7 @@ class TestCohortCreate:
         make_cohort(program, number=1)
         resp = make_client(admin_user).post(
             cohorts_url(program),
-            {"number": 1, "start_month": str(first_of_this_month())},
+            {"number": 1, "start_month": str(first_of_this_month()), "end_month": "2027-01-01"},
             format="json",
         )
         assert resp.status_code == 400
@@ -183,7 +187,7 @@ class TestCohortCreate:
 
         resp = make_client(admin_user).post(
             cohorts_url(other),
-            {"number": 1, "start_month": str(first_of_this_month())},
+            {"number": 1, "start_month": str(first_of_this_month()), "end_month": "2027-01-01"},
             format="json",
         )
         assert resp.status_code == 201
@@ -191,27 +195,64 @@ class TestCohortCreate:
     def test_number_zero_rejected(self, db, admin_user, program):
         resp = make_client(admin_user).post(
             cohorts_url(program),
-            {"number": 0, "start_month": str(first_of_this_month())},
+            {"number": 0, "start_month": str(first_of_this_month()), "end_month": "2027-01-01"},
             format="json",
         )
         assert resp.status_code == 400
 
-    def test_client_cannot_set_end_month(self, db, admin_user, program):
-        """end_month lo sella el servicio: si el cliente lo manda, se ignora."""
+    def test_end_month_is_required(self, db, admin_user, program):
+        """Sin fin previsto el cálculo de tiempo transcurrido no tendría rango."""
+        resp = make_client(admin_user).post(
+            cohorts_url(program),
+            {"number": 1, "start_month": str(first_of_this_month())},
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert "end_month" in resp.json()
+
+    def test_end_month_before_start_is_rejected(self, db, admin_user, program):
+        resp = make_client(admin_user).post(
+            cohorts_url(program),
+            {"number": 1, "start_month": "2026-09-01", "end_month": "2026-08-01"},
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert "end_month" in resp.json()
+
+    def test_creating_an_already_finished_cohort_keeps_the_typed_month(self, db, admin_user, program):
+        """Registrar una edición histórica no debe resellarse con el mes actual."""
         resp = make_client(admin_user).post(
             cohorts_url(program),
             {
                 "number": 1,
-                "start_month": str(first_of_this_month()),
-                "end_month": "2030-01-01",
+                "start_month": "2026-01-01",
+                "end_month": "2026-05-01",
+                "status": Cohort.Status.FINISHED,
             },
             format="json",
         )
         assert resp.status_code == 201
-        assert resp.json()["end_month"] is None
+        assert resp.json()["end_month"] == "2026-05-01"
 
 
 class TestCohortFinish:
+    def test_finishing_reseals_a_planned_end_that_was_wrong(self, db, admin_user, program):
+        """El previsto era enero de 2027; se cierra hoy y debe quedar hoy."""
+        cohort = make_cohort(
+            program,
+            start_month=first_of_this_month() - datetime.timedelta(days=60),
+            end_month=datetime.date(2027, 1, 1),
+            status=Cohort.Status.IN_PROGRESS,
+        )
+
+        resp = make_client(admin_user).patch(
+            cohort_url(program, cohort),
+            {"status": Cohort.Status.FINISHED},
+            format="json",
+        )
+        assert resp.status_code == 200
+        assert resp.json()["end_month"] == str(first_of_this_month())
+
     def test_marking_finished_seals_the_current_month(self, db, admin_user, program):
         cohort = make_cohort(program, status=Cohort.Status.IN_PROGRESS)
         resp = make_client(admin_user).patch(
@@ -222,7 +263,8 @@ class TestCohortFinish:
         assert resp.status_code == 200
         assert resp.json()["end_month"] == str(first_of_this_month())
 
-    def test_reopening_clears_the_end_month(self, db, admin_user, program):
+    def test_reopening_keeps_the_month_as_planned_end(self, db, admin_user, program):
+        """Vaciarlo dejaría a los pagos sin rango; vuelve a leerse como previsión."""
         cohort = make_cohort(program, status=Cohort.Status.IN_PROGRESS)
         client = make_client(admin_user)
         client.patch(cohort_url(program, cohort), {"status": Cohort.Status.FINISHED}, format="json")
@@ -233,13 +275,16 @@ class TestCohortFinish:
             format="json",
         )
         assert resp.status_code == 200
-        assert resp.json()["end_month"] is None
+        assert resp.json()["end_month"] == str(first_of_this_month())
 
     def test_editing_a_finished_cohort_keeps_its_end_month(self, db, admin_user, program):
         """Corregir otro campo no debe mover la fecha de cierre ya sellada."""
-        cohort = make_cohort(program, status=Cohort.Status.FINISHED)
-        cohort.end_month = datetime.date(2026, 3, 1)
-        cohort.save()
+        cohort = make_cohort(
+            program,
+            start_month=datetime.date(2026, 1, 1),
+            end_month=datetime.date(2026, 3, 1),
+            status=Cohort.Status.FINISHED,
+        )
 
         resp = make_client(admin_user).patch(
             cohort_url(program, cohort), {"number": 7}, format="json",
