@@ -1,10 +1,10 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getFinancePortfolio } from '../api/finance.api'
+import { getFinancePortfolio } from '../../api/finance.api'
 
 /**
- * Lo que ve el administrador al entrar a pagos: una tarjeta por persona de
- * Finanzas, más el recuento de los que siguen en el pool.
+ * Pestaña de Finanzas: una tarjeta por persona, más el recuento de los
+ * bootcampers que siguen en el pool.
  *
  * El administrador no tiene bootcampers propios, así que la pantalla de
  * Finanzas no le aplica — mira las carteras ajenas, y sólo mira.
@@ -81,7 +81,7 @@ function SkeletonCard() {
   )
 }
 
-export default function AdminFinancePage() {
+export default function FinancePortfolios() {
   const navigate = useNavigate()
   const { data, isLoading, isError } = useQuery({
     queryKey: ['finance-portfolio'],
@@ -92,14 +92,7 @@ export default function AdminFinancePage() {
   const unassigned = data?.unassigned_bootcampers ?? 0
 
   return (
-    <div className="p-6 sm:p-8">
-      <header className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Finanzas</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Abre una persona de Finanzas para ver los bootcampers que monitorea. Sólo consulta.
-        </p>
-      </header>
-
+    <>
       {isError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
           No pudimos cargar las carteras. Intenta de nuevo.
@@ -141,6 +134,6 @@ export default function AdminFinancePage() {
           ))}
         </div>
       )}
-    </div>
+    </>
   )
 }

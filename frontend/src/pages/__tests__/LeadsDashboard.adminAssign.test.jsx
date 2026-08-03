@@ -67,11 +67,7 @@ function renderDashboard() {
   );
 }
 
-async function openAvailableTab(user) {
-  await user.click(await screen.findByRole('button', { name: /^disponibles/i }));
-}
-
-describe('LeadsDashboard — admin asigna lead sin dueño (CB-225)', () => {
+describe('LeadsDashboard — admin reasigna desde la columna "Asignado a" (CB-224/CB-225)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAuthStore.setState({ user: { id: 'a1', role: 'ADMINISTRATOR' } });
@@ -83,21 +79,19 @@ describe('LeadsDashboard — admin asigna lead sin dueño (CB-225)', () => {
     useAuthStore.setState({ accessToken: null, refreshToken: null, user: null });
   });
 
-  it('muestra "Asignar a" para un lead sin dueño y abre el modal con ese título', async () => {
+  it('clickear "Sin asignar" abre el modal de asignación', async () => {
     const user = userEvent.setup();
     getLeads.mockResolvedValue({
       my_leads: [],
-      available_leads: [LEAD_SIN_DUENO],
+      available_leads: [],
+      all_leads: [LEAD_SIN_DUENO],
+      unassigned_leads: [LEAD_SIN_DUENO],
+      assigned_leads: [],
       pagination: {},
     });
     renderDashboard();
 
-    await openAvailableTab(user);
-    await user.click(await screen.findByRole('button', { name: /acciones para lead sin dueño/i }));
-
-    const assignOption = screen.getByRole('button', { name: /^asignar a$/i });
-    expect(assignOption).toBeInTheDocument();
-    await user.click(assignOption);
+    await user.click(await screen.findByRole('button', { name: /asignado a: sin asignar/i }));
 
     expect(await screen.findByRole('heading', { name: /asignar lead/i })).toBeInTheDocument();
     expect(screen.getByText(/^asignar a$/i)).toBeInTheDocument();
@@ -107,14 +101,15 @@ describe('LeadsDashboard — admin asigna lead sin dueño (CB-225)', () => {
     const user = userEvent.setup();
     getLeads.mockResolvedValue({
       my_leads: [],
-      available_leads: [LEAD_SIN_DUENO],
+      available_leads: [],
+      all_leads: [LEAD_SIN_DUENO],
+      unassigned_leads: [LEAD_SIN_DUENO],
+      assigned_leads: [],
       pagination: {},
     });
     renderDashboard();
 
-    await openAvailableTab(user);
-    await user.click(await screen.findByRole('button', { name: /acciones para lead sin dueño/i }));
-    await user.click(screen.getByRole('button', { name: /^asignar a$/i }));
+    await user.click(await screen.findByRole('button', { name: /asignado a: sin asignar/i }));
 
     const submitButton = await screen.findByRole('button', { name: /^asignar$/i });
     expect(submitButton).toBeDisabled();
@@ -124,15 +119,16 @@ describe('LeadsDashboard — admin asigna lead sin dueño (CB-225)', () => {
     const user = userEvent.setup();
     getLeads.mockResolvedValue({
       my_leads: [],
-      available_leads: [LEAD_SIN_DUENO],
+      available_leads: [],
+      all_leads: [LEAD_SIN_DUENO],
+      unassigned_leads: [LEAD_SIN_DUENO],
+      assigned_leads: [],
       pagination: {},
     });
     adminReassignLead.mockResolvedValue({ ...LEAD_SIN_DUENO, owner: 'sp-1' });
     renderDashboard();
 
-    await openAvailableTab(user);
-    await user.click(await screen.findByRole('button', { name: /acciones para lead sin dueño/i }));
-    await user.click(screen.getByRole('button', { name: /^asignar a$/i }));
+    await user.click(await screen.findByRole('button', { name: /asignado a: sin asignar/i }));
 
     await user.selectOptions(await screen.findByRole('combobox'), 'sp-1');
     await user.click(screen.getByRole('button', { name: /^asignar$/i }));
@@ -140,16 +136,38 @@ describe('LeadsDashboard — admin asigna lead sin dueño (CB-225)', () => {
     expect(adminReassignLead).toHaveBeenCalledWith('lead-1', 'sp-1');
   });
 
-  it('conserva "Liberar / Reasignar" para un lead con dueño', async () => {
+  it('clickear el nombre de un lead asignado abre "Liberar o reasignar"', async () => {
     const user = userEvent.setup();
     getLeads.mockResolvedValue({
-      my_leads: [LEAD_ASIGNADO],
+      my_leads: [],
       available_leads: [],
+      all_leads: [LEAD_ASIGNADO],
+      unassigned_leads: [],
+      assigned_leads: [LEAD_ASIGNADO],
+      pagination: {},
+    });
+    renderDashboard();
+
+    await user.click(await screen.findByRole('button', { name: /asignado a: vendedor uno/i }));
+
+    expect(await screen.findByRole('heading', { name: /liberar o reasignar lead/i })).toBeInTheDocument();
+  });
+
+  it('el menú de "Acciones" ya no ofrece asignar/reasignar (vive en la columna "Asignado a")', async () => {
+    const user = userEvent.setup();
+    getLeads.mockResolvedValue({
+      my_leads: [],
+      available_leads: [],
+      all_leads: [LEAD_ASIGNADO],
+      unassigned_leads: [],
+      assigned_leads: [LEAD_ASIGNADO],
       pagination: {},
     });
     renderDashboard();
 
     await user.click(await screen.findByRole('button', { name: /acciones para lead asignado/i }));
-    expect(screen.getByRole('button', { name: /liberar \/ reasignar/i })).toBeInTheDocument();
+
+    expect(screen.queryByRole('button', { name: /liberar \/ reasignar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^asignar a$/i })).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUsers, toggleUserActive } from '../api/users.api'
+import { getSelfAssignmentSetting } from '../api/leads.api'
 import { useAuthStore } from '../store/auth.store'
 import Toast from '../components/Toast'
 import CustomSelect from '../components/CustomSelect'
@@ -9,10 +10,15 @@ import UsersTable from '../components/users/UsersTable'
 import CreateUserModal from '../components/users/CreateUserModal'
 import EditUserModal from '../components/users/EditUserModal'
 import ConfirmToggleModal from '../components/users/ConfirmToggleModal'
+import SelfAssignmentToggle from '../components/leads/SelfAssignmentToggle'
 import { ROLE_OPTIONS } from '../components/users/roles'
 import { errorMessage } from '../components/users/apiErrors'
 
-const ROLE_FILTER_OPTIONS = [{ value: 'ALL', label: 'Todos los roles' }, ...ROLE_OPTIONS]
+// El staff administrativo (roles que se gestionan activamente) vive separado
+// de los bootcampers: estos últimos suelen llegar por conversión de leads y
+// hoy inundaban la misma tabla, tapando al resto.
+const STAFF_ROLE_OPTIONS = ROLE_OPTIONS.filter((r) => r.value !== 'BOOTCAMPER')
+const ROLE_FILTER_OPTIONS = [{ value: 'ALL', label: 'Todos los roles' }, ...STAFF_ROLE_OPTIONS]
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'ALL', label: 'Todos los estados' },
@@ -36,6 +42,7 @@ export default function UsersPage() {
   const queryClient = useQueryClient()
   const currentUserId = useAuthStore((s) => s.user?.id)
 
+  const [activeTab, setActiveTab] = useState('staff') // 'staff' | 'bootcampers'
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('ALL')
   const [statusFilter, setStatusFilter] = useState('ALL')
@@ -51,20 +58,32 @@ export default function UsersPage() {
     queryFn: () => getUsers(),
   })
 
+  // Control global de auto-asignación (CR-004) — vive acá y no en el
+  // dashboard de leads porque es un ajuste de usuarios/roles, no del flujo
+  // de trabajo diario del vendedor.
+  const { data: selfAssignSetting, isLoading: loadingSelfAssign } = useQuery({
+    queryKey: ['self-assignment-setting'],
+    queryFn: getSelfAssignmentSetting,
+  })
+
   const users = useMemo(() => data?.results ?? data ?? [], [data])
+
+  const staffUsers       = useMemo(() => users.filter((u) => u.role !== 'BOOTCAMPER'), [users])
+  const bootcamperUsers  = useMemo(() => users.filter((u) => u.role === 'BOOTCAMPER'), [users])
+  const tabUsers = activeTab === 'staff' ? staffUsers : bootcamperUsers
 
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase()
-    return users.filter(
+    return tabUsers.filter(
       (u) =>
         matchesSearch(u, term) &&
-        (roleFilter === 'ALL' || u.role === roleFilter) &&
+        (activeTab === 'bootcampers' || roleFilter === 'ALL' || u.role === roleFilter) &&
         matchesStatus(u, statusFilter),
     )
-  }, [users, search, roleFilter, statusFilter])
+  }, [tabUsers, activeTab, search, roleFilter, statusFilter])
 
-  const activeCount = users.filter((u) => u.is_active).length
-  const adminCount = users.filter((u) => u.role === 'ADMINISTRATOR').length
+  const activeCount = tabUsers.filter((u) => u.is_active).length
+  const adminCount  = staffUsers.filter((u) => u.role === 'ADMINISTRATOR').length
 
   const toggleMutation = useMutation({
     mutationFn: (user) => toggleUserActive(user.id),
@@ -99,15 +118,51 @@ export default function UsersPage() {
         </button>
       </div>
 
+      <SelfAssignmentToggle
+        setting={selfAssignSetting}
+        isLoading={loadingSelfAssign}
+        onResult={showToast}
+      />
+
       {/* Stat Cards */}
       <div className="grid grid-cols-3 gap-3 mb-6 lg:mb-8">
-        <StatCard label="Total usuarios" value={users.length} loading={isLoading} />
+        <StatCard label="Total usuarios" value={tabUsers.length} loading={isLoading} />
         <StatCard label="Activos" value={activeCount} loading={isLoading} />
-        <StatCard label="Administradores" value={adminCount} loading={isLoading} />
+        {activeTab === 'staff' ? (
+          <StatCard label="Administradores" value={adminCount} loading={isLoading} />
+        ) : (
+          <StatCard label="Inactivos" value={tabUsers.length - activeCount} loading={isLoading} />
+        )}
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Usuarios</h2>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
+          <button
+            data-testid="tab-staff"
+            onClick={() => { setActiveTab('staff'); setRoleFilter('ALL') }}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === 'staff'
+                ? 'bg-[#213A8E] text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Administrativos ({staffUsers.length})
+          </button>
+          <button
+            data-testid="tab-bootcampers"
+            onClick={() => { setActiveTab('bootcampers'); setRoleFilter('ALL') }}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === 'bootcampers'
+                ? 'bg-[#213A8E] text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Bootcampers ({bootcamperUsers.length})
+          </button>
+        </div>
 
         {/* Search + filters */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-5">
@@ -128,7 +183,9 @@ export default function UsersPage() {
               className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
-          <CustomSelect value={roleFilter} onChange={setRoleFilter} options={ROLE_FILTER_OPTIONS} />
+          {activeTab === 'staff' && (
+            <CustomSelect value={roleFilter} onChange={setRoleFilter} options={ROLE_FILTER_OPTIONS} />
+          )}
           <CustomSelect value={statusFilter} onChange={setStatusFilter} options={STATUS_FILTER_OPTIONS} />
         </div>
 

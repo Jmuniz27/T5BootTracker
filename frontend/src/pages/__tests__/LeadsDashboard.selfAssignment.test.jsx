@@ -69,21 +69,12 @@ describe('LeadsDashboard — control de auto-asignación (CR-004)', () => {
     useAuthStore.setState({ accessToken: null, refreshToken: null, user: null });
   });
 
-  it('muestra el control solo al Administrador', async () => {
+  it('no muestra el switch en el dashboard (vive en Usuarios)', async () => {
     useAuthStore.setState({ user: { id: 'a1', role: 'ADMINISTRATOR' } });
     getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
     renderDashboard();
 
-    expect(await screen.findByRole('switch', { name: /auto-asignación/i })).toBeInTheDocument();
-  });
-
-  it('oculta el control al Vendedor', async () => {
-    const user = userEvent.setup();
-    useAuthStore.setState({ user: { id: 's1', role: 'SALESPERSON' } });
-    getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
-    renderDashboard();
-
-    await openAvailableTab(user);
+    await screen.findByText('Dashboard de Leads')
     expect(screen.queryByRole('switch', { name: /auto-asignación/i })).not.toBeInTheDocument();
   });
 
