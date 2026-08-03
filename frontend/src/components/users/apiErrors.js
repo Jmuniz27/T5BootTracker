@@ -9,7 +9,8 @@ const FORM_FIELDS = ['first_name', 'last_name', 'email', 'role', 'cedula', 'phon
  * los campos del formulario de usuarios.
  *
  * Returns:
- *   El mensaje general a mostrar, o `null` si todo el error se pintó por campo.
+ *   El mensaje general a mostrar, o `null` si el error completo quedó pintado
+ *   bajo sus campos.
  */
 export function applyServerErrors(error, setError, fields = FORM_FIELDS) {
   const data = error?.response?.data

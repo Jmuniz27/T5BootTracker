@@ -9,6 +9,8 @@ export default function CustomSelect({
   // Nombre accesible del control. Necesario cuando hay varios selects iguales en
   // la pantalla y el texto visible no alcanza para distinguirlos.
   ariaLabel,
+  // Gancho para la suite E2E de Playwright.
+  testId,
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -25,6 +27,7 @@ export default function CustomSelect({
     <div className="relative" ref={ref}>
       <button
         type="button"
+        data-testid={testId}
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
         aria-label={ariaLabel}
@@ -40,6 +43,8 @@ export default function CustomSelect({
           {options.map((o) => (
             <li
               key={o.value}
+              data-testid={testId ? `${testId}-option` : undefined}
+              data-value={o.value}
               onClick={() => { onChange(o.value); setOpen(false) }}
               className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-blue-50 hover:text-[#213A8E] transition-colors ${
                 value === o.value ? 'text-[#213A8E] font-medium bg-blue-50' : 'text-gray-700'

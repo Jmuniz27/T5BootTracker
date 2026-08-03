@@ -1,0 +1,9 @@
+node_modules/
+
+# Tokens de sesión generados en cada corrida — nunca se versionan.
+.auth/
+
+# Artefactos de reporte
+playwright-report/
+test-results/
+reports/
