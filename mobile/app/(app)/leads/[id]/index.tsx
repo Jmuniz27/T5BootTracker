@@ -153,14 +153,20 @@ export default function LeadDetailScreen() {
         <View style={s.actions}>
           {owned ? (
             <>
-              <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/log-interaction')} activeOpacity={0.85}>
-                <Ionicons name="create-outline" size={18} color={colors.white} />
-                <Text style={s.actionPrimaryText}>Registrar interacción</Text>
-              </TouchableOpacity>
+              {!isConverted && (
+                <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/log-interaction')} activeOpacity={0.85}>
+                  <Ionicons name="create-outline" size={18} color={colors.white} />
+                  <Text style={s.actionPrimaryText}>Registrar interacción</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.8}>
-                <Ionicons name="time-outline" size={18} color={colors.navy} />
-                <Text style={s.actionGhostText}>Ver historial</Text>
+              <TouchableOpacity
+                style={isConverted ? s.actionPrimary : s.actionGhost}
+                onPress={() => go('/(app)/leads/[id]/history')}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="time-outline" size={18} color={isConverted ? colors.white : colors.navy} />
+                <Text style={isConverted ? s.actionPrimaryText : s.actionGhostText}>Ver historial</Text>
               </TouchableOpacity>
 
               {!isConverted && (

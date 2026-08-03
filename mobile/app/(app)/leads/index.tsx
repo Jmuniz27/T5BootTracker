@@ -140,7 +140,7 @@ function LeadCard({ lead, onOpenDetail }: CardProps) {
 
 // ─── screen ──────────────────────────────────────────────────────────────────
 
-type Tab = 'my' | 'available';
+type Tab = 'my' | 'available' | 'converted';
 
 export default function LeadsScreen() {
   const router = useRouter();
@@ -219,11 +219,13 @@ export default function LeadsScreen() {
   function handleOpenDetail(lead: Lead) {
     router.push({
       pathname: '/(app)/leads/[id]',
-      params: { id: lead.id, lead: JSON.stringify(lead), owned: tab === 'my' ? '1' : '0' },
+      params: { id: lead.id, lead: JSON.stringify(lead), owned: tab === 'available' ? '0' : '1' },
     });
   }
 
-  const displayed = tab === 'my' ? myLeads : available;
+  const activeMy = myLeads.filter((l) => l.status !== 'CONVERTED');
+  const converted = myLeads.filter((l) => l.status === 'CONVERTED');
+  const displayed = tab === 'available' ? available : tab === 'converted' ? converted : activeMy;
 
   if (loading) {
     return (
@@ -277,7 +279,7 @@ export default function LeadsScreen() {
             {/* Stat cards */}
             <View style={styles.statRow}>
               <View style={styles.statCard}>
-                <Text style={styles.statValue}>{myLeads.length}</Text>
+                <Text style={styles.statValue}>{activeMy.length}</Text>
                 <Text style={styles.statLabel}>Mis leads</Text>
               </View>
               <View style={styles.statCard}>
@@ -285,7 +287,7 @@ export default function LeadsScreen() {
                 <Text style={styles.statLabel}>Disponibles</Text>
               </View>
               <View style={styles.statCard}>
-                <Text style={styles.statValue}>{myLeads.filter((l) => l.status === 'CONVERTED').length}</Text>
+                <Text style={styles.statValue}>{converted.length}</Text>
                 <Text style={styles.statLabel}>Convertidos</Text>
               </View>
             </View>
@@ -327,8 +329,8 @@ export default function LeadsScreen() {
                 onPress={() => setTab('my')}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]}>
-                  Mis leads ({myLeads.length})
+                <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]} numberOfLines={1}>
+                  Mis leads ({activeMy.length})
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -336,8 +338,17 @@ export default function LeadsScreen() {
                 onPress={() => setTab('available')}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.tabText, tab === 'available' && styles.tabTextActive]}>
+                <Text style={[styles.tabText, tab === 'available' && styles.tabTextActive]} numberOfLines={1}>
                   Disponibles ({available.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, tab === 'converted' && styles.tabActive]}
+                onPress={() => setTab('converted')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabText, tab === 'converted' && styles.tabTextActive]} numberOfLines={1}>
+                  Convertidos ({converted.length})
                 </Text>
               </TouchableOpacity>
             </View>
@@ -355,6 +366,8 @@ export default function LeadsScreen() {
             <Text style={styles.emptyText}>
               {tab === 'my'
                 ? 'No tienes leads asignados.'
+                : tab === 'converted'
+                ? 'Aún no has convertido ningún lead.'
                 : 'No hay leads disponibles para asignarte.'}
             </Text>
           </View>
@@ -617,6 +630,7 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     paddingVertical: 9,
+    paddingHorizontal: 2,
     alignItems: 'center',
     borderRadius: 10,
   },
@@ -624,7 +638,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.textMuted,
   },
