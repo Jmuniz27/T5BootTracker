@@ -120,8 +120,8 @@ export default function LoginScreen() {
       router.replace('/(app)/leads');
     } catch (err: any) {
       const status = err?.response?.status;
-      if (err?.code === 'NOT_SALESPERSON') {
-        setError('Esta aplicación es solo para vendedores.');
+      if (err?.code === 'ROLE_NOT_ALLOWED') {
+        setError('Esta aplicación es solo para vendedores y finanzas.');
       } else if (status === 403) {
         setError(err.response?.data?.error ?? 'Cuenta desactivada. Contacte al administrador.');
       } else if (status === 401) {
