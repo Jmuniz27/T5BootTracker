@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
-import { createLead } from '../../../src/api/leads.api';
+import { createLead, getPrograms, type Program } from '../../../src/api/leads.api';
+import ProgramSelect from '../../../src/components/ProgramSelect';
 
 const SOURCES = [
   { value: 'MANUAL', label: 'Manual' },
@@ -30,10 +31,15 @@ export default function NewLeadScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [source, setSource] = useState<string>('MANUAL');
-  const [program, setProgram] = useState('');
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [programId, setProgramId] = useState<string | null>(null);
   const [isCompany, setIsCompany] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getPrograms().then(setPrograms).catch(() => {});
+  }, []);
 
   const canSubmit = name.trim() !== '' && phone.trim() !== '' && !loading;
 
@@ -45,7 +51,7 @@ export default function NewLeadScreen() {
         name: name.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
-        program_interest: program.trim() || undefined,
+        program_interest: programs.find((p) => p.id === programId)?.name || undefined,
         source,
         is_company: isCompany,
         confirm_duplicate: confirmDuplicate,
@@ -130,13 +136,8 @@ export default function NewLeadScreen() {
             />
 
             <Text style={s.label}>Programa de interés</Text>
-            <TextInput
-              style={s.input}
-              value={program}
-              onChangeText={setProgram}
-              placeholder="Ej. Full Stack"
-              placeholderTextColor={colors.textMuted}
-            />
+            <ProgramSelect programs={programs} selectedId={programId} onSelect={setProgramId} />
+
 
             <Text style={s.label}>Origen</Text>
             <View style={s.chips}>

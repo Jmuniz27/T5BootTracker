@@ -15,10 +15,11 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
 import { convertLead, getPrograms, type Program } from '../../../../src/api/leads.api';
+import ProgramSelect from '../../../../src/components/ProgramSelect';
 
 export default function ConvertLeadScreen() {
   const router = useRouter();
-  const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
+  const { id, name, program } = useLocalSearchParams<{ id: string; name?: string; program?: string }>();
 
   const [programs, setPrograms] = useState<Program[]>([]);
   const [programId, setProgramId] = useState('');
@@ -29,8 +30,14 @@ export default function ConvertLeadScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getPrograms().then(setPrograms).catch(() => {});
-  }, []);
+    getPrograms()
+      .then((list) => {
+        setPrograms(list);
+        const match = list.find((p) => p.name === program);
+        if (match) setProgramId(match.id);
+      })
+      .catch(() => {});
+  }, [program]);
 
   const canSubmit = cedula.trim().length === 10 && programId !== '' && !loading;
 
@@ -94,25 +101,7 @@ export default function ConvertLeadScreen() {
             />
 
             <Text style={s.label}>Programa *</Text>
-            {programs.length === 0 ? (
-              <Text style={s.hint}>Cargando programas…</Text>
-            ) : (
-              <View style={s.chips}>
-                {programs.map((p) => {
-                  const active = programId === p.id;
-                  return (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[s.chip, active && s.chipActive]}
-                      onPress={() => setProgramId(p.id)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[s.chipText, active && s.chipTextActive]}>{p.name}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
+            <ProgramSelect programs={programs} selectedId={programId || null} onSelect={setProgramId} />
 
             <Text style={s.label}>Email</Text>
             <TextInput
@@ -189,7 +178,6 @@ const s = StyleSheet.create({
     gap: 6,
   },
   label: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginTop: 10 },
-  hint: { fontSize: 13, color: colors.textMuted, paddingVertical: 8 },
   input: {
     backgroundColor: '#f8f9fb',
     borderRadius: 10,
@@ -200,18 +188,6 @@ const s = StyleSheet.create({
     fontSize: 14,
     color: colors.textPrimary,
   },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: '#f8f9fb',
-  },
-  chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  chipTextActive: { color: colors.white },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,8 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
-import { updateLead } from '../../../../src/api/leads.api';
+import { updateLead, getPrograms, type Program } from '../../../../src/api/leads.api';
+import ProgramSelect from '../../../../src/components/ProgramSelect';
 import type { Lead } from '../../../../src/types/leads';
 
 const SOURCES = [
@@ -39,10 +40,21 @@ export default function EditLeadScreen() {
   const [phone, setPhone] = useState(lead.phone ?? '');
   const [email, setEmail] = useState(lead.email ?? '');
   const [source, setSource] = useState<string>(lead.source ?? 'MANUAL');
-  const [program, setProgram] = useState(lead.program_interest ?? '');
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [programId, setProgramId] = useState<string | null>(null);
   const [isCompany, setIsCompany] = useState(lead.is_company ?? false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getPrograms()
+      .then((list) => {
+        setPrograms(list);
+        const match = list.find((p) => p.name === lead.program_interest);
+        if (match) setProgramId(match.id);
+      })
+      .catch(() => {});
+  }, [lead.program_interest]);
 
   const canSubmit = name.trim() !== '' && phone.trim() !== '' && !loading;
 
@@ -54,7 +66,7 @@ export default function EditLeadScreen() {
         name: name.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
-        program_interest: program.trim() || undefined,
+        program_interest: programId ? programs.find((p) => p.id === programId)?.name : undefined,
         source,
         is_company: isCompany,
       });
@@ -126,13 +138,8 @@ export default function EditLeadScreen() {
             />
 
             <Text style={s.label}>Programa de interés</Text>
-            <TextInput
-              style={s.input}
-              value={program}
-              onChangeText={setProgram}
-              placeholder="Ej. Full Stack"
-              placeholderTextColor={colors.textMuted}
-            />
+            <ProgramSelect programs={programs} selectedId={programId} onSelect={setProgramId} />
+
 
             <Text style={s.label}>Origen</Text>
             <View style={s.chips}>

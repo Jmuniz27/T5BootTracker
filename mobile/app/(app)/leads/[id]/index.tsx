@@ -141,6 +141,20 @@ export default function LeadDetailScreen() {
                 </View>
               ) : null}
             </View>
+            {owned && !isConverted && (
+              <TouchableOpacity
+                style={s.editIcon}
+                hitSlop={8}
+                onPress={() => router.push({
+                  pathname: '/(app)/leads/[id]/edit',
+                  params: { id: lead.id, lead: JSON.stringify(lead) },
+                })}
+                accessibilityRole="button"
+                accessibilityLabel="Editar información del lead"
+              >
+                <Ionicons name="pencil" size={16} color={colors.navy} />
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={s.divider} />
@@ -190,20 +204,15 @@ export default function LeadDetailScreen() {
                 <Text style={s.actionGhostText}>Cambiar estado</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={s.actionGhost}
-                onPress={() => router.push({
-                  pathname: '/(app)/leads/[id]/edit',
-                  params: { id: lead.id, lead: JSON.stringify(lead) },
-                })}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="pencil-outline" size={18} color={colors.navy} />
-                <Text style={s.actionGhostText}>Editar información</Text>
-              </TouchableOpacity>
-
               {isQualified && (
-                <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/convert')} activeOpacity={0.8}>
+                <TouchableOpacity
+                  style={s.actionGhost}
+                  onPress={() => router.push({
+                    pathname: '/(app)/leads/[id]/convert',
+                    params: { id: lead.id, name: lead.name, program: lead.program_interest ?? '' },
+                  })}
+                  activeOpacity={0.8}
+                >
                   <Ionicons name="ribbon-outline" size={18} color={colors.navy} />
                   <Text style={s.actionGhostText}>Convertir a bootcamper</Text>
                 </TouchableOpacity>
@@ -296,6 +305,14 @@ const s = StyleSheet.create({
     padding: 16,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  editIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#eff2fb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatar: {
     width: 48,
     height: 48,
