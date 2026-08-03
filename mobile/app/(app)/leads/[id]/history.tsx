@@ -21,20 +21,22 @@ import type { Interaction } from '../../../../src/types/leads';
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
-const TYPE_CONFIG: Record<string, { label: string; icon: string; iconColor: string; bg: string }> = {
-  CALL:     { label: 'Llamada',  icon: 'call',          iconColor: '#3b82f6', bg: '#eff6ff' },
-  WHATSAPP: { label: 'WhatsApp', icon: 'logo-whatsapp', iconColor: '#22c55e', bg: '#f0fdf4' },
-  EMAIL:    { label: 'Email',    icon: 'mail',          iconColor: '#8b5cf6', bg: '#f5f3ff' },
-  VISIT:    { label: 'Visita',   icon: 'location',      iconColor: '#f59e0b', bg: '#fffbeb' },
-  NOTE:     { label: 'Nota',     icon: 'create',        iconColor: '#6b7280', bg: '#f9fafb' },
+// El ícono varía por tipo, pero el círculo usa un color uniforme (navy sobre
+// azul claro), igual que el historial del web.
+const TYPE_CONFIG: Record<string, { label: string; icon: string }> = {
+  CALL:     { label: 'Llamada',  icon: 'call' },
+  WHATSAPP: { label: 'WhatsApp', icon: 'logo-whatsapp' },
+  EMAIL:    { label: 'Email',    icon: 'mail' },
+  VISIT:    { label: 'Visita',   icon: 'location' },
+  NOTE:     { label: 'Nota',     icon: 'create' },
 };
 
-const OUTCOME_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  CALL_AGAIN:        { label: 'Llamar de nuevo',     bg: '#fef9c3', color: '#a16207' },
-  SEND_INFO:         { label: 'Enviar información',  bg: '#dcfce7', color: '#15803d' },
-  SCHEDULE_VISIT:    { label: 'Agendar visita',      bg: '#dbeafe', color: '#1d4ed8' },
-  AWAIT_REPLY:       { label: 'Esperar respuesta',   bg: '#f3f4f6', color: '#4b5563' },
-  SPEAK_COORDINATOR: { label: 'Hablar coordinador',  bg: '#f3e8ff', color: '#7e22ce' },
+const OUTCOME_LABEL: Record<string, string> = {
+  CALL_AGAIN:        'Llamar de nuevo',
+  SEND_INFO:         'Enviar información',
+  SCHEDULE_VISIT:    'Agendar visita',
+  AWAIT_REPLY:       'Esperar respuesta',
+  SPEAK_COORDINATOR: 'Hablar coordinador',
 };
 
 const TYPES = [
@@ -54,10 +56,11 @@ const OUTCOMES = [
 ] as const;
 
 function formatDate(iso: string) {
-  const d = new Date(iso);
-  const date = d.toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' });
-  const time = d.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
-  return `${date} · ${time}`;
+  return new Date(iso).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
 // ─── edit modal ──────────────────────────────────────────────────────────────
@@ -236,63 +239,62 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
 
 // ─── interaction card ─────────────────────────────────────────────────────────
 
-function InteractionCard({ item, onEdit, isLast }: { item: Interaction; onEdit: () => void; isLast: boolean }) {
-  const cfg     = TYPE_CONFIG[item.interaction_type] ?? TYPE_CONFIG.NOTE;
-  const outcome = OUTCOME_CONFIG[item.outcome];
+function InteractionCard({ item, onEdit }: { item: Interaction; onEdit: () => void }) {
+  const cfg = TYPE_CONFIG[item.interaction_type] ?? TYPE_CONFIG.NOTE;
+  const hasStars = item.interest_level != null && item.interest_level > 0;
 
   return (
-    <View style={s.timelineRow}>
-      {/* Left: icon circle + connecting line */}
-      <View style={s.timelineLeft}>
-        <View style={[s.typeIconCircle, { backgroundColor: cfg.bg }]}>
-          <Ionicons name={cfg.icon as any} size={16} color={cfg.iconColor} />
-        </View>
-        {!isLast && <View style={s.timelineLine} />}
+    <View style={s.row}>
+      {/* Icon circle (uniforme, como el web) */}
+      <View style={s.iconCircle}>
+        <Ionicons name={cfg.icon as any} size={18} color={colors.navy} />
       </View>
 
-      {/* Right: card */}
-      <View style={s.card}>
-        {/* Header: label + date + edit button */}
-        <View style={s.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.typeLabel, { color: cfg.iconColor }]}>{cfg.label}</Text>
-            <Text style={s.cardDate}>{formatDate(item.created_at)}</Text>
-          </View>
-          <TouchableOpacity style={s.editBtn} onPress={onEdit} activeOpacity={0.8}>
-            <Ionicons name="pencil" size={14} color={colors.white} />
-          </TouchableOpacity>
+      {/* Content */}
+      <View style={s.rowBody}>
+        {/* Line 1: tipo + estrellas + duración */}
+        <View style={s.line1}>
+          <Text style={s.typeLabel}>{cfg.label}</Text>
+          {hasStars && (
+            <View style={s.inlineMeta}>
+              <Ionicons name="star" size={13} color="#f59e0b" />
+              <Text style={s.starText}>{item.interest_level}</Text>
+            </View>
+          )}
+          {item.duration_minutes ? (
+            <>
+              <Text style={s.sep}>|</Text>
+              <View style={s.inlineMeta}>
+                <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                <Text style={s.durText}>{item.duration_minutes} min</Text>
+              </View>
+            </>
+          ) : null}
         </View>
 
-        {/* Outcome badge */}
-        {outcome && (
-          <View style={[s.outcomeBadge, { backgroundColor: outcome.bg }]}>
-            <Text style={[s.outcomeBadgeText, { color: outcome.color }]}>{outcome.label}</Text>
+        {/* Line 2: badges (resultado gris + próxima acción azul) */}
+        <View style={s.badgeRow}>
+          <View style={s.outcomeBadge}>
+            <Text style={s.outcomeText}>{OUTCOME_LABEL[item.outcome] ?? item.outcome}</Text>
           </View>
-        )}
-
-        {/* Stars */}
-        {item.interest_level != null && item.interest_level > 0 && (
-          <View style={s.starsRow}>
-            <Ionicons name="star" size={14} color="#f59e0b" />
-            <Text style={s.starsLabel}>{item.interest_level}</Text>
-          </View>
-        )}
+          {item.next_action ? (
+            <View style={s.nextBadge}>
+              <Text style={s.nextText}>{item.next_action}</Text>
+            </View>
+          ) : null}
+        </View>
 
         {/* Notes */}
-        {item.notes ? <Text style={s.notes}>{item.notes}</Text> : null}
+        {item.notes ? <Text style={s.notes} numberOfLines={2}>{item.notes}</Text> : null}
+      </View>
 
-        {/* Meta row */}
-        {item.duration_minutes ? (
-          <View style={s.metaRow}>
-            <View style={s.metaChip}>
-              <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-              <Text style={s.metaChipText}>{item.duration_minutes} min</Text>
-            </View>
-          </View>
-        ) : null}
-
-        {/* Salesperson */}
-        <Text style={s.salesperson}>{item.salesperson_name}</Text>
+      {/* Right: edit + fecha/hora */}
+      <View style={s.rowRight}>
+        <TouchableOpacity style={s.editBtn} onPress={onEdit} activeOpacity={0.8}>
+          <Ionicons name="pencil" size={13} color={colors.white} />
+        </TouchableOpacity>
+        <Text style={s.dateSmall}>{formatDate(item.created_at)}</Text>
+        <Text style={s.dateSmall}>{formatTime(item.created_at)}</Text>
       </View>
     </View>
   );
@@ -363,12 +365,8 @@ export default function LeadHistoryScreen() {
               <Text style={s.emptyText}>Aún no hay registros para este lead.</Text>
             </View>
           }
-          renderItem={({ item, index }) => (
-            <InteractionCard
-              item={item}
-              onEdit={() => setEditing(item)}
-              isLast={index === interactions.length - 1}
-            />
+          renderItem={({ item }) => (
+            <InteractionCard item={item} onEdit={() => setEditing(item)} />
           )}
         />
       )}
@@ -410,7 +408,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
   headerSub: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   loader: { marginTop: 80 },
-  list: { paddingTop: 16, paddingBottom: 48 },
+  list: { padding: 16, paddingBottom: 48, gap: 12 },
   // States
   center: { paddingTop: 80, alignItems: 'center', gap: 12, paddingHorizontal: 32 },
   errorBox: {
@@ -435,72 +433,59 @@ const s = StyleSheet.create({
   retryText: { color: colors.navy, fontWeight: '600', fontSize: 14 },
   emptyTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   emptyText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
-  // Timeline
-  timelineRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 4 },
-  timelineLeft: { alignItems: 'center', width: 38 },
-  typeIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timelineLine: { flex: 1, width: 2, backgroundColor: colors.border, marginTop: 4, minHeight: 16 },
-  // Card
-  card: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    gap: 8,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  cardHeader: {
+  // Interaction row (flat, estilo web)
+  row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
+    gap: 12,
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+    padding: 12,
   },
-  typeLabel: { fontSize: 13, fontWeight: '700' },
-  cardDate: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
-  outcomeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  iconCircle: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-  },
-  outcomeBadgeText: { fontSize: 12, fontWeight: '600' },
-  starsRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  starsLabel: { fontSize: 12, color: '#f59e0b', fontWeight: '600', marginLeft: 2 },
-  notes: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },
-  metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  metaChipText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
-  salesperson: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
-  editBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: colors.navy,
+    backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
+  rowBody: { flex: 1, gap: 5 },
+  line1: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  typeLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  inlineMeta: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  starText: { fontSize: 12, color: '#f59e0b', fontWeight: '700' },
+  durText: { fontSize: 12, color: colors.textMuted },
+  sep: { fontSize: 12, color: '#d1d5db' },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  outcomeBadge: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  outcomeText: { fontSize: 11, fontWeight: '600', color: '#4b5563' },
+  nextBadge: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  nextText: { fontSize: 11, fontWeight: '600', color: '#2563eb' },
+  notes: { fontSize: 12, color: colors.textMuted, lineHeight: 17 },
+  rowRight: { alignItems: 'flex-end', gap: 4, flexShrink: 0 },
+  editBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: colors.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateSmall: { fontSize: 11, color: colors.textMuted },
 });
 
 // ─── edit modal styles ────────────────────────────────────────────────────────
