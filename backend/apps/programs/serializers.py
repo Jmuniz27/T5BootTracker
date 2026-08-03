@@ -27,14 +27,14 @@ class CohortSerializer(serializers.ModelSerializer):
 class CohortWriteSerializer(serializers.ModelSerializer):
     """Escritura.
 
-    `end_month` no está en `fields` a propósito: lo sella el servicio al
-    finalizar y nunca se acepta del cliente. `program` tampoco — lo fija la
-    vista desde la URL anidada.
+    `end_month` se acepta del cliente como **fin previsto**; al pasar a FINISHED
+    el servicio lo resella con el mes real. `program` no es un campo — lo fija
+    la vista desde la URL anidada.
     """
 
     class Meta:
         model = Cohort
-        fields = ('number', 'start_month', 'status')
+        fields = ('number', 'start_month', 'end_month', 'status')
 
     def validate_number(self, value):
         if value < 1:
@@ -42,10 +42,10 @@ class CohortWriteSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """Unicidad del número dentro del programa.
+        """Unicidad del número en el programa y coherencia de los dos meses.
 
-        No se puede delegar en UniqueTogetherValidator: `program` no es un campo
-        del serializer, así que DRF no lo ve.
+        La unicidad no se puede delegar en UniqueTogetherValidator: `program` no
+        es un campo del serializer, así que DRF no lo ve.
         """
         program = self.context.get('program') or getattr(self.instance, 'program', None)
         number  = attrs.get('number', getattr(self.instance, 'number', None))
@@ -59,13 +59,29 @@ class CohortWriteSerializer(serializers.ModelSerializer):
                     {'number': f'El programa ya tiene una cohorte {number}.'}
                 )
 
+        # Los ausentes se resuelven contra la instancia: un PATCH que sólo mueve
+        # uno de los dos meses también tiene que quedar coherente.
+        start = attrs.get('start_month', getattr(self.instance, 'start_month', None))
+        end   = attrs.get('end_month',   getattr(self.instance, 'end_month', None))
+
+        if start and end and end < start:
+            raise serializers.ValidationError(
+                {'end_month': 'El fin previsto no puede ser anterior al mes de inicio.'}
+            )
+
         return attrs
 
     def create(self, validated_data):
-        status = validated_data.pop('status', Cohort.Status.UPCOMING)
+        """No pasa por el servicio: al crear se respeta el fin previsto tal cual.
+
+        Registrar una cohorte ya finalizada es legítimo (una edición histórica),
+        y resellar el mes con el actual pisaría la fecha real que se tecleó. El
+        resellado sólo tiene sentido en la transición hacia FINISHED, que ocurre
+        en `update`.
+        """
         cohort = Cohort(program=self.context['program'], **validated_data)
-        # El servicio resuelve end_month y persiste una sola vez.
-        return set_cohort_status(cohort, status)
+        cohort.save()
+        return cohort
 
     def update(self, instance, validated_data):
         status = validated_data.pop('status', None)
