@@ -52,9 +52,9 @@ def coordinator_users_for(program):
     """Active coordinator accounts that must be alerted about `program`.
 
     A coordinator reaches this list either by being general (they follow every
-    program) or by being assigned to this specific program. Coordinators hold
-    no permissions in the app — the account exists so a salesperson can reach
-    them by email.
+    program) or by having this program among the ones they are assigned to.
+    Coordinators hold no permissions in the app — the account exists so a
+    salesperson can reach them by email.
 
     Args:
         program: the `Program` the notification is about.
@@ -71,9 +71,11 @@ def coordinator_users_for(program):
         Q(coordinator_scope=CustomUser.CoordinatorScope.GENERAL)
         | Q(
             coordinator_scope=CustomUser.CoordinatorScope.PROGRAM,
-            coordinator_program=program,
+            coordinator_programs=program,
         )
-    )
+    # El join del M2M puede repetir filas por usuario si coordina varios
+    # programas; sin distinct() la misma persona entraría dos veces en el TO.
+    ).distinct()
 
 
 def coordinator_recipients(program):
