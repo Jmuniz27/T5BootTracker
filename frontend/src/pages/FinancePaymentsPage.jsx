@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { getMonitoring, getPrograms } from '../api/payments.api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  assignBootcamper,
+  getBootcamperPool,
+  getPrograms,
+  releaseBootcamper,
+} from '../api/payments.api'
 import StatCard from '../components/StatCard'
 import CustomSelect from '../components/CustomSelect'
+import Toast from '../components/Toast'
+import Skeleton from '../components/ui/Skeleton'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -24,16 +31,18 @@ function fmt(v) {
 
 // ─── Bootcamper Card ──────────────────────────────────────────────────────────
 
-function BootcamperCard({ bc, onClick }) {
+function BootcamperCard({ bc, onClick, action }) {
   const cfg       = STATUS[bc.payment_status] || STATUS.ON_TRACK
   const totalCost = parseFloat(bc.total_cost) || 1
   const totalPaid = parseFloat(bc.total_paid) || 0
   const paidPct   = Math.min((totalPaid / totalCost) * 100, 100)
 
   return (
+    <div className="bg-white border border-gray-200 rounded-2xl hover:shadow-md hover:border-[#213A8E]/30 transition-all group">
+    {/* El botón de acción va fuera de esta zona: un <button> no puede anidarse. */}
     <button
       onClick={onClick}
-      className="bg-white border border-gray-200 rounded-2xl p-5 text-left hover:shadow-md hover:border-[#1D3176]/30 transition-all w-full group"
+      className={`p-5 text-left w-full ${action ? 'pb-3' : ''}`}
     >
       {/* Top row */}
       <div className="flex items-start justify-between mb-3">
@@ -44,10 +53,10 @@ function BootcamperCard({ bc, onClick }) {
             className="w-10 h-10 rounded-full bg-gray-100 flex-shrink-0 object-cover"
           />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 group-hover:text-[#1D3176] transition-colors truncate">
+            <p className="text-sm font-semibold text-gray-900 group-hover:text-[#213A8E] transition-colors truncate">
               {bc.bootcamper_name}
             </p>
-            <p className="text-xs text-gray-400 truncate">{bc.email}</p>
+            <p className="text-xs text-gray-500 truncate">{bc.email}</p>
           </div>
         </div>
         <span className={`px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ml-2 ${cfg.bg} ${cfg.text}`}>
@@ -61,7 +70,7 @@ function BootcamperCard({ bc, onClick }) {
       {/* Progress bar */}
       <div className="mb-3">
         <div className="flex justify-between mb-1">
-          <span className="text-xs text-gray-400">Pagado</span>
+          <span className="text-xs text-gray-500">Pagado</span>
           <span className="text-xs font-semibold text-gray-700">{paidPct.toFixed(0)}%</span>
         </div>
         <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -73,7 +82,7 @@ function BootcamperCard({ bc, onClick }) {
       <div className="flex items-end justify-between">
         <div>
           <p className="text-lg font-bold text-gray-900 leading-tight">{fmt(bc.total_paid)}</p>
-          <p className="text-xs text-gray-400">de {fmt(bc.total_cost)}</p>
+          <p className="text-xs text-gray-500">de {fmt(bc.total_cost)}</p>
         </div>
         {bc.pending_payments > 0 && (
           <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
@@ -85,6 +94,8 @@ function BootcamperCard({ bc, onClick }) {
         )}
       </div>
     </button>
+    {action && <div className="px-5 pb-4">{action}</div>}
+    </div>
   )
 }
 
@@ -92,19 +103,19 @@ function BootcamperCard({ bc, onClick }) {
 
 function SkeletonCard() {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 animate-pulse">
+    <div aria-busy="true" className="bg-white border border-gray-200 rounded-2xl p-5">
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0" />
+        <Skeleton className="w-10 h-10 flex-shrink-0" rounded="rounded-full" />
         <div className="flex-1 space-y-1.5">
-          <div className="h-3.5 bg-gray-200 rounded w-32" />
-          <div className="h-3 bg-gray-100 rounded w-40" />
+          <Skeleton className="h-3.5 w-32" />
+          <Skeleton className="h-3 w-40" />
         </div>
       </div>
-      <div className="h-3 bg-gray-100 rounded w-24 mb-3" />
-      <div className="h-1.5 bg-gray-100 rounded-full mb-3" />
+      <Skeleton className="h-3 w-24 mb-3" />
+      <Skeleton className="h-1.5 w-full mb-3" rounded="rounded-full" />
       <div className="flex justify-between">
-        <div className="h-5 bg-gray-200 rounded w-20" />
-        <div className="h-5 bg-gray-100 rounded w-16" />
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-5 w-16" />
       </div>
     </div>
   )
@@ -112,38 +123,73 @@ function SkeletonCard() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function SalespersonPaymentsPage() {
+// El backend topea page_size en 100; sin paginación en la UI se pide el máximo
+// y el filtrado fino (búsqueda, programa, estado) lo resuelve el servidor.
+const PAGE_SIZE = 100
+
+export default function FinancePaymentsPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [search, setSearch]             = useState('')
   const [programId, setProgramId]       = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [toast, setToast]               = useState(null) // { message, type }
 
-  const { data: bootcampers = [], isLoading, isFetching } = useQuery({
-    queryKey: ['payment-monitoring', { programId, statusFilter }],
-    queryFn: () => getMonitoring({
+  const showToast = (message, type = 'success') => setToast({ message, type })
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['bootcamper-pool', { programId, statusFilter, search }],
+    queryFn: () => getBootcamperPool({
       program_id: programId || undefined,
       status:     statusFilter || undefined,
+      search:     search || undefined,
+      page_size:  PAGE_SIZE,
     }),
   })
+
+  const mine      = data?.my_bootcampers ?? []
+  const available = data?.available_bootcampers ?? []
 
   const { data: programs = [] } = useQuery({
     queryKey: ['programs'],
     queryFn: getPrograms,
   })
 
-  const filtered = search
-    ? bootcampers.filter(
-        (bc) =>
-          bc.bootcamper_name.toLowerCase().includes(search.toLowerCase()) ||
-          bc.email.toLowerCase().includes(search.toLowerCase()),
-      )
-    : bootcampers
+  const refreshPool = () => {
+    queryClient.invalidateQueries({ queryKey: ['bootcamper-pool'] })
+    queryClient.invalidateQueries({ queryKey: ['payment-monitoring'] })
+  }
+
+  const assignMutation = useMutation({
+    mutationFn: assignBootcamper,
+    onSuccess: () => {
+      refreshPool()
+      showToast('Bootcamper asignado. Ya podés monitorear sus pagos.')
+    },
+    onError: (err) => {
+      // 409: otra persona de Finanzas lo tomó primero. Se refresca igual para
+      // que la tarjeta desaparezca del pool en vez de quedar como señuelo.
+      refreshPool()
+      showToast(err.response?.data?.error ?? 'No se pudo asignar el bootcamper.', 'error')
+    },
+  })
+
+  const releaseMutation = useMutation({
+    mutationFn: releaseBootcamper,
+    onSuccess: () => {
+      refreshPool()
+      showToast('Bootcamper devuelto al pool.')
+    },
+    onError: (err) => {
+      showToast(err.response?.data?.error ?? 'No se pudo liberar el bootcamper.', 'error')
+    },
+  })
 
   const stats = {
-    total:    bootcampers.length,
-    critical: bootcampers.filter((b) => b.payment_status === 'CRITICAL').length,
-    atRisk:   bootcampers.filter((b) => b.payment_status === 'AT_RISK').length,
-    onTrack:  bootcampers.filter((b) => b.payment_status === 'ON_TRACK').length,
+    total:    mine.length,
+    critical: mine.filter((b) => b.payment_status === 'CRITICAL').length,
+    atRisk:   mine.filter((b) => b.payment_status === 'AT_RISK').length,
+    onTrack:  mine.filter((b) => b.payment_status === 'ON_TRACK').length,
   }
 
   const handleCardClick = (bc) => {
@@ -156,12 +202,14 @@ export default function SalespersonPaymentsPage() {
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Monitoreo de Pagos</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Avance de pagos por bootcamper</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Tomá bootcampers del pool para seguirles el cobro
+          </p>
         </div>
       </div>
 
       {/* Summary stats */}
-      {!isLoading && bootcampers.length > 0 && (
+      {!isLoading && mine.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <StatCard label="Bootcampers" value={stats.total} />
           <StatCard
@@ -230,33 +278,107 @@ export default function SalespersonPaymentsPage() {
         )}
       </div>
 
-      {/* Cards grid */}
       {isLoading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => <SkeletonCard key={i} />)}
         </div>
       )}
-      {!isLoading && filtered.length === 0 && (
-        <div className="py-20 text-center">
-          <svg className="w-12 h-12 text-gray-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          <p className="text-sm text-gray-500">
-            {search ? 'No se encontraron bootcampers con ese nombre o email.' : 'Sin bootcampers activos en este programa.'}
-          </p>
-        </div>
+
+      {!isLoading && (
+        <>
+          <Section
+            title="Mis bootcampers"
+            count={mine.length}
+            empty={
+              search
+                ? 'Ninguno de tus bootcampers coincide con la búsqueda.'
+                : 'Todavía no monitoreás a nadie. Tomá uno del pool de abajo.'
+            }
+            cards={mine}
+            onCardClick={handleCardClick}
+            renderAction={(bc) => (
+              <CardAction
+                label="Liberar"
+                pendingLabel="Liberando…"
+                variant="secondary"
+                isPending={releaseMutation.isPending && releaseMutation.variables === bc.bootcamper_id}
+                onClick={() => releaseMutation.mutate(bc.bootcamper_id)}
+              />
+            )}
+          />
+
+          <Section
+            title="Disponibles"
+            subtitle="Bootcampers sin responsable de cobro"
+            count={available.length}
+            empty="No hay bootcampers esperando en el pool."
+            cards={available}
+            onCardClick={handleCardClick}
+            renderAction={(bc) => (
+              <CardAction
+                label="Asignarme"
+                pendingLabel="Asignando…"
+                isPending={assignMutation.isPending && assignMutation.variables === bc.bootcamper_id}
+                onClick={() => assignMutation.mutate(bc.bootcamper_id)}
+              />
+            )}
+          />
+        </>
       )}
-      {!isLoading && filtered.length > 0 && (
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+    </div>
+  )
+}
+
+// ─── Secciones ────────────────────────────────────────────────────────────────
+
+function Section({ title, subtitle, count, empty, cards, onCardClick, renderAction }) {
+  return (
+    <section className="mb-8">
+      <div className="flex items-baseline gap-2 mb-3">
+        <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+          {count}
+        </span>
+        {subtitle && <span className="text-xs text-gray-400">— {subtitle}</span>}
+      </div>
+
+      {cards.length === 0 ? (
+        <p className="text-sm text-gray-500 bg-gray-50 border border-gray-100 rounded-xl py-8 text-center">
+          {empty}
+        </p>
+      ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((bc) => (
+          {cards.map((bc) => (
             <BootcamperCard
               key={`${bc.bootcamper_id}-${bc.program_id}`}
               bc={bc}
-              onClick={() => handleCardClick(bc)}
+              onClick={() => onCardClick(bc)}
+              action={renderAction(bc)}
             />
           ))}
         </div>
       )}
-    </div>
+    </section>
+  )
+}
+
+function CardAction({ label, pendingLabel, onClick, isPending, variant = 'primary' }) {
+  const styles =
+    variant === 'primary'
+      ? 'bg-[#213A8E] text-white hover:bg-[#1a2f72]'
+      : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={isPending}
+      className={`w-full py-2 rounded-xl text-xs font-semibold transition-colors disabled:opacity-60 ${styles}`}
+    >
+      {isPending ? pendingLabel : label}
+    </button>
   )
 }

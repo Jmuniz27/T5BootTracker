@@ -50,7 +50,7 @@ function ChartCard({ title, subtitle, isEmpty, children }) {
         {subtitle ? <p className="text-xs text-gray-500">{subtitle}</p> : null}
       </div>
       {isEmpty ? (
-        <div className="flex h-[260px] items-center justify-center text-sm text-gray-400">
+        <div className="flex h-[260px] items-center justify-center text-sm text-gray-500">
           Sin datos para este período
         </div>
       ) : (
@@ -80,7 +80,7 @@ export default function AnalyticsCharts({ filters = {} }) {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-gray-400">
+      <div className="flex h-64 items-center justify-center text-sm text-gray-500">
         Cargando analíticas…
       </div>
     )

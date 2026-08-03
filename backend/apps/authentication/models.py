@@ -32,7 +32,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         FINANCE       = 'FINANCE',       'Finanzas'
 
     class CoordinatorScope(models.TextChoices):
-        """Alcance de un coordinador: general o atado a un programa.
+        """Alcance de un coordinador: general o atado a programas concretos.
 
         Sólo aplica a usuarios con rol COORDINATOR; en el resto queda vacío.
         Determina a qué notificaciones se le copia (ver
@@ -66,14 +66,25 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         default='',
         verbose_name='Alcance del coordinador',
     )
-    coordinator_program = models.ForeignKey(
+    coordinator_programs = models.ManyToManyField(
         'programs.Program',
+        blank=True,
+        related_name='coordinator_users',
+        verbose_name='Programas asignados',
+    )
+    # Pool de bootcampers: quién de Finanzas monitorea los pagos de esta
+    # persona. Sólo tiene sentido en usuarios con rol BOOTCAMPER; vacío
+    # significa que sigue en el pool, sin responsable. Espejo de
+    # `Lead.owner` / `Lead.assigned_at` en el pool de leads.
+    finance_owner = models.ForeignKey(
+        'self',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='coordinator_users',
-        verbose_name='Programa asignado',
+        related_name='monitored_bootcampers',
+        verbose_name='Responsable de cobro',
     )
+    finance_assigned_at = models.DateTimeField(null=True, blank=True)
     is_active  = models.BooleanField(default=True)
     is_staff   = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -102,6 +113,14 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     @property
     def is_administrator(self):
         return self.role == self.Role.ADMINISTRATOR
+
+    @property
+    def is_finance(self):
+        return self.role == self.Role.FINANCE
+
+    @property
+    def is_bootcamper(self):
+        return self.role == self.Role.BOOTCAMPER
 
     @property
     def is_coordinator(self):

@@ -31,3 +31,14 @@ class IsFinanceOrAdmin(BasePermission):
         return request.user.is_authenticated and request.user.role in (
             CustomUser.Role.ADMINISTRATOR, CustomUser.Role.FINANCE
         )
+
+
+class IsFinance(BasePermission):
+    """Sólo Finanzas.
+
+    El admin queda fuera a propósito: asignarse y liberar bootcampers del pool
+    es un acto de tomar responsabilidad de cobro, y el administrador no tiene
+    cartera propia (mismo criterio que `IsCommercial` sobre el pool de leads).
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == CustomUser.Role.FINANCE

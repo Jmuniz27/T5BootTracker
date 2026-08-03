@@ -17,7 +17,7 @@ from rest_framework.views import APIView
 from apps.authentication.models import CustomUser
 from apps.programs.models import Program
 from .models import Lead, Interaction, LeadAssignmentSetting
-from .permissions import IsAdministrator, IsSalesperson, IsSalespersonOrAdmin
+from .permissions import COMMERCIAL_ROLES, IsAdministrator, IsCommercial, IsCommercialOrAdmin
 from .serializers import (
     LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
     InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
@@ -38,7 +38,7 @@ TRUTHY            = {'true', '1', 'yes', 'on'}
 
 class LeadListCreateView(APIView):
     """GET returns paginated my_leads + available_leads. POST creates a new lead."""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsCommercialOrAdmin]
 
     def _annotated_qs(self):
         latest = Interaction.objects.filter(lead=OuterRef('pk')).order_by('-created_at')
@@ -82,17 +82,37 @@ class LeadListCreateView(APIView):
         responses={200: inline_serializer('LeadListResponse', fields={
             'my_leads':        LeadListSerializer(many=True),
             'available_leads': LeadListSerializer(many=True),
+            'converted_leads': LeadListSerializer(many=True),
+            'all_leads':        LeadListSerializer(many=True, required=False),
+            'assigned_leads':   LeadListSerializer(many=True, required=False),
+            'unassigned_leads': LeadListSerializer(many=True, required=False),
             'pagination':      inline_serializer('LeadListPagination', fields={
                 'page':                        drf_serializers.IntegerField(),
                 'page_size':                   drf_serializers.IntegerField(),
                 'my_leads_count':              drf_serializers.IntegerField(),
                 'available_leads_count':       drf_serializers.IntegerField(),
+                'converted_leads_count':       drf_serializers.IntegerField(),
                 'my_leads_total_pages':        drf_serializers.IntegerField(),
                 'available_leads_total_pages': drf_serializers.IntegerField(),
+                'converted_leads_total_pages': drf_serializers.IntegerField(),
+                'all_leads_count':              drf_serializers.IntegerField(required=False),
+                'assigned_leads_count':         drf_serializers.IntegerField(required=False),
+                'unassigned_leads_count':       drf_serializers.IntegerField(required=False),
+                'all_leads_total_pages':        drf_serializers.IntegerField(required=False),
+                'assigned_leads_total_pages':   drf_serializers.IntegerField(required=False),
+                'unassigned_leads_total_pages': drf_serializers.IntegerField(required=False),
             }),
         })},
         summary='Listar leads',
-        description='Devuelve my_leads (asignados al usuario) y available_leads (sin asignar), paginados de forma independiente.',
+        description=(
+            'Vendedor: devuelve my_leads (asignados al usuario), available_leads (sin asignar) y '
+            'converted_leads (todos los convertidos, visibles para cualquier vendedor; '
+            'owner_name indica quién lo convirtió), paginados de forma independiente. '
+            'Administrador: además devuelve all_leads (todos), assigned_leads (con vendedor) y '
+            'unassigned_leads (sin asignar), cada uno paginado de forma independiente — '
+            'my_leads/available_leads se mantienen para no romper clientes existentes (mobile), '
+            'pero para admin no reflejan una partición real.'
+        ),
         tags=['Leads'],
     )
     def get(self, request):
@@ -106,8 +126,6 @@ class LeadListCreateView(APIView):
         fecha_desde   = parse_date(params.get('fecha_desde', '') or '')
         fecha_hasta   = parse_date(params.get('fecha_hasta', '') or '')
 
-        if status_filter:
-            qs = qs.filter(status=status_filter)
         if source_filter:
             qs = qs.filter(source=source_filter)
         if is_company is not None:
@@ -130,9 +148,21 @@ class LeadListCreateView(APIView):
             except ValueError:
                 pass
 
+        # converted_leads es visible para cualquier vendedor y no depende del
+        # filtro de estado (ese aplica solo a my/available). owner_name señala
+        # quién convirtió el lead.
+        converted_leads_qs = qs.filter(status=Lead.Status.CONVERTED)
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
         only_mine = (params.get('my_leads', '').lower() in TRUTHY)
 
         if request.user.is_administrator:
+            # CB-223 / HST-025: my_leads/available_leads se mantienen tal cual
+            # (contrato existente, no romper mobile), pero para admin no son
+            # una partición real — se agregan all_leads/assigned_leads/
+            # unassigned_leads con la vista real que el admin necesita.
             my_leads_qs        = qs
             available_leads_qs = qs.none()
         elif only_mine:
@@ -146,21 +176,52 @@ class LeadListCreateView(APIView):
 
         my_paginator        = Paginator(my_leads_qs, page_size)
         available_paginator = Paginator(available_leads_qs, page_size)
+        converted_paginator = Paginator(converted_leads_qs, page_size)
         my_page        = my_paginator.get_page(page_number)
         available_page = available_paginator.get_page(page_number)
+        converted_page = converted_paginator.get_page(page_number)
 
-        return Response({
+        data = {
             'my_leads':        LeadListSerializer(my_page.object_list, many=True).data,
             'available_leads': LeadListSerializer(available_page.object_list, many=True).data,
+            'converted_leads': LeadListSerializer(converted_page.object_list, many=True).data,
             'pagination': {
                 'page':                        page_number,
                 'page_size':                   page_size,
                 'my_leads_count':              my_paginator.count,
                 'available_leads_count':       available_paginator.count,
+                'converted_leads_count':       converted_paginator.count,
                 'my_leads_total_pages':        my_paginator.num_pages,
                 'available_leads_total_pages': available_paginator.num_pages,
+                'converted_leads_total_pages': converted_paginator.num_pages,
             },
-        })
+        }
+
+        if request.user.is_administrator:
+            all_leads_qs        = qs
+            assigned_leads_qs   = qs.filter(owner__isnull=False)
+            unassigned_leads_qs = qs.filter(owner__isnull=True)
+
+            all_paginator        = Paginator(all_leads_qs, page_size)
+            assigned_paginator   = Paginator(assigned_leads_qs, page_size)
+            unassigned_paginator = Paginator(unassigned_leads_qs, page_size)
+            all_page        = all_paginator.get_page(page_number)
+            assigned_page   = assigned_paginator.get_page(page_number)
+            unassigned_page = unassigned_paginator.get_page(page_number)
+
+            data['all_leads']        = LeadListSerializer(all_page.object_list, many=True).data
+            data['assigned_leads']   = LeadListSerializer(assigned_page.object_list, many=True).data
+            data['unassigned_leads'] = LeadListSerializer(unassigned_page.object_list, many=True).data
+            data['pagination'].update({
+                'all_leads_count':              all_paginator.count,
+                'assigned_leads_count':         assigned_paginator.count,
+                'unassigned_leads_count':       unassigned_paginator.count,
+                'all_leads_total_pages':        all_paginator.num_pages,
+                'assigned_leads_total_pages':   assigned_paginator.num_pages,
+                'unassigned_leads_total_pages': unassigned_paginator.num_pages,
+            })
+
+        return Response(data)
 
     @extend_schema(
         request=LeadWriteSerializer,
@@ -202,7 +263,7 @@ class LeadListCreateView(APIView):
 
 class LeadAssignView(APIView):
     """PATCH /leads/{id}/assign/ — self-assignment with optimistic locking."""
-    permission_classes = [IsSalesperson]
+    permission_classes = [IsCommercial]
 
     @extend_schema(
         responses={
@@ -247,7 +308,7 @@ class LeadAssignView(APIView):
 
 class LeadReleaseView(APIView):
     """PATCH /leads/{id}/release/ — release ownership."""
-    permission_classes = [IsSalesperson]
+    permission_classes = [IsCommercial]
 
     @extend_schema(
         responses={200: LeadListSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
@@ -295,10 +356,13 @@ class LeadAdminReassignView(APIView):
         owner_id = request.data.get('owner_id')
         if owner_id:
             try:
-                new_owner = CustomUser.objects.get(pk=uuid.UUID(str(owner_id)), role=CustomUser.Role.SALESPERSON)
+                # Finanzas también trabaja leads, así que puede recibir uno.
+                new_owner = CustomUser.objects.get(
+                    pk=uuid.UUID(str(owner_id)), role__in=COMMERCIAL_ROLES,
+                )
             except (CustomUser.DoesNotExist, ValueError):
                 return Response(
-                    {'error': 'owner_id debe ser un Vendedor existente.', 'code': 'INVALID_OWNER'},
+                    {'error': 'owner_id debe ser un Vendedor o Finanzas existente.', 'code': 'INVALID_OWNER'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -350,7 +414,7 @@ class LeadAssignmentSettingView(APIView):
 
 class LeadDetailView(APIView):
     """GET/PATCH/DELETE /leads/{id}/ — detail, partial update, soft delete."""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsCommercialOrAdmin]
 
     @extend_schema(
         responses={200: LeadDetailSerializer, 404: OpenApiResponse(description='Lead no encontrado')},
@@ -400,7 +464,7 @@ class LeadDetailView(APIView):
 
 class InteractionListCreateView(APIView):
     """GET/POST /leads/{id}/interactions/"""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsCommercialOrAdmin]
 
     @extend_schema(
         responses={200: InteractionSerializer(many=True)},
@@ -440,7 +504,7 @@ class InteractionListCreateView(APIView):
 
 class InteractionDetailView(APIView):
     """PATCH /leads/{pk}/interactions/{interaction_pk}/ — edit an existing interaction."""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsCommercialOrAdmin]
 
     @extend_schema(
         request=InteractionSerializer,
@@ -464,7 +528,7 @@ class InteractionDetailView(APIView):
 
 class ConvertLeadView(APIView):
     """POST /api/leads/{id}/convert/ — convert a lead to a bootcamper."""
-    permission_classes = [IsSalesperson]
+    permission_classes = [IsCommercial]
 
     @extend_schema(
         request=ConvertLeadSerializer,
@@ -501,7 +565,7 @@ class ConvertLeadView(APIView):
 
 class ReturningBootcamperView(APIView):
     """POST /api/leads/returning-bootcamper/ — create a lead for an existing bootcamper."""
-    permission_classes = [IsSalesperson]
+    permission_classes = [IsCommercial]
 
     @extend_schema(
         request=ReturningBootcamperSerializer,

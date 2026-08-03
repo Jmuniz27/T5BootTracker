@@ -20,7 +20,7 @@ test.describe('HST-016 / HST-021 · Registro y validación de comprobante de pag
     titulo({
       hst: 'HST-016 / HST-021',
       dado: 'un bootcamper con un comprobante de transferencia',
-      cuando: 'lo sube, el sistema lo procesa y el vendedor lo aprueba',
+      cuando: 'lo sube, el sistema lo procesa y Finanzas lo aprueba',
       entonces: 'el pago queda aprobado con el monto confirmado',
     }),
     async ({ page }) => {
@@ -84,14 +84,17 @@ test.describe('HST-016 / HST-021 · Registro y validación de comprobante de pag
         await page.getByTestId('confirm-payment-submit').click()
       })
 
-      await y('el vendedor lo aprueba desde la cola de validación', async () => {
+      await y('Finanzas lo aprueba desde la cola de validación', async () => {
+        // La validación de comprobantes es de Finanzas: al vendedor la API le
+        // responde 403 en los endpoints de pagos.
+        //
         // PaymentApproveView rechaza con 400 NOT_PENDING si el pago no pasó a
         // PENDING, así que el confirm anterior debe haberse completado.
-        const apiVendedor = await clienteApi('vendedor')
+        const apiFinanzas = await clienteApi('finanzas')
         await expect
           .poll(
             async () => {
-              const r = await apiVendedor.get(`/api/payments/${pagoId}/`)
+              const r = await apiFinanzas.get(`/api/payments/${pagoId}/`)
               if (!r.ok()) return null
               return (await r.json()).status
             },
@@ -99,7 +102,7 @@ test.describe('HST-016 / HST-021 · Registro y validación de comprobante de pag
           )
           .toBe('PENDING')
 
-        const aprobacion = await apiVendedor.patch(`/api/payments/${pagoId}/approve/`, {
+        const aprobacion = await apiFinanzas.patch(`/api/payments/${pagoId}/approve/`, {
           data: { confirmed_amount: '450.00' },
         })
         expect(
@@ -108,13 +111,13 @@ test.describe('HST-016 / HST-021 · Registro y validación de comprobante de pag
         ).toBeTruthy()
 
         await entonces('el pago queda aprobado con el monto confirmado', async () => {
-          const detalle = await apiVendedor.get(`/api/payments/${pagoId}/`)
+          const detalle = await apiFinanzas.get(`/api/payments/${pagoId}/`)
           const pago = await detalle.json()
           expect(pago.status).toBe('APPROVED')
           expect(Number(pago.confirmed_amount)).toBe(450)
         })
 
-        await apiVendedor.dispose()
+        await apiFinanzas.dispose()
       })
     },
   )

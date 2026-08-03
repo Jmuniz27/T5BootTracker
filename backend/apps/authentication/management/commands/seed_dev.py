@@ -7,7 +7,6 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils.timezone import now, timedelta
 from apps.authentication.models import CustomUser
 from apps.leads.models import Lead, Interaction
-from apps.programs.services import set_cohort_status
 
 # Semilla fija: el comando reparte estados y programas con `random`, y sin
 # fijarla cada ejecución produce datos distintos. Eso vuelve no reproducibles
@@ -102,11 +101,29 @@ class Command(BaseCommand):
         v2.set_password('vendedor1234')
         v2.save()
 
+        f1, _ = CustomUser.objects.get_or_create(
+            email='finanzas1@boottracker.com',
+            defaults={'first_name': 'Finanzas', 'last_name': 'Uno', 'role': CustomUser.Role.FINANCE},
+        )
+        f1.set_password('finanzas1234')
+        f1.save()
+
+        f2, _ = CustomUser.objects.get_or_create(
+            email='finanzas2@boottracker.com',
+            defaults={'first_name': 'Finanzas', 'last_name': 'Dos', 'role': CustomUser.Role.FINANCE},
+        )
+        f2.set_password('finanzas1234')
+        f2.save()
+
         bootcamper, _ = CustomUser.objects.get_or_create(
             email='bootcamper@boottracker.com',
             defaults={'first_name': 'Boot', 'last_name': 'Camper', 'role': CustomUser.Role.BOOTCAMPER},
         )
         bootcamper.set_password('boot1234')
+        # Este ya tiene responsable de cobro; el convertido queda en el pool,
+        # para que se vean los dos lados de la página de Finanzas.
+        bootcamper.finance_owner = f1
+        bootcamper.finance_assigned_at = now()
         bootcamper.save()
 
         self.stdout.write(self.style.SUCCESS('  Users created/updated.'))
@@ -184,21 +201,23 @@ class Command(BaseCommand):
         # Cohortes: una por estado, para poder probar el filtro sin crearlas a mano.
         from apps.programs.models import Cohort
         first_of_month = today.replace(day=1)
+        # (programa, numero, inicio, fin previsto, estado)
         cohort_seed = [
-            (program1, 1, first_of_month - dt_timedelta(days=210), Cohort.Status.FINISHED),
-            (program1, 2, first_of_month - dt_timedelta(days=30),  Cohort.Status.IN_PROGRESS),
-            (program1, 3, first_of_month + dt_timedelta(days=60),  Cohort.Status.UPCOMING),
-            (program2, 1, first_of_month + dt_timedelta(days=30),  Cohort.Status.UPCOMING),
+            (program1, 1, first_of_month - dt_timedelta(days=210), first_of_month - dt_timedelta(days=60),  Cohort.Status.FINISHED),
+            (program1, 2, first_of_month - dt_timedelta(days=30),  first_of_month + dt_timedelta(days=60),  Cohort.Status.IN_PROGRESS),
+            (program1, 3, first_of_month + dt_timedelta(days=60),  first_of_month + dt_timedelta(days=150), Cohort.Status.UPCOMING),
+            (program2, 1, first_of_month + dt_timedelta(days=30),  first_of_month + dt_timedelta(days=120), Cohort.Status.UPCOMING),
         ]
-        for program, number, start_month, cohort_status in cohort_seed:
-            cohort, created = Cohort.objects.get_or_create(
+        for program, number, start_month, end_month, cohort_status in cohort_seed:
+            Cohort.objects.get_or_create(
                 program=program,
                 number=number,
-                defaults={'start_month': start_month, 'status': cohort_status},
+                defaults={
+                    'start_month': start_month,
+                    'end_month':   end_month,
+                    'status':      cohort_status,
+                },
             )
-            # La finalizada necesita mes de fin; se sella igual que por la API.
-            if created and cohort_status == Cohort.Status.FINISHED:
-                set_cohort_status(cohort, Cohort.Status.FINISHED)
 
         self.stdout.write(self.style.SUCCESS('  Cohorts created/updated.'))
 
@@ -265,9 +284,14 @@ class Command(BaseCommand):
         self.stdout.write('  admin@boottracker.com            / admin1234     ADMINISTRATOR')
         self.stdout.write('  vendedor1@boottracker.com        / vendedor1234  SALESPERSON')
         self.stdout.write('  vendedor2@boottracker.com        / vendedor1234  SALESPERSON')
+        self.stdout.write('  finanzas1@boottracker.com        / finanzas1234  FINANCE')
+        self.stdout.write('  finanzas2@boottracker.com        / finanzas1234  FINANCE')
         self.stdout.write('  bootcamper@boottracker.com       / boot1234      BOOTCAMPER')
         self.stdout.write('  bootcamper.conv@boottracker.com  / boot1234      BOOTCAMPER')
         self.stdout.write(
-            '\n  Nota: no existe rol "finance". La validacion de pagos la realiza el '
-            'SALESPERSON (y el ADMINISTRATOR). El ADMINISTRATOR tiene acceso total + Django admin.'
+            '\n  Nota: el SALESPERSON trabaja el dashboard de leads (crear, asignarse, '
+            'convertir) y no ve pagos. FINANCE hace lo mismo y ademas monitorea los pagos '
+            'de los bootcampers que se asigna desde el pool. bootcamper@ ya esta asignado a '
+            'finanzas1@; bootcamper.conv@ sigue en el pool. El ADMINISTRATOR tiene acceso '
+            'total + Django admin.'
         )

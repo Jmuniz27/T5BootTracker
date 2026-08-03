@@ -2,16 +2,17 @@
 import logging
 import mimetypes
 from django.core import signing
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
 from rest_framework import status, serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.leads.permissions import IsSalesperson, IsSalespersonOrAdmin
+from apps.authentication.permissions import IsFinance, IsFinanceOrAdmin
 from .models import Payment
 from .serializers import (
     PaymentUploadSerializer, PaymentListSerializer, PaymentDetailSerializer,
@@ -22,8 +23,12 @@ from .services import PaymentProgressService, read_receipt_token
 
 logger = logging.getLogger(__name__)
 
+# Mismos topes que el pool de leads, para que ambos pools pagineen igual.
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE     = 100
 
-class IsBootcamper(IsSalesperson):
+
+class IsBootcamper(BasePermission):
     """Only bootcamper users."""
     def has_permission(self, request, view):
         from apps.authentication.models import CustomUser
@@ -255,7 +260,7 @@ class PaymentConfirmView(APIView):
 
 class PaymentQueueView(APIView):
     """GET /api/payments/queue/ — pending payments for review."""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsFinanceOrAdmin]
 
     @extend_schema(
         parameters=[
@@ -284,7 +289,7 @@ class PaymentQueueView(APIView):
 
 class PaymentMonitoringView(APIView):
     """GET /api/payments/monitoring/ — payment summary for all bootcampers in a program."""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsFinanceOrAdmin]
 
     @extend_schema(
         parameters=[
@@ -311,7 +316,6 @@ class PaymentMonitoringView(APIView):
         tags=['Pagos — Vendedor/Admin'],
     )
     def get(self, request):
-        from apps.authentication.models import CustomUser
         from apps.programs.models import Program
 
         program_id    = request.query_params.get('program_id')
@@ -325,31 +329,25 @@ class PaymentMonitoringView(APIView):
         else:
             programs = list(Program.objects.filter(is_active=True))
 
-        svc  = PaymentProgressService()
-        data = []
-        for program in programs:
-            bootcampers = CustomUser.objects.filter(
-                role=CustomUser.Role.BOOTCAMPER,
-                payments__program=program,
-            ).distinct()
-            for bc in bootcampers:
-                summary = svc.get_payment_summary(str(bc.id), str(program.id))
-                if status_filter and summary.get('payment_status') != status_filter:
-                    continue
-                data.append({
-                    'bootcamper_id':   str(bc.id),
-                    'bootcamper_name': bc.get_full_name(),
-                    'email':           bc.email,
-                    'program_id':      str(program.id),
-                    'program_name':    program.name,
-                    **summary,
-                })
+        data = PaymentProgressService().get_monitoring_summaries(programs, status_filter)
+
+        # Finanzas sólo monitorea su propia cartera; el administrador ve todo.
+        if not request.user.is_administrator:
+            from apps.authentication.models import CustomUser
+
+            mine = {
+                str(pk) for pk in CustomUser.objects
+                .filter(role=CustomUser.Role.BOOTCAMPER, finance_owner=request.user)
+                .values_list('id', flat=True)
+            }
+            data = [row for row in data if row['bootcamper_id'] in mine]
+
         return Response(data)
 
 
 class PaymentDetailView(APIView):
     """GET /api/payments/{id}/ — full payment details including ocr_raw_text."""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsFinanceOrAdmin]
 
     @extend_schema(
         responses={200: PaymentDetailSerializer, 404: OpenApiResponse(description='Pago no encontrado')},
@@ -364,7 +362,7 @@ class PaymentDetailView(APIView):
 
 class PaymentApproveView(APIView):
     """PATCH /api/payments/{id}/approve/"""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsFinanceOrAdmin]
 
     @extend_schema(
         request=PaymentApproveSerializer,
@@ -406,7 +404,7 @@ class PaymentApproveView(APIView):
 
 class PaymentRejectView(APIView):
     """PATCH /api/payments/{id}/reject/"""
-    permission_classes = [IsSalespersonOrAdmin]
+    permission_classes = [IsFinanceOrAdmin]
 
     @extend_schema(
         request=PaymentRejectSerializer,
@@ -445,7 +443,7 @@ class PaymentRejectView(APIView):
 
 class NotifyCoordinatorView(APIView):
     """POST /api/payments/notify-coordinator/{bootcamper_id}/?program_id=..."""
-    permission_classes = [IsSalesperson]
+    permission_classes = [IsFinanceOrAdmin]
 
     @extend_schema(
         parameters=[OpenApiParameter('program_id', str, required=True, description='UUID del programa')],
@@ -473,3 +471,206 @@ class NotifyCoordinatorView(APIView):
 
         send_late_payment_alert.delay(str(bootcamper_id), str(program_id))
         return Response({'detail': 'Alerta enviada.'}, status=status.HTTP_200_OK)
+
+
+# ─── Pool de bootcampers ──────────────────────────────────────────────────────
+#
+# Misma mecánica que el pool de leads: al convertirse, un bootcamper queda sin
+# responsable de cobro (`finance_owner` vacío) y cualquiera de Finanzas puede
+# tomarlo. No hace falta ningún paso extra en la conversión — estar en el pool
+# es, literalmente, no tener dueño.
+
+BOOTCAMPER_CARD_FIELDS = {
+    'bootcamper_id':           drf_serializers.UUIDField(),
+    'bootcamper_name':         drf_serializers.CharField(),
+    'email':                   drf_serializers.EmailField(),
+    'program_id':              drf_serializers.UUIDField(),
+    'program_name':            drf_serializers.CharField(),
+    'total_cost':              drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+    'total_paid':              drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+    'pending_payments':        drf_serializers.IntegerField(),
+    'deficit':                 drf_serializers.DecimalField(max_digits=12, decimal_places=2),
+    'is_critical':             drf_serializers.BooleanField(),
+    'payment_status':          drf_serializers.CharField(),
+    'time_elapsed_percentage': drf_serializers.FloatField(),
+    'payment_count':           drf_serializers.IntegerField(),
+}
+
+
+class BootcamperPoolView(APIView):
+    """GET /api/payments/bootcampers/ — cartera propia + pool sin asignar."""
+    permission_classes = [IsFinanceOrAdmin]
+
+    def _page_params(self, request):
+        """Lee y acota ``page`` / ``page_size``, igual que el pool de leads."""
+        try:
+            page_size = int(request.query_params.get('page_size', DEFAULT_PAGE_SIZE))
+        except (TypeError, ValueError):
+            page_size = DEFAULT_PAGE_SIZE
+        if page_size <= 0:
+            page_size = DEFAULT_PAGE_SIZE
+        page_size = min(page_size, MAX_PAGE_SIZE)
+
+        try:
+            page_number = int(request.query_params.get('page', 1))
+        except (TypeError, ValueError):
+            page_number = 1
+        return max(1, page_number), page_size
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter('search', str, required=False, description='Buscar por nombre o email'),
+            OpenApiParameter('program_id', str, required=False, description='Filtrar por UUID del programa'),
+            OpenApiParameter('status', str, required=False, description='CRITICAL | AT_RISK | ON_TRACK'),
+            OpenApiParameter('page', int, required=False, description='Número de página (default 1)'),
+            OpenApiParameter('page_size', int, required=False, description=f'Default {DEFAULT_PAGE_SIZE}, máx {MAX_PAGE_SIZE}'),
+        ],
+        responses={200: inline_serializer('BootcamperPoolResponse', fields={
+            'my_bootcampers':        inline_serializer('MyBootcamperCard', fields=BOOTCAMPER_CARD_FIELDS, many=True),
+            'available_bootcampers': inline_serializer('PoolBootcamperCard', fields=BOOTCAMPER_CARD_FIELDS, many=True),
+            'pagination':            inline_serializer('BootcamperPoolPagination', fields={
+                'page':                             drf_serializers.IntegerField(),
+                'page_size':                        drf_serializers.IntegerField(),
+                'my_bootcampers_count':             drf_serializers.IntegerField(),
+                'available_bootcampers_count':      drf_serializers.IntegerField(),
+                'my_bootcampers_total_pages':       drf_serializers.IntegerField(),
+                'available_bootcampers_total_pages': drf_serializers.IntegerField(),
+            }),
+        })},
+        summary='Pool de bootcampers',
+        description=(
+            'Devuelve my_bootcampers (los que monitorea quien llama) y available_bootcampers '
+            '(sin responsable de cobro), paginados de forma independiente. El administrador no '
+            'tiene cartera propia: sólo ve el pool.'
+        ),
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def get(self, request):
+        from django.core.paginator import Paginator
+        from apps.authentication.models import CustomUser
+
+        bootcampers = CustomUser.objects.filter(
+            role=CustomUser.Role.BOOTCAMPER, is_active=True,
+        )
+
+        search = request.query_params.get('search')
+        if search:
+            bootcampers = bootcampers.filter(
+                Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(email__icontains=search)
+            )
+
+        service = PaymentProgressService()
+        mine = (
+            [] if request.user.is_administrator
+            else service.get_bootcamper_summaries(bootcampers.filter(finance_owner=request.user))
+        )
+        available = service.get_bootcamper_summaries(bootcampers.filter(finance_owner__isnull=True))
+
+        program_id    = request.query_params.get('program_id')
+        status_filter = request.query_params.get('status')
+
+        def _filter(cards):
+            if program_id:
+                cards = [c for c in cards if c['program_id'] == program_id]
+            if status_filter:
+                cards = [c for c in cards if c['payment_status'] == status_filter]
+            return cards
+
+        mine      = _filter(mine)
+        available = _filter(available)
+
+        page_number, page_size = self._page_params(request)
+        mine_paginator      = Paginator(mine, page_size)
+        available_paginator = Paginator(available, page_size)
+
+        return Response({
+            'my_bootcampers':        list(mine_paginator.get_page(page_number).object_list),
+            'available_bootcampers': list(available_paginator.get_page(page_number).object_list),
+            'pagination': {
+                'page':                              page_number,
+                'page_size':                         page_size,
+                'my_bootcampers_count':              mine_paginator.count,
+                'available_bootcampers_count':       available_paginator.count,
+                'my_bootcampers_total_pages':        mine_paginator.num_pages,
+                'available_bootcampers_total_pages': available_paginator.num_pages,
+            },
+        })
+
+
+class BootcamperAssignView(APIView):
+    """PATCH /api/payments/bootcampers/{id}/assign/ — tomar del pool."""
+    permission_classes = [IsFinance]
+
+    @extend_schema(
+        responses={
+            200: inline_serializer('AssignedBootcamper', fields=BOOTCAMPER_CARD_FIELDS, many=True),
+            404: OpenApiResponse(description='Bootcamper no encontrado'),
+            409: OpenApiResponse(description='Ya tiene responsable de cobro'),
+        },
+        summary='Asignarse un bootcamper',
+        description='Toma un bootcamper del pool. Con bloqueo: si dos personas de Finanzas lo piden a la vez, la segunda recibe 409.',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def patch(self, request, bootcamper_id):
+        from django.db import transaction
+        from apps.authentication.models import CustomUser
+
+        with transaction.atomic():
+            try:
+                bootcamper = CustomUser.objects.select_for_update().get(
+                    pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER,
+                )
+            except CustomUser.DoesNotExist:
+                return Response(
+                    {'error': 'Bootcamper no encontrado.', 'code': 'BOOTCAMPER_NOT_FOUND'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if bootcamper.finance_owner_id is not None:
+                return Response(
+                    {
+                        'error': 'Este bootcamper ya lo está monitoreando otra persona.',
+                        'code': 'BOOTCAMPER_ALREADY_ASSIGNED',
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            bootcamper.finance_owner       = request.user
+            bootcamper.finance_assigned_at = now()
+            bootcamper.save(update_fields=['finance_owner', 'finance_assigned_at', 'updated_at'])
+
+        return Response(PaymentProgressService().get_bootcamper_summaries([bootcamper]))
+
+
+class BootcamperReleaseView(APIView):
+    """PATCH /api/payments/bootcampers/{id}/release/ — devolver al pool."""
+    permission_classes = [IsFinance]
+
+    @extend_schema(
+        responses={
+            200: inline_serializer('ReleasedBootcamper', fields=BOOTCAMPER_CARD_FIELDS, many=True),
+            403: OpenApiResponse(description='No eres el responsable de cobro'),
+            404: OpenApiResponse(description='Bootcamper no encontrado'),
+        },
+        summary='Liberar un bootcamper',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def patch(self, request, bootcamper_id):
+        from apps.authentication.models import CustomUser
+
+        bootcamper = get_object_or_404(
+            CustomUser, pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER,
+        )
+        if bootcamper.finance_owner_id != request.user.id:
+            return Response(
+                {
+                    'error': 'Solo quien monitorea a este bootcamper puede liberarlo.',
+                    'code': 'NOT_OWNER',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        bootcamper.finance_owner       = None
+        bootcamper.finance_assigned_at = None
+        bootcamper.save(update_fields=['finance_owner', 'finance_assigned_at', 'updated_at'])
+
+        return Response(PaymentProgressService().get_bootcamper_summaries([bootcamper]))

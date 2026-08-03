@@ -4,10 +4,10 @@ Estos tests no fijan un contrato de negocio: cuantifican el costo actual del
 endpoint para poder documentar el antes/después de la optimización (T1.5 del
 plan de entrega) con números reales y no con estimaciones.
 
-Sirven además como red de seguridad: cuando la vista se reescriba con
-values()/annotate(), el número de queries debe dejar de crecer con la cantidad
-de bootcampers. `test_monitoring_no_escala_con_bootcampers` es el que falla si
-la reescritura no logra eso, y es el que hay que actualizar al cerrar T1.5.
+Con T1.5 cerrada (values()/annotate() en get_monitoring_summaries), estos
+tests fijan el contrato de performance: el número de queries del endpoint es
+constante respecto a la cantidad de bootcampers, y el programa se consulta una
+sola vez por request. Si vuelven a fallar, alguien reintrodujo el N+1.
 """
 from decimal import Decimal
 
@@ -54,14 +54,14 @@ def crear_bootcamper_con_pago(program, indice):
 
 @pytest.mark.django_db
 class TestMonitoringQueryCount:
-    def test_monitoring_no_escala_con_bootcampers(self, salesperson_user, program):
-        """El costo del endpoint no debería depender del número de bootcampers.
+    def test_monitoring_no_escala_con_bootcampers(self, finance_user, program):
+        """El costo del endpoint no depende del número de bootcampers (T1.5).
 
-        Hoy sí depende: `get_payment_summary` se llama una vez por bootcamper y
-        cada llamada dispara su propio `Program.objects.get()` más dos consultas
-        de agregación. Este test documenta esa relación lineal.
+        La vista agrega por (bootcamper, programa) con values()/annotate() en
+        una sola consulta más una de usuarios, así que pasar de 2 a 6
+        bootcampers no puede añadir queries.
         """
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
         url = f"{MONITORING_URL}?program_id={program.id}"
 
         for i in range(2):
@@ -76,8 +76,6 @@ class TestMonitoringQueryCount:
             assert client.get(url).status_code == 200
         queries_con_6 = len(ctx_6)
 
-        # Cuatro bootcampers más ⇒ cuánto crece el costo. Con la vista actual
-        # el incremento es de ~4 queries por bootcamper; tras T1.5 debería ser 0.
         incremento_por_bootcamper = (queries_con_6 - queries_con_2) / 4
 
         print(
@@ -86,21 +84,20 @@ class TestMonitoringQueryCount:
             f"incremento por bootcamper: {incremento_por_bootcamper:.1f}"
         )
 
-        # Se afirma la relación lineal, no un número exacto: el valor absoluto
-        # depende de las queries de autenticación y cambiaría por motivos ajenos.
-        assert incremento_por_bootcamper > 0, (
-            "El endpoint ya no escala con el número de bootcampers: la optimización "
-            "de T1.5 está hecha. Actualizar este test para fijar el nuevo contrato "
-            "(incremento == 0) y documentar el después en docs/profiling/."
+        # Se afirma el incremento, no el total: el valor absoluto depende de
+        # las queries de autenticación y cambiaría por motivos ajenos.
+        assert incremento_por_bootcamper == 0, (
+            "El endpoint vuelve a escalar con el número de bootcampers: se "
+            "reintrodujo el N+1 que T1.5 eliminó (PERF-1)."
         )
 
-    def test_monitoring_repite_la_consulta_del_programa(self, salesperson_user, program):
-        """`Program.objects.get()` se repite una vez por bootcamper.
+    def test_monitoring_repite_la_consulta_del_programa(self, finance_user, program):
+        """El programa se consulta una sola vez por request (T1.5).
 
-        Es la parte más evitable de PERF-1: el programa ya se conoce en la vista
-        y aun así el servicio lo vuelve a leer en cada iteración.
+        Antes `get_payment_summary` releía el programa por cada bootcamper;
+        ahora la vista lo carga una vez y el servicio lo recibe ya resuelto.
         """
-        client = make_client(salesperson_user)
+        client = make_client(finance_user)
 
         for i in range(3):
             crear_bootcamper_con_pago(program, i)
@@ -115,7 +112,7 @@ class TestMonitoringQueryCount:
             f"\n[PERF-1] consultas a programs_program con 3 bootcampers: "
             f"{len(consultas_de_programa)}"
         )
-        assert len(consultas_de_programa) >= 3, (
-            "La consulta del programa ya no se repite por bootcamper: revisar si "
-            "T1.5 está hecha y actualizar este test."
+        assert len(consultas_de_programa) == 1, (
+            "El programa se está consultando más de una vez por request: se "
+            "reintrodujo parte del N+1 de PERF-1."
         )

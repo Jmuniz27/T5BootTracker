@@ -13,7 +13,7 @@ function Field({ label, required, hint, error, children }) {
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {label}
         {required && <span className="text-red-500"> *</span>}
-        {hint && <span className="text-xs text-gray-400 font-normal"> ({hint})</span>}
+        {hint && <span className="text-xs text-gray-500 font-normal"> ({hint})</span>}
       </label>
       {children}
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
@@ -58,21 +58,54 @@ function CoordinatorScopeFields({ control, errors }) {
       </Field>
 
       {scope === 'PROGRAM' && (
-        <Field label="Programa" required error={errors.coordinator_program?.message}>
+        <Field label="Programas" required error={errors.coordinator_programs?.message}>
           <Controller
-            name="coordinator_program"
+            name="coordinator_programs"
             control={control}
             render={({ field }) => (
-              <CustomSelect
-                value={field.value}
+              <ProgramCheckboxes
+                value={field.value ?? []}
                 onChange={field.onChange}
-                options={programs.map((p) => ({ value: p.id, label: p.name }))}
-                placeholder={isLoading ? 'Cargando programas…' : 'Seleccionar programa'}
+                programs={programs}
+                isLoading={isLoading}
               />
             )}
           />
         </Field>
       )}
+    </div>
+  )
+}
+
+/**
+ * Selección múltiple de programas. Casillas en vez de un multi-select nativo
+ * para que se vea cuántos y cuáles están marcados sin abrir nada.
+ */
+function ProgramCheckboxes({ value, onChange, programs, isLoading }) {
+  if (isLoading) {
+    return <p className="text-sm text-gray-400">Cargando programas…</p>
+  }
+
+  if (programs.length === 0) {
+    return <p className="text-sm text-gray-400">No hay programas creados todavía.</p>
+  }
+
+  const toggle = (id) =>
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id])
+
+  return (
+    <div className="space-y-1.5 max-h-40 overflow-y-auto">
+      {programs.map((p) => (
+        <label key={p.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={value.includes(p.id)}
+            onChange={() => toggle(p.id)}
+            className="rounded border-gray-300 text-[#1D3176] focus:ring-[#1D3176]"
+          />
+          <span className="truncate">{p.name}</span>
+        </label>
+      ))}
     </div>
   )
 }
@@ -131,7 +164,9 @@ export default function UserFormFields({ register, errors, control, includePassw
         <input {...register('phone')} placeholder="0991234567" className={inputClass} />
       </Field>
 
-      {includePassword && (
+      {/* El coordinador no inicia sesión: pedirle contraseña sería crear una
+          credencial que nadie usa. */}
+      {includePassword && role !== 'COORDINATOR' && (
         <Field label="Contraseña temporal" required error={errors.password?.message}>
           <input
             {...register('password')}
@@ -139,7 +174,7 @@ export default function UserFormFields({ register, errors, control, includePassw
             placeholder="Mínimo 8 caracteres"
             className={inputClass}
           />
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-500 mt-1">
             Se le comparte al usuario para su primer ingreso.
           </p>
         </Field>

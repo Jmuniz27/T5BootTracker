@@ -8,6 +8,9 @@
 export const USERS = {
   admin: { email: 'admin@boottracker.com', password: 'admin1234' },
   vendedor: { email: 'vendedor1@boottracker.com', password: 'vendedor1234' },
+  // El vendedor capta y convierte; el cobro es de Finanzas, que es quien
+  // valida los comprobantes desde la cola.
+  finanzas: { email: 'finanzas1@boottracker.com', password: 'finanzas1234' },
   bootcamper: { email: 'bootcamper.conv@boottracker.com', password: 'boot1234' },
 }
 
@@ -15,6 +18,7 @@ export const USERS = {
 export const STORAGE_STATE = {
   admin: '.auth/admin.json',
   vendedor: '.auth/vendedor.json',
+  finanzas: '.auth/finanzas.json',
   bootcamper: '.auth/bootcamper.json',
 }
 
