@@ -90,11 +90,11 @@ describe('AnalyticsKpiCards', () => {
     expect(screen.getByText(/sin interacciones registradas/i)).toBeInTheDocument();
   });
 
-  it('avisa que el cobro no responde a segmento/campaña cuando ese filtro está activo', async () => {
+  it('avisa que el cobro no responde a segmento cuando ese filtro está activo', async () => {
     getAnalyticsKpis.mockResolvedValue(KPIS);
     renderCards({ filters: { segment: 'INSTAGRAM' } });
 
-    expect(await screen.findByText(/no responde a segmento\/campaña/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no responde a segmento/i)).toBeInTheDocument();
   });
 
   it('muestra un error si la petición falla', async () => {
