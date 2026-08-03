@@ -1,4 +1,6 @@
 """Serializers for leads app."""
+from decimal import Decimal
+
 from django.utils.timezone import now
 from rest_framework import serializers
 
@@ -141,6 +143,17 @@ class ConvertLeadSerializer(serializers.Serializer):
     program_id = serializers.UUIDField()
     email      = serializers.EmailField(required=False, allow_blank=True)
     phone      = serializers.CharField(required=False, allow_blank=True)
+    # Sólo el porcentaje: el precio final lo calcula el backend. Si el cliente
+    # pudiera mandarlo, cualquiera podría inscribir a alguien por el monto que
+    # quisiera sin dejar rastro de por qué.
+    discount_percentage = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        max_value=Decimal('100'),
+        required=False,
+        default=Decimal('0.00'),
+    )
 
 
 class ReturningBootcamperSerializer(serializers.Serializer):

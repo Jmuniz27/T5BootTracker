@@ -1,7 +1,10 @@
 """Program and CoordinatorEmailConfig models."""
 import uuid
-from django.db import models
+from decimal import Decimal
+
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
 
 
 class Program(models.Model):
@@ -140,6 +143,17 @@ class Enrollment(models.Model):
         related_name='enrollments'
     )
     start_date = models.DateField(verbose_name='Fecha de inicio')
+    # El descuento que el vendedor concedió al convertir. Se guarda el
+    # porcentaje **además** del precio resultante: con sólo el monto final no hay
+    # forma de auditar por qué esta persona paga menos que el precio del
+    # programa. `agreed_price` es el derivado y es lo que cobran los pagos.
+    discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name='Descuento (%)',
+    )
     agreed_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Precio acordado')
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
     created_at = models.DateTimeField(auto_now_add=True)
