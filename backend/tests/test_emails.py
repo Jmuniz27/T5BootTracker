@@ -134,6 +134,120 @@ class TestCoordinatorEmails:
         assert msg.cc == ['coord.cc@espol.edu.ec']
 
 
+@pytest.fixture
+def make_coordinator(db):
+    """Factory de cuentas con rol COORDINATOR y un alcance dado."""
+    from apps.authentication.models import CustomUser
+
+    def _make(email, scope, program=None, is_active=True):
+        return CustomUser.objects.create_user(
+            email=email,
+            password='testpass123',
+            first_name='Coord',
+            last_name='Test',
+            role=CustomUser.Role.COORDINATOR,
+            coordinator_scope=scope,
+            coordinator_program=program,
+            is_active=is_active,
+        )
+
+    return _make
+
+
+class TestCoordinatorAccountRecipients:
+    """Las cuentas con rol COORDINATOR reciben los avisos además de los
+    correos sueltos configurados por programa (CoordinatorEmailConfig)."""
+
+    def test_general_coordinator_is_alerted_for_any_program(
+        self, db, program, converted_bootcamper, make_coordinator
+    ):
+        from apps.authentication.models import CustomUser
+
+        make_coordinator('general@espol.edu.ec', CustomUser.CoordinatorScope.GENERAL)
+
+        send_late_payment_alert(converted_bootcamper.id, program.id)
+
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == ['general@espol.edu.ec']
+
+    def test_program_coordinator_only_receives_their_own_program(
+        self, db, program, converted_bootcamper, make_coordinator
+    ):
+        from apps.authentication.models import CustomUser
+        from apps.programs.models import Program
+
+        other = Program.objects.create(
+            name='Data Science Junio 2026',
+            start_date=program.start_date,
+            end_date=program.end_date,
+            total_cost=program.total_cost,
+        )
+        make_coordinator('mine@espol.edu.ec', CustomUser.CoordinatorScope.PROGRAM, program)
+        make_coordinator('other@espol.edu.ec', CustomUser.CoordinatorScope.PROGRAM, other)
+
+        send_late_payment_alert(converted_bootcamper.id, program.id)
+
+        assert mail.outbox[0].to == ['mine@espol.edu.ec']
+
+    def test_inactive_coordinator_is_skipped(
+        self, db, coordinator_config, converted_bootcamper, make_coordinator
+    ):
+        from apps.authentication.models import CustomUser
+
+        make_coordinator(
+            'baja@espol.edu.ec',
+            CustomUser.CoordinatorScope.GENERAL,
+            is_active=False,
+        )
+
+        send_late_payment_alert(converted_bootcamper.id, coordinator_config.id)
+
+        assert 'baja@espol.edu.ec' not in mail.outbox[0].to
+
+    def test_accounts_are_merged_with_configured_addresses_without_duplicates(
+        self, db, coordinator_config, converted_bootcamper, make_coordinator
+    ):
+        """Una cuenta cuyo email ya estaba configurado como TO no se repite, y
+        si estaba como CC se promueve a TO en lugar de aparecer dos veces."""
+        from apps.authentication.models import CustomUser
+
+        make_coordinator('coord.to@espol.edu.ec', CustomUser.CoordinatorScope.GENERAL)
+        make_coordinator(
+            'coord.cc@espol.edu.ec',
+            CustomUser.CoordinatorScope.PROGRAM,
+            coordinator_config,
+        )
+
+        send_late_payment_alert(converted_bootcamper.id, coordinator_config.id)
+
+        msg = mail.outbox[0]
+        assert msg.to == ['coord.to@espol.edu.ec', 'coord.cc@espol.edu.ec']
+        assert msg.cc == []
+
+    def test_conversion_notification_also_reaches_coordinator_accounts(
+        self, db, program, sample_lead, converted_bootcamper, make_coordinator
+    ):
+        from apps.authentication.models import CustomUser
+
+        make_coordinator('general@espol.edu.ec', CustomUser.CoordinatorScope.GENERAL)
+        sample_lead.program = program
+        sample_lead.save()
+
+        send_conversion_notification(sample_lead.id, converted_bootcamper.id)
+
+        assert mail.outbox[0].to == ['general@espol.edu.ec']
+
+    def test_coordinator_without_scope_is_never_alerted(
+        self, db, program, converted_bootcamper, make_coordinator
+    ):
+        """Sin alcance no hay a quién notificar — no debe colarse en ningún envío."""
+        make_coordinator('sin-alcance@espol.edu.ec', '')
+
+        send_late_payment_alert(converted_bootcamper.id, program.id)
+
+        assert mail.outbox == []
+
+
 @pytest.mark.parametrize('template_name', list(PREVIEWS.keys()))
 def test_all_email_templates_render_without_error(template_name):
     """Smoke test: catches typos in {% block %} / {% include %} across all

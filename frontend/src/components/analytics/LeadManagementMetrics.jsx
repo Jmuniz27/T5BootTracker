@@ -4,6 +4,10 @@ import { useLeadManagementMetrics } from '../../hooks/use-lead-management-metric
 const fmtHours = (value) =>
   value === null || value === undefined ? '—' : `${value} h`
 
+/** Igual que fmtHours pero sin unidad: es un conteo, no horas. */
+const fmtCount = (value) =>
+  value === null || value === undefined ? '—' : `${value}`
+
 function TableStateRow({ children }) {
   return (
     <tr>
@@ -40,7 +44,8 @@ function SummaryCard({ label, value, footer, isLoading }) {
  *
  * Retención = tiempo que el vendedor mantiene el lead (hasta liberarlo, o
  * hasta ahora si sigue asignado). Primer contacto = desde la asignación hasta
- * la primera interacción registrada.
+ * la primera interacción registrada. Leads sin asignar = los que siguen sin
+ * dueño, incluidos los liberados por el Administrador.
  */
 export default function LeadManagementMetrics({ filters = {} }) {
   const { data, isLoading, isError, error } = useLeadManagementMetrics(filters)
@@ -67,7 +72,7 @@ export default function LeadManagementMetrics({ filters = {} }) {
         </p>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-2 mb-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
         <SummaryCard
           isLoading={isLoading}
           label="Retención promedio"
@@ -79,6 +84,12 @@ export default function LeadManagementMetrics({ filters = {} }) {
           label="Tiempo al primer contacto"
           value={fmtHours(data?.avg_time_to_first_contact_hours)}
           footer="Desde la asignación hasta la primera interacción"
+        />
+        <SummaryCard
+          isLoading={isLoading}
+          label="Leads sin asignar"
+          value={fmtCount(data?.unassigned_leads)}
+          footer="Esperando que un vendedor los tome"
         />
       </div>
 

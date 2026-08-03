@@ -285,7 +285,8 @@ class AnalyticsService:
 
         Retención: para un lead liberado es `released_at - assigned_at`; para uno
         aún asignado, el tiempo transcurrido hasta ahora. Primer contacto:
-        la interacción más antigua del lead menos `assigned_at`.
+        la interacción más antigua del lead menos `assigned_at`. `unassigned_leads`
+        cuenta los que siguen sin dueño y por tanto faltan por asignar.
 
         `first_interaction_at` se resuelve con un Subquery anotado (no en un bucle
         por lead) para no reintroducir el N+1 de PERF-1.
@@ -303,6 +304,15 @@ class AnalyticsService:
                 'owner_id', 'owner__first_name', 'owner__last_name',
                 'assigned_at', 'released_at', 'first_interaction_at',
             )
+        )
+
+        # Leads que esperan que alguien los tome. `owner__isnull` y no
+        # `assigned_at__isnull`: un lead liberado por el Administrador conserva su
+        # assigned_at pero vuelve a la pila, así que también falta asignarlo.
+        unassigned_leads = (
+            self._leads_base_qs(fecha_desde, fecha_hasta, segment, campaign)
+            .filter(owner__isnull=True)
+            .count()
         )
 
         reference = timezone.now()
@@ -358,6 +368,7 @@ class AnalyticsService:
                 'campaign': campaign,
             },
             'leads_considered': len(retention_all),
+            'unassigned_leads': unassigned_leads,
             'avg_retention_hours': self._mean_hours(retention_all),
             'avg_time_to_first_contact_hours': self._mean_hours(contact_all),
             'by_salesperson': by_salesperson,
