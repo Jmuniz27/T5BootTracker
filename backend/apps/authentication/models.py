@@ -31,6 +31,16 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         COORDINATOR   = 'COORDINATOR',   'Coordinador'
         FINANCE       = 'FINANCE',       'Finanzas'
 
+    class CoordinatorScope(models.TextChoices):
+        """Alcance de un coordinador: general o atado a un programa.
+
+        Sólo aplica a usuarios con rol COORDINATOR; en el resto queda vacío.
+        Determina a qué notificaciones se le copia (ver
+        `apps.notifications.emails.coordinator_recipients`).
+        """
+        GENERAL = 'GENERAL', 'General'
+        PROGRAM = 'PROGRAM', 'Por programa'
+
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email      = models.EmailField(unique=True, verbose_name='Correo electrónico')
     first_name = models.CharField(max_length=150, verbose_name='Nombre')
@@ -48,6 +58,21 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         choices=Role.choices,
         default=Role.BOOTCAMPER,
         verbose_name='Rol',
+    )
+    coordinator_scope = models.CharField(
+        max_length=20,
+        choices=CoordinatorScope.choices,
+        blank=True,
+        default='',
+        verbose_name='Alcance del coordinador',
+    )
+    coordinator_program = models.ForeignKey(
+        'programs.Program',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='coordinator_users',
+        verbose_name='Programa asignado',
     )
     is_active  = models.BooleanField(default=True)
     is_staff   = models.BooleanField(default=False)
@@ -77,3 +102,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     @property
     def is_administrator(self):
         return self.role == self.Role.ADMINISTRATOR
+
+    @property
+    def is_coordinator(self):
+        return self.role == self.Role.COORDINATOR
