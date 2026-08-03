@@ -2,10 +2,17 @@
 import random
 from decimal import Decimal
 from datetime import date, timedelta as dt_timedelta
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.utils.timezone import now, timedelta
 from apps.authentication.models import CustomUser
 from apps.leads.models import Lead, Interaction
+from apps.programs.services import set_cohort_status
+
+# Semilla fija: el comando reparte estados y programas con `random`, y sin
+# fijarla cada ejecución produce datos distintos. Eso vuelve no reproducibles
+# tanto la demo como las pruebas de aceptación, que dependen de este seed.
+RANDOM_SEED = 42
 
 
 SOURCES = [
@@ -48,7 +55,29 @@ LEADS_DATA = [
 class Command(BaseCommand):
     help = 'Populate the database with sample development data.'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help='Ejecutar aunque DEBUG=False. Sólo para entornos de prueba controlados.',
+        )
+
     def handle(self, *args, **options):
+        # Crea usuarios con contraseñas conocidas y publicadas en el repositorio.
+        # Ejecutarlo contra producción abriría cuentas de administrador con
+        # credenciales que cualquiera puede leer.
+        if not settings.DEBUG and not options['force']:
+            raise CommandError(
+                'seed_dev está pensado sólo para desarrollo y DEBUG=False sugiere un '
+                'entorno productivo. Crea usuarios con contraseñas conocidas y '
+                'publicadas en el repositorio. Si de verdad quieres ejecutarlo aquí, '
+                'usa --force.'
+            )
+
+        # Reproducibilidad: sin esto cada corrida genera datos distintos y ni la
+        # demo ni las pruebas de aceptación pueden apoyarse en el seed.
+        random.seed(RANDOM_SEED)
+
         self.stdout.write('Seeding development data...')
 
         # Users
@@ -151,6 +180,27 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(self.style.SUCCESS('  Programs created/updated.'))
+
+        # Cohortes: una por estado, para poder probar el filtro sin crearlas a mano.
+        from apps.programs.models import Cohort
+        first_of_month = today.replace(day=1)
+        cohort_seed = [
+            (program1, 1, first_of_month - dt_timedelta(days=210), Cohort.Status.FINISHED),
+            (program1, 2, first_of_month - dt_timedelta(days=30),  Cohort.Status.IN_PROGRESS),
+            (program1, 3, first_of_month + dt_timedelta(days=60),  Cohort.Status.UPCOMING),
+            (program2, 1, first_of_month + dt_timedelta(days=30),  Cohort.Status.UPCOMING),
+        ]
+        for program, number, start_month, cohort_status in cohort_seed:
+            cohort, created = Cohort.objects.get_or_create(
+                program=program,
+                number=number,
+                defaults={'start_month': start_month, 'status': cohort_status},
+            )
+            # La finalizada necesita mes de fin; se sella igual que por la API.
+            if created and cohort_status == Cohort.Status.FINISHED:
+                set_cohort_status(cohort, Cohort.Status.FINISHED)
+
+        self.stdout.write(self.style.SUCCESS('  Cohorts created/updated.'))
 
         # Converted bootcamper with payments
         conv_boot, _ = CustomUser.objects.get_or_create(

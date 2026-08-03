@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import SessionTimeoutWarning from '../SessionTimeoutWarning'
+import { useIdleTimeout } from '../../hooks/use-idle-timeout'
+import { forceLogout } from '../../api/client'
 import { useAuthStore } from '../../store/auth.store'
 
 const AVATAR_COLORS = [
@@ -20,8 +23,12 @@ export default function AppLayout() {
   const avatarColor = AVATAR_COLORS[(name.charCodeAt(0) ?? 0) % AVATAR_COLORS.length]
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // HST-003: se monta una sola vez para toda el área autenticada.
+  const { showWarning, resetTimer } = useIdleTimeout({ onTimeout: forceLogout })
+
   return (
     <div className="flex h-screen bg-gray-50">
+      {showWarning && <SessionTimeoutWarning onStayConnected={resetTimer} />}
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div

@@ -41,6 +41,7 @@ class Lead(models.Model):
         max_length=30,
         choices=Status.choices,
         default=Status.NEW,
+        db_index=True,
         verbose_name='Estado',
     )
     owner            = models.ForeignKey(
@@ -60,10 +61,13 @@ class Lead(models.Model):
         verbose_name='Programa',
     )
     assigned_at      = models.DateTimeField(null=True, blank=True)
+    # CR-006: se setea al liberar (por el vendedor o por el admin) y se limpia al
+    # reasignar. Con assigned_at permite calcular el tiempo de retención.
+    released_at      = models.DateTimeField(null=True, blank=True, verbose_name='Liberado')
     last_contact     = models.DateTimeField(null=True, blank=True, verbose_name='Último contacto')
     version          = models.PositiveIntegerField(default=0)
-    deleted_at       = models.DateTimeField(null=True, blank=True, verbose_name='Eliminado')
-    created_at       = models.DateTimeField(auto_now_add=True)
+    deleted_at       = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name='Eliminado')
+    created_at       = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at       = models.DateTimeField(auto_now=True)
 
     objects     = LeadManager()

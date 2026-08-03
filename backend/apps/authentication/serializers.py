@@ -21,16 +21,26 @@ class LoginSerializer(serializers.Serializer):
         )
 
         if user is None:
-            # Check if the user exists but is inactive
+            # `authenticate()` devuelve None tanto si la contraseña es
+            # incorrecta como si la cuenta está desactivada (ModelBackend
+            # rechaza a los inactivos). Para distinguir ambos casos sin filtrar
+            # qué emails existen, se comprueba la contraseña explícitamente:
+            # sólo quien ya demostró conocerla se entera de que la cuenta está
+            # desactivada. A cualquier otro se le responde lo mismo (SEC-3).
             try:
                 db_user = CustomUser.objects.get(email=email)
-                if not db_user.is_active:
-                    raise serializers.ValidationError(
-                        {'code': 'ACCOUNT_INACTIVE', 'error': 'Cuenta desactivada. Contacte al administrador.'},
-                        code='account_inactive',
-                    )
             except CustomUser.DoesNotExist:
-                pass
+                # Se hashea igual contra un usuario inexistente para que el
+                # tiempo de respuesta no delate si el email está registrado.
+                CustomUser().set_password(password)
+                db_user = None
+
+            if db_user is not None and not db_user.is_active and db_user.check_password(password):
+                raise serializers.ValidationError(
+                    {'code': 'ACCOUNT_INACTIVE', 'error': 'Cuenta desactivada. Contacte al administrador.'},
+                    code='account_inactive',
+                )
+
             raise serializers.ValidationError(
                 {'code': 'INVALID_CREDENTIALS', 'error': 'Credenciales inválidas.'},
                 code='authorization',

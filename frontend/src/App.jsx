@@ -9,9 +9,12 @@ import ResetPasswordPage from './pages/ResetPasswordPage'
 import ResetSuccessPage from './pages/ResetSuccessPage'
 import LeadsDashboard from './pages/LeadsDashboard'
 import UsersPage from './pages/UsersPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 import PaymentsPage from './pages/PaymentsPage'
 import SalespersonPaymentsPage from './pages/SalespersonPaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
+import ProgramsPage from './pages/ProgramsPage'
+import ProgramDetailPage from './pages/ProgramDetailPage'
 import { useAuthStore } from './store/auth.store'
 
 function PaymentsRoute() {
@@ -51,10 +54,34 @@ export default function App() {
           <Route path="/payments" element={<PaymentsRoute />} />
           <Route path="/payments/:bootcamperId/:programId" element={<BootcamperPaymentDetailPage />} />
           <Route
+            path="/analytics"
+            element={
+              <AdminRoute>
+                <AnalyticsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
             path="/admin/users"
             element={
               <AdminRoute>
                 <UsersPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/programs"
+            element={
+              <AdminRoute>
+                <ProgramsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/programs/:programId"
+            element={
+              <AdminRoute>
+                <ProgramDetailPage />
               </AdminRoute>
             }
           />

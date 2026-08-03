@@ -21,15 +21,6 @@ describe('AnalyticsFilters', () => {
     );
   });
 
-  it('emite el filtro de campaña', async () => {
-    const user = userEvent.setup();
-    const { onChange } = renderFilters();
-
-    await user.type(screen.getByLabelText('Campaña'), 'A');
-
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ campaign: 'A' }));
-  });
-
   it('emite el segmento seleccionado', async () => {
     const user = userEvent.setup();
     const { onChange } = renderFilters();
@@ -45,13 +36,12 @@ describe('AnalyticsFilters', () => {
     const { onChange } = renderFilters({
       ...EMPTY_ANALYTICS_FILTERS,
       segment: 'INSTAGRAM',
-      campaign: 'verano',
     });
 
-    await user.type(screen.getByLabelText('Campaña'), 'X');
+    await user.type(screen.getByLabelText('Desde'), '2026-01-15');
 
     expect(onChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ segment: 'INSTAGRAM', campaign: 'veranoX' }),
+      expect.objectContaining({ segment: 'INSTAGRAM', fecha_desde: '2026-01-15' }),
     );
   });
 
@@ -75,7 +65,6 @@ describe('AnalyticsFilters', () => {
     const { onChange } = renderFilters({
       ...EMPTY_ANALYTICS_FILTERS,
       segment: 'MANUAL',
-      campaign: 'verano',
     });
 
     await user.click(screen.getByRole('button', { name: /limpiar filtros/i }));

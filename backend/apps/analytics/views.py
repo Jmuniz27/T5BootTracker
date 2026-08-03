@@ -50,3 +50,43 @@ class AnalyticsKPIView(APIView):
             campaign=campaign,
         )
         return Response(data)
+
+
+class LeadManagementMetricsView(APIView):
+    """GET /api/analytics/lead-management/ — métricas de gestión por vendedor (CR-006, solo Admin)."""
+    permission_classes = [IsAdministrator]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter('fecha_desde', str, description='Filtrar leads creados desde (YYYY-MM-DD).'),
+            OpenApiParameter('fecha_hasta', str, description='Filtrar leads creados hasta (YYYY-MM-DD).'),
+            OpenApiParameter('segment', str, description='Lead.source: INSTAGRAM, WHATSAPP, LANDING_PAGE, MANUAL'),
+            OpenApiParameter('campaign', str, description='Interaction.campaign (coincidencia parcial, case-insensitive)'),
+        ],
+        responses={200: inline_serializer('LeadManagementMetricsResponse', fields={
+            'filters_applied':                 drf_serializers.DictField(),
+            'leads_considered':                drf_serializers.IntegerField(),
+            'unassigned_leads':                drf_serializers.IntegerField(),
+            'avg_retention_hours':             drf_serializers.FloatField(allow_null=True),
+            'avg_time_to_first_contact_hours': drf_serializers.FloatField(allow_null=True),
+            'by_salesperson':                  drf_serializers.ListField(),
+        })},
+        summary='Métricas de gestión de leads por vendedor (solo Admin)',
+        description=(
+            'Tiempo de retención (assigned_at → released_at, o hasta ahora si sigue asignado) '
+            'y tiempo entre asignación y primer contacto, global y por vendedor. Solo considera '
+            'leads que fueron asignados alguna vez. Los promedios son null cuando no hay datos. '
+            'unassigned_leads cuenta aparte los leads sin dueño (owner=None, incluidos los '
+            'liberados), que son los que faltan por asignar.'
+        ),
+        tags=['Analytics'],
+    )
+    def get(self, request):
+        params = request.query_params
+        data = AnalyticsService().get_lead_management_metrics(
+            fecha_desde=parse_date(params.get('fecha_desde', '') or ''),
+            fecha_hasta=parse_date(params.get('fecha_hasta', '') or ''),
+            segment=params.get('segment') or None,
+            campaign=params.get('campaign') or None,
+        )
+        return Response(data)
