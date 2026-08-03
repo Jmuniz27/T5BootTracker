@@ -1,5 +1,6 @@
 """Tests for lead-to-bootcamper conversion and returning bootcamper endpoints."""
 from unittest.mock import patch
+import pytest
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -78,6 +79,41 @@ class TestConvertLead:
         assert enrollment.bootcamp == program
         assert enrollment.start_date == program.start_date
         assert enrollment.agreed_price == program.total_cost
+
+    def test_convert_lead_single_word_name_leaves_last_name_blank(self, db, salesperson_user, program):
+        lead = Lead.objects.create(
+            name='Cher', phone='0991111111',
+            status=Lead.Status.QUALIFIED,
+            owner=salesperson_user,
+        )
+        client = make_client(salesperson_user)
+        with patch('apps.notifications.tasks.send_conversion_notification.delay'):
+            resp = client.post(CONVERT_URL.format(id=lead.id), {
+                'cedula': '1713175071', 'program_id': str(program.id),
+            }, format='json')
+        assert resp.status_code == 201
+        new_user = CustomUser.objects.get(id=resp.json()['bootcamper_id'])
+        assert new_user.first_name == 'Cher'
+        assert new_user.last_name == ''
+
+    @pytest.mark.parametrize('status', [
+        Lead.Status.NEW,
+        Lead.Status.INTERESTED,
+        Lead.Status.NOT_INTERESTED,
+        Lead.Status.CONVERTED,
+    ])
+    def test_convert_lead_requires_qualified_status(self, db, salesperson_user, program, status):
+        lead = Lead.objects.create(
+            name='Estado Invalido', phone='0990000001',
+            status=status,
+            owner=salesperson_user,
+        )
+        client = make_client(salesperson_user)
+        resp = client.post(CONVERT_URL.format(id=lead.id), {
+            'cedula': '1713175071', 'program_id': str(program.id),
+        }, format='json')
+        assert resp.status_code == 400
+        assert resp.json()['code'] == 'LEAD_NOT_QUALIFIED'
 
     def test_convert_lead_invalid_cedula(self, db, salesperson_user, program):
         lead = Lead.objects.create(
