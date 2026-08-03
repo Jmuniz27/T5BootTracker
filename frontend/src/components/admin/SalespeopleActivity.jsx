@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getSalespeopleActivity } from '../../api/salespeople.api'
 
@@ -8,20 +9,25 @@ import { getSalespeopleActivity } from '../../api/salespeople.api'
  * agrupado por responsable en la otra pestaña; repetirlo acá, agrupado por
  * quién trajo al bootcamper, serían los mismos montos contados de otra forma.
  *
- * Sin navegación a detalle: no hay una pantalla de vendedor que abrir, y los
- * leads de cada uno se filtran desde el dashboard.
+ * Cada tarjeta abre el rendimiento de ese vendedor: totales, reparto de sus
+ * leads por estado y evolución mensual.
  */
 
-function SalespersonCard({ person }) {
+function SalespersonCard({ person, onSelect }) {
   const assigned    = person.assigned_leads ?? 0
   const converted   = person.converted_leads ?? 0
   const uncontacted = person.uncontacted_leads ?? 0
   const rate        = person.conversion_rate ?? 0
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5">
+    <button
+      onClick={onSelect}
+      className="bg-white border border-gray-200 rounded-2xl p-5 text-left w-full group hover:shadow-md hover:border-[#1D3176]/30 transition-all"
+    >
       <div className="mb-3 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 truncate">{person.salesperson}</p>
+        <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-[#1D3176] transition-colors">
+          {person.salesperson}
+        </p>
         <p className="text-xs text-gray-400 truncate">{person.email}</p>
       </div>
 
@@ -55,7 +61,7 @@ function SalespersonCard({ person }) {
           {uncontacted} sin contactar
         </p>
       )}
-    </div>
+    </button>
   )
 }
 
@@ -71,6 +77,7 @@ function SkeletonCard() {
 }
 
 export default function SalespeopleActivity() {
+  const navigate = useNavigate()
   const { data: salespeople = [], isLoading, isError } = useQuery({
     queryKey: ['salespeople-activity'],
     queryFn: getSalespeopleActivity,
@@ -101,7 +108,11 @@ export default function SalespeopleActivity() {
       {!isLoading && salespeople.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {salespeople.map((person) => (
-            <SalespersonCard key={person.salesperson_id} person={person} />
+            <SalespersonCard
+              key={person.salesperson_id}
+              person={person}
+              onSelect={() => navigate(`/analytics/vendedor/${person.salesperson_id}`)}
+            />
           ))}
         </div>
       )}
