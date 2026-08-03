@@ -13,13 +13,19 @@ import AnalyticsPage from './pages/AnalyticsPage'
 import PaymentsPage from './pages/PaymentsPage'
 import SalespersonPaymentsPage from './pages/SalespersonPaymentsPage'
 import BootcamperPaymentDetailPage from './pages/BootcamperPaymentDetailPage'
+import AdminSalespeoplePage from './pages/AdminSalespeoplePage'
+import AdminSalespersonDetailPage from './pages/AdminSalespersonDetailPage'
 import ProgramsPage from './pages/ProgramsPage'
 import ProgramDetailPage from './pages/ProgramDetailPage'
 import { useAuthStore } from './store/auth.store'
 
 function PaymentsRoute() {
   const user = useAuthStore((s) => s.user)
-  return user?.role === 'BOOTCAMPER' ? <PaymentsPage /> : <SalespersonPaymentsPage />
+  if (user?.role === 'BOOTCAMPER') return <PaymentsPage />
+  // El administrador no tiene bootcampers propios: ve las carteras de los
+  // vendedores en lugar de una lista que no le pertenece.
+  if (user?.role === 'ADMINISTRATOR') return <AdminSalespeoplePage />
+  return <SalespersonPaymentsPage />
 }
 
 function DashboardRoute() {
@@ -53,6 +59,14 @@ export default function App() {
           <Route path="/schedule" element={<div className="p-8 text-gray-500">Schedule — coming soon</div>} />
           <Route path="/payments" element={<PaymentsRoute />} />
           <Route path="/payments/:bootcamperId/:programId" element={<BootcamperPaymentDetailPage />} />
+          <Route
+            path="/payments/vendedor/:salespersonId"
+            element={
+              <AdminRoute>
+                <AdminSalespersonDetailPage />
+              </AdminRoute>
+            }
+          />
           <Route
             path="/analytics"
             element={
