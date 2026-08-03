@@ -4,8 +4,15 @@ const FORM_FIELDS = ['first_name', 'last_name', 'email', 'role', 'cedula', 'phon
  * DRF devuelve errores por campo (`{email: ["..."]}`) y también mensajes sueltos
  * (`detail` / `error`). Los de campo se pintan bajo su input; el resto se
  * devuelve para mostrarlo como mensaje general del formulario.
+ *
+ * `fields` permite reutilizarlo desde otros formularios: sin él sólo se mapean
+ * los campos del formulario de usuarios.
+ *
+ * Returns:
+ *   El mensaje general a mostrar, o `null` si el error completo quedó pintado
+ *   bajo sus campos.
  */
-export function applyServerErrors(error, setError) {
+export function applyServerErrors(error, setError, fields = FORM_FIELDS) {
   const data = error?.response?.data
 
   if (!data || typeof data !== 'object') {
@@ -13,7 +20,7 @@ export function applyServerErrors(error, setError) {
   }
 
   let matchedField = false
-  FORM_FIELDS.forEach((field) => {
+  fields.forEach((field) => {
     const message = data[field]
     if (!message) return
     matchedField = true

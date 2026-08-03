@@ -1,4 +1,4 @@
-import { ROLE_BADGE_CLASSES, ROLE_LABELS } from './roles'
+import { COORDINATOR_SCOPE_LABELS, ROLE_BADGE_CLASSES, ROLE_LABELS } from './roles'
 
 const COLUMNS = ['Usuario', 'Rol', 'Cédula', 'Estado', 'Acciones']
 
@@ -90,6 +90,15 @@ export default function UsersTable({ users, isLoading, isError, currentUserId, o
                   </td>
                   <td className="py-3.5 px-3">
                     <RoleBadge role={user.role} />
+                    {user.role === 'COORDINATOR' && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {/* Con varios programas se listan por nombre; el general
+                            y el que no tiene alcance caen a la etiqueta. */}
+                        {user.coordinator_program_names?.length
+                          ? user.coordinator_program_names.join(', ')
+                          : COORDINATOR_SCOPE_LABELS[user.coordinator_scope] ?? 'Sin alcance'}
+                      </p>
+                    )}
                   </td>
                   <td className="py-3.5 px-3 text-gray-600">{user.cedula || '—'}</td>
                   <td className="py-3.5 px-3">

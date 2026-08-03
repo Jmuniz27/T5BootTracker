@@ -7,6 +7,8 @@ import UsersPage from '../UsersPage';
 import { useAuthStore } from '../../store/auth.store';
 import { getUsers, toggleUserActive, createUser } from '../../api/users.api';
 
+import { getPrograms } from '../../api/leads.api';
+
 vi.mock('../../api/users.api', () => ({
   getUsers: vi.fn(),
   createUser: vi.fn(),
@@ -14,6 +16,12 @@ vi.mock('../../api/users.api', () => ({
   toggleUserActive: vi.fn(),
   resetUserPassword: vi.fn(),
 }));
+
+vi.mock('../../api/leads.api', () => ({
+  getPrograms: vi.fn(),
+}));
+
+const PROGRAMA = { id: 'prog-1', name: 'Python Full Stack Abril 2026' };
 
 /** Credencial de prueba, no un secreto real. */
 const CLAVE_TEMPORAL = 'clave1234';
@@ -51,6 +59,20 @@ const INACTIVO = {
   is_active: false,
 };
 
+const COORDINADOR = {
+  id: 'coord-1',
+  email: 'coordinador@espol.edu.ec',
+  first_name: 'Coord',
+  last_name: 'Tres',
+  full_name: 'Coord Tres',
+  role: 'COORDINATOR',
+  cedula: null,
+  is_active: true,
+  coordinator_scope: 'PROGRAM',
+  coordinator_programs: [PROGRAMA.id],
+  coordinator_program_names: [PROGRAMA.name],
+};
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -71,7 +93,8 @@ describe('UsersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAuthStore.setState({ user: ADMIN });
-    getUsers.mockResolvedValue({ results: [ADMIN, VENDEDOR, INACTIVO] });
+    getUsers.mockResolvedValue({ results: [ADMIN, VENDEDOR, INACTIVO, COORDINADOR] });
+    getPrograms.mockResolvedValue([PROGRAMA]);
   });
 
   afterEach(() => {
@@ -202,7 +225,176 @@ describe('UsersPage', () => {
       password: CLAVE_TEMPORAL,
       cedula: null,
       phone: null,
+      coordinator_scope: '',
+      coordinator_programs: [],
     });
     expect(await screen.findByText(/creado correctamente/i)).toBeInTheDocument();
+  });
+
+  describe('alcance del coordinador', () => {
+    /** Abre el modal y llena los campos comunes con el rol Coordinador. */
+    async function openCoordinatorForm(user) {
+      await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
+      const dialog = await screen.findByRole('dialog', { name: /nuevo usuario/i });
+
+      await user.type(within(dialog).getByPlaceholderText('Ana'), 'Nueva');
+      await user.type(within(dialog).getByPlaceholderText('Vera'), 'Coord');
+      await user.type(within(dialog).getByPlaceholderText(/@espol/i), 'coord@espol.edu.ec');
+      await user.type(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i), CLAVE_TEMPORAL);
+
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
+      await user.click(within(dialog).getByText('Coordinador'));
+
+      return dialog;
+    }
+
+    it('muestra el alcance solo cuando el rol es Coordinador', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
+      const dialog = await screen.findByRole('dialog', { name: /nuevo usuario/i });
+
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
+      await user.click(within(dialog).getByText('Vendedor'));
+      expect(within(dialog).queryByText('Alcance')).not.toBeInTheDocument();
+
+      await user.click(within(dialog).getByRole('button', { name: 'Vendedor' }));
+      await user.click(within(dialog).getByText('Coordinador'));
+      expect(within(dialog).getByText('Alcance')).toBeInTheDocument();
+    });
+
+    it('exige elegir el alcance antes de llamar al backend', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      const dialog = await openCoordinatorForm(user);
+      await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+      expect(await within(dialog).findByText(/general o de un programa/i)).toBeInTheDocument();
+      expect(createUser).not.toHaveBeenCalled();
+    });
+
+    it('exige al menos un programa cuando el alcance es por programa', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      const dialog = await openCoordinatorForm(user);
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar alcance/i }));
+      await user.click(within(dialog).getByText(/por programa/i));
+
+      await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+      expect(await within(dialog).findByText(/selecciona al menos un programa/i)).toBeInTheDocument();
+      expect(createUser).not.toHaveBeenCalled();
+    });
+
+    it('crea un coordinador general sin programa', async () => {
+      const user = userEvent.setup();
+      createUser.mockResolvedValue({ ...COORDINADOR, full_name: 'Nueva Coord' });
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      const dialog = await openCoordinatorForm(user);
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar alcance/i }));
+      await user.click(within(dialog).getByText(/todos los programas/i));
+
+      await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+      expect(createUser.mock.calls[0][0]).toMatchObject({
+        role: 'COORDINATOR',
+        coordinator_scope: 'GENERAL',
+        coordinator_programs: [],
+      });
+    });
+
+    it('crea un coordinador atado a un programa', async () => {
+      const user = userEvent.setup();
+      createUser.mockResolvedValue({ ...COORDINADOR, full_name: 'Nueva Coord' });
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      const dialog = await openCoordinatorForm(user);
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar alcance/i }));
+      await user.click(within(dialog).getByText(/por programa/i));
+
+      await user.click(await within(dialog).findByLabelText(PROGRAMA.name));
+
+      await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+      expect(createUser.mock.calls[0][0]).toMatchObject({
+        role: 'COORDINATOR',
+        coordinator_scope: 'PROGRAM',
+        coordinator_programs: [PROGRAMA.id],
+      });
+    });
+
+    it('muestra el programa asignado en la tabla', async () => {
+      renderPage();
+      await screen.findByText('Coord Tres');
+
+      const row = within(rowFor('Coord Tres'));
+      expect(row.getByText('Coordinador')).toBeInTheDocument();
+      expect(row.getByText(PROGRAMA.name)).toBeInTheDocument();
+    });
+
+    it('no pide contraseña al coordinador', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
+      const dialog = await screen.findByRole('dialog', { name: /nuevo usuario/i });
+
+      expect(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i)).toBeInTheDocument();
+
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
+      await user.click(within(dialog).getByText('Coordinador'));
+
+      expect(
+        within(dialog).queryByPlaceholderText(/mínimo 8 caracteres/i),
+      ).not.toBeInTheDocument();
+    });
+
+    it('descarta la contraseña escrita antes de pasar a coordinador', async () => {
+      const user = userEvent.setup();
+      createUser.mockResolvedValue({ ...COORDINADOR, full_name: 'Nueva Coord' });
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      // openCoordinatorForm escribe la contraseña y después cambia el rol.
+      const dialog = await openCoordinatorForm(user);
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar alcance/i }));
+      await user.click(within(dialog).getByText(/todos los programas/i));
+      await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+      expect(createUser.mock.calls[0][0].password).toBe('');
+    });
+
+    it('permite marcar varios programas', async () => {
+      const user = userEvent.setup();
+      const otro = { id: 'prog-2', name: 'Data Science Junio 2026' };
+      getPrograms.mockResolvedValue([PROGRAMA, otro]);
+      createUser.mockResolvedValue({ ...COORDINADOR, full_name: 'Nueva Coord' });
+      renderPage();
+      await screen.findByText('Vendedor Uno');
+
+      const dialog = await openCoordinatorForm(user);
+      await user.click(within(dialog).getByRole('button', { name: /seleccionar alcance/i }));
+      await user.click(within(dialog).getByText(/por programa/i));
+
+      await user.click(await within(dialog).findByLabelText(PROGRAMA.name));
+      await user.click(await within(dialog).findByLabelText(otro.name));
+
+      await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+      expect(createUser.mock.calls[0][0]).toMatchObject({
+        coordinator_scope: 'PROGRAM',
+        coordinator_programs: [PROGRAMA.id, otro.id],
+      });
+    });
   });
 });

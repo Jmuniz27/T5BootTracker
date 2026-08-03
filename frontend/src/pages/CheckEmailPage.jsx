@@ -1,7 +1,8 @@
-import { useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import AuthLayout from '../components/AuthLayout';
+import AuthButton from '../components/AuthButton';
 import { requestPasswordReset } from '../api/auth.api';
 
 function maskEmail(email) {
@@ -12,70 +13,38 @@ function maskEmail(email) {
 
 export default function CheckEmailPage() {
   const { state } = useLocation();
-  const navigate = useNavigate();
   const email = state?.email ?? '';
   const displayEmail = email ? maskEmail(email) : 'tu correo';
-
-  const inputRefs = useRef([]);
-  const digits = useRef(Array(5).fill(''));
+  const [resent, setResent] = useState(false);
 
   const { mutate: resend, isPending } = useMutation({
     mutationFn: requestPasswordReset,
+    onSuccess: () => setResent(true),
   });
 
-  const handleDigit = (e, index) => {
-    const val = e.target.value.replace(/\D/g, '').slice(-1);
-    e.target.value = val;
-    digits.current[index] = val;
-    if (val && index < 4) inputRefs.current[index + 1]?.focus();
-  };
-
-  const handleKeyDown = (e, index) => {
-    if (e.key === 'Backspace' && !e.target.value && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
   return (
-    <AuthLayout backTo="/forgot-password" backLabel="Volver">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h1>
-      <p className="text-gray-500 text-sm mb-8">
-        We sent a reset link to{' '}
-        <span className="font-semibold text-gray-700">{displayEmail}</span>.{' '}
-        Enter the 5 digit code mentioned in the email.
+    <AuthLayout backTo="/login" backLabel="Volver al inicio de sesión">
+      <h1 className="text-3xl font-bold text-white mb-2">Revisa tu correo</h1>
+      <p className="text-white/50 text-sm mb-10">
+        Si <span className="font-semibold text-white">{displayEmail}</span> tiene una cuenta
+        registrada, te enviamos un enlace de recuperación. Abre el correo y haz clic en el
+        enlace para elegir una nueva contraseña. El enlace expira en 60 minutos.
       </p>
 
-      <div className="flex gap-3 mb-8">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <input
-            key={i}
-            ref={(el) => (inputRefs.current[i] = el)}
-            type="text"
-            inputMode="numeric"
-            maxLength={1}
-            onChange={(e) => handleDigit(e, i)}
-            onKeyDown={(e) => handleKeyDown(e, i)}
-            className="w-full aspect-square text-center text-lg font-semibold border-2 border-gray-200 rounded-lg outline-none focus:border-secondary transition"
-          />
-        ))}
-      </div>
-
-      <button
-        onClick={() => navigate('/reset-success')}
-        className="w-full bg-primary text-white py-3 rounded-lg font-medium hover:opacity-90 transition mb-4"
+      <AuthButton
+        type="button"
+        onClick={() => resend({ email })}
+        disabled={isPending}
       >
-        Verify code
-      </button>
+        {isPending ? 'Enviando...' : 'Reenviar correo'}
+      </AuthButton>
 
-      <p className="text-center text-sm text-gray-500">
-        Haven&apos;t got the email yet?{' '}
-        <button
-          onClick={() => resend({ email })}
-          disabled={isPending}
-          className="text-secondary hover:underline disabled:opacity-60"
-        >
-          {isPending ? 'Enviando...' : 'Resend email'}
-        </button>
+      <p className="text-center text-sm text-white/50 mt-6">
+        {resent ? (
+          'Correo reenviado.'
+        ) : (
+          <>¿No te llegó el correo? Usa el botón de arriba para reenviarlo.</>
+        )}
       </p>
     </AuthLayout>
   );

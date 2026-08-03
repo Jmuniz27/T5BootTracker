@@ -180,6 +180,29 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('  Programs created/updated.'))
 
+        # Cohortes: una por estado, para poder probar el filtro sin crearlas a mano.
+        from apps.programs.models import Cohort
+        first_of_month = today.replace(day=1)
+        # (programa, numero, inicio, fin previsto, estado)
+        cohort_seed = [
+            (program1, 1, first_of_month - dt_timedelta(days=210), first_of_month - dt_timedelta(days=60),  Cohort.Status.FINISHED),
+            (program1, 2, first_of_month - dt_timedelta(days=30),  first_of_month + dt_timedelta(days=60),  Cohort.Status.IN_PROGRESS),
+            (program1, 3, first_of_month + dt_timedelta(days=60),  first_of_month + dt_timedelta(days=150), Cohort.Status.UPCOMING),
+            (program2, 1, first_of_month + dt_timedelta(days=30),  first_of_month + dt_timedelta(days=120), Cohort.Status.UPCOMING),
+        ]
+        for program, number, start_month, end_month, cohort_status in cohort_seed:
+            Cohort.objects.get_or_create(
+                program=program,
+                number=number,
+                defaults={
+                    'start_month': start_month,
+                    'end_month':   end_month,
+                    'status':      cohort_status,
+                },
+            )
+
+        self.stdout.write(self.style.SUCCESS('  Cohorts created/updated.'))
+
         # Converted bootcamper with payments
         conv_boot, _ = CustomUser.objects.get_or_create(
             email='bootcamper.conv@boottracker.com',

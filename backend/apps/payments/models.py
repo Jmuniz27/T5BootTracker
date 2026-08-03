@@ -56,6 +56,7 @@ class Payment(models.Model):
         max_length=10,
         choices=Status.choices,
         default=Status.PENDING,
+        db_index=True,
     )
     rejection_reason = models.TextField(blank=True)
     validated_by = models.ForeignKey(
@@ -66,7 +67,7 @@ class Payment(models.Model):
         related_name="validated_payments",
     )
     validated_at = models.DateTimeField(null=True, blank=True)
-    submitted_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

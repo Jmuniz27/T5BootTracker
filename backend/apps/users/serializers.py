@@ -3,21 +3,111 @@ from apps.authentication.models import CustomUser
 from apps.authentication.serializers import UserDataSerializer
 from apps.authentication.validators import validate_cedula_ecuatoriana
 
-class AdminUserSerializer(UserDataSerializer):
+COORDINATOR_FIELDS = ('coordinator_scope', 'coordinator_programs')
+
+
+class CoordinatorScopeMixin:
+    """Valida la coherencia entre rol, alcance y programas del coordinador.
+
+    Reglas:
+      - Un COORDINATOR debe declarar alcance (general o por programa).
+      - Alcance PROGRAM exige al menos un programa; GENERAL no admite ninguno.
+      - Ningún otro rol admite alcance ni programas; si el rol cambia y deja
+        restos de una asignación anterior, se limpian en silencio.
+
+    Sólo se evalúa cuando el payload toca el rol o el alcance: un PATCH
+    parcial de otro campo no debe fallar por una asignación heredada (los
+    coordinadores creados antes de esta función no tienen alcance). Los campos
+    ausentes se resuelven contra la instancia en edición.
     """
-    Hereda del serializador base de usuarios pero expone la cédula
-    exclusivamente para el panel de administración.
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        if not {'role', *COORDINATOR_FIELDS} & set(attrs):
+            return attrs
+
+        def resolve(field):
+            if field in attrs:
+                return attrs[field]
+            if self.instance is None:
+                return None
+            value = getattr(self.instance, field, None)
+            # Un M2M no se lee como atributo: hay que resolver el manager.
+            return list(value.all()) if hasattr(value, 'all') else value
+
+        role     = resolve('role')
+        scope    = resolve('coordinator_scope')
+        programs = resolve('coordinator_programs') or []
+
+        if role == CustomUser.Role.COORDINATOR:
+            if not scope:
+                raise serializers.ValidationError({
+                    'coordinator_scope': 'Indica si el coordinador es general o de un programa.',
+                })
+            if scope == CustomUser.CoordinatorScope.PROGRAM and not programs:
+                raise serializers.ValidationError({
+                    'coordinator_programs': 'Selecciona al menos un programa que coordina.',
+                })
+            if scope == CustomUser.CoordinatorScope.GENERAL and programs:
+                raise serializers.ValidationError({
+                    'coordinator_programs': 'Un coordinador general cubre todos los programas; no se le asignan.',
+                })
+        elif attrs.get('coordinator_scope') or attrs.get('coordinator_programs'):
+            raise serializers.ValidationError({
+                'coordinator_scope': 'Sólo los coordinadores tienen alcance y programas asignados.',
+            })
+        else:
+            attrs['coordinator_scope']    = ''
+            attrs['coordinator_programs'] = []
+
+        return attrs
+
+
+class AdminUserSerializer(CoordinatorScopeMixin, UserDataSerializer):
     """
+    Hereda del serializador base de usuarios pero expone la cédula y la
+    asignación de coordinador exclusivamente para el panel de administración.
+    """
+    coordinator_program_names = serializers.SerializerMethodField()
+
     class Meta(UserDataSerializer.Meta):
-        fields = UserDataSerializer.Meta.fields + ('cedula',)
+        fields = UserDataSerializer.Meta.fields + ('cedula',) + COORDINATOR_FIELDS + (
+            'coordinator_program_names',
+        )
+
+    def get_coordinator_program_names(self, obj):
+        """Nombres para pintar la tabla sin que el cliente cruce ids."""
+        return [p.name for p in obj.coordinator_programs.all()]
 
 
-class CreateUserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+class CreateUserSerializer(CoordinatorScopeMixin, serializers.ModelSerializer):
+    # No `required=True`: el coordinador es una persona de contacto y no entra a
+    # la aplicación, así que no se le pide contraseña. La exigencia por rol se
+    # resuelve en validate(); `create_user` deja la contraseña inutilizable
+    # cuando no viene ninguna.
+    password = serializers.CharField(
+        write_only=True, required=False, allow_blank=True, style={'input_type': 'password'},
+    )
 
     class Meta:
         model = CustomUser
-        fields = ['email', 'cedula', 'first_name', 'last_name', 'role', 'password', 'phone']
+        fields = [
+            'email', 'cedula', 'first_name', 'last_name', 'role', 'password', 'phone',
+            *COORDINATOR_FIELDS,
+        ]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        # Todos los roles que sí usan la aplicación necesitan contraseña; el
+        # coordinador es la única excepción.
+        if attrs.get('role') != CustomUser.Role.COORDINATOR and not attrs.get('password'):
+            raise serializers.ValidationError({
+                'password': 'Este campo es obligatorio.',
+            })
+
+        return attrs
 
     def validate_email(self, value):
         if CustomUser.objects.filter(email=value).exists():

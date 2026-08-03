@@ -5,25 +5,46 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createUser } from '../../api/users.api'
 import { isValidCedula } from '../../utils/cedula'
 import { ROLE_OPTIONS } from './roles'
+import {
+  coordinatorScopeFields,
+  coordinatorScopePayload,
+  refineCoordinatorScope,
+} from './coordinatorScope'
 import ModalShell from './ModalShell'
 import UserFormFields from './UserFormFields'
 import { applyServerErrors } from './apiErrors'
 
-const schema = z.object({
-  first_name: z.string().trim().min(1, 'El nombre es requerido'),
-  last_name: z.string().trim().min(1, 'El apellido es requerido'),
-  email: z.string().trim().email('Ingresa un email válido'),
-  role: z.enum(
-    ROLE_OPTIONS.map((r) => r.value),
-    { message: 'Selecciona un rol' },
-  ),
-  password: z.string().min(8, 'Mínimo 8 caracteres'),
-  cedula: z
-    .string()
-    .trim()
-    .refine((v) => v === '' || isValidCedula(v), 'Cédula ecuatoriana inválida'),
-  phone: z.string().trim(),
-})
+const schema = z
+  .object({
+    first_name: z.string().trim().min(1, 'El nombre es requerido'),
+    last_name: z.string().trim().min(1, 'El apellido es requerido'),
+    email: z.string().trim().email('Ingresa un email válido'),
+    role: z.enum(
+      ROLE_OPTIONS.map((r) => r.value),
+      { message: 'Selecciona un rol' },
+    ),
+    // Sin `min` aquí: el coordinador no lleva contraseña y el mínimo se exige
+    // más abajo, sólo para los roles que sí inician sesión.
+    password: z.string(),
+    cedula: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || isValidCedula(v), 'Cédula ecuatoriana inválida'),
+    phone: z.string().trim(),
+    ...coordinatorScopeFields,
+  })
+  .superRefine(refineCoordinatorScope)
+  .superRefine((values, ctx) => {
+    if (values.role === 'COORDINATOR') return
+
+    if (values.password.length < 8) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['password'],
+        message: 'Mínimo 8 caracteres',
+      })
+    }
+  })
 
 export default function CreateUserModal({ onClose, onSuccess, onError }) {
   const queryClient = useQueryClient()
@@ -36,7 +57,17 @@ export default function CreateUserModal({ onClose, onSuccess, onError }) {
     formState: { errors },
   } = useForm({
     resolver: zodResolver(schema),
-    defaultValues: { first_name: '', last_name: '', email: '', role: '', password: '', cedula: '', phone: '' },
+    defaultValues: {
+      first_name: '',
+      last_name: '',
+      email: '',
+      role: '',
+      password: '',
+      cedula: '',
+      phone: '',
+      coordinator_scope: '',
+      coordinator_programs: [],
+    },
   })
 
   const mutation = useMutation({
@@ -58,6 +89,11 @@ export default function CreateUserModal({ onClose, onSuccess, onError }) {
       // El backend rechaza cadena vacía en campos únicos/opcionales — manda null.
       cedula: values.cedula || null,
       phone: values.phone || null,
+      // El campo se oculta al elegir Coordinador, pero si ya se había escrito
+      // algo el valor sigue en el formulario: se descarta aquí para no crearle
+      // una credencial que por diseño no debe tener.
+      password: values.role === 'COORDINATOR' ? '' : values.password,
+      ...coordinatorScopePayload(values),
     })
 
   return (

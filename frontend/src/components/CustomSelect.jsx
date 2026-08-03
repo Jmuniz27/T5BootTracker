@@ -16,7 +16,19 @@ import { useState, useRef, useEffect, useId } from 'react'
  * `testId`/`data-testid` se conservan tal cual (HST-032/009 y demas
  * escenarios de la suite Playwright los usan como selector estable).
  */
-export default function CustomSelect({ value, onChange, options, placeholder = 'Seleccionar', label, testId }) {
+export default function CustomSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Seleccionar',
+  disabled = false,
+  label,
+  // Nombre accesible del control. Necesario cuando hay varios selects iguales en
+  // la pantalla y el texto visible no alcanza para distinguirlos.
+  ariaLabel,
+  // Gancho para la suite E2E de Playwright.
+  testId,
+}) {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const ref = useRef(null)
@@ -113,9 +125,11 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
+        aria-label={ariaLabel}
+        disabled={disabled}
         onClick={() => (open ? close({ restoreFocus: false }) : openList())}
         onKeyDown={handleTriggerKeyDown}
-        className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E] bg-white text-left whitespace-nowrap"
+        className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E] bg-white text-left whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {selected ? selected.label : placeholder}
         <svg
