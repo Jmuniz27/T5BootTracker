@@ -33,6 +33,7 @@ export interface InteractionPayload {
   interest_level?: number | null;
   notes?: string;
   duration_minutes?: number | null;
+  discount_offered?: number | null;
 }
 
 export async function logInteraction(leadId: string, payload: InteractionPayload) {
@@ -54,5 +55,47 @@ export async function updateInteraction(
     `/leads/${leadId}/interactions/${interactionId}/`,
     payload,
   );
+  return data;
+}
+
+// ─── Crear / convertir lead ───────────────────────────────────────────────────
+
+export interface LeadInput {
+  name: string;
+  phone: string;
+  email?: string;
+  program_interest?: string;
+  source: string; // INSTAGRAM | WHATSAPP | LANDING_PAGE | MANUAL
+  is_company?: boolean;
+  status?: string;
+  confirm_duplicate?: boolean;
+}
+
+// Devuelve el lead creado, o { duplicate: {...} } si hay un posible duplicado
+// (reenviar con confirm_duplicate: true para forzar la creación).
+export async function createLead(payload: LeadInput) {
+  const { data } = await api.post('/leads/', payload);
+  return data;
+}
+
+export interface Program {
+  id: string;
+  name: string;
+}
+
+export async function getPrograms(): Promise<Program[]> {
+  const { data } = await api.get('/programs/');
+  return Array.isArray(data) ? data : (data?.results ?? []);
+}
+
+export interface ConvertPayload {
+  cedula: string;
+  program_id: string;
+  email?: string;
+  phone?: string;
+}
+
+export async function convertLead(leadId: string, payload: ConvertPayload) {
+  const { data } = await api.post(`/leads/${leadId}/convert/`, payload);
   return data;
 }

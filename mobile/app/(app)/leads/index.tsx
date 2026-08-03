@@ -575,6 +575,17 @@ export default function LeadsScreen() {
           onSelect={handleSelectStatus}
         />
       )}
+
+      {/* FAB: nuevo lead */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => router.push('/(app)/leads/new')}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Nuevo lead"
+      >
+        <Ionicons name="add" size={28} color={colors.white} />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -625,6 +636,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff2fb',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.navy,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
   headerNameCol: {
     alignItems: 'flex-end',
