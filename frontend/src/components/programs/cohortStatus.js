@@ -46,11 +46,20 @@ export function formatMonth(value) {
   return name ? `${name} ${year}` : value
 }
 
-/** Valor por defecto del input type="month": el mes en curso. */
-export function currentMonthValue() {
+/** Valor por defecto del input type="month": el mes en curso más `offset` meses. */
+export function currentMonthValue(offset = 0) {
   const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const shifted = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`
 }
+
+/**
+ * El mismo campo significa dos cosas según el estado: mientras la cohorte vive
+ * es el fin previsto, y al finalizarla el backend lo resella con el mes real.
+ * La etiqueta lo dice para que nadie lea una previsión como un hecho.
+ */
+export const endMonthLabel = (status) =>
+  status === 'FINISHED' ? 'Finalizó' : 'Fin previsto'
 
 /** El input entrega "2026-09"; el backend espera una fecha completa. */
 export const monthInputToDate = (value) => (value ? `${value}-01` : '')

@@ -3,7 +3,7 @@ import logging
 from datetime import date
 from decimal import Decimal
 from django.core import signing
-from django.db.models import Sum
+from django.db.models import Count, Q, Sum
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +62,80 @@ class PaymentProgressService:
         )
         total_paid    = agg['total_paid'] or Decimal('0.00')
         pending_count = payments.filter(status=Payment.Status.PENDING).count()
-        total_cost    = program.total_cost
-        deficit       = max(total_cost - total_paid, Decimal('0.00'))
-        is_critical   = deficit > total_cost * CRITICAL_DEFICIT_THRESHOLD
+
+        return self._build_summary(program, total_paid, pending_count, payments.count())
+
+    def get_monitoring_summaries(self, programs, status_filter=None) -> list[dict]:
+        """Bulk version of get_payment_summary for PaymentMonitoringView (PERF-1).
+
+        Aggregates every (bootcamper, program) pair in three fixed queries
+        (aggregation + bootcampers + nothing per row) instead of ~4 queries per
+        bootcamper, keeping the exact same summary dict per row.
+        """
+        from .models import Payment
+        from apps.authentication.models import CustomUser
+
+        program_map = {program.id: program for program in programs}
+
+        rows = (
+            Payment.objects
+            .filter(program_id__in=program_map)
+            .values('bootcamper_id', 'program_id')
+            .annotate(
+                total_paid=Sum(
+                    'confirmed_amount',
+                    filter=Q(status=Payment.Status.APPROVED),
+                ),
+                pending_payments=Count('id', filter=Q(status=Payment.Status.PENDING)),
+                payment_count=Count('id'),
+            )
+        )
+
+        bootcampers = {
+            user.id: user
+            for user in CustomUser.objects.filter(
+                id__in={row['bootcamper_id'] for row in rows},
+                role=CustomUser.Role.BOOTCAMPER,
+            )
+        }
+
+        # Mismo orden que la versión por iteración: programas en el orden
+        # recibido y, dentro de cada uno, bootcampers según el ordering del
+        # modelo de usuario.
+        order = {pid: idx for idx, pid in enumerate(program_map)}
+        visible = [row for row in rows if row['bootcamper_id'] in bootcampers]
+        visible.sort(
+            key=lambda r: (
+                order[r['program_id']],
+                -bootcampers[r['bootcamper_id']].created_at.timestamp(),
+            )
+        )
+        data = []
+        for row in visible:
+            bootcamper = bootcampers[row['bootcamper_id']]
+            program = program_map[row['program_id']]
+            summary = self._build_summary(
+                program,
+                row['total_paid'] or Decimal('0.00'),
+                row['pending_payments'],
+                row['payment_count'],
+            )
+            if status_filter and summary['payment_status'] != status_filter:
+                continue
+            data.append({
+                'bootcamper_id':   str(bootcamper.id),
+                'bootcamper_name': bootcamper.get_full_name(),
+                'email':           bootcamper.email,
+                'program_id':      str(program.id),
+                'program_name':    program.name,
+                **summary,
+            })
+        return data
+
+    def _build_summary(self, program, total_paid, pending_count, payment_count) -> dict:
+        total_cost  = program.total_cost
+        deficit     = max(total_cost - total_paid, Decimal('0.00'))
+        is_critical = deficit > total_cost * CRITICAL_DEFICIT_THRESHOLD
 
         today      = date.today()
         start_date = program.start_date
@@ -93,7 +164,7 @@ class PaymentProgressService:
             'pending_balance':         deficit,
             'is_critical':             is_critical,
             'time_elapsed_percentage': time_elapsed_percentage,
-            'payment_count':           payments.count(),
+            'payment_count':           payment_count,
             'payment_percentage':      payment_percentage,
             'payment_status':          payment_status,
             'expected_payment_by_now': expected_payment_by_now,

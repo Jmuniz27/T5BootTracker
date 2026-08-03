@@ -16,7 +16,7 @@ class CustomUserAdmin(UserAdmin):
         ('Información personal', {'fields': ('first_name', 'last_name', 'phone')}),
         ('Rol y permisos', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Coordinador', {
-            'fields': ('coordinator_scope', 'coordinator_program'),
+            'fields': ('coordinator_scope', 'coordinator_programs'),
             'description': 'Sólo aplica al rol Coordinador: define a qué programas se le notifica.',
         }),
         ('Fechas', {'fields': ('last_login',)}),

@@ -10,6 +10,7 @@ import {
   COHORT_STATUS_BADGE,
   COHORT_STATUS_LABELS,
   COHORT_STATUS_OPTIONS,
+  endMonthLabel,
   formatMonth,
 } from '../components/programs/cohortStatus'
 import CustomSelect from '../components/CustomSelect'
@@ -34,7 +35,7 @@ function CohortCard({ cohort, onChangeStatus, isBusy }) {
           <dd className="text-gray-700 font-medium">{formatMonth(cohort.start_month)}</dd>
         </div>
         <div className="flex justify-between text-xs">
-          <dt className="text-gray-400">Finalización</dt>
+          <dt className="text-gray-400">{endMonthLabel(cohort.status)}</dt>
           <dd className="text-gray-700 font-medium">{formatMonth(cohort.end_month)}</dd>
         </div>
       </dl>
