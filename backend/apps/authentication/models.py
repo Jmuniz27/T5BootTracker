@@ -41,6 +41,18 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         GENERAL = 'GENERAL', 'General'
         PROGRAM = 'PROGRAM', 'Por programa'
 
+    class VerificationStatus(models.TextChoices):
+        """Estado de verificación del perfil de un bootcamper (sólo aplica a ese rol).
+
+        INVITED: recién convertido, aún no activó su cuenta.
+        PENDING_VERIFICATION: activó la cuenta y confirmó sus datos, falta que
+        el vendedor los verifique. No bloquea nada — es informativo.
+        VERIFIED: el vendedor confirmó los datos.
+        """
+        INVITED              = 'INVITED',              'Invitado'
+        PENDING_VERIFICATION = 'PENDING_VERIFICATION', 'Pendiente de verificación'
+        VERIFIED             = 'VERIFIED',              'Verificado'
+
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email      = models.EmailField(unique=True, verbose_name='Correo electrónico')
     first_name = models.CharField(max_length=150, verbose_name='Nombre')
@@ -85,6 +97,29 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         verbose_name='Responsable de cobro',
     )
     finance_assigned_at = models.DateTimeField(null=True, blank=True)
+    # Verificación del perfil del bootcamper (issue #254). El default VERIFIED
+    # es a propósito: la migración no debe marcar retroactivamente todo el
+    # historial de bootcampers como pendiente — sólo los convertidos a partir
+    # de aquí arrancan en INVITED (ver `convert_lead_to_bootcamper`).
+    verification_status = models.CharField(
+        max_length=25,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.VERIFIED,
+        verbose_name='Estado de verificación',
+    )
+    verified_by = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_bootcampers',
+        verbose_name='Verificado por',
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+    # Token de invitación vigente (issue #253/#255): comparado contra el
+    # `iat` firmado en el token para invalidar el link anterior al reenviar.
+    onboarding_token_issued_at = models.DateTimeField(null=True, blank=True)
     is_active  = models.BooleanField(default=True)
     is_staff   = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
