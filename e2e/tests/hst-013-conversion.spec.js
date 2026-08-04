@@ -59,7 +59,7 @@ test.describe('HST-013 · Conversión de lead a bootcamper con validación de c�
       })
 
       await entonces('el sistema rechaza la cédula y no convierte el lead', async () => {
-        await expect(page.getByText('Cédula ecuatoriana inválida.')).toBeVisible()
+        await expect(page.getByText('Cédula o RUC ecuatoriano inválido.')).toBeVisible()
         // El modal sigue abierto: la conversión no se ejecutó.
         await expect(page.getByRole('heading', { name: 'Convertir lead' })).toBeVisible()
       })
