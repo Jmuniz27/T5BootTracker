@@ -2,7 +2,7 @@
 
 from django.urls import reverse
 from rest_framework import serializers
-from apps.authentication.validators import validate_cedula_ecuatoriana
+from apps.authentication.validators import validate_identificacion
 from .models import Payment
 from .services import make_receipt_token
 
@@ -169,16 +169,14 @@ class PaymentConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "La identificación debe contener solo dígitos."
             )
-        if len(value) == 10:
-            if not validate_cedula_ecuatoriana(value):
-                raise serializers.ValidationError("Cédula ecuatoriana inválida.")
-        elif len(value) == 13:
-            if not (validate_cedula_ecuatoriana(value[:10]) and value.endswith("001")):
-                raise serializers.ValidationError("RUC ecuatoriano inválido.")
-        else:
+        if len(value) not in (10, 13):
             raise serializers.ValidationError(
                 "La identificación debe tener 10 dígitos (cédula) o 13 (RUC)."
             )
+        if not validate_identificacion(value):
+            if len(value) == 10:
+                raise serializers.ValidationError("Cédula ecuatoriana inválida.")
+            raise serializers.ValidationError("RUC ecuatoriano inválido.")
         return value
 
 
