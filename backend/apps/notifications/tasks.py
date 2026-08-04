@@ -34,6 +34,34 @@ def send_password_reset_email(self, email, reset_link, user_name=None):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_bootcamper_invitation_email(self, bootcamper_id, invitation_link):
+    """Send the one-time onboarding invitation link to a newly converted bootcamper."""
+    try:
+        from apps.authentication.models import CustomUser
+        from apps.authentication.services import ONBOARDING_TOKEN_MAX_AGE
+        from apps.programs.models import Enrollment
+
+        bootcamper = CustomUser.objects.get(id=bootcamper_id)
+        enrollment = Enrollment.objects.filter(bootcamper=bootcamper).select_related('bootcamp').order_by('-id').first()
+
+        send_templated_email(
+            template='bootcamper_invitation',
+            context={
+                'recipient_name': bootcamper.get_full_name(),
+                'invitation_link': invitation_link,
+                'expiry_hours': ONBOARDING_TOKEN_MAX_AGE // 3600,
+                'program_name': enrollment.bootcamp.name if enrollment else None,
+            },
+            subject='Activa tu cuenta de bootcamper — Boot-Tracker',
+            to=[bootcamper.email],
+        )
+        logger.info('Bootcamper invitation email sent to %s.', bootcamper.email)
+    except Exception as exc:
+        logger.exception('Error sending bootcamper invitation email for %s.', bootcamper_id)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def send_conversion_notification(self, lead_id, bootcamper_id):
     """Notify program coordinators when a lead is converted to a bootcamper."""
     try:

@@ -13,7 +13,7 @@ from apps.authentication.validators import validate_identificacion
 from apps.authentication.services import make_onboarding_token, build_invitation_link
 from apps.programs.models import Program, Enrollment
 from apps.programs.services import apply_discount, resolve_assignable_cohort
-from apps.notifications.tasks import send_conversion_notification
+from apps.notifications.tasks import send_conversion_notification, send_bootcamper_invitation_email
 from .models import Interaction, Lead, LeadAssignmentSetting
 
 logger = logging.getLogger(__name__)
@@ -147,6 +147,11 @@ def convert_lead_to_bootcamper(lead, validated_data):
 
     try:
         send_conversion_notification.delay(str(lead.id), str(bootcamper.id))
+        # Complementa la notificación a coordinadores — esta es la única que
+        # efectivamente llega al bootcamper. Sólo aplica a cuentas nuevas: un
+        # recurrente no recibe invitación porque no se le tocó la contraseña.
+        if invitation_link:
+            send_bootcamper_invitation_email.delay(str(bootcamper.id), invitation_link)
     except Exception:
         logger.warning(
             'Could not enqueue conversion notification for lead %s — Celery/Redis may be unavailable.',
@@ -166,6 +171,39 @@ def convert_lead_to_bootcamper(lead, validated_data):
         'cohort_id': str(cohort.id) if cohort else None,
         'cohort_number': cohort.number if cohort else None,
     }
+
+
+def resend_invitation(lead):
+    """Issue a new onboarding token for `lead.bootcamper` and re-send the email (#255).
+
+    Generating a new token via `make_onboarding_token` already invalidates
+    the previous link (TOKEN_SUPERSEDED, see `read_onboarding_token`) — no
+    separate revocation step is needed.
+    """
+    bootcamper = lead.bootcamper
+    if bootcamper is None:
+        raise ValidationError({
+            'error': 'Este lead todavía no fue convertido a bootcamper.',
+            'code': 'NOT_CONVERTED',
+        })
+    if bootcamper.verification_status != CustomUser.VerificationStatus.INVITED:
+        raise ValidationError({
+            'error': 'Esta cuenta ya fue activada; no se puede reenviar la invitación.',
+            'code': 'ALREADY_ACTIVATED',
+        })
+
+    token = make_onboarding_token(bootcamper)
+    invitation_link = build_invitation_link(token)
+
+    try:
+        send_bootcamper_invitation_email.delay(str(bootcamper.id), invitation_link)
+    except Exception:
+        logger.warning(
+            'Could not enqueue invitation resend for bootcamper %s — Celery/Redis may be unavailable.',
+            bootcamper.id,
+        )
+
+    return {'invitation_link': invitation_link}
 
 
 def get_self_assignment_enabled():

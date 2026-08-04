@@ -149,6 +149,9 @@ REST_FRAMEWORK = {
         # entornos de prueba automatizada (la suite E2E hace muchos logins
         # legítimos por minuto desde una sola IP); producción usa el default.
         'auth': os.environ.get('AUTH_THROTTLE_RATE', '5/min'),
+        # Reenvío de invitación de onboarding (#255) — evita que un vendedor
+        # sature de emails al bootcamper con reintentos.
+        'invitation': os.environ.get('INVITATION_THROTTLE_RATE', '5/hour'),
     },
 }
 
