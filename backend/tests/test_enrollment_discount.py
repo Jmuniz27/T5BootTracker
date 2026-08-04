@@ -82,7 +82,7 @@ class TestConversionEndpointValidation:
     def test_over_one_hundred_is_rejected(self, db, salesperson_user, program, assigned_lead):
         resp = make_client(salesperson_user).post(
             self.url(assigned_lead),
-            {'cedula': '1713175071', 'program_id': str(program.id), 'discount_percentage': '101'},
+            {'cedula': '1713175071', 'program_id': str(program.id), 'discount_percentage': '101', 'email': 'over100@test.com'},
             format='json',
         )
         assert resp.status_code == 400
@@ -91,7 +91,7 @@ class TestConversionEndpointValidation:
     def test_negative_is_rejected(self, db, salesperson_user, program, assigned_lead):
         resp = make_client(salesperson_user).post(
             self.url(assigned_lead),
-            {'cedula': '1713175071', 'program_id': str(program.id), 'discount_percentage': '-5'},
+            {'cedula': '1713175071', 'program_id': str(program.id), 'discount_percentage': '-5', 'email': 'negative@test.com'},
             format='json',
         )
         assert resp.status_code == 400
@@ -107,6 +107,7 @@ class TestConversionEndpointValidation:
                 'program_id': str(program.id),
                 'discount_percentage': '10',
                 'agreed_price': '1.00',
+                'email': 'cannot.set.price@test.com',
             },
             format='json',
         )
@@ -118,7 +119,7 @@ class TestConversionEndpointValidation:
         qualify(assigned_lead)
         resp = make_client(salesperson_user).post(
             self.url(assigned_lead),
-            {'cedula': '1713175071', 'program_id': str(program.id)},
+            {'cedula': '1713175071', 'program_id': str(program.id), 'email': 'omitting@test.com'},
             format='json',
         )
         assert resp.status_code in (200, 201)

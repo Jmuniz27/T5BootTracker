@@ -1,6 +1,5 @@
 """Business logic for leads app."""
 import logging
-import secrets
 from decimal import Decimal
 
 from django.db import transaction, IntegrityError
@@ -11,6 +10,7 @@ from rest_framework import status
 
 from apps.authentication.models import CustomUser
 from apps.authentication.validators import validate_identificacion
+from apps.authentication.services import make_onboarding_token, build_invitation_link
 from apps.programs.models import Program, Enrollment
 from apps.programs.services import apply_discount, resolve_assignable_cohort
 from apps.notifications.tasks import send_conversion_notification
@@ -78,43 +78,48 @@ def convert_lead_to_bootcamper(lead, validated_data):
     # Antes de crear nada: si la cohorte no sirve, la conversión no debe empezar.
     cohort = resolve_assignable_cohort(program, validated_data.get('cohort_id'))
 
-    email = validated_data.get('email') or lead.email
+    email = validated_data['email']
     phone = validated_data.get('phone') or lead.phone
 
-    temporary_password = None
+    invitation_link = None
     is_returning = False
     bootcamper = None
 
-    if email:
-        try:
-            existing = CustomUser.objects.get(email=email)
-            if existing.role != CustomUser.Role.BOOTCAMPER:
-                # 4. LANZAR CONFLICTERROR (409)
-                raise ConflictError({'error': 'El email ya está asociado a otro rol.', 'code': 'EMAIL_CONFLICT'})
-            bootcamper = existing
-            is_returning = True
-        except CustomUser.DoesNotExist:
-            pass
+    try:
+        existing = CustomUser.objects.get(email=email)
+        if existing.role != CustomUser.Role.BOOTCAMPER:
+            # 4. LANZAR CONFLICTERROR (409)
+            raise ConflictError({'error': 'El email ya está asociado a otro rol.', 'code': 'EMAIL_CONFLICT'})
+        bootcamper = existing
+        is_returning = True
+    except CustomUser.DoesNotExist:
+        pass
 
     if bootcamper is None:
-        temporary_password = secrets.token_urlsafe(12)
         try:
             parts = lead.name.split() if lead.name else []
             first_name = parts[0] if parts else 'Bootcamper'
             last_name = ' '.join(parts[1:])
 
+            # password=None deja la cuenta con contraseña no utilizable
+            # (CustomUserManager.create_user -> set_password(None)); la
+            # persona la define ella misma al activar la invitación.
             bootcamper = CustomUser.objects.create_user(
-                email=email or f'bootcamper_{validated_data["cedula"]}@placeholder.com',
-                password=temporary_password,
+                email=email,
+                password=None,
                 first_name=first_name,
                 last_name=last_name,
                 role=CustomUser.Role.BOOTCAMPER,
                 cedula=validated_data['cedula'],
                 phone=phone,
+                verification_status=CustomUser.VerificationStatus.INVITED,
             )
         except IntegrityError:
             # 5. LANZAR CONFLICTERROR (409)
             raise ConflictError({'error': 'Esta cédula ya está registrada en el sistema.', 'code': 'CEDULA_ALREADY_EXISTS'})
+
+        token = make_onboarding_token(bootcamper)
+        invitation_link = build_invitation_link(token)
 
     discount = validated_data.get('discount_percentage') or Decimal('0.00')
     agreed_price = apply_discount(program.total_cost, discount)
@@ -151,7 +156,7 @@ def convert_lead_to_bootcamper(lead, validated_data):
     return {
         'bootcamper_id': str(bootcamper.id),
         'email': bootcamper.email,
-        'temporary_password': temporary_password,
+        'invitation_link': invitation_link,
         'is_returning': is_returning,
         'lead_status': lead.status,
         # Se devuelven para que el vendedor confirme en pantalla lo que quedó

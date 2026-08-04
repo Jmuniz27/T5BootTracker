@@ -1587,6 +1587,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     const errs = {}
     if (!cedula.trim()) errs.cedula = 'La cédula o RUC es requerida.'
     else if (!validateIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
+    if (!email.trim()) errs.email = 'El email es requerido para enviar la invitación.'
     if (!programId) errs.programId = 'Selecciona un programa.'
     const pct = Number(discount)
     if (discount !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
@@ -1600,11 +1601,10 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     setErrors({})
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
-    const payload = { cedula, program_id: programId }
+    const payload = { cedula, program_id: programId, email }
     if (cohortId) payload.cohort_id = cohortId
     // Se manda el porcentaje y nunca el precio: la cuenta la hace el backend.
     if (Number(discount) > 0) payload.discount_percentage = discount
-    if (email) payload.email = email
     if (phone) payload.phone = phone
     convertMutation.mutate({ id: lead.id, payload })
   }
@@ -1629,12 +1629,10 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               <span className="text-gray-500">Email</span>
               <span className="font-medium text-gray-800">{result.email}</span>
             </div>
-            {result.temporary_password && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">Contraseña temporal</span>
-                <span className="font-mono font-bold text-[#213A8E] bg-blue-50 px-2 py-0.5 rounded">
-                  {result.temporary_password}
-                </span>
+            {result.invitation_link && (
+              <div className="space-y-1">
+                <span className="text-gray-500">Enlace de invitación enviado</span>
+                <p className="text-xs text-gray-400 break-all">{result.invitation_link}</p>
               </div>
             )}
             {result.is_returning && (
@@ -1765,13 +1763,17 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email <span className="text-red-500">*</span>
+            </label>
             <input
               type="email"
+              data-testid="convert-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${errors.email ? 'border-red-400' : 'border-gray-200'}`}
             />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           {/* Phone */}

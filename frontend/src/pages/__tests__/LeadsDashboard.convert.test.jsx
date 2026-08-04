@@ -114,7 +114,7 @@ describe('LeadsDashboard — convertir con cohorte y descuento', () => {
     });
     getPrograms.mockResolvedValue([PROGRAMA]);
     getCohorts.mockResolvedValue(COHORTES);
-    convertLead.mockResolvedValue({ email: 'ana@test.com', temporary_password: 'x' });
+    convertLead.mockResolvedValue({ email: 'ana@test.com', invitation_link: 'https://app.test/onboarding/tok' });
   });
 
   afterEach(() => {

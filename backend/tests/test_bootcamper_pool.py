@@ -308,7 +308,7 @@ class TestRoleSeparation:
 
         converted = client.post(
             f"/api/leads/{lead_id}/convert/",
-            {"cedula": "1713175071", "program_id": str(program.id)},
+            {"cedula": "1713175071", "program_id": str(program.id), "email": "finanzas.lead@test.com"},
             format="json",
         )
         assert converted.status_code == 201, converted.json()
