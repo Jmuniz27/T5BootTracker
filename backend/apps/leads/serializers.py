@@ -139,7 +139,7 @@ class LeadAdminWriteSerializer(LeadWriteSerializer):
 
 class ConvertLeadSerializer(serializers.Serializer):
     """Validate lead-to-bootcamper conversion input."""
-    cedula     = serializers.CharField(max_length=10)
+    cedula     = serializers.CharField(max_length=13)
     program_id = serializers.UUIDField()
     # Opcional: hay programas sin cohortes creadas todavía, y exigirla bloquearía
     # la conversión. Cuando viene, el servicio comprueba que sea de ese programa

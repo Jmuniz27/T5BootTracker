@@ -47,7 +47,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     last_name  = models.CharField(max_length=150, verbose_name='Apellido')
     phone      = models.CharField(max_length=20, blank=True, null=True, verbose_name='Teléfono')
     cedula     = models.CharField(
-        max_length=10,
+        max_length=13,
         unique=True,
         null=True,
         blank=True,

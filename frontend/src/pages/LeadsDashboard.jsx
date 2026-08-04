@@ -1448,9 +1448,42 @@ function validateCedulaEcuatoriana(cedula) {
   return checkDigit === digits[9]
 }
 
+function mod11CheckDigit(digits, coefficients) {
+  const sum = digits.reduce((acc, d, i) => acc + d * coefficients[i], 0)
+  const r = sum % 11
+  const expected = r === 0 ? 0 : 11 - r
+  return expected === 10 ? null : expected
+}
+
+function validateRucEcuatoriano(ruc) {
+  if (!/^\d{13}$/.test(ruc)) return false
+  const digits = ruc.split('').map(Number)
+  const province = digits[0] * 10 + digits[1]
+  if (province < 1 || province > 24) return false
+  const thirdDigit = digits[2]
+  if (thirdDigit <= 5) {
+    return validateCedulaEcuatoriana(ruc.slice(0, 10)) && ruc.endsWith('001')
+  }
+  if (thirdDigit === 6) {
+    const expected = mod11CheckDigit(digits.slice(0, 8), [3, 2, 7, 6, 5, 4, 3, 2])
+    return expected !== null && expected === digits[8]
+  }
+  if (thirdDigit === 9) {
+    const expected = mod11CheckDigit(digits.slice(0, 9), [4, 3, 2, 7, 6, 5, 4, 3, 2])
+    return expected !== null && expected === digits[9]
+  }
+  return false
+}
+
+function validateIdentificacion(value) {
+  if (value.length === 10) return validateCedulaEcuatoriana(value)
+  if (value.length === 13) return validateRucEcuatoriano(value)
+  return false
+}
+
 function cedulaInputBorderClass(hasError, cedula) {
   if (hasError) return 'border-red-400'
-  if (cedula.length === 10 && validateCedulaEcuatoriana(cedula)) return 'border-green-400'
+  if ((cedula.length === 10 || cedula.length === 13) && validateIdentificacion(cedula)) return 'border-green-400'
   return 'border-gray-200'
 }
 
@@ -1552,8 +1585,8 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
   const validate = () => {
     const errs = {}
-    if (!cedula.trim()) errs.cedula = 'La cédula es requerida.'
-    else if (!validateCedulaEcuatoriana(cedula)) errs.cedula = 'Cédula ecuatoriana inválida.'
+    if (!cedula.trim()) errs.cedula = 'La cédula o RUC es requerida.'
+    else if (!validateIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
     if (!programId) errs.programId = 'Selecciona un programa.'
     const pct = Number(discount)
     if (discount !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
@@ -1643,20 +1676,20 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Cédula */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cédula <span className="text-red-500">*</span>
+              Cédula / RUC <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               data-testid="convert-cedula"
-              maxLength={10}
+              maxLength={13}
               value={cedula}
               onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
-              placeholder="10 dígitos"
+              placeholder="10 dígitos (cédula) o 13 (RUC)"
               className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${cedulaInputBorderClass(errors.cedula, cedula)}`}
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
-            {cedula.length === 10 && validateCedulaEcuatoriana(cedula) && (
-              <p className="text-xs text-green-600 mt-1">✓ Cédula válida</p>
+            {(cedula.length === 10 || cedula.length === 13) && validateIdentificacion(cedula) && (
+              <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? 'Cédula válida' : 'RUC válido'}</p>
             )}
           </div>
 

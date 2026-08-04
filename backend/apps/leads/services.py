@@ -10,7 +10,7 @@ from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import status
 
 from apps.authentication.models import CustomUser
-from apps.authentication.validators import validate_cedula_ecuatoriana
+from apps.authentication.validators import validate_identificacion
 from apps.programs.models import Program, Enrollment
 from apps.programs.services import apply_discount, resolve_assignable_cohort
 from apps.notifications.tasks import send_conversion_notification
@@ -66,8 +66,8 @@ def convert_lead_to_bootcamper(lead, validated_data):
             'code': 'LEAD_NOT_QUALIFIED',
         })
 
-    if not validate_cedula_ecuatoriana(validated_data['cedula']):
-        raise ValidationError({'error': 'La cédula ingresada no es válida.', 'code': 'INVALID_CEDULA'})
+    if not validate_identificacion(validated_data['cedula']):
+        raise ValidationError({'error': 'La identificación ingresada no es válida.', 'code': 'INVALID_CEDULA'})
 
     try:
         program = Program.objects.get(pk=validated_data['program_id'])
