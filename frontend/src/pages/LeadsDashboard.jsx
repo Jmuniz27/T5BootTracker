@@ -1689,7 +1689,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
             {(cedula.length === 10 || cedula.length === 13) && validateIdentificacion(cedula) && (
-              <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? 'Cédula' : 'RUC'} válido</p>
+              <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? 'Cédula válida' : 'RUC válido'}</p>
             )}
           </div>
 
