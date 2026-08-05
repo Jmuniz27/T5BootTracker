@@ -250,12 +250,23 @@ class TestPoolPermissions:
     def test_admin_cannot_assign_itself_a_bootcamper(
         self, db, admin_user, converted_bootcamper
     ):
-        """El administrador no tiene cartera propia: mira, no toma."""
+        """El administrador no tiene cartera propia: reparte, no toma.
+
+        Antes esto daba 403 porque el endpoint era sólo de Finanzas. Ahora el
+        administrador puede repartir el pool, pero tiene que indicar a qué
+        persona de Finanzas: sin `finance_owner_id` la petición no significa
+        nada y se rechaza con 400. La intención del test no cambia — sigue sin
+        poder quedarse el bootcamper.
+        """
         resp = make_client(admin_user).patch(
             ASSIGN_URL.format(id=converted_bootcamper.id)
         )
 
-        assert resp.status_code == 403
+        assert resp.status_code == 400
+        assert resp.json()['code'] == 'FINANCE_OWNER_REQUIRED'
+
+        converted_bootcamper.refresh_from_db()
+        assert converted_bootcamper.finance_owner_id is None
 
     def test_bootcamper_cannot_see_the_pool(self, db, converted_bootcamper):
         assert make_client(converted_bootcamper).get(POOL_URL).status_code == 403
