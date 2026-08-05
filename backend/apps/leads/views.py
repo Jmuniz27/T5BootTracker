@@ -167,10 +167,11 @@ class LeadListCreateView(APIView):
             my_leads_qs        = qs
             available_leads_qs = qs.none()
         elif only_mine:
-            my_leads_qs        = qs.filter(owner=request.user)
+            # Los convertidos viven en converted_leads, no en "Mis leads".
+            my_leads_qs        = qs.filter(owner=request.user).exclude(status=Lead.Status.CONVERTED)
             available_leads_qs = qs.none()
         else:
-            my_leads_qs        = qs.filter(owner=request.user)
+            my_leads_qs        = qs.filter(owner=request.user).exclude(status=Lead.Status.CONVERTED)
             available_leads_qs = qs.filter(owner__isnull=True)
 
         page_number, page_size = self._page_params(request)

@@ -319,15 +319,17 @@ function ViewHistoryModal({ lead, onClose }) {
                 )}
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                <button
-                  onClick={() => setEditTarget(interaction)}
-                  className="p-1.5 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
-                  title="Editar interacción"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
-                  </svg>
-                </button>
+                {lead.status !== 'CONVERTED' && (
+                  <button
+                    onClick={() => setEditTarget(interaction)}
+                    className="p-1.5 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
+                    title="Editar interacción"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
+                    </svg>
+                  </button>
+                )}
                 <p className="text-xs text-gray-500">{formatDate(interaction.created_at)}</p>
                 <p className="text-xs text-gray-500">{formatTime(interaction.created_at)}</p>
               </div>
@@ -693,7 +695,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
 // ─── View Lead Modal ──────────────────────────────────────────────────────────
 
-function ViewLeadModal({ lead, onClose }) {
+function ViewLeadModal({ lead, onClose, onEdit }) {
   const { data: interactions = [] } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -731,7 +733,21 @@ function ViewLeadModal({ lead, onClose }) {
           </div>
         </div>
 
-        <h2 className="text-2xl font-bold text-gray-900 mb-4 pb-4 border-b border-gray-100">{lead.name}</h2>
+        <div className="flex items-center justify-between gap-3 mb-4 pb-4 border-b border-gray-100">
+          <h2 className="text-2xl font-bold text-gray-900">{lead.name}</h2>
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              title="Editar información del lead"
+              aria-label="Editar información del lead"
+              className="shrink-0 p-2 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
+              </svg>
+            </button>
+          )}
+        </div>
 
         <div className="space-y-3 text-sm">
           <div>
@@ -1589,6 +1605,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     else if (!validateIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
     if (!email.trim()) errs.email = 'El email es requerido para enviar la invitación.'
     if (!programId) errs.programId = 'Selecciona un programa.'
+    else if (!cohortId) errs.cohortId = 'Selecciona una cohorte.'
     const pct = Number(discount)
     if (discount !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
       errs.discount = 'El descuento va de 0 a 100.'
@@ -1710,7 +1727,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {programId && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cohorte <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+                Cohorte <span className="text-red-500">*</span>
               </label>
               {loadingCohorts && <p className="text-sm text-gray-400">Cargando cohortes…</p>}
               {!loadingCohorts && assignableCohorts.length === 0 && (
@@ -1819,6 +1836,8 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit }) {
   const isConverted = lead.status === 'CONVERTED'
+  // Editable si no está convertido y es propio, disponible (sin dueño) o soy admin.
+  const canEdit = !isConverted && (isAdmin || !lead.owner || isOwned)
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -1889,7 +1908,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Registrar interacción
             </button>
           )}
-          {isOwned && !isConverted && (
+          {canEdit && (
             <button
               onClick={() => { onEdit(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1990,6 +2009,8 @@ export default function LeadsDashboard() {
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const isAdmin = currentUser?.role === 'ADMINISTRATOR'
+  const canEditLead = (l) =>
+    !!l && l.status !== 'CONVERTED' && (isAdmin || !l.owner || l.owner === currentUser?.id)
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [companyFilter, setCompanyFilter] = useState(false)
@@ -2256,7 +2277,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Todos ({statsPagination.all_leads_count ?? allLeads.length})
+                Todos ({pagination.all_leads_count ?? allLeads.length})
               </button>
               <button
                 data-testid="tab-assigned"
@@ -2267,7 +2288,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Asignados ({statsPagination.assigned_leads_count ?? assignedLeads.length})
+                Asignados ({pagination.assigned_leads_count ?? assignedLeads.length})
               </button>
               <button
                 data-testid="tab-unassigned"
@@ -2278,7 +2299,18 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Sin asignar ({statsPagination.unassigned_leads_count ?? unassignedLeads.length})
+                Sin asignar ({pagination.unassigned_leads_count ?? unassignedLeads.length})
+              </button>
+              <button
+                data-testid="tab-converted-admin"
+                onClick={() => { setActiveTab('converted'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'converted'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           ) : (
@@ -2292,7 +2324,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Mis leads ({activeMyLeads.length})
+                Mis leads ({pagination.my_leads_count ?? activeMyLeads.length})
               </button>
               <button
                 data-testid="tab-available"
@@ -2303,7 +2335,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Disponibles ({availableLeads.length})
+                Disponibles ({pagination.available_leads_count ?? availableLeads.length})
               </button>
               <button
                 data-testid="tab-converted"
@@ -2314,7 +2346,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Convertidos ({convertedLeads.length})
+                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           )}
@@ -2441,7 +2473,13 @@ export default function LeadsDashboard() {
       </div>
 
       {/* Modals */}
-      {viewLead && <ViewLeadModal lead={viewLead} onClose={() => setViewLead(null)} />}
+      {viewLead && (
+        <ViewLeadModal
+          lead={viewLead}
+          onClose={() => setViewLead(null)}
+          onEdit={canEditLead(viewLead) ? () => { setEditLead(viewLead); setViewLead(null) } : undefined}
+        />
+      )}
 
       {historyLead && (
         <ViewHistoryModal lead={historyLead} onClose={() => setHistoryLead(null)} />
