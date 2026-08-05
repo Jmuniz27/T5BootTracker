@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getFinancePortfolio } from '../../api/finance.api'
 import UnassignedPoolModal from './UnassignedPoolModal'
+import BootcamperAssignmentToggle from './BootcamperAssignmentToggle'
+import { getBootcamperAssignmentSetting } from '../../api/payments.api'
 import Toast from '../Toast'
 
 /**
@@ -91,6 +93,11 @@ export default function FinancePortfolios() {
     queryFn: getFinancePortfolio,
   })
 
+  const { data: setting, isLoading: loadingSetting } = useQuery({
+    queryKey: ['bootcamper-assignment-setting'],
+    queryFn: getBootcamperAssignmentSetting,
+  })
+
   const [repartiendo, setRepartiendo] = useState(false)
   const [toast, setToast] = useState(null)
 
@@ -99,6 +106,12 @@ export default function FinancePortfolios() {
 
   return (
     <>
+      <BootcamperAssignmentToggle
+        setting={setting}
+        isLoading={loadingSetting}
+        onResult={(message, type = 'success') => setToast({ type, message })}
+      />
+
       {isError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
           No pudimos cargar las carteras. Intenta de nuevo.
