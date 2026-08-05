@@ -3,7 +3,7 @@ import logging
 from decimal import Decimal
 
 from django.db import transaction, IntegrityError
-from django.db.models import Q
+from django.db.models import F, Func, Q, Value
 from django.utils.timezone import now
 from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import status
@@ -232,6 +232,53 @@ def find_duplicate_lead(phone, email):
     if email:
         query |= Q(email=email)
     return Lead.objects.filter(query).first()
+
+
+# Los teléfonos llegan al CRM en formato local ecuatoriano (0991000001, como los
+# siembra seed_dev) y desde WhatsApp en E.164 sin '+' (593991000001). Nada los
+# normaliza al guardarlos, así que comparar exacto nunca cruza los dos formatos.
+# Lo único que ambos comparten es el número de abonado: los últimos 9 dígitos.
+SUBSCRIBER_DIGITS = 9
+
+
+def normalize_phone(raw):
+    """Return only the digits in ``raw``; empty string when there are none."""
+    if not raw:
+        return ''
+    return ''.join(char for char in str(raw) if char.isdigit())
+
+
+def find_lead_by_phone(raw):
+    """Return the Lead whose phone matches ``raw`` by subscriber number, or None.
+
+    Compares the last ``SUBSCRIBER_DIGITS`` digits of both sides, so a lead saved
+    as ``0991000001`` is reachable from WhatsApp's ``593991000001``. The stored
+    column is free text, so it is stripped to digits inside the query rather than
+    matched raw: a lead saved as ``099-100-0001`` still has to match.
+    """
+    normalized = normalize_phone(raw)
+    if len(normalized) < SUBSCRIBER_DIGITS:
+        return None
+
+    subscriber = normalized[-SUBSCRIBER_DIGITS:]
+    matches = list(
+        Lead.objects
+        .annotate(phone_digits=Func(
+            F('phone'), Value('[^0-9]'), Value(''), Value('g'),
+            function='regexp_replace',
+        ))
+        .filter(phone_digits__endswith=subscriber)
+        .order_by('-created_at')
+    )
+    if not matches:
+        return None
+
+    # Dos leads pueden compartir el abonado si uno se guardó con código de país y
+    # el otro sin él: gana el que coincide entero, no el más reciente.
+    for lead in matches:
+        if normalize_phone(lead.phone) == normalized:
+            return lead
+    return matches[0]
 
 
 @transaction.atomic
