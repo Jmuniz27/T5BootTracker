@@ -109,3 +109,31 @@ describe('LeadsDashboard — control de auto-asignación (CR-004)', () => {
     expect(assignLead.mock.calls[0][0]).toBe('lead-1');
   });
 });
+
+describe('LeadsDashboard — el admin no se asigna leads', () => {
+  it('no ofrece asignarse el lead al crearlo', async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({ user: { id: 'a1', role: 'ADMINISTRATOR' } });
+    getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
+    getLeads.mockResolvedValue({ my_leads: [], available_leads: [], pagination: {} });
+    renderDashboard();
+
+    await user.click(await screen.findByRole('button', { name: /nuevo lead/i }));
+
+    // El Administrador no tiene cartera de leads: reparte, no se queda ninguno.
+    expect(await screen.findByTestId('create-lead-autoassign')).toBeDisabled();
+  });
+
+  it('explica el motivo correcto para el admin', async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({ user: { id: 'a1', role: 'ADMINISTRATOR' } });
+    getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
+    getLeads.mockResolvedValue({ my_leads: [], available_leads: [], pagination: {} });
+    renderDashboard();
+
+    await user.click(await screen.findByRole('button', { name: /nuevo lead/i }));
+
+    // Decirle "la asignación la realiza el Administrador" no le aporta nada.
+    expect(await screen.findByText(/no tiene cartera de leads/i)).toBeInTheDocument();
+  });
+});

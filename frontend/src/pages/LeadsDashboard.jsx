@@ -904,7 +904,15 @@ function leadFieldClass(errors, key) {
   }`
 }
 
-function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true }) {
+function CreateLeadModal({
+  onClose,
+  onSubmit,
+  isLoading,
+  canSelfAssign = true,
+  // El motivo cambia según el caso: al Administrador no le sirve leer que "la
+  // asignación la realiza el Administrador".
+  selfAssignReason = 'La asignación la realiza el Administrador.',
+}) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
@@ -1013,7 +1021,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
             </label>
             {!canSelfAssign && (
               <p className="text-xs text-gray-500 mt-1 ml-7">
-                La asignación la realiza el Administrador.
+                {selfAssignReason}
               </p>
             )}
           </div>
@@ -2502,7 +2510,12 @@ export default function LeadsDashboard() {
           onClose={() => setShowCreate(false)}
           onSubmit={(data, autoAssign) => { autoAssignRef.current = autoAssign; createMutation.mutate(data) }}
           isLoading={createMutation.isPending}
-          canSelfAssign={selfAssignEnabled}
+          canSelfAssign={selfAssignEnabled && !isAdmin}
+          selfAssignReason={
+            isAdmin
+              ? 'El Administrador no tiene cartera de leads: asigna a un vendedor desde la lista.'
+              : 'La asignación la realiza el Administrador.'
+          }
         />
       )}
 
