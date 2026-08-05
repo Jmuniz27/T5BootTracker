@@ -695,7 +695,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
 // ─── View Lead Modal ──────────────────────────────────────────────────────────
 
-function ViewLeadModal({ lead, onClose, onEdit }) {
+function ViewLeadModal({ lead, onClose }) {
   const { data: interactions = [] } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -733,21 +733,7 @@ function ViewLeadModal({ lead, onClose, onEdit }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 mb-4 pb-4 border-b border-gray-100">
-          <h2 className="text-2xl font-bold text-gray-900">{lead.name}</h2>
-          {onEdit && (
-            <button
-              onClick={onEdit}
-              title="Editar información del lead"
-              aria-label="Editar información del lead"
-              className="shrink-0 p-2 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4 pb-4 border-b border-gray-100">{lead.name}</h2>
 
         <div className="space-y-3 text-sm">
           <div>
@@ -2058,8 +2044,6 @@ export default function LeadsDashboard() {
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const isAdmin = currentUser?.role === 'ADMINISTRATOR'
-  const canEditLead = (l) =>
-    !!l && l.status !== 'CONVERTED' && (isAdmin || !l.owner || l.owner === currentUser?.id)
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
@@ -2525,13 +2509,7 @@ export default function LeadsDashboard() {
       </div>
 
       {/* Modals */}
-      {viewLead && (
-        <ViewLeadModal
-          lead={viewLead}
-          onClose={() => setViewLead(null)}
-          onEdit={canEditLead(viewLead) ? () => { setEditLead(viewLead); setViewLead(null) } : undefined}
-        />
-      )}
+      {viewLead && <ViewLeadModal lead={viewLead} onClose={() => setViewLead(null)} />}
 
       {historyLead && (
         <ViewHistoryModal lead={historyLead} onClose={() => setHistoryLead(null)} />
