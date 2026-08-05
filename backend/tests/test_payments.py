@@ -18,6 +18,7 @@ APPROVE_URL = "/api/payments/{id}/approve/"
 REJECT_URL = "/api/payments/{id}/reject/"
 OCR_STATUS_URL = "/api/payments/my-payments/{id}/ocr-status/"
 CONFIRM_URL = "/api/payments/my-payments/{id}/confirm/"
+MY_PAYMENT_URL = "/api/payments/my-payments/{id}/"
 NOTIFY_COORD_URL = "/api/payments/notify-coordinator/{bootcamper_id}/"
 
 
@@ -542,6 +543,126 @@ class TestPaymentConfirm:
             {},
             format="json",
         )
+        assert resp.status_code == 403
+
+
+class TestMyPaymentResubmit:
+    def test_resubmit_rejected_transitions_to_pending(
+        self, db, converted_bootcamper, rejected_payment
+    ):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {"ocr_amount": "200.00"},
+            format="json",
+        )
+        assert resp.status_code == 200
+        rejected_payment.refresh_from_db()
+        assert rejected_payment.status == Payment.Status.PENDING
+        assert rejected_payment.ocr_amount == Decimal("200.00")
+
+    def test_resubmit_clears_rejection_reason_and_review(
+        self, db, converted_bootcamper, rejected_payment
+    ):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 200
+        rejected_payment.refresh_from_db()
+        assert rejected_payment.rejection_reason == ""
+        assert rejected_payment.validated_by is None
+        assert rejected_payment.validated_at is None
+
+    def test_resubmit_empty_payment_date_is_normalized_to_null(
+        self, db, converted_bootcamper, rejected_payment
+    ):
+        """The frontend sends '' for an empty date input; DateField accepts
+        null but not '' — this must not blow up with a 400."""
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {"ocr_payment_date": ""},
+            format="json",
+        )
+        assert resp.status_code == 200
+        rejected_payment.refresh_from_db()
+        assert rejected_payment.ocr_payment_date is None
+
+    def test_resubmit_non_rejected_payment_fails(
+        self, db, converted_bootcamper, pending_payment
+    ):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=pending_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_REJECTED"
+
+    def test_resubmit_other_bootcampers_payment_forbidden(
+        self, db, bootcamper_user, rejected_payment
+    ):
+        """A different bootcamper must get 404, not 403 (no information leakage)."""
+        client = make_client(bootcamper_user)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 404
+
+    def test_resubmit_salesperson_forbidden(self, db, salesperson_user, rejected_payment):
+        client = make_client(salesperson_user)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 403
+
+
+class TestMyPaymentDelete:
+    def test_delete_draft_payment_succeeds(self, db, converted_bootcamper, draft_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.delete(MY_PAYMENT_URL.format(id=draft_payment.id))
+        assert resp.status_code == 204
+        assert not Payment.objects.filter(pk=draft_payment.id).exists()
+
+    def test_delete_rejected_payment_succeeds(self, db, converted_bootcamper, rejected_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.delete(MY_PAYMENT_URL.format(id=rejected_payment.id))
+        assert resp.status_code == 204
+        assert not Payment.objects.filter(pk=rejected_payment.id).exists()
+
+    def test_delete_pending_payment_fails(self, db, converted_bootcamper, pending_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.delete(MY_PAYMENT_URL.format(id=pending_payment.id))
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_DELETABLE"
+        assert Payment.objects.filter(pk=pending_payment.id).exists()
+
+    def test_delete_approved_payment_fails(self, db, converted_bootcamper, approved_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.delete(MY_PAYMENT_URL.format(id=approved_payment.id))
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_DELETABLE"
+        assert Payment.objects.filter(pk=approved_payment.id).exists()
+
+    def test_delete_other_bootcampers_payment_forbidden(
+        self, db, bootcamper_user, rejected_payment
+    ):
+        client = make_client(bootcamper_user)
+        resp = client.delete(MY_PAYMENT_URL.format(id=rejected_payment.id))
+        assert resp.status_code == 404
+        assert Payment.objects.filter(pk=rejected_payment.id).exists()
+
+    def test_delete_salesperson_forbidden(self, db, salesperson_user, draft_payment):
+        client = make_client(salesperson_user)
+        resp = client.delete(MY_PAYMENT_URL.format(id=draft_payment.id))
         assert resp.status_code == 403
 
 
