@@ -2,8 +2,7 @@ import { test, expect } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { titulo, dado, y, cuando, entonces } from './support/gwt.js'
-import { STORAGE_STATE, PROGRAMA_PRINCIPAL } from './support/users.js'
-import { elegirOpcion } from './support/selectors.js'
+import { STORAGE_STATE } from './support/users.js'
 import { clienteApi } from './support/api.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -36,7 +35,7 @@ test.describe('HST-016 / HST-021 · Registro y validación de comprobante de pag
         await expect(page.getByRole('heading', { name: /Subir comprobante/ })).toBeVisible()
 
         await page.getByTestId('upload-file-input').setInputFiles(COMPROBANTE)
-        await elegirOpcion(page, 'upload-program', PROGRAMA_PRINCIPAL)
+        // Ya no se elige programa: el backend lo deduce de la inscripción activa.
         await page.getByTestId('upload-submit').click()
       })
 

@@ -132,13 +132,15 @@ describe('AdminFinanceDetailPage', () => {
   });
 });
 
-describe('AdminFinanceDetailPage — pagos finalizados y cohorte', () => {
-  const EN_COBRO = {
+describe('AdminFinanceDetailPage — cohortes y programa', () => {
+  const EN_CURSO = {
     bootcamper_id: 'bc-10',
-    bootcamper_name: 'Ana Debe',
-    email: 'debe@test.com',
+    bootcamper_name: 'Ana EnCurso',
+    email: 'encurso@test.com',
+    program_id: 'prog-1',
     program_name: 'Python Full Stack',
     cohort_number: 2,
+    cohort_status: 'IN_PROGRESS',
     pending_payments: 1,
     expected_amount: '1200.00',
     total_paid: '400.00',
@@ -147,18 +149,25 @@ describe('AdminFinanceDetailPage — pagos finalizados y cohorte', () => {
     is_fully_paid: false,
   };
 
-  const FINALIZADO = {
+  const FINALIZADA = {
+    ...EN_CURSO,
     bootcamper_id: 'bc-11',
-    bootcamper_name: 'Luis Pago',
-    email: 'pago@test.com',
+    bootcamper_name: 'Luis Cerrada',
+    email: 'cerrada@test.com',
+    program_id: 'prog-2',
     program_name: 'Data Science',
     cohort_number: 5,
-    pending_payments: 0,
-    expected_amount: '1200.00',
-    total_paid: '1200.00',
-    deficit: '0.00',
-    critical_count: 0,
+    cohort_status: 'FINISHED',
     is_fully_paid: true,
+  };
+
+  const SIN_COHORTE = {
+    ...EN_CURSO,
+    bootcamper_id: 'bc-12',
+    bootcamper_name: 'Pedro SinCohorte',
+    email: 'sincohorte@test.com',
+    cohort_number: null,
+    cohort_status: null,
   };
 
   function renderConCartera(bootcampers) {
@@ -175,53 +184,81 @@ describe('AdminFinanceDetailPage — pagos finalizados y cohorte', () => {
 
   beforeEach(() => vi.clearAllMocks());
 
-  it('arranca en En cobro y esconde a quien ya pagó', async () => {
-    renderConCartera([EN_COBRO, FINALIZADO]);
+  it('arranca en cohortes en curso y esconde las finalizadas', async () => {
+    renderConCartera([EN_CURSO, FINALIZADA]);
 
-    expect(await screen.findByText('Ana Debe')).toBeInTheDocument();
-    expect(screen.queryByText('Luis Pago')).not.toBeInTheDocument();
+    expect(await screen.findByText('Ana EnCurso')).toBeInTheDocument();
+    expect(screen.queryByText('Luis Cerrada')).not.toBeInTheDocument();
   });
 
-  it('muestra el conteo de cada pestaña', async () => {
-    renderConCartera([EN_COBRO, FINALIZADO]);
+  it('muestra el conteo de cada lado del slicer', async () => {
+    renderConCartera([EN_CURSO, FINALIZADA]);
 
-    expect(await screen.findByRole('tab', { name: /en cobro \(1\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /pagos finalizados \(1\)/i })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: /en curso \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /finalizadas \(1\)/i })).toBeInTheDocument();
   });
 
-  it('al cambiar de pestaña aparece quien ya pagó', async () => {
+  it('al cambiar de lado aparecen las cohortes finalizadas', async () => {
     const user = userEvent.setup();
-    renderConCartera([EN_COBRO, FINALIZADO]);
-    await screen.findByText('Ana Debe');
+    renderConCartera([EN_CURSO, FINALIZADA]);
+    await screen.findByText('Ana EnCurso');
 
-    await user.click(screen.getByRole('tab', { name: /pagos finalizados/i }));
+    await user.click(screen.getByRole('tab', { name: /finalizadas/i }));
 
-    expect(screen.getByText('Luis Pago')).toBeInTheDocument();
-    expect(screen.queryByText('Ana Debe')).not.toBeInTheDocument();
+    expect(screen.getByText('Luis Cerrada')).toBeInTheDocument();
+    expect(screen.queryByText('Ana EnCurso')).not.toBeInTheDocument();
+  });
+
+  it('sin cohorte cuenta como en curso', async () => {
+    // Se le sigue cobrando igual: dejarlo fuera de las dos listas lo esconde.
+    renderConCartera([SIN_COHORTE]);
+
+    expect(await screen.findByText('Pedro SinCohorte')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /en curso \(1\)/i })).toBeInTheDocument();
   });
 
   it('la tarjeta dice programa y cohorte', async () => {
-    renderConCartera([EN_COBRO]);
-    await screen.findByText('Ana Debe');
+    renderConCartera([EN_CURSO]);
+    await screen.findByText('Ana EnCurso');
 
-    // El cobro se sigue por edición, no sólo por programa.
     expect(screen.getByText(/Python Full Stack/)).toBeInTheDocument();
     expect(screen.getByText(/Cohorte 2/)).toBeInTheDocument();
   });
 
-  it('avisa cuando nadie de la cartera completó el pago', async () => {
-    const user = userEvent.setup();
-    renderConCartera([EN_COBRO]);
-    await screen.findByText('Ana Debe');
+  it('el filtro por programa aparece con más de un programa', async () => {
+    renderConCartera([EN_CURSO, FINALIZADA]);
+    await screen.findByText('Ana EnCurso');
 
-    await user.click(screen.getByRole('tab', { name: /pagos finalizados/i }));
-
-    expect(screen.getByText(/nadie de su cartera completó el pago/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /filtrar por programa/i })).toBeInTheDocument();
   });
 
-  it('avisa cuando toda la cartera ya pagó', async () => {
-    renderConCartera([FINALIZADO]);
+  it('no ofrece filtro cuando sólo hay un programa', async () => {
+    renderConCartera([EN_CURSO]);
+    await screen.findByText('Ana EnCurso');
 
-    expect(await screen.findByText(/toda su cartera ya completó el pago/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /filtrar por programa/i })).not.toBeInTheDocument();
+  });
+
+  it('filtrar por programa acota los conteos del slicer', async () => {
+    const user = userEvent.setup();
+    renderConCartera([EN_CURSO, FINALIZADA]);
+    await screen.findByText('Ana EnCurso');
+
+    await user.click(screen.getByRole('button', { name: /filtrar por programa/i }));
+    await user.click(screen.getByText('Data Science'));
+
+    // Sólo queda el de Data Science, que está en cohorte finalizada.
+    expect(screen.getByRole('tab', { name: /en curso \(0\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /finalizadas \(1\)/i })).toBeInTheDocument();
+  });
+
+  it('avisa cuando no hay cohortes finalizadas', async () => {
+    const user = userEvent.setup();
+    renderConCartera([EN_CURSO]);
+    await screen.findByText('Ana EnCurso');
+
+    await user.click(screen.getByRole('tab', { name: /finalizadas/i }));
+
+    expect(screen.getByText(/no tiene bootcampers en cohortes finalizadas/i)).toBeInTheDocument();
   });
 });

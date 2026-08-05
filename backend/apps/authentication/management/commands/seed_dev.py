@@ -234,6 +234,22 @@ class Command(BaseCommand):
         conv_boot.set_password('boot1234')
         conv_boot.save()
 
+        # La conversión de un lead siempre crea la inscripción, así que un
+        # bootcamper sembrado sin ella no representa ningún estado real. Y sin
+        # inscripción activa no se puede subir un comprobante: el programa del
+        # pago se deduce de ahí.
+        from apps.programs.models import Enrollment
+        for persona, precio in ((conv_boot, Decimal('1000.00')), (bootcamper, Decimal('1000.00'))):
+            Enrollment.objects.get_or_create(
+                bootcamper=persona,
+                bootcamp=program1,
+                defaults={
+                    'start_date':   program1.start_date,
+                    'agreed_price': precio,
+                    'status':       Enrollment.Status.ACTIVE,
+                },
+            )
+
         from apps.payments.models import Payment
         if not Payment.objects.filter(bootcamper=conv_boot, program=program1).exists():
             Payment.objects.create(

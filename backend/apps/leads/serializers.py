@@ -30,12 +30,31 @@ class InteractionSerializer(serializers.ModelSerializer):
         return obj.salesperson.get_full_name()
 
 
+class BootcamperSummarySerializer(serializers.ModelSerializer):
+    """Datos de sólo lectura del bootcamper resultante de una conversión (#259)."""
+    verified_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = (
+            'id', 'first_name', 'last_name', 'email', 'phone', 'cedula',
+            'verification_status', 'verified_at', 'verified_by_name',
+            'onboarding_completed_at',
+        )
+
+    def get_verified_by_name(self, obj):
+        return obj.verified_by.get_full_name() if obj.verified_by else None
+
+
 class LeadListSerializer(serializers.ModelSerializer):
     interaction_count = serializers.IntegerField(read_only=True)
     last_outcome = serializers.CharField(read_only=True, allow_null=True, default=None)
     last_interaction_at = serializers.DateTimeField(read_only=True, allow_null=True, default=None)
     days_assigned = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
+    bootcamper_verification_status = serializers.CharField(
+        source='bootcamper.verification_status', read_only=True, allow_null=True, default=None,
+    )
 
     class Meta:
         model = Lead
@@ -44,6 +63,7 @@ class LeadListSerializer(serializers.ModelSerializer):
             'is_company', 'program_interest', 'interaction_count',
             'last_outcome', 'last_interaction_at', 'days_assigned',
             'owner', 'owner_name', 'created_at',
+            'bootcamper', 'bootcamper_verification_status',
         )
 
     def get_days_assigned(self, obj):
@@ -64,6 +84,10 @@ class LeadDetailSerializer(serializers.ModelSerializer):
     interaction_count = serializers.IntegerField(read_only=True)
     days_assigned = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
+    bootcamper_verification_status = serializers.CharField(
+        source='bootcamper.verification_status', read_only=True, allow_null=True, default=None,
+    )
+    bootcamper_profile = BootcamperSummarySerializer(source='bootcamper', read_only=True)
 
     class Meta:
         model = Lead
@@ -72,6 +96,7 @@ class LeadDetailSerializer(serializers.ModelSerializer):
             'is_company', 'program_interest', 'program', 'interaction_count',
             'owner', 'owner_name', 'assigned_at', 'released_at', 'days_assigned',
             'last_contact', 'created_at', 'updated_at',
+            'bootcamper', 'bootcamper_verification_status', 'bootcamper_profile',
         )
 
     def get_days_assigned(self, obj):
