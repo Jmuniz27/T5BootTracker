@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMyHistory, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
+import { getMyHistory, getMyPrograms, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
 import CustomSelect from '../components/CustomSelect'
 import { useModalA11y } from '../hooks/use-modal-a11y'
 import Skeleton from '../components/ui/Skeleton'
 import Spinner from '../components/ui/Spinner'
+import { flattenUploadError } from '../lib/payments'
 
 const STATUS_LABELS = {
   DRAFT: 'En revisión',
@@ -229,26 +230,32 @@ function UploadModal({ programs, onClose, onSuccess }) {
           {/* Program */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Programa</label>
-            <CustomSelect
-              testId="upload-program"
-              value={programId}
-              onChange={setProgramId}
-              placeholder="Selecciona un programa"
-              options={programs.map((p) => ({ value: p.id, label: p.name }))}
-            />
+            {programs.length > 0 ? (
+              <CustomSelect
+                testId="upload-program"
+                value={programId}
+                onChange={setProgramId}
+                placeholder="Selecciona un programa"
+                options={programs.map((p) => ({ value: p.id, label: p.name }))}
+              />
+            ) : (
+              <p data-testid="upload-no-programs" className="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-2">
+                No tienes ningún programa activo. Contacta a tu asesor si crees que esto es un error.
+              </p>
+            )}
             {errors.program && <p className="text-red-500 text-xs mt-1">{errors.program}</p>}
           </div>
 
           {mutation.isError && (
             <p className="text-red-500 text-sm">
-              {mutation.error?.response?.data?.error || 'Error al subir el comprobante.'}
+              {flattenUploadError(mutation.error)}
             </p>
           )}
 
           <button
             type="submit"
             data-testid="upload-submit"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || programs.length === 0}
             className="w-full bg-[#213A8E] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#1a2f72] disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
           >
             {mutation.isPending && <Spinner />}
@@ -669,16 +676,26 @@ export default function PaymentsPage() {
     queryFn: getMyHistory,
   })
 
+  // Bootcampers get 403 on /programs/, so /my-programs/ (their active Enrollments)
+  // is the primary source. /programs/ stays as a fallback for other roles that
+  // may render this page, and payment history as a last-resort safety net.
+  const { data: myPrograms = [] } = useQuery({
+    queryKey: ['my-programs'],
+    queryFn: getMyPrograms,
+    retry: false,
+  })
+
   const { data: apiPrograms = [] } = useQuery({
     queryKey: ['programs'],
     queryFn: getPrograms,
     retry: false,
   })
 
-  // Bootcampers get 403 on /programs/ — fall back to unique programs from their own history
-  const programs = apiPrograms.length > 0
-    ? apiPrograms
-    : [...new Map(payments.filter((p) => p.program).map((p) => [p.program, { id: p.program, name: p.program_name }])).values()]
+  let programs = myPrograms
+  if (programs.length === 0) programs = apiPrograms
+  if (programs.length === 0) {
+    programs = [...new Map(payments.filter((p) => p.program).map((p) => [p.program, { id: p.program, name: p.program_name }])).values()]
+  }
 
   useEffect(() => {
     const handler = (e) => {

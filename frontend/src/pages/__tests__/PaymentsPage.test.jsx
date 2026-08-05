@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PaymentsPage from '../PaymentsPage';
 import {
   getMyHistory,
+  getMyPrograms,
   getPrograms,
   uploadPayment,
   getOCRStatus,
@@ -14,6 +15,7 @@ import {
 
 vi.mock('../../api/payments.api', () => ({
   getMyHistory: vi.fn(),
+  getMyPrograms: vi.fn(),
   getPrograms: vi.fn(),
   uploadPayment: vi.fn(),
   getOCRStatus: vi.fn(),
@@ -86,9 +88,10 @@ function renderPage() {
 describe('PaymentsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Los bootcampers reciben 403 en /programs/; la página cae a los programas
-    // que aparecen en su propio historial.
-    getPrograms.mockResolvedValue([PROGRAMA]);
+    // /my-programs/ (Enrollment activa) es la fuente primaria del selector.
+    getMyPrograms.mockResolvedValue([PROGRAMA]);
+    // Los bootcampers reciben 403 en /programs/; se deja como red de seguridad.
+    getPrograms.mockResolvedValue([]);
     getMyHistory.mockResolvedValue([]);
   });
 
@@ -242,6 +245,55 @@ describe('PaymentsPage', () => {
       await user.click(within(modal).getByRole('button', { name: 'Subir comprobante' }));
 
       expect(await screen.findByText('Comprobante duplicado.')).toBeInTheDocument();
+    });
+
+    it('muestra el detalle de un error de validación DRF en vez del mensaje genérico', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([]);
+      uploadPayment.mockRejectedValue({
+        response: { data: { receipt_file: ['El archivo no puede superar 10 MB.'] } },
+      });
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Upload payment' }));
+      const modal = screen.getByText('📄 Subir comprobante').closest('div.bg-white');
+      const input = modal.querySelector('input[type="file"]');
+      await user.upload(input, new File(['x'], 'c.png', { type: 'image/png' }));
+      await user.click(screen.getByText('Selecciona un programa'));
+      await user.click(screen.getByText(PROGRAMA.name));
+      await user.click(within(modal).getByRole('button', { name: 'Subir comprobante' }));
+
+      expect(await screen.findByText('El archivo no puede superar 10 MB.')).toBeInTheDocument();
+      expect(screen.queryByText('Error al subir el comprobante.')).not.toBeInTheDocument();
+    });
+
+    it('un bootcamper recién convertido sin pagos previos ve su programa inscrito (issue #293)', async () => {
+      const user = userEvent.setup();
+      // Sin pagos previos: el fallback por historial daría lista vacía.
+      // /my-programs/ debe alimentar el selector igual.
+      getMyHistory.mockResolvedValue([]);
+      getMyPrograms.mockResolvedValue([PROGRAMA]);
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Upload payment' }));
+
+      expect(screen.getByText('Selecciona un programa')).toBeInTheDocument();
+      await user.click(screen.getByText('Selecciona un programa'));
+      expect(screen.getByText(PROGRAMA.name)).toBeInTheDocument();
+    });
+
+    it('muestra un estado vacío explícito si no tiene ninguna inscripción', async () => {
+      getMyHistory.mockResolvedValue([]);
+      getMyPrograms.mockResolvedValue([]);
+      getPrograms.mockResolvedValue([]);
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Upload payment' }));
+
+      expect(await screen.findByTestId('upload-no-programs')).toBeInTheDocument();
+      expect(screen.queryByText('Selecciona un programa')).not.toBeInTheDocument();
+      expect(within(screen.getByText('📄 Subir comprobante').closest('div.bg-white')).getByRole('button', { name: 'Subir comprobante' })).toBeDisabled();
     });
   });
 

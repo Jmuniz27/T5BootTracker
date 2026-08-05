@@ -3,6 +3,9 @@ import client from './client'
 export const getMyHistory = () =>
   client.get('/payments/my-history/').then((r) => r.data)
 
+export const getMyPrograms = () =>
+  client.get('/payments/my-programs/').then((r) => r.data)
+
 export const getMyStatus = (programId) =>
   client.get('/payments/my-status/', { params: { program_id: programId } }).then((r) => r.data)
 

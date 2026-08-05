@@ -113,6 +113,18 @@ def program(db):
 
 
 @pytest.fixture
+def active_enrollment(db, converted_bootcamper, program):
+    from apps.programs.models import Enrollment
+    return Enrollment.objects.create(
+        bootcamper=converted_bootcamper,
+        bootcamp=program,
+        status=Enrollment.Status.ACTIVE,
+        start_date=date.today() - timedelta(days=30),
+        agreed_price=program.total_cost,
+    )
+
+
+@pytest.fixture
 def coordinator_config(db, program):
     from apps.programs.models import CoordinatorEmailConfig
     CoordinatorEmailConfig.objects.create(

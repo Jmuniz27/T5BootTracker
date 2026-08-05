@@ -93,9 +93,10 @@ class PaymentUploadView(APIView):
         tags=['Pagos — Bootcamper'],
     )
     def post(self, request):
+        import os
         from apps.programs.models import Program
         from .tasks import process_payment_ocr
-        from .serializers import ALLOWED_MIME_TYPES
+        from .serializers import ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
 
         serializer = PaymentUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -109,8 +110,12 @@ class PaymentUploadView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        file      = data['receipt_file']
-        file_type = ALLOWED_MIME_TYPES.get(file.content_type, 'image')
+        file = data['receipt_file']
+        if file.content_type in ALLOWED_MIME_TYPES:
+            file_type = ALLOWED_MIME_TYPES[file.content_type]
+        else:
+            extension = os.path.splitext(file.name or '')[1].lower()
+            file_type = ALLOWED_EXTENSIONS.get(extension, 'image')
 
         payment = Payment.objects.create(
             bootcamper=request.user,
@@ -123,6 +128,39 @@ class PaymentUploadView(APIView):
         process_payment_ocr.delay(str(payment.id))
 
         return Response(PaymentListSerializer(payment).data, status=status.HTTP_201_CREATED)
+
+
+class PaymentMyProgramsView(APIView):
+    """GET /api/payments/my-programs/ — programas en los que el bootcamper tiene Enrollment activa.
+
+    El bootcamper recibe 403 en /programs/, así que el selector de subida no
+    puede usar ese endpoint. Antes se armaba desde el historial de pagos, pero
+    un bootcamper recién convertido no tiene ninguno todavía y el selector
+    quedaba vacío. Enrollment es la fuente correcta: existe desde la conversión.
+    """
+    permission_classes = [IsBootcamper]
+
+    @extend_schema(
+        responses={200: inline_serializer('MyProgram', fields={
+            'id':   drf_serializers.UUIDField(),
+            'name': drf_serializers.CharField(),
+        }, many=True)},
+        summary='Mis programas inscritos',
+        description='Programas con Enrollment activa del bootcamper autenticado, para el selector de subida de comprobantes.',
+        tags=['Pagos — Bootcamper'],
+    )
+    def get(self, request):
+        from apps.programs.models import Enrollment, Program
+
+        programs = (
+            Program.objects
+            .filter(
+                enrollments__bootcamper=request.user,
+                enrollments__status=Enrollment.Status.ACTIVE,
+            )
+            .distinct()
+        )
+        return Response([{'id': str(p.id), 'name': p.name} for p in programs])
 
 
 class PaymentMyStatusView(APIView):
