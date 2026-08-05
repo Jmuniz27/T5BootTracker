@@ -1,8 +1,8 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import AnalyticsFilters, { EMPTY_ANALYTICS_FILTERS } from '../components/analytics/AnalyticsFilters'
 import AnalyticsKpiCards from '../components/analytics/AnalyticsKpiCards'
 import AnalyticsCharts from '../components/analytics/AnalyticsCharts'
-import LeadManagementMetrics from '../components/analytics/LeadManagementMetrics'
 import SalespeopleActivity from '../components/admin/SalespeopleActivity'
 
 /**
@@ -20,6 +20,10 @@ import SalespeopleActivity from '../components/admin/SalespeopleActivity'
  *
  * En la vista general, KPI cards y gráficos comparten `useAnalyticsKpis(filters)`,
  * así que la misma queryKey deduplica la petición: un solo GET.
+ *
+ * La pestaña activa vive en la URL (`?tab=`) y no en estado local: al entrar al
+ * detalle de un vendedor y volver, hay que aterrizar en la pestaña de la que se
+ * salió. De paso, la vista queda enlazable y sobrevive a un refresco.
  */
 
 const TABS = [
@@ -27,9 +31,19 @@ const TABS = [
   { id: 'vendedor', label: 'Vendedor' },
 ]
 
+const DEFAULT_TAB = 'general'
+
 export default function AnalyticsPage() {
   const [filters, setFilters] = useState(EMPTY_ANALYTICS_FILTERS)
-  const [activa, setActiva] = useState('general')
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Un ?tab= inventado o ausente cae en la pestaña por defecto en vez de dejar
+  // la pantalla en blanco.
+  const requested = searchParams.get('tab')
+  const activa = TABS.some((tab) => tab.id === requested) ? requested : DEFAULT_TAB
+
+  // replace: cambiar de pestaña no debería llenar el historial del navegador.
+  const setActiva = (id) => setSearchParams(id === DEFAULT_TAB ? {} : { tab: id }, { replace: true })
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -66,7 +80,6 @@ export default function AnalyticsPage() {
             <AnalyticsFilters filters={filters} onChange={setFilters} />
             <AnalyticsKpiCards filters={filters} />
             <AnalyticsCharts filters={filters} />
-            <LeadManagementMetrics filters={filters} />
           </>
         ) : (
           <SalespeopleActivity />
