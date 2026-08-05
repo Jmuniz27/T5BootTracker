@@ -369,3 +369,39 @@ class PaymentProgressService:
             'program_start':           str(program.start_date),
             'program_end':             str(program.end_date),
         }
+
+
+def get_bootcamper_self_assignment_enabled():
+    """Si Finanzas puede tomar bootcampers del pool por su cuenta.
+
+    Espejo de `leads.services.get_self_assignment_enabled`, aplicado al pool de
+    bootcampers.
+    """
+    from .models import BootcamperAssignmentSetting
+
+    return BootcamperAssignmentSetting.get_solo().self_assign_enabled
+
+
+def set_bootcamper_self_assignment_enabled(enabled, user):
+    """Cambia el control global, dejando registrado quién y cuándo.
+
+    `select_for_update` sobre el singleton: dos administradores cambiándolo a la
+    vez dejarían el último valor sin saber cuál quedó, y acá interesa que el
+    registro de quién lo cambió sea el del valor que efectivamente quedó.
+    """
+    from django.db import transaction
+
+    from .models import BootcamperAssignmentSetting
+
+    with transaction.atomic():
+        setting = BootcamperAssignmentSetting.objects.select_for_update().get_or_create(pk=1)[0]
+        setting.self_assign_enabled = enabled
+        setting.updated_by = user
+        setting.save(update_fields=['self_assign_enabled', 'updated_by', 'updated_at'])
+
+    logger.info(
+        'Bootcamper self-assignment %s by %s',
+        'enabled' if enabled else 'disabled',
+        user.email,
+    )
+    return setting

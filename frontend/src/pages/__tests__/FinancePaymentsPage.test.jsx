@@ -7,6 +7,7 @@ import FinancePaymentsPage from '../FinancePaymentsPage';
 import {
   assignBootcamper,
   getBootcamperPool,
+  getBootcamperAssignmentSetting,
   releaseBootcamper,
 } from '../../api/payments.api';
 
@@ -22,6 +23,7 @@ vi.mock('../../api/payments.api', () => ({
   assignBootcamper: vi.fn(),
   releaseBootcamper: vi.fn(),
   getPrograms: vi.fn(),
+  getBootcamperAssignmentSetting: vi.fn(),
 }));
 
 const MIA = {
@@ -82,6 +84,7 @@ function cardFor(name) {
 describe('FinancePaymentsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getBootcamperAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
     getBootcamperPool.mockResolvedValue(poolResponse());
   });
 
