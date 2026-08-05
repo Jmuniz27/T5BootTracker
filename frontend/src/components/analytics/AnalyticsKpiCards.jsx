@@ -2,7 +2,6 @@ import { useAnalyticsKpis } from '../../hooks/use-analytics-kpis'
 import {
   toConversionCard,
   toResponseTimeCard,
-  toVelocityCard,
   toPaymentCard,
 } from '../../lib/analytics'
 
@@ -16,17 +15,7 @@ const currency = new Intl.NumberFormat('es-EC', {
 const fmt = (value, suffix = '') =>
   value === null || value === undefined ? '—' : `${value}${suffix}`
 
-function Trend({ growth }) {
-  if (growth === null || growth === undefined) return null
-  const up = growth >= 0
-  return (
-    <span className={`text-xs font-medium ${up ? 'text-green-600' : 'text-red-600'}`}>
-      {up ? '▲' : '▼'} {Math.abs(growth)}%
-    </span>
-  )
-}
-
-function KpiCard({ label, value, footer, trend, isLoading }) {
+function KpiCard({ label, value, footer, isLoading }) {
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-5 animate-pulse">
@@ -39,10 +28,7 @@ function KpiCard({ label, value, footer, trend, isLoading }) {
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm text-gray-500">{label}</p>
-        {trend}
-      </div>
+      <p className="text-sm text-gray-500">{label}</p>
       <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
       {footer && <p className="text-xs text-gray-500 mt-1">{footer}</p>}
     </div>
@@ -68,13 +54,12 @@ export default function AnalyticsKpiCards({ filters = {} }) {
 
   const conversion = toConversionCard(data)
   const response = toResponseTimeCard(data)
-  const velocity = toVelocityCard(data)
   const payment = toPaymentCard(data)
 
   const segmentFilterActive = Boolean(filters.segment)
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6">
       <KpiCard
         isLoading={isLoading}
         label="Tasa de conversión"
@@ -83,20 +68,13 @@ export default function AnalyticsKpiCards({ filters = {} }) {
       />
       <KpiCard
         isLoading={isLoading}
-        label="Tiempo de respuesta"
+        label="Promedio de tiempo de respuesta"
         value={fmt(response.value, ' h')}
         footer={
           response.value === null
             ? 'Sin interacciones registradas'
-            : `Mediana ${fmt(response.median, ' h')} · ${response.withoutResponse} sin respuesta`
+            : `${response.withoutResponse} leads sin respuesta`
         }
-      />
-      <KpiCard
-        isLoading={isLoading}
-        label="Velocidad de leads"
-        value={velocity.value}
-        trend={<Trend growth={velocity.growth} />}
-        footer={`Período anterior: ${velocity.previous}`}
       />
       <KpiCard
         isLoading={isLoading}
@@ -104,7 +82,7 @@ export default function AnalyticsKpiCards({ filters = {} }) {
         value={fmt(payment.value, '%')}
         footer={
           segmentFilterActive
-            ? 'No responde a segmento'
+            ? 'No responde a fuente'
             : `${currency.format(payment.collected)} de ${currency.format(payment.expected)}`
         }
       />

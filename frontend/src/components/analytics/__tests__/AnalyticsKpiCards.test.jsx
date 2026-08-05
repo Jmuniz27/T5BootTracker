@@ -38,14 +38,21 @@ function renderCards(props = {}) {
 describe('AnalyticsKpiCards', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('muestra los cuatro indicadores con sus valores', async () => {
+  it('muestra los tres indicadores con sus valores', async () => {
     getAnalyticsKpis.mockResolvedValue(KPIS);
     renderCards();
 
     expect(await screen.findByText('20%')).toBeInTheDocument();
     expect(screen.getByText('4.5 h')).toBeInTheDocument();
-    expect(screen.getByText('30')).toBeInTheDocument();
     expect(screen.getByText('50%')).toBeInTheDocument();
+  });
+
+  it('no muestra la tarjeta de crecimiento de leads', async () => {
+    getAnalyticsKpis.mockResolvedValue(KPIS);
+    renderCards();
+
+    await screen.findByText('20%');
+    expect(screen.queryByText(/crecimiento de leads/i)).not.toBeInTheDocument();
   });
 
   it('muestra el detalle de cada indicador', async () => {
@@ -53,27 +60,7 @@ describe('AnalyticsKpiCards', () => {
     renderCards();
 
     expect(await screen.findByText('10 de 50 leads')).toBeInTheDocument();
-    expect(screen.getByText(/mediana 3 h · 7 sin respuesta/i)).toBeInTheDocument();
-    expect(screen.getByText('Período anterior: 24')).toBeInTheDocument();
-  });
-
-  it('muestra la tendencia positiva de velocidad', async () => {
-    getAnalyticsKpis.mockResolvedValue(KPIS);
-    renderCards();
-    expect(await screen.findByText(/▲ 25%/)).toBeInTheDocument();
-  });
-
-  it('muestra la tendencia negativa cuando el crecimiento es negativo', async () => {
-    getAnalyticsKpis.mockResolvedValue({
-      ...KPIS,
-      lead_velocity: {
-        current_period: { count: 12 },
-        previous_period: { count: 24 },
-        growth_rate_percentage: -50,
-      },
-    });
-    renderCards();
-    expect(await screen.findByText(/▼ 50%/)).toBeInTheDocument();
+    expect(screen.getByText('7 leads sin respuesta')).toBeInTheDocument();
   });
 
   it('distingue dato ausente de cero', async () => {
@@ -90,11 +77,11 @@ describe('AnalyticsKpiCards', () => {
     expect(screen.getByText(/sin interacciones registradas/i)).toBeInTheDocument();
   });
 
-  it('avisa que el cobro no responde a segmento cuando ese filtro está activo', async () => {
+  it('avisa que el cobro no responde a fuente cuando ese filtro está activo', async () => {
     getAnalyticsKpis.mockResolvedValue(KPIS);
     renderCards({ filters: { segment: 'INSTAGRAM' } });
 
-    expect(await screen.findByText(/no responde a segmento/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no responde a fuente/i)).toBeInTheDocument();
   });
 
   it('muestra un error si la petición falla', async () => {

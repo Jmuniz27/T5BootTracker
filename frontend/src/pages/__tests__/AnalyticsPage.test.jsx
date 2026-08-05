@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AnalyticsPage from '../AnalyticsPage';
-import { getAnalyticsKpis, getLeadManagementMetrics } from '../../api/analytics.api';
+import { getAnalyticsKpis } from '../../api/analytics.api';
 import { getSalespeopleActivity } from '../../api/salespeople.api';
 
 const navigate = vi.fn();
@@ -41,15 +41,7 @@ const VENDEDORES = [
 
 vi.mock('../../api/analytics.api', () => ({
   getAnalyticsKpis: vi.fn(),
-  getLeadManagementMetrics: vi.fn(),
 }));
-
-const LEAD_MANAGEMENT = {
-  leads_considered: 3,
-  avg_retention_hours: 12.5,
-  avg_time_to_first_contact_hours: 2.4,
-  by_salesperson: [],
-};
 
 // Recharts mide el contenedor con ResizeObserver, ausente en jsdom.
 global.ResizeObserver = class {
@@ -91,7 +83,6 @@ function renderPage() {
 describe('AnalyticsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getLeadManagementMetrics.mockResolvedValue(LEAD_MANAGEMENT);
     getSalespeopleActivity.mockResolvedValue(VENDEDORES);
   });
 

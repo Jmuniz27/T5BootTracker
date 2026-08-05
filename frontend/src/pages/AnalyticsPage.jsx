@@ -36,7 +36,7 @@ export default function AnalyticsPage() {
       <header className="mb-4">
         <h1 className="text-2xl font-bold text-gray-900">Analítica</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Indicadores de conversión, tiempo de respuesta, velocidad de leads y cobro de pagos.
+          Indicadores de conversión, tiempo de respuesta y cobro de pagos.
         </p>
       </header>
 

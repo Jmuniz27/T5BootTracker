@@ -1,12 +1,52 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LeadManagementMetrics from '../LeadManagementMetrics';
-import { getLeadManagementMetrics } from '../../../api/analytics.api';
+import { getLeadManagementMetrics, getSalespersonLeads } from '../../../api/analytics.api';
 
 vi.mock('../../../api/analytics.api', () => ({
   getLeadManagementMetrics: vi.fn(),
+  getSalespersonLeads: vi.fn(),
 }));
+
+const SALESPERSON_LEADS = {
+  leads_count: 2,
+  leads: [
+    {
+      lead_id: 'l1',
+      name: 'Ana Torres',
+      source: 'INSTAGRAM',
+      status: 'CONVERTED',
+      program_interest: 'Data Science',
+      created_at: '2026-07-01T10:00:00Z',
+      assigned_at: '2026-07-01T12:00:00Z',
+      released_at: null,
+      is_released: false,
+      retention_hours: 48.5,
+      hours_to_first_contact: 2.5,
+      interaction_count: 3,
+      last_outcome: 'CALL_AGAIN',
+      last_interaction_at: '2026-07-03T09:00:00Z',
+    },
+    {
+      lead_id: 'l2',
+      name: 'Pedro Guerrero',
+      source: 'WHATSAPP',
+      status: 'NEW',
+      program_interest: '',
+      created_at: '2026-07-05T10:00:00Z',
+      assigned_at: '2026-07-05T11:00:00Z',
+      released_at: '2026-07-06T11:00:00Z',
+      is_released: true,
+      retention_hours: 24,
+      hours_to_first_contact: null,
+      interaction_count: 0,
+      last_outcome: null,
+      last_interaction_at: null,
+    },
+  ],
+};
 
 const METRICS = {
   leads_considered: 12,
@@ -53,8 +93,18 @@ describe('LeadManagementMetrics (CR-006)', () => {
     renderMetrics();
 
     expect(await screen.findByText('42.6 h')).toBeInTheDocument();
-    expect(screen.getByText('5.3 h')).toBeInTheDocument();
     expect(screen.getByText(/12 leads asignados/)).toBeInTheDocument();
+  });
+
+  it('no muestra la tarjeta global de tiempo al primer contacto', async () => {
+    getLeadManagementMetrics.mockResolvedValue(METRICS);
+    renderMetrics();
+
+    await screen.findByText('42.6 h');
+    expect(screen.queryByText(/tiempo al primer contacto/i)).not.toBeInTheDocument();
+    // El promedio global (5.3 h) desaparece; el detalle por vendedor se mantiene.
+    expect(screen.queryByText('5.3 h')).not.toBeInTheDocument();
+    expect(screen.getByText('3.1 h')).toBeInTheDocument();
   });
 
   it('lista una fila por vendedor', async () => {
@@ -126,5 +176,117 @@ describe('LeadManagementMetrics (CR-006)', () => {
 
     await screen.findByText('María Cedeño');
     expect(getLeadManagementMetrics).toHaveBeenCalledWith({ segment: 'INSTAGRAM' });
+  });
+});
+
+describe('LeadManagementMetrics — detalle por vendedor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getLeadManagementMetrics.mockResolvedValue(METRICS);
+    getSalespersonLeads.mockResolvedValue(SALESPERSON_LEADS);
+  });
+
+  it('arranca en el resumen y no pide el detalle hasta elegir un vendedor', async () => {
+    renderMetrics();
+
+    expect(await screen.findByText('María Cedeño')).toBeInTheDocument();
+    expect(getSalespersonLeads).not.toHaveBeenCalled();
+  });
+
+  it('ofrece un vendedor por cada fila del resumen', async () => {
+    const user = userEvent.setup();
+    renderMetrics();
+
+    await screen.findByText('María Cedeño');
+    await user.click(screen.getByTestId('analytics-salesperson'));
+
+    expect(screen.getByRole('option', { name: 'Todos los vendedores' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Luis Vera' })).toBeInTheDocument();
+  });
+
+  it('al elegir un vendedor reemplaza el resumen por sus leads', async () => {
+    const user = userEvent.setup();
+    renderMetrics();
+
+    await screen.findByText('María Cedeño');
+    await user.click(screen.getByTestId('analytics-salesperson'));
+    await user.click(screen.getByRole('option', { name: 'María Cedeño' }));
+
+    expect(await screen.findByText('Ana Torres')).toBeInTheDocument();
+    expect(screen.getByText('Pedro Guerrero')).toBeInTheDocument();
+    // La tabla resumen (columna "Leads activos") ya no está.
+    expect(screen.queryByText('Leads activos')).not.toBeInTheDocument();
+    expect(getSalespersonLeads).toHaveBeenCalledWith(
+      expect.objectContaining({ salesperson: 'u1' }),
+    );
+  });
+
+  it('traduce fuente y estado, y muestra el programa de interés', async () => {
+    const user = userEvent.setup();
+    renderMetrics();
+
+    await screen.findByText('María Cedeño');
+    await user.click(screen.getByTestId('analytics-salesperson'));
+    await user.click(screen.getByRole('option', { name: 'María Cedeño' }));
+
+    await screen.findByText('Ana Torres');
+    expect(screen.getByText('Instagram')).toBeInTheDocument();
+    expect(screen.getByText('Convertido')).toBeInTheDocument();
+    expect(screen.getByText('Data Science')).toBeInTheDocument();
+  });
+
+  it('distingue lead sin contactar de contacto inmediato, y marca los liberados', async () => {
+    const user = userEvent.setup();
+    renderMetrics();
+
+    await screen.findByText('María Cedeño');
+    await user.click(screen.getByTestId('analytics-salesperson'));
+    await user.click(screen.getByRole('option', { name: 'María Cedeño' }));
+
+    await screen.findByText('Pedro Guerrero');
+    // Pedro no tiene interacciones: primer contacto "—", no "0 h".
+    expect(screen.getByText('2.5 h')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.getByText('liberado')).toBeInTheDocument();
+  });
+
+  it('propaga los filtros de la página al detalle', async () => {
+    const user = userEvent.setup();
+    renderMetrics({ filters: { fecha_desde: '2026-07-01', segment: 'INSTAGRAM' } });
+
+    await screen.findByText('María Cedeño');
+    await user.click(screen.getByTestId('analytics-salesperson'));
+    await user.click(screen.getByRole('option', { name: 'María Cedeño' }));
+
+    await screen.findByText('Ana Torres');
+    expect(getSalespersonLeads).toHaveBeenCalledWith({
+      fecha_desde: '2026-07-01',
+      segment: 'INSTAGRAM',
+      salesperson: 'u1',
+    });
+  });
+
+  it('avisa cuando el vendedor no tiene leads en el período', async () => {
+    getSalespersonLeads.mockResolvedValue({ leads_count: 0, leads: [] });
+    const user = userEvent.setup();
+    renderMetrics();
+
+    await screen.findByText('María Cedeño');
+    await user.click(screen.getByTestId('analytics-salesperson'));
+    await user.click(screen.getByRole('option', { name: 'María Cedeño' }));
+
+    expect(await screen.findByText(/no tiene leads asignados en el período/i)).toBeInTheDocument();
+  });
+
+  it('muestra un error propio si falla el detalle', async () => {
+    getSalespersonLeads.mockRejectedValue(new Error('boom'));
+    const user = userEvent.setup();
+    renderMetrics();
+
+    await screen.findByText('María Cedeño');
+    await user.click(screen.getByTestId('analytics-salesperson'));
+    await user.click(screen.getByRole('option', { name: 'María Cedeño' }));
+
+    expect(await screen.findByText(/no pudimos cargar los leads de este vendedor/i)).toBeInTheDocument();
   });
 });
