@@ -1,0 +1,6 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Revisamos los datos que registraste{% if program_name %} para {{ program_name }}{% endif %} y están correctos.
+
+No tienes que hacer nada más. Si algún dato cambia más adelante, escríbele a tu asesor para actualizarlo.
+{% endblock %}

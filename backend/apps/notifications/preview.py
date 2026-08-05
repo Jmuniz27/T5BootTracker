@@ -38,6 +38,15 @@ PREVIEWS = {
         'expiry_hours': 72,
         'role_display': 'Finanzas',
     },
+    'verification_approved': {
+        'recipient_name': 'Ana Torres',
+        'program_name': 'Data Science Bootcamp',
+    },
+    'verification_rejected': {
+        'recipient_name': 'Ana Torres',
+        'program_name': 'Data Science Bootcamp',
+        'rejection_reason': 'La cédula registrada no coincide con la del documento que enviaste.',
+    },
     'conversion_notification': {
         'lead_name': 'María Gómez',
         'bootcamper_name': 'María Gómez',

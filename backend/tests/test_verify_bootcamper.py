@@ -1,12 +1,20 @@
 """Tests for the verify-bootcamper endpoint and its serializer exposure (#259)."""
 from unittest.mock import patch
 
+import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.authentication.models import CustomUser
 from apps.leads.models import Lead
+
+
+@pytest.fixture(autouse=True)
+def sin_correo_de_verificacion():
+    """Verificar encola un correo (#309); acá no se ejercita el broker."""
+    with patch('apps.notifications.tasks.send_verification_approved_email.delay'):
+        yield
 
 CONVERT_URL = '/api/leads/{id}/convert/'
 VERIFY_URL = '/api/leads/{id}/verify-bootcamper/'
