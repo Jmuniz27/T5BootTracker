@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.payments.models import Payment
 
 UPLOAD_URL = "/api/payments/upload/"
+MY_PROGRAMS_URL = "/api/payments/my-programs/"
 MY_STATUS_URL = "/api/payments/my-status/"
 MY_HISTORY_URL = "/api/payments/my-history/"
 QUEUE_URL = "/api/payments/queue/"
@@ -113,6 +114,65 @@ class TestPaymentUpload:
             },
             format="multipart",
         )
+        assert resp.status_code == 403
+
+    def test_payment_upload_pdf_as_octet_stream_accepted(self, db, converted_bootcamper, program):
+        """Some OS/browsers declare PDFs as application/octet-stream on drag-drop.
+
+        The frontend allows it by extension; the backend must too, or the same
+        upload that passed client-side validation gets rejected server-side.
+        """
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.pdf", b"%PDF-1.4 fake", content_type="application/octet-stream"
+        )
+        with patch("apps.payments.tasks.process_payment_ocr.delay"):
+            resp = client.post(
+                UPLOAD_URL,
+                {
+                    "receipt_file": fake_file,
+                    "program_id": str(program.id),
+                },
+                format="multipart",
+            )
+        assert resp.status_code == 201
+        payment = Payment.objects.get(bootcamper=converted_bootcamper, program=program)
+        assert payment.receipt_file_type == "pdf"
+
+    def test_payment_upload_octet_stream_bad_extension_rejected(self, db, converted_bootcamper, program):
+        """application/octet-stream is only tolerated for allowed extensions."""
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "virus.exe", b"MZ", content_type="application/octet-stream"
+        )
+        resp = client.post(
+            UPLOAD_URL,
+            {
+                "receipt_file": fake_file,
+                "program_id": str(program.id),
+            },
+            format="multipart",
+        )
+        assert resp.status_code == 400
+
+
+class TestPaymentMyPrograms:
+    def test_bootcamper_with_enrollment_sees_program(self, db, converted_bootcamper, active_enrollment, program):
+        client = make_client(converted_bootcamper)
+        resp = client.get(MY_PROGRAMS_URL)
+        assert resp.status_code == 200
+        ids = [p["id"] for p in resp.json()]
+        assert str(program.id) in ids
+
+    def test_bootcamper_without_enrollment_sees_empty_list(self, db, converted_bootcamper):
+        client = make_client(converted_bootcamper)
+        resp = client.get(MY_PROGRAMS_URL)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_other_role_forbidden(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(MY_PROGRAMS_URL)
         assert resp.status_code == 403
 
 
