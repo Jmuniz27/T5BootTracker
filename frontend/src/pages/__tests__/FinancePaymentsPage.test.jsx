@@ -24,6 +24,10 @@ vi.mock('../../api/payments.api', () => ({
   getPrograms: vi.fn(),
 }));
 
+vi.mock('../../api/programs.api', () => ({
+  getCohorts: vi.fn(),
+}));
+
 const MIA = {
   bootcamper_id: 'bc-1',
   bootcamper_name: 'Ana Torres',
@@ -190,5 +194,99 @@ describe('FinancePaymentsPage', () => {
     expect(getBootcamperPool).toHaveBeenLastCalledWith(
       expect.objectContaining({ search: 'ana' }),
     );
+  });
+});
+
+describe('FinancePaymentsPage — pagos finalizados y cohorte', () => {
+  const DEBE = {
+    bootcamper_id: 'bc-90',
+    bootcamper_name: 'Ana Debe',
+    email: 'debe@test.com',
+    program_id: 'prog-1',
+    program_name: 'Python Full Stack',
+    cohort_number: 2,
+    total_cost: '1200.00',
+    total_paid: '400.00',
+    pending_payments: 1,
+    payment_status: 'CRITICAL',
+    is_fully_paid: false,
+  };
+
+  const PAGO = {
+    ...DEBE,
+    bootcamper_id: 'bc-91',
+    bootcamper_name: 'Luis Pago',
+    email: 'pago@test.com',
+    cohort_number: 5,
+    total_paid: '1200.00',
+    payment_status: 'ON_TRACK',
+    is_fully_paid: true,
+  };
+
+  function renderCon(mine) {
+    getBootcamperPool.mockResolvedValue({
+      my_bootcampers: mine, available_bootcampers: [], pagination: {},
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <FinancePaymentsPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('arranca en En cobro y no muestra a quien ya pagó', async () => {
+    renderCon([DEBE, PAGO]);
+
+    expect(await screen.findByText('Ana Debe')).toBeInTheDocument();
+    expect(screen.queryByText('Luis Pago')).not.toBeInTheDocument();
+  });
+
+  it('la pestaña de finalizados muestra a quien completó', async () => {
+    const user = userEvent.setup();
+    renderCon([DEBE, PAGO]);
+    await screen.findByText('Ana Debe');
+
+    await user.click(screen.getByRole('tab', { name: /pagos finalizados/i }));
+
+    expect(screen.getByText('Luis Pago')).toBeInTheDocument();
+    expect(screen.queryByText('Ana Debe')).not.toBeInTheDocument();
+  });
+
+  it('las estadísticas cuentan sólo lo que falta cobrar', async () => {
+    renderCon([DEBE, PAGO]);
+    await screen.findByText('Ana Debe');
+
+    // Quien ya pagó no debe inflar el total de la cartera en cobro.
+    expect(screen.getByRole('tab', { name: /en cobro \(1\)/i })).toBeInTheDocument();
+  });
+
+  it('la tarjeta dice programa y cohorte', async () => {
+    renderCon([DEBE]);
+    await screen.findByText('Ana Debe');
+
+    expect(screen.getByText(/Cohorte 2/)).toBeInTheDocument();
+  });
+
+  it('avisa cuando nadie completó el pago', async () => {
+    const user = userEvent.setup();
+    renderCon([DEBE]);
+    await screen.findByText('Ana Debe');
+
+    await user.click(screen.getByRole('tab', { name: /pagos finalizados/i }));
+
+    expect(screen.getByText(/todavía nadie completó el pago/i)).toBeInTheDocument();
+  });
+
+  it('el filtro de cohorte sólo aparece con un programa elegido', async () => {
+    renderCon([DEBE]);
+    await screen.findByText('Ana Debe');
+
+    // Suelto no identifica nada: el número se repite entre programas.
+    expect(screen.queryByRole('button', { name: /filtrar por cohorte/i })).not.toBeInTheDocument();
   });
 });
