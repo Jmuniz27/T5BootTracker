@@ -104,9 +104,9 @@ export default function AnalyticsCharts({ filters = {} }) {
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {/* Conversión por segmento */}
+      {/* Conversión por fuente */}
       <ChartCard
-        title="Tasa de conversión por segmento"
+        title="Tasa de conversión por fuente"
         subtitle="% de leads convertidos según su origen"
         isEmpty={conversion.length === 0}
       >
@@ -153,10 +153,10 @@ export default function AnalyticsCharts({ filters = {} }) {
         </ResponsiveContainer>
       </ChartCard>
 
-      {/* Velocidad de leads */}
+      {/* Leads nuevos por período (alimenta la tarjeta "Crecimiento de leads") */}
       <ChartCard
-        title="Velocidad de leads"
-        subtitle="Leads nuevos por período"
+        title="Leads nuevos"
+        subtitle="Ingresos por período"
         isEmpty={velocity.length === 0}
       >
         <ResponsiveContainer width="100%" height="100%">

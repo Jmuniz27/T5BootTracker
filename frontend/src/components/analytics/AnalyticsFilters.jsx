@@ -2,7 +2,7 @@ import CustomSelect from '../CustomSelect'
 
 // Espejo de Lead.source en backend/apps/leads/models.py
 const SEGMENT_OPTIONS = [
-  { value: '', label: 'Todos los segmentos' },
+  { value: '', label: 'Todas las fuentes' },
   { value: 'INSTAGRAM', label: 'Instagram' },
   { value: 'WHATSAPP', label: 'WhatsApp' },
   { value: 'LANDING_PAGE', label: 'Landing Page' },
@@ -58,12 +58,12 @@ export default function AnalyticsFilters({ filters, onChange }) {
         </div>
 
         <div>
-          <span className="block text-sm font-medium text-gray-700 mb-1">Segmento</span>
+          <span className="block text-sm font-medium text-gray-700 mb-1">Fuente</span>
           <CustomSelect
             value={filters.segment}
             onChange={set('segment')}
             options={SEGMENT_OPTIONS}
-            placeholder="Todos los segmentos"
+            placeholder="Todas las fuentes"
           />
         </div>
       </div>
