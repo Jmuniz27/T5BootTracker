@@ -73,24 +73,39 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
 
   const confidence = payment?.ocr_confidence || {}
 
+  // Sólo un pago sin revisar se puede aprobar o rechazar. En el historial la
+  // solicitud ya fue resuelta, así que ofrecer esas acciones era engañoso: el
+  // backend responde 400 porque el pago no está pendiente.
+  const isPending = payment ? ['PENDING', 'DRAFT'].includes(payment.status) : false
+  const isRejected = payment?.status === 'REJECTED'
+
+  const tabs = [
+    { id: 'details', label: 'Campos OCR' },
+    { id: 'raw',     label: 'Texto crudo' },
+    // El motivo se lee acá y no en la tarjeta del historial: la tarjeta lista,
+    // el detalle explica.
+    ...(isRejected ? [{ id: 'reason', label: 'Motivo del rechazo' }] : []),
+    ...(isPending ? [{ id: 'action', label: 'Aprobar / Rechazar' }] : []),
+  ]
+
+  // Si la pestaña activa no existe para este pago —por ejemplo 'action' tras
+  // aprobarlo en esta misma sesión— se vuelve a la primera.
+  const activeTab = tabs.some((t) => t.id === tab) ? tab : 'details'
+
   function renderTabs() {
     return (
       <>
         {/* Tabs */}
         <div role="tablist" aria-label="Secciones del pago" className="flex border-b border-gray-100 px-4 sm:px-6 flex-shrink-0">
-          {[
-            { id: 'details', label: 'Campos OCR' },
-            { id: 'raw',     label: 'Texto crudo' },
-            { id: 'action',  label: 'Aprobar / Rechazar' },
-          ].map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.id}
               role="tab"
-              aria-selected={tab === t.id}
+              aria-selected={activeTab === t.id}
               data-testid={`payment-tab-${t.id}`}
               onClick={() => setTab(t.id)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E] ${
-                tab === t.id
+                activeTab === t.id
                   ? 'border-[#213A8E] text-[#213A8E]'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
@@ -100,9 +115,9 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
           ))}
         </div>
 
-        <div key={tab} className="px-6 py-5 overflow-y-auto flex-1 min-h-0 animate-fade-in">
+        <div key={activeTab} className="px-6 py-5 overflow-y-auto flex-1 min-h-0 animate-fade-in">
           {/* OCR Fields */}
-          {tab === 'details' && (
+          {activeTab === 'details' && (
             <div className="space-y-1">
               {[
                 { label: 'Banco',                    value: payment.ocr_bank_name,         conf: 'bank_name' },
@@ -123,7 +138,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
           )}
 
           {/* Raw text */}
-          {tab === 'raw' && (
+          {activeTab === 'raw' && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm text-gray-500">Texto extraído por OCR — copia para pegar en otro sistema.</p>
@@ -143,8 +158,29 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
             </div>
           )}
 
+          {/* Motivo del rechazo */}
+          {activeTab === 'reason' && (
+            <div>
+              <p className="text-sm text-gray-500 mb-3">
+                Motivo que registró quien revisó la solicitud.
+              </p>
+              <p
+                data-testid="payment-rejection-reason"
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 whitespace-pre-wrap"
+              >
+                {payment.rejection_reason || 'No se registró un motivo.'}
+              </p>
+              {payment.validated_by_name && (
+                <p className="mt-3 text-xs text-gray-500">
+                  Rechazado por {payment.validated_by_name}
+                  {payment.validated_at && ` el ${new Date(payment.validated_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Approve / Reject */}
-          {tab === 'action' && (
+          {activeTab === 'action' && (
             <div className="space-y-6">
               <div className="border border-green-200 rounded-xl p-4 space-y-3">
                 <h3 className="text-sm font-semibold text-green-700">Aprobar pago</h3>
