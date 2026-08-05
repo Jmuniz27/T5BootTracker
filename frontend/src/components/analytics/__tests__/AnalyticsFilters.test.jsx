@@ -21,11 +21,11 @@ describe('AnalyticsFilters', () => {
     );
   });
 
-  it('emite el segmento seleccionado', async () => {
+  it('emite la fuente seleccionada', async () => {
     const user = userEvent.setup();
     const { onChange } = renderFilters();
 
-    await user.click(screen.getByRole('button', { name: /todos los segmentos/i }));
+    await user.click(screen.getByRole('button', { name: /todas las fuentes/i }));
     await user.click(screen.getByText('WhatsApp'));
 
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ segment: 'WHATSAPP' }));

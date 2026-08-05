@@ -1,4 +1,9 @@
+import { useState } from 'react'
 import { useLeadManagementMetrics } from '../../hooks/use-lead-management-metrics'
+import CustomSelect from '../CustomSelect'
+import SalespersonLeadsTable from './SalespersonLeadsTable'
+
+const ALL_SALESPEOPLE = ''
 
 /** "—" para dato ausente; 0 es un valor real y se muestra como 0. */
 const fmtHours = (value) =>
@@ -46,9 +51,16 @@ function SummaryCard({ label, value, footer, isLoading }) {
  * hasta ahora si sigue asignado). Primer contacto = desde la asignación hasta
  * la primera interacción registrada. Leads sin asignar = los que siguen sin
  * dueño, incluidos los liberados por el Administrador.
+ *
+ * El selector de vendedor alterna entre dos tablas: sin selección, el resumen
+ * comparativo del equipo completo; con un vendedor elegido, el detalle lead por
+ * lead que produjo sus promedios. Las opciones salen de `by_salesperson`, así
+ * que la lista solo ofrece vendedores con leads en el período — no hace falta
+ * un endpoint de usuarios ni ofrecer nombres que darían una tabla vacía.
  */
 export default function LeadManagementMetrics({ filters = {} }) {
   const { data, isLoading, isError, error } = useLeadManagementMetrics(filters)
+  const [salespersonId, setSalespersonId] = useState(ALL_SALESPEOPLE)
 
   if (isError) {
     return (
@@ -63,6 +75,17 @@ export default function LeadManagementMetrics({ filters = {} }) {
 
   const rows = data?.by_salesperson ?? []
 
+  // El vendedor elegido puede desaparecer de la lista al cambiar el rango de
+  // fechas (deja de tener leads). En ese caso se vuelve al resumen en vez de
+  // pedir el detalle de alguien que ya no aplica al período.
+  const selected = rows.find((row) => row.salesperson_id === salespersonId)
+  const showDetail = Boolean(salespersonId) && Boolean(selected)
+
+  const salespersonOptions = [
+    { value: ALL_SALESPEOPLE, label: 'Todos los vendedores' },
+    ...rows.map((row) => ({ value: row.salesperson_id, label: row.salesperson })),
+  ]
+
   return (
     <section className="mt-8">
       <header className="mb-3">
@@ -72,18 +95,12 @@ export default function LeadManagementMetrics({ filters = {} }) {
         </p>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
+      <div className="grid gap-3 sm:grid-cols-2 mb-4">
         <SummaryCard
           isLoading={isLoading}
           label="Retención promedio"
           value={fmtHours(data?.avg_retention_hours)}
           footer={`${data?.leads_considered ?? 0} leads asignados`}
-        />
-        <SummaryCard
-          isLoading={isLoading}
-          label="Tiempo al primer contacto"
-          value={fmtHours(data?.avg_time_to_first_contact_hours)}
-          footer="Desde la asignación hasta la primera interacción"
         />
         <SummaryCard
           isLoading={isLoading}
@@ -93,39 +110,60 @@ export default function LeadManagementMetrics({ filters = {} }) {
         />
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500">
-              <tr>
-                <th scope="col" className="text-left font-medium px-5 py-3">Vendedor</th>
-                <th scope="col" className="text-right font-medium px-5 py-3">Leads activos</th>
-                <th scope="col" className="text-right font-medium px-5 py-3">Retención prom.</th>
-                <th scope="col" className="text-right font-medium px-5 py-3">Primer contacto</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {isLoading && <TableStateRow>Cargando métricas…</TableStateRow>}
-              {!isLoading && rows.length === 0 && (
-                <TableStateRow>Sin leads asignados en este período</TableStateRow>
-              )}
-              {!isLoading &&
-                rows.map((row) => (
-                  <tr key={row.salesperson_id}>
-                    <td className="px-5 py-3 text-gray-900">{row.salesperson}</td>
-                    <td className="px-5 py-3 text-right text-gray-700">{row.active_leads}</td>
-                    <td className="px-5 py-3 text-right text-gray-700">
-                      {fmtHours(row.avg_retention_hours)}
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-700">
-                      {fmtHours(row.avg_time_to_first_contact_hours)}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="mb-4 max-w-xs">
+        <span className="block text-sm font-medium text-gray-700 mb-1">Vendedor</span>
+        <CustomSelect
+          value={salespersonId}
+          onChange={setSalespersonId}
+          options={salespersonOptions}
+          placeholder="Todos los vendedores"
+          ariaLabel="Vendedor"
+          testId="analytics-salesperson"
+          disabled={isLoading || rows.length === 0}
+        />
       </div>
+
+      {showDetail ? (
+        <SalespersonLeadsTable
+          salespersonId={salespersonId}
+          salespersonName={selected.salesperson}
+          filters={filters}
+        />
+      ) : (
+        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-500">
+                <tr>
+                  <th scope="col" className="text-left font-medium px-5 py-3">Vendedor</th>
+                  <th scope="col" className="text-right font-medium px-5 py-3">Leads activos</th>
+                  <th scope="col" className="text-right font-medium px-5 py-3">Retención prom.</th>
+                  <th scope="col" className="text-right font-medium px-5 py-3">Primer contacto</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {isLoading && <TableStateRow>Cargando métricas…</TableStateRow>}
+                {!isLoading && rows.length === 0 && (
+                  <TableStateRow>Sin leads asignados en este período</TableStateRow>
+                )}
+                {!isLoading &&
+                  rows.map((row) => (
+                    <tr key={row.salesperson_id}>
+                      <td className="px-5 py-3 text-gray-900">{row.salesperson}</td>
+                      <td className="px-5 py-3 text-right text-gray-700">{row.active_leads}</td>
+                      <td className="px-5 py-3 text-right text-gray-700">
+                        {fmtHours(row.avg_retention_hours)}
+                      </td>
+                      <td className="px-5 py-3 text-right text-gray-700">
+                        {fmtHours(row.avg_time_to_first_contact_hours)}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
