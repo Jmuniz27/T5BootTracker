@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getFinancePortfolio } from '../../api/finance.api'
+import UnassignedPoolModal from './UnassignedPoolModal'
+import Toast from '../Toast'
 
 /**
  * Pestaña de Finanzas: una tarjeta por persona, más el recuento de los
@@ -88,6 +91,9 @@ export default function FinancePortfolios() {
     queryFn: getFinancePortfolio,
   })
 
+  const [repartiendo, setRepartiendo] = useState(false)
+  const [toast, setToast] = useState(null)
+
   const portfolios = data?.portfolios ?? []
   const unassigned = data?.unassigned_bootcampers ?? 0
 
@@ -109,11 +115,19 @@ export default function FinancePortfolios() {
 
       {/* Lo que nadie está cobrando es justo lo que el administrador necesita ver. */}
       {!isLoading && !isError && unassigned > 0 && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-4 flex items-center gap-3">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-4 flex items-center gap-3 flex-wrap">
           <span className="text-2xl font-bold text-amber-700">{unassigned}</span>
-          <p className="text-sm text-amber-800">
+          <p className="text-sm text-amber-800 flex-1 min-w-[200px]">
             bootcamper{unassigned === 1 ? '' : 's'} sin responsable de cobro, esperando en el pool.
           </p>
+          {/* El aviso solía terminar acá: informaba de un problema que el
+              administrador no podía resolver desde ninguna pantalla. */}
+          <button
+            onClick={() => setRepartiendo(true)}
+            className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-xl hover:bg-amber-700 transition-colors"
+          >
+            Repartir
+          </button>
         </div>
       )}
 
@@ -134,6 +148,17 @@ export default function FinancePortfolios() {
           ))}
         </div>
       )}
+
+      {repartiendo && (
+        <UnassignedPoolModal
+          financePeople={portfolios}
+          onClose={() => setRepartiendo(false)}
+          onDone={(message) => setToast({ type: 'success', message })}
+          onError={(message) => setToast({ type: 'error', message })}
+        />
+      )}
+
+      {toast && <Toast {...toast} onClose={() => setToast(null)} />}
     </>
   )
 }
