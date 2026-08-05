@@ -102,6 +102,26 @@ class TestLeadList:
         data = client.get(LEADS_URL).json()
         assert str(assigned_lead.id) not in [lead['id'] for lead in data['converted_leads']]
 
+    def test_system_interactions_excluded_from_history_and_count(self, db, salesperson_user, assigned_lead):
+        Interaction.objects.create(
+            lead=assigned_lead, salesperson=salesperson_user,
+            interaction_type=Interaction.InteractionType.WHATSAPP,
+            outcome=Interaction.Outcome.SEND_INFO, interest_level=4, notes='Hola',
+        )
+        Interaction.objects.create(
+            lead=assigned_lead, salesperson=salesperson_user,
+            interaction_type=Interaction.InteractionType.SYSTEM,
+            outcome=Interaction.Outcome.REASSIGNED, notes='Reasignado por admin',
+        )
+        client = make_client(salesperson_user)
+
+        history = client.get(f'{LEADS_URL}{assigned_lead.id}/interactions/').json()
+        assert [i['interaction_type'] for i in history] == ['WHATSAPP']
+
+        data = client.get(LEADS_URL).json()
+        row = next(lead for lead in data['my_leads'] if lead['id'] == str(assigned_lead.id))
+        assert row['interaction_count'] == 1
+
 
 class TestLeadCreate:
     def test_lead_create_manual_with_is_company(self, db, salesperson_user):

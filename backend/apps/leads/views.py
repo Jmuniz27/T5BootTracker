@@ -42,9 +42,17 @@ class LeadListCreateView(APIView):
     permission_classes = [IsCommercialOrAdmin]
 
     def _annotated_qs(self):
-        latest = Interaction.objects.filter(lead=OuterRef('pk')).order_by('-created_at')
+        # Los eventos de sistema (asignación/reasignación) no son interacciones
+        # de venta: no cuentan ni pesan en la última interacción.
+        real = ~Q(interactions__interaction_type=Interaction.InteractionType.SYSTEM)
+        latest = (
+            Interaction.objects
+            .filter(lead=OuterRef('pk'))
+            .exclude(interaction_type=Interaction.InteractionType.SYSTEM)
+            .order_by('-created_at')
+        )
         return Lead.objects.annotate(
-            interaction_count=Count('interactions'),
+            interaction_count=Count('interactions', filter=real),
             last_outcome=Subquery(latest.values('outcome')[:1]),
             last_interaction_at=Subquery(latest.values('created_at')[:1]),
         ).order_by(F('last_interaction_at').desc(nulls_last=True), 'name')
@@ -430,7 +438,15 @@ class LeadDetailView(APIView):
         tags=['Leads'],
     )
     def get(self, request, pk):
-        lead = get_object_or_404(Lead.objects.annotate(interaction_count=Count('interactions')), pk=pk)
+        lead = get_object_or_404(
+            Lead.objects.annotate(
+                interaction_count=Count(
+                    'interactions',
+                    filter=~Q(interactions__interaction_type=Interaction.InteractionType.SYSTEM),
+                ),
+            ),
+            pk=pk,
+        )
         if not request.user.is_administrator and lead.owner is not None and lead.owner != request.user:
             return Response(
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
@@ -491,7 +507,14 @@ class InteractionListCreateView(APIView):
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        interactions = lead.interactions.select_related('salesperson').order_by('-created_at')
+        # Los eventos de sistema (asignación/reasignación) son auditoría, no
+        # interacciones de venta: no se muestran en el historial.
+        interactions = (
+            lead.interactions
+            .exclude(interaction_type=Interaction.InteractionType.SYSTEM)
+            .select_related('salesperson')
+            .order_by('-created_at')
+        )
         return Response(InteractionSerializer(interactions, many=True).data)
 
     @extend_schema(
