@@ -91,9 +91,17 @@ class PaymentUploadView(APIView):
 
     @extend_schema(
         request={'multipart/form-data': PaymentUploadSerializer},
-        responses={201: PaymentListSerializer, 400: OpenApiResponse(description='Archivo inválido o muy grande'), 404: OpenApiResponse(description='Programa no encontrado')},
+        responses={
+            201: PaymentListSerializer,
+            400: OpenApiResponse(description='Archivo inválido, muy grande, o sin inscripción activa de la cual deducir el programa'),
+            404: OpenApiResponse(description='Programa no encontrado'),
+        },
         summary='Subir comprobante de pago',
-        description='El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR asíncrono.',
+        description=(
+            'El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR '
+            'asíncrono. `program_id` es opcional: sin él, el programa se deduce de la '
+            'inscripción activa del bootcamper.'
+        ),
         tags=['Pagos — Bootcamper'],
     )
     def post(self, request):
@@ -101,17 +109,23 @@ class PaymentUploadView(APIView):
         from apps.programs.models import Program
         from .tasks import process_payment_ocr
         from .serializers import ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
+        from .services import UploadProgramError, resolve_upload_program
 
         serializer = PaymentUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
         try:
-            program = Program.objects.get(pk=data['program_id'])
+            program = resolve_upload_program(request.user, data.get('program_id'))
         except Program.DoesNotExist:
             return Response(
                 {'error': 'Programa no encontrado.', 'code': 'PROGRAM_NOT_FOUND'},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+        except UploadProgramError as exc:
+            return Response(
+                {'error': exc.message, 'code': exc.code},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         file = data['receipt_file']
