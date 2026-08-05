@@ -259,6 +259,83 @@ class PaymentConfirmView(APIView):
         return Response(PaymentOCRStatusSerializer(payment).data)
 
 
+class MyPaymentDetailView(APIView):
+    """PATCH/DELETE /api/payments/my-payments/{id}/ — bootcamper corrects and
+    resubmits a REJECTED payment, or deletes a payment they can still fix.
+    """
+    permission_classes = [IsBootcamper]
+
+    @extend_schema(
+        request=PaymentConfirmSerializer,
+        responses={
+            200: PaymentOCRStatusSerializer,
+            400: OpenApiResponse(description='El pago no está rechazado'),
+            404: OpenApiResponse(description='Pago no encontrado'),
+        },
+        summary='Corregir y reenviar pago rechazado (REJECTED → PENDING)',
+        description=(
+            'El bootcamper corrige los datos observados en el rechazo y reenvía el pago. '
+            'El pago pasa de Rechazado (REJECTED) a Pendiente (PENDING) y vuelve a la cola '
+            'del vendedor. Sólo se puede reenviar un pago rechazado.'
+        ),
+        tags=['Pagos — Bootcamper'],
+    )
+    def patch(self, request, pk):
+        payment = get_object_or_404(Payment, pk=pk, bootcamper=request.user)
+
+        if payment.status != Payment.Status.REJECTED:
+            return Response(
+                {'error': 'Solo se pueden reenviar pagos rechazados.', 'code': 'NOT_REJECTED'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = PaymentConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        editable = (
+            'ocr_bank_name', 'ocr_account_last_digits',
+            'ocr_amount', 'ocr_transaction_id', 'ocr_payment_date',
+            'payer_name', 'payer_identification', 'payer_email',
+            'payer_address', 'payer_phone', 'document_number',
+        )
+        for field in editable:
+            if field in data:
+                setattr(payment, field, data[field])
+
+        payment.status           = Payment.Status.PENDING
+        payment.rejection_reason = ''
+        payment.validated_by     = None
+        payment.validated_at     = None
+        payment.save()
+
+        logger.info("Payment %s resubmitted by bootcamper %s.", payment.id, request.user.id)
+        return Response(PaymentOCRStatusSerializer(payment).data)
+
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description='Pago eliminado'),
+            400: OpenApiResponse(description='El pago no se puede eliminar en su estado actual'),
+            404: OpenApiResponse(description='Pago no encontrado'),
+        },
+        summary='Eliminar pago propio',
+        description='El bootcamper elimina un pago propio en estado DRAFT o REJECTED.',
+        tags=['Pagos — Bootcamper'],
+    )
+    def delete(self, request, pk):
+        payment = get_object_or_404(Payment, pk=pk, bootcamper=request.user)
+
+        if payment.status not in (Payment.Status.DRAFT, Payment.Status.REJECTED):
+            return Response(
+                {'error': 'Solo se pueden eliminar pagos en revisión o rechazados.', 'code': 'NOT_DELETABLE'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        logger.info("Payment %s deleted by bootcamper %s.", payment.id, request.user.id)
+        payment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Salesperson / Admin views
 # ──────────────────────────────────────────────────────────────────────────────

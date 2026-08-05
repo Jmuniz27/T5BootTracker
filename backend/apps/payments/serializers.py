@@ -160,6 +160,13 @@ class PaymentConfirmSerializer(serializers.Serializer):
     payer_phone              = serializers.CharField(max_length=20,  required=False, allow_blank=True)
     document_number         = serializers.CharField(max_length=50,  required=False, allow_blank=True)
 
+    def to_internal_value(self, data):
+        # The frontend initializes the date input to '' when there's no OCR
+        # value; DRF's DateField accepts null but not '', so normalize here.
+        if data.get("ocr_payment_date") == "":
+            data = {**data, "ocr_payment_date": None}
+        return super().to_internal_value(data)
+
     def validate_payer_identification(self, value):
         """Accept blank (best-effort field). If provided, must be a valid
         Ecuadorian cédula (10 digits) or RUC (13 digits, ends in 001)."""
