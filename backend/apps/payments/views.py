@@ -91,30 +91,49 @@ class PaymentUploadView(APIView):
 
     @extend_schema(
         request={'multipart/form-data': PaymentUploadSerializer},
-        responses={201: PaymentListSerializer, 400: OpenApiResponse(description='Archivo inválido o muy grande'), 404: OpenApiResponse(description='Programa no encontrado')},
+        responses={
+            201: PaymentListSerializer,
+            400: OpenApiResponse(description='Archivo inválido, muy grande, o sin inscripción activa de la cual deducir el programa'),
+            404: OpenApiResponse(description='Programa no encontrado'),
+        },
         summary='Subir comprobante de pago',
-        description='El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR asíncrono.',
+        description=(
+            'El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR '
+            'asíncrono. `program_id` es opcional: sin él, el programa se deduce de la '
+            'inscripción activa del bootcamper.'
+        ),
         tags=['Pagos — Bootcamper'],
     )
     def post(self, request):
+        import os
         from apps.programs.models import Program
         from .tasks import process_payment_ocr
-        from .serializers import ALLOWED_MIME_TYPES
+        from .serializers import ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
+        from .services import UploadProgramError, resolve_upload_program
 
         serializer = PaymentUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
         try:
-            program = Program.objects.get(pk=data['program_id'])
+            program = resolve_upload_program(request.user, data.get('program_id'))
         except Program.DoesNotExist:
             return Response(
                 {'error': 'Programa no encontrado.', 'code': 'PROGRAM_NOT_FOUND'},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        except UploadProgramError as exc:
+            return Response(
+                {'error': exc.message, 'code': exc.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        file      = data['receipt_file']
-        file_type = ALLOWED_MIME_TYPES.get(file.content_type, 'image')
+        file = data['receipt_file']
+        if file.content_type in ALLOWED_MIME_TYPES:
+            file_type = ALLOWED_MIME_TYPES[file.content_type]
+        else:
+            extension = os.path.splitext(file.name or '')[1].lower()
+            file_type = ALLOWED_EXTENSIONS.get(extension, 'image')
 
         payment = Payment.objects.create(
             bootcamper=request.user,
@@ -127,6 +146,39 @@ class PaymentUploadView(APIView):
         process_payment_ocr.delay(str(payment.id))
 
         return Response(PaymentListSerializer(payment).data, status=status.HTTP_201_CREATED)
+
+
+class PaymentMyProgramsView(APIView):
+    """GET /api/payments/my-programs/ — programas en los que el bootcamper tiene Enrollment activa.
+
+    El bootcamper recibe 403 en /programs/, así que el selector de subida no
+    puede usar ese endpoint. Antes se armaba desde el historial de pagos, pero
+    un bootcamper recién convertido no tiene ninguno todavía y el selector
+    quedaba vacío. Enrollment es la fuente correcta: existe desde la conversión.
+    """
+    permission_classes = [IsBootcamper]
+
+    @extend_schema(
+        responses={200: inline_serializer('MyProgram', fields={
+            'id':   drf_serializers.UUIDField(),
+            'name': drf_serializers.CharField(),
+        }, many=True)},
+        summary='Mis programas inscritos',
+        description='Programas con Enrollment activa del bootcamper autenticado, para el selector de subida de comprobantes.',
+        tags=['Pagos — Bootcamper'],
+    )
+    def get(self, request):
+        from apps.programs.models import Enrollment, Program
+
+        programs = (
+            Program.objects
+            .filter(
+                enrollments__bootcamper=request.user,
+                enrollments__status=Enrollment.Status.ACTIVE,
+            )
+            .distinct()
+        )
+        return Response([{'id': str(p.id), 'name': p.name} for p in programs])
 
 
 class PaymentMyStatusView(APIView):
@@ -257,6 +309,83 @@ class PaymentConfirmView(APIView):
 
         logger.info("Payment %s confirmed by bootcamper %s.", payment.id, request.user.id)
         return Response(PaymentOCRStatusSerializer(payment).data)
+
+
+class MyPaymentDetailView(APIView):
+    """PATCH/DELETE /api/payments/my-payments/{id}/ — bootcamper corrects and
+    resubmits a REJECTED payment, or deletes a payment they can still fix.
+    """
+    permission_classes = [IsBootcamper]
+
+    @extend_schema(
+        request=PaymentConfirmSerializer,
+        responses={
+            200: PaymentOCRStatusSerializer,
+            400: OpenApiResponse(description='El pago no está rechazado'),
+            404: OpenApiResponse(description='Pago no encontrado'),
+        },
+        summary='Corregir y reenviar pago rechazado (REJECTED → PENDING)',
+        description=(
+            'El bootcamper corrige los datos observados en el rechazo y reenvía el pago. '
+            'El pago pasa de Rechazado (REJECTED) a Pendiente (PENDING) y vuelve a la cola '
+            'del vendedor. Sólo se puede reenviar un pago rechazado.'
+        ),
+        tags=['Pagos — Bootcamper'],
+    )
+    def patch(self, request, pk):
+        payment = get_object_or_404(Payment, pk=pk, bootcamper=request.user)
+
+        if payment.status != Payment.Status.REJECTED:
+            return Response(
+                {'error': 'Solo se pueden reenviar pagos rechazados.', 'code': 'NOT_REJECTED'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = PaymentConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        editable = (
+            'ocr_bank_name', 'ocr_account_last_digits',
+            'ocr_amount', 'ocr_transaction_id', 'ocr_payment_date',
+            'payer_name', 'payer_identification', 'payer_email',
+            'payer_address', 'payer_phone', 'document_number',
+        )
+        for field in editable:
+            if field in data:
+                setattr(payment, field, data[field])
+
+        payment.status           = Payment.Status.PENDING
+        payment.rejection_reason = ''
+        payment.validated_by     = None
+        payment.validated_at     = None
+        payment.save()
+
+        logger.info("Payment %s resubmitted by bootcamper %s.", payment.id, request.user.id)
+        return Response(PaymentOCRStatusSerializer(payment).data)
+
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description='Pago eliminado'),
+            400: OpenApiResponse(description='El pago no se puede eliminar en su estado actual'),
+            404: OpenApiResponse(description='Pago no encontrado'),
+        },
+        summary='Eliminar pago propio',
+        description='El bootcamper elimina un pago propio en estado DRAFT o REJECTED.',
+        tags=['Pagos — Bootcamper'],
+    )
+    def delete(self, request, pk):
+        payment = get_object_or_404(Payment, pk=pk, bootcamper=request.user)
+
+        if payment.status not in (Payment.Status.DRAFT, Payment.Status.REJECTED):
+            return Response(
+                {'error': 'Solo se pueden eliminar pagos en revisión o rechazados.', 'code': 'NOT_DELETABLE'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        logger.info("Payment %s deleted by bootcamper %s.", payment.id, request.user.id)
+        payment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
@@ -9,6 +9,7 @@ import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
 import MeetingFormModal from '../components/MeetingFormModal'
 import { useMeetingMutations } from '../hooks/use-meetings'
 import { toDatetimeLocal } from '../lib/meetings'
+import { isValidIdentificacion } from '../utils/cedula'
 
 const PAGE_SIZE = 10
 
@@ -83,6 +84,29 @@ function LeadStatusBadge({ status, lastOutcome }) {
   }
   const label = STATUS_LABELS[status] ?? OUTCOME_LABELS[lastOutcome] ?? status
   const color = STATUS_COLORS[status] ?? OUTCOME_COLORS[lastOutcome] ?? 'bg-gray-100 text-gray-500'
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
+      {label}
+    </span>
+  )
+}
+
+const VERIFICATION_LABELS = {
+  INVITED: 'Invitado',
+  PENDING_VERIFICATION: 'Pendiente de verificación',
+  VERIFIED: 'Verificado',
+}
+
+const VERIFICATION_COLORS = {
+  INVITED: 'bg-gray-100 text-gray-500',
+  PENDING_VERIFICATION: 'bg-yellow-100 text-yellow-700',
+  VERIFIED: 'bg-green-100 text-green-700',
+}
+
+function VerificationBadge({ status }) {
+  if (!status) return null
+  const label = VERIFICATION_LABELS[status] ?? status
+  const color = VERIFICATION_COLORS[status] ?? 'bg-gray-100 text-gray-500'
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
       {label}
@@ -693,7 +717,8 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
 // ─── View Lead Modal ──────────────────────────────────────────────────────────
 
-function ViewLeadModal({ lead, onClose }) {
+function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
+  const queryClient = useQueryClient()
   const { data: interactions = [] } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -701,10 +726,19 @@ function ViewLeadModal({ lead, onClose }) {
 
   const lastInteraction = interactions[0]
   const rating = lastInteraction?.interest_level ?? null
+  const isConverted = lead.status === 'CONVERTED'
+  const profile = lead.bootcamper_profile
+
+  const verifyMutation = useMutation({
+    mutationFn: () => verifyBootcamper(lead.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-sm shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-md shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -765,6 +799,34 @@ function ViewLeadModal({ lead, onClose }) {
             <div>
               <p className="font-semibold text-gray-700 mb-0.5">Interés en programa:</p>
               <p className="text-gray-600">{lead.program_interest}</p>
+            </div>
+          )}
+          {isConverted && profile && (
+            <div className="pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-semibold text-gray-700">Datos del bootcamper:</p>
+                <VerificationBadge status={profile.verification_status} />
+              </div>
+              <div className="text-gray-600 space-y-0.5">
+                <p>{profile.first_name} {profile.last_name}</p>
+                <p>{profile.email}</p>
+                {profile.cedula && <p>Cédula/RUC: {profile.cedula}</p>}
+                {profile.phone && <p>{profile.phone}</p>}
+              </div>
+              {profile.verification_status === 'VERIFIED' && profile.verified_by_name && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Verificado por {profile.verified_by_name}
+                </p>
+              )}
+              {(isOwned || isAdmin) && profile.verification_status === 'PENDING_VERIFICATION' && (
+                <button
+                  onClick={() => verifyMutation.mutate()}
+                  disabled={verifyMutation.isPending}
+                  className="mt-3 w-full py-2 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
+                >
+                  {verifyMutation.isPending ? 'Verificando...' : 'Marcar como verificado'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -904,7 +966,7 @@ function leadFieldClass(errors, key) {
   }`
 }
 
-function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true }) {
+function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, isAdmin = false }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
@@ -997,26 +1059,32 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
             />
           </div>
 
-          <div>
-            <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-              <input
-                type="checkbox"
-                data-testid="create-lead-autoassign"
-                checked={form.autoAssign && canSelfAssign}
-                disabled={!canSelfAssign}
-                onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
-                className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
-              />
-              <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
-                Asignarme este lead
-              </span>
-            </label>
-            {!canSelfAssign && (
-              <p className="text-xs text-gray-500 mt-1 ml-7">
-                La asignación la realiza el Administrador.
-              </p>
-            )}
-          </div>
+          {/* CB-QA: un Administrador nunca puede ser owner de un lead (ver
+              LeadAssignView, permission_classes=[IsSalesperson] en el backend),
+              así que este checkbox ni se le muestra — antes se veía habilitado
+              y al tildarlo la asignación fallaba en silencio tras crear el lead. */}
+          {!isAdmin && (
+            <div>
+              <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                <input
+                  type="checkbox"
+                  data-testid="create-lead-autoassign"
+                  checked={form.autoAssign && canSelfAssign}
+                  disabled={!canSelfAssign}
+                  onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
+                  className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
+                />
+                <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
+                  Asignarme este lead
+                </span>
+              </label>
+              {!canSelfAssign && (
+                <p className="text-xs text-gray-500 mt-1 ml-7">
+                  La asignación la realiza el Administrador.
+                </p>
+              )}
+            </div>
+          )}
 
 
           <div className="flex gap-3 pt-2">
@@ -1427,63 +1495,101 @@ function VendorFilterDropdown({ value, onChange }) {
   )
 }
 
+// ─── Resend Invitation Modal ────────────────────────────────────────────────
+
+function ResendInvitationModal({ lead, onClose }) {
+  const queryClient = useQueryClient()
+  const [copied, setCopied] = useState(false)
+
+  const resendMutation = useMutation({
+    mutationFn: () => resendInvitation(lead.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
+
+  const errorMsg = resendMutation.error
+    ? resendMutation.error.response?.status === 429
+      ? 'Demasiados reenvíos en poco tiempo. Intenta de nuevo más tarde.'
+      : (resendMutation.error.response?.data?.error ?? 'No pudimos reenviar la invitación. Intenta de nuevo.')
+    : null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Reenviar invitación</h2>
+
+        {!resendMutation.data && !resendMutation.isPending && (
+          <>
+            <p className="text-sm text-gray-500 mb-6">
+              Se generará un link nuevo para <span className="font-semibold text-gray-800">{lead.name}</span> y el
+              anterior dejará de funcionar.
+            </p>
+            {errorMsg && <p className="text-red-500 text-sm mb-4">{errorMsg}</p>}
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => resendMutation.mutate()}
+                className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
+              >
+                Reenviar
+              </button>
+            </div>
+          </>
+        )}
+
+        {resendMutation.isPending && <p className="text-sm text-gray-500 py-4">Reenviando...</p>}
+
+        {resendMutation.data && (
+          <>
+            <p className="text-sm text-gray-500 mb-6">Se generó un link nuevo. El anterior ya no funciona.</p>
+            <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-1.5 mb-6">
+              <span className="text-gray-500">Nuevo enlace de invitación</span>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={resendMutation.data.invitation_link}
+                  onFocus={(e) => e.target.select()}
+                  className="flex-1 min-w-0 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2 py-1.5 truncate"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(resendMutation.data.invitation_link)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                  className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
+                >
+                  {copied ? '¡Copiado!' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
+            >
+              Listo
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Row Actions Dropdown ─────────────────────────────────────────────────────
 
 // ─── Cédula Validator ─────────────────────────────────────────────────────────
 
-function validateCedulaEcuatoriana(cedula) {
-  if (!/^\d{10}$/.test(cedula)) return false
-  const digits = cedula.split('').map(Number)
-  const province = digits[0] * 10 + digits[1]
-  if (province < 1 || province > 24) return false
-  if (digits[2] >= 6) return false
-  const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2]
-  let sum = 0
-  for (let i = 0; i < 9; i++) {
-    let val = digits[i] * coefficients[i]
-    if (val >= 10) val -= 9
-    sum += val
-  }
-  const checkDigit = sum % 10 === 0 ? 0 : 10 - (sum % 10)
-  return checkDigit === digits[9]
-}
-
-function mod11CheckDigit(digits, coefficients) {
-  const sum = digits.reduce((acc, d, i) => acc + d * coefficients[i], 0)
-  const r = sum % 11
-  const expected = r === 0 ? 0 : 11 - r
-  return expected === 10 ? null : expected
-}
-
-function validateRucEcuatoriano(ruc) {
-  if (!/^\d{13}$/.test(ruc)) return false
-  const digits = ruc.split('').map(Number)
-  const province = digits[0] * 10 + digits[1]
-  if (province < 1 || province > 24) return false
-  const thirdDigit = digits[2]
-  if (thirdDigit <= 5) {
-    return validateCedulaEcuatoriana(ruc.slice(0, 10)) && ruc.endsWith('001')
-  }
-  if (thirdDigit === 6) {
-    const expected = mod11CheckDigit(digits.slice(0, 8), [3, 2, 7, 6, 5, 4, 3, 2])
-    return expected !== null && expected === digits[8]
-  }
-  if (thirdDigit === 9) {
-    const expected = mod11CheckDigit(digits.slice(0, 9), [4, 3, 2, 7, 6, 5, 4, 3, 2])
-    return expected !== null && expected === digits[9]
-  }
-  return false
-}
-
-function validateIdentificacion(value) {
-  if (value.length === 10) return validateCedulaEcuatoriana(value)
-  if (value.length === 13) return validateRucEcuatoriano(value)
-  return false
-}
-
 function cedulaInputBorderClass(hasError, cedula) {
   if (hasError) return 'border-red-400'
-  if ((cedula.length === 10 || cedula.length === 13) && validateIdentificacion(cedula)) return 'border-green-400'
+  if ((cedula.length === 10 || cedula.length === 13) && isValidIdentificacion(cedula)) return 'border-green-400'
   return 'border-gray-200'
 }
 
@@ -1534,6 +1640,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   const [phone, setPhone]     = useState(lead.phone || '')
   const [errors, setErrors]   = useState({})
   const [result, setResult]   = useState(null) // conversion success data
+  const [copied, setCopied]   = useState(false)
 
   const { data: programs = [], isLoading: loadingPrograms } = useQuery({
     queryKey: ['programs'],
@@ -1586,7 +1693,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   const validate = () => {
     const errs = {}
     if (!cedula.trim()) errs.cedula = 'La cédula o RUC es requerida.'
-    else if (!validateIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
+    else if (!isValidIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
     if (!email.trim()) errs.email = 'El email es requerido para enviar la invitación.'
     if (!programId) errs.programId = 'Selecciona un programa.'
     const pct = Number(discount)
@@ -1630,9 +1737,30 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               <span className="font-medium text-gray-800">{result.email}</span>
             </div>
             {result.invitation_link && (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <span className="text-gray-500">Enlace de invitación enviado</span>
-                <p className="text-xs text-gray-400 break-all">{result.invitation_link}</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={result.invitation_link}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 min-w-0 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2 py-1.5 truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(result.invitation_link)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
+                  >
+                    {copied ? '¡Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Si el correo no llega, comparte este link por WhatsApp. Expira en 72 horas.
+                </p>
               </div>
             )}
             {result.is_returning && (
@@ -1686,7 +1814,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${cedulaInputBorderClass(errors.cedula, cedula)}`}
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
-            {(cedula.length === 10 || cedula.length === 13) && validateIdentificacion(cedula) && (
+            {(cedula.length === 10 || cedula.length === 13) && isValidIdentificacion(cedula) && (
               <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? 'Cédula válida' : 'RUC válido'}</p>
             )}
           </div>
@@ -1817,8 +1945,12 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit }) {
+function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit, onResendInvitation }) {
   const isConverted = lead.status === 'CONVERTED'
+  // El botón de reenvío sólo tiene sentido mientras el bootcamper no activó su
+  // cuenta — una vez PENDING_VERIFICATION o VERIFIED el link ya no sirve para
+  // nada (backend lo rechazaría con ALREADY_ACTIVATED).
+  const canResendInvitation = isConverted && lead.bootcamper_verification_status === 'INVITED'
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -1840,11 +1972,11 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
   const handleToggle = () => {
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect()
-      const upward = window.innerHeight - rect.bottom < 220
+      const upward = window.innerHeight - rect.bottom < 260
       setOpenUpward(upward)
       setPos({
         top: upward ? rect.top - 4 : rect.bottom + 4,
-        left: rect.right - 160,
+        left: rect.right - 176,
       })
     }
     setOpen((v) => !v)
@@ -1866,7 +1998,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
       {open && (
         <div
           ref={menuRef}
-          className={`fixed w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 ${openUpward ? '-translate-y-full' : ''}`}
+          className={`fixed w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 ${openUpward ? '-translate-y-full' : ''}`}
           style={{ top: pos.top, left: pos.left }}
         >
           <button
@@ -1911,6 +2043,14 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
             >
               Convertir lead
+            </button>
+          )}
+          {(isOwned || isAdmin) && canResendInvitation && (
+            <button
+              onClick={() => { onResendInvitation(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Reenviar invitación
             </button>
           )}
           {!isAdmin && !isConverted && (isOwned ? (
@@ -2002,6 +2142,7 @@ export default function LeadsDashboard() {
   const [releaseTarget, setReleaseTarget] = useState(null)
   const [reassignTarget, setReassignTarget] = useState(null)
   const [convertTarget, setConvertTarget] = useState(null)
+  const [resendTarget, setResendTarget]   = useState(null)
   const [editLead, setEditLead]           = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState(null) // { duplicate, payload }
@@ -2243,7 +2384,15 @@ export default function LeadsDashboard() {
           {isAdmin && <VendorFilterDropdown value={vendorFilter} onChange={setVendorFilter} />}
         </div>
 
-        {/* Tabs */}
+        {/* Tabs
+            CB-QA: se evaluó ocultar "Disponibles" para el Admin porque el
+            backend (LeadListCreateView.get) manda todos los leads dentro de
+            my_leads y deja available_leads vacío para ese rol. Se revierte:
+            CB-223/CB-225 agregaron el flujo "Asignar a" sobre leads sin dueño
+            para el Admin, y sus tests asumen que ambas pestañas siguen
+            existiendo — separar la vista real de Admin (all/assigned/
+            unassigned_leads, ya expuestos por el backend) queda pendiente de
+            hacer en el frontend, pero no acá para no romper CB-225. */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
           {isAdmin ? (
             <>
@@ -2424,6 +2573,7 @@ export default function LeadsDashboard() {
                     onAssign={() => assignMutation.mutate(lead.id)}
                     onConvert={() => setConvertTarget(lead)}
                     onEdit={() => setEditLead(lead)}
+                    onResendInvitation={() => setResendTarget(lead)}
                   />
                 </td>
               </tr>
@@ -2441,7 +2591,14 @@ export default function LeadsDashboard() {
       </div>
 
       {/* Modals */}
-      {viewLead && <ViewLeadModal lead={viewLead} onClose={() => setViewLead(null)} />}
+      {viewLead && (
+        <ViewLeadModal
+          lead={viewLead}
+          isOwned={viewLead._isOwned}
+          isAdmin={isAdmin}
+          onClose={() => setViewLead(null)}
+        />
+      )}
 
       {historyLead && (
         <ViewHistoryModal lead={historyLead} onClose={() => setHistoryLead(null)} />
@@ -2460,6 +2617,13 @@ export default function LeadsDashboard() {
           lead={convertTarget}
           onClose={() => setConvertTarget(null)}
           onSuccess={() => { flashLead(convertTarget.id); showToast(`${convertTarget.name} convertido correctamente.`) }}
+        />
+      )}
+
+      {resendTarget && (
+        <ResendInvitationModal
+          lead={resendTarget}
+          onClose={() => setResendTarget(null)}
         />
       )}
 
@@ -2503,12 +2667,14 @@ export default function LeadsDashboard() {
           onSubmit={(data, autoAssign) => { autoAssignRef.current = autoAssign; createMutation.mutate(data) }}
           isLoading={createMutation.isPending}
           canSelfAssign={selfAssignEnabled}
+          isAdmin={isAdmin}
         />
       )}
 
       {duplicateWarning && (
         <DuplicateLeadModal
           duplicate={duplicateWarning.duplicate}
+          payload={duplicateWarning.payload}
           isLoading={createMutation.isPending}
           onClose={() => setDuplicateWarning(null)}
           onConfirm={() =>

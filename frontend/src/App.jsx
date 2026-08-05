@@ -9,6 +9,8 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import CheckEmailPage from './pages/CheckEmailPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import ResetSuccessPage from './pages/ResetSuccessPage'
+import OnboardingPage from './pages/OnboardingPage'
+import OnboardingSuccessPage from './pages/OnboardingSuccessPage'
 import LeadsDashboard from './pages/LeadsDashboard'
 import UsersPage from './pages/UsersPage'
 import AnalyticsPage from './pages/AnalyticsPage'
@@ -51,6 +53,8 @@ export default function App() {
         <Route path="/check-email" element={<CheckEmailPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/reset-success" element={<ResetSuccessPage />} />
+        <Route path="/onboarding/:token" element={<OnboardingPage />} />
+        <Route path="/onboarding-success" element={<OnboardingSuccessPage />} />
 
         {/* Protected app routes */}
         <Route

@@ -11,11 +11,30 @@ function Row({ label, value }) {
 }
 
 /**
+ * Arma el texto de coincidencia según qué campo(s) realmente matcheó el
+ * backend. `find_duplicate_lead` (services.py) hace una sola consulta
+ * `phone=X OR email=Y` y no distingue cuál matcheó, así que la distinción se
+ * hace acá: comparamos lo que el usuario tipeó (`payload`) contra el lead que
+ * volvió (`duplicate`).
+ */
+function matchDescription(duplicate, payload) {
+  const phoneMatches = Boolean(payload?.phone && duplicate?.phone === payload.phone)
+  const emailMatches = Boolean(payload?.email && duplicate?.email === payload.email)
+
+  if (phoneMatches && emailMatches) return 'el mismo teléfono y el mismo email'
+  if (phoneMatches) return 'el mismo teléfono'
+  if (emailMatches) return 'el mismo email'
+  // Fallback: no deberíamos llegar acá si el backend efectivamente encontró un
+  // duplicado, pero por las dudas no dejamos el mensaje en blanco.
+  return 'el mismo teléfono o email'
+}
+
+/**
  * Advertencia de posible duplicado (CR-011). El backend responde 409 con el
  * lead que coincide por teléfono o email; acá se muestra para que el usuario
  * decida, y al confirmar se reenvía la creación con confirm_duplicate.
  */
-export default function DuplicateLeadModal({ duplicate, isLoading, onConfirm, onClose }) {
+export default function DuplicateLeadModal({ duplicate, payload, isLoading, onConfirm, onClose }) {
   const dialogRef = useModalA11y(onClose)
 
   return (
@@ -38,7 +57,7 @@ export default function DuplicateLeadModal({ duplicate, isLoading, onConfirm, on
           <div>
             <h2 className="text-lg font-bold text-gray-900">Posible lead duplicado</h2>
             <p className="text-sm text-gray-500 mt-0.5">
-              Ya existe un lead con el mismo teléfono o email.
+              Ya existe un lead con {matchDescription(duplicate, payload)}.
             </p>
           </div>
         </div>

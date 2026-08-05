@@ -178,7 +178,11 @@ class TestFinanceBootcampers:
         assert row['bootcamper_id'] == str(bc.id)
         assert Decimal(row['total_paid']) == Decimal('500.00')
         assert row['pending_payments'] == 1
-        assert row['program_count'] == 1
+        # Antes se devolvía `program_count` (cuántos programas tenía) y no cuál.
+        # Ahora hay una fila por (bootcamper, programa), con el programa a la
+        # vista: sin eso no se podía mostrar de qué se le cobra ni filtrar.
+        assert row['program_id'] == str(program.id)
+        assert row['program_name'] == program.name
 
     def test_empty_for_finance_without_bootcampers(self, db, admin_user, finance_user):
         body = make_client(admin_user).get(bootcampers_url(finance_user)).json()
@@ -219,3 +223,110 @@ class TestConversionLeavesTheLink:
         assert assigned_lead.bootcamper is not None
         assert str(assigned_lead.bootcamper_id) == result['bootcamper_id']
         assert assigned_lead.owner == salesperson_user
+
+
+class TestProgramAndCohortInCards:
+    """El defecto reportado: la tarjeta no decía de qué programa ni cohorte se cobra."""
+
+    def _cohort(self, program, number=1, status=None):
+        import datetime
+
+        from apps.programs.models import Cohort
+
+        start = datetime.date.today().replace(day=1)
+        return Cohort.objects.create(
+            program=program, number=number, start_month=start,
+            end_month=(start + datetime.timedelta(days=90)).replace(day=1),
+            status=status or Cohort.Status.IN_PROGRESS,
+        )
+
+    def _enroll(self, bootcamper, program, cohort):
+        from apps.programs.models import Enrollment
+
+        return Enrollment.objects.create(
+            bootcamper=bootcamper, bootcamp=program, cohort=cohort,
+            start_date=program.start_date, agreed_price=program.total_cost,
+        )
+
+    def test_card_carries_program_and_cohort(
+        self, db, admin_user, finance_user, program, bootcamper_factory
+    ):
+        bc = bootcamper_factory('concohorte@test.com', owner=finance_user)
+        cohort = self._cohort(program, number=3)
+        self._enroll(bc, program, cohort)
+
+        row = make_client(admin_user).get(bootcampers_url(finance_user)).json()['bootcampers'][0]
+        assert row['program_name'] == program.name
+        assert row['cohort_number'] == 3
+        assert row['cohort_id'] == str(cohort.id)
+
+    def test_card_carries_the_cohort_status(
+        self, db, admin_user, finance_user, program, bootcamper_factory
+    ):
+        """Es lo que separa la vista entre cohortes en curso y finalizadas."""
+        from apps.programs.models import Cohort
+
+        bc = bootcamper_factory('finalizada@test.com', owner=finance_user)
+        self._enroll(bc, program, self._cohort(program, status=Cohort.Status.FINISHED))
+
+        row = make_client(admin_user).get(bootcampers_url(finance_user)).json()['bootcampers'][0]
+        assert row['cohort_status'] == Cohort.Status.FINISHED
+
+    def test_cohort_is_none_without_enrollment(
+        self, db, admin_user, finance_user, program, bootcamper_factory
+    ):
+        """Hay pagos sin inscripción: no debe reventar ni inventar cohorte."""
+        bc = bootcamper_factory('sinenroll@test.com', owner=finance_user)
+        pay(bc, program, Decimal('100.00'))
+
+        row = make_client(admin_user).get(bootcampers_url(finance_user)).json()['bootcampers'][0]
+        assert row['cohort_id'] is None
+        assert row['cohort_status'] is None
+        assert row['program_name'] == program.name
+
+    def test_is_fully_paid_flips_when_the_debt_is_cleared(
+        self, db, admin_user, finance_user, program, bootcamper_factory
+    ):
+        """Antes este campo no venía, así que la pestaña de finalizados quedaba en 0."""
+        debe = bootcamper_factory('debe@test.com', owner=finance_user)
+        pago = bootcamper_factory('pago@test.com', owner=finance_user)
+        pay(debe, program, Decimal('100.00'))
+        pay(pago, program, program.total_cost)
+
+        rows = make_client(admin_user).get(bootcampers_url(finance_user)).json()['bootcampers']
+        by_email = {r['email']: r for r in rows}
+        assert by_email['debe@test.com']['is_fully_paid'] is False
+        assert by_email['pago@test.com']['is_fully_paid'] is True
+
+    def test_one_card_per_program(
+        self, db, admin_user, finance_user, program, bootcamper_factory
+    ):
+        """Una persona en dos programas se cobra por separado en cada uno."""
+        import datetime
+
+        from apps.programs.models import Program
+
+        otro = Program.objects.create(
+            name='Segundo programa',
+            start_date=datetime.date.today(),
+            end_date=datetime.date.today() + datetime.timedelta(days=90),
+            total_cost='900.00',
+        )
+        bc = bootcamper_factory('dosprogramas@test.com', owner=finance_user)
+        pay(bc, program, Decimal('100.00'))
+        pay(bc, otro, Decimal('50.00'))
+
+        rows = make_client(admin_user).get(bootcampers_url(finance_user)).json()['bootcampers']
+        assert len(rows) == 2
+        assert {r['program_name'] for r in rows} == {program.name, 'Segundo programa'}
+
+    def test_assigned_without_payments_still_appears(
+        self, db, admin_user, finance_user, program, bootcamper_factory
+    ):
+        """Recién asignado y sin comprobantes, debe verse en la cartera igual."""
+        bc = bootcamper_factory('recien@test.com', owner=finance_user)
+        self._enroll(bc, program, self._cohort(program, number=9))
+
+        rows = make_client(admin_user).get(bootcampers_url(finance_user)).json()['bootcampers']
+        assert len(rows) == 1
+        assert rows[0]['cohort_number'] == 9
