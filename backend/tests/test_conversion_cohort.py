@@ -5,6 +5,7 @@ import pytest
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.leads.models import Lead
 from apps.programs.models import Cohort, Enrollment, Program
 from apps.programs.services import resolve_assignable_cohort
 
@@ -16,6 +17,13 @@ def make_client(user):
     refresh = RefreshToken.for_user(user)
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
     return client
+
+
+def qualify(lead):
+    """La conversión exige QUALIFIED; assigned_lead viene en INTERESTED."""
+    lead.status = Lead.Status.QUALIFIED
+    lead.save(update_fields=['status'])
+    return lead
 
 
 def convert_url(lead):
@@ -82,7 +90,7 @@ class TestConversionWithCohort:
         cohort = make_cohort(program, status=Cohort.Status.IN_PROGRESS)
 
         resp = make_client(salesperson_user).post(
-            convert_url(assigned_lead),
+            convert_url(qualify(assigned_lead)),
             payload(program, cohort_id=str(cohort.id), email='con.cohorte@test.com'),
             format='json',
         )
@@ -98,7 +106,7 @@ class TestConversionWithCohort:
         cohort = make_cohort(program, start_month=month)
 
         make_client(salesperson_user).post(
-            convert_url(assigned_lead),
+            convert_url(qualify(assigned_lead)),
             payload(program, cohort_id=str(cohort.id), email='inicio@test.com'),
             format='json',
         )
@@ -109,7 +117,7 @@ class TestConversionWithCohort:
         cohort = make_cohort(program, status=Cohort.Status.FINISHED)
 
         resp = make_client(salesperson_user).post(
-            convert_url(assigned_lead),
+            convert_url(qualify(assigned_lead)),
             payload(program, cohort_id=str(cohort.id), email='cerrada@test.com'),
             format='json',
         )
@@ -126,7 +134,7 @@ class TestConversionWithCohort:
         before = CustomUser.objects.count()
 
         make_client(salesperson_user).post(
-            convert_url(assigned_lead),
+            convert_url(qualify(assigned_lead)),
             payload(program, cohort_id=str(cohort.id), email='nada@test.com'),
             format='json',
         )
@@ -141,7 +149,7 @@ class TestConversionWithCohort:
     ):
         """Hay programas sin cohortes: exigirla bloquearía la conversión."""
         resp = make_client(salesperson_user).post(
-            convert_url(assigned_lead),
+            convert_url(qualify(assigned_lead)),
             payload(program, email='sin.cohorte@test.com'),
             format='json',
         )
@@ -156,7 +164,7 @@ class TestConversionWithCohort:
     def test_unknown_cohort_gives_404(self, db, salesperson_user, program, assigned_lead):
         import uuid
         resp = make_client(salesperson_user).post(
-            convert_url(assigned_lead),
+            convert_url(qualify(assigned_lead)),
             payload(program, cohort_id=str(uuid.uuid4()), email='fantasma@test.com'),
             format='json',
         )
@@ -175,7 +183,7 @@ class TestConversionWithCohort:
         foreign = make_cohort(other, number=1)
 
         resp = make_client(salesperson_user).post(
-            convert_url(assigned_lead),
+            convert_url(qualify(assigned_lead)),
             payload(program, cohort_id=str(foreign.id), email='ajena@test.com'),
             format='json',
         )
@@ -188,7 +196,7 @@ class TestConversionWithCohort:
         """SET_NULL: borrar una edición no puede borrar a la persona inscrita."""
         cohort = make_cohort(program)
         make_client(salesperson_user).post(
-            convert_url(assigned_lead),
+            convert_url(qualify(assigned_lead)),
             payload(program, cohort_id=str(cohort.id), email='sobrevive@test.com'),
             format='json',
         )

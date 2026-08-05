@@ -139,13 +139,16 @@ class LeadAdminWriteSerializer(LeadWriteSerializer):
 
 class ConvertLeadSerializer(serializers.Serializer):
     """Validate lead-to-bootcamper conversion input."""
-    cedula     = serializers.CharField(max_length=10)
+    cedula     = serializers.CharField(max_length=13)
     program_id = serializers.UUIDField()
     # Opcional: hay programas sin cohortes creadas todavía, y exigirla bloquearía
     # la conversión. Cuando viene, el servicio comprueba que sea de ese programa
     # y que no esté finalizada.
     cohort_id  = serializers.UUIDField(required=False, allow_null=True)
-    email      = serializers.EmailField(required=False, allow_blank=True)
+    # Obligatorio: la cuenta se crea sin contraseña utilizable y la persona la
+    # activa vía un link de invitación que llega a este correo (#253). Ya no
+    # existe el placeholder bootcamper_<cedula>@placeholder.com.
+    email      = serializers.EmailField()
     phone      = serializers.CharField(required=False, allow_blank=True)
     # Sólo el porcentaje: el precio final lo calcula el backend. Si el cliente
     # pudiera mandarlo, cualquiera podría inscribir a alguien por el monto que

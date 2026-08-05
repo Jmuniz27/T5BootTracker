@@ -5,6 +5,7 @@ import pytest
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.leads.models import Lead
 from apps.leads.services import convert_lead_to_bootcamper
 from apps.payments.models import Payment
 from apps.payments.services import PaymentProgressService
@@ -17,6 +18,13 @@ def make_client(user):
     refresh = RefreshToken.for_user(user)
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
     return client
+
+
+def qualify(lead):
+    """La conversión exige QUALIFIED; assigned_lead viene en INTERESTED."""
+    lead.status = Lead.Status.QUALIFIED
+    lead.save(update_fields=['status'])
+    return lead
 
 
 def convert(lead, program, cedula='1713175071', **extra):
@@ -46,14 +54,14 @@ class TestApplyDiscount:
 
 class TestConversionRecordsDiscount:
     def test_without_discount_the_price_is_the_program_cost(self, db, program, assigned_lead):
-        convert(assigned_lead, program, email='sin.desc@test.com')
+        convert(qualify(assigned_lead), program, email='sin.desc@test.com')
 
         enrollment = Enrollment.objects.get(bootcamp=program)
         assert enrollment.discount_percentage == Decimal('0.00')
         assert enrollment.agreed_price == program.total_cost
 
     def test_discount_is_stored_with_the_resulting_price(self, db, program, assigned_lead):
-        convert(assigned_lead, program, email='con.desc@test.com', discount_percentage=Decimal('25'))
+        convert(qualify(assigned_lead), program, email='con.desc@test.com', discount_percentage=Decimal('25'))
 
         enrollment = Enrollment.objects.get(bootcamp=program)
         # Se guardan los dos: sin el porcentaje no se puede auditar el precio.
@@ -61,7 +69,7 @@ class TestConversionRecordsDiscount:
         assert enrollment.agreed_price == apply_discount(program.total_cost, Decimal('25'))
 
     def test_response_reports_what_was_registered(self, db, program, assigned_lead):
-        result = convert(assigned_lead, program, email='resp@test.com', discount_percentage=Decimal('10'))
+        result = convert(qualify(assigned_lead), program, email='resp@test.com', discount_percentage=Decimal('10'))
 
         assert Decimal(result['discount_percentage']) == Decimal('10')
         assert Decimal(result['agreed_price']) == apply_discount(program.total_cost, Decimal('10'))
@@ -74,7 +82,7 @@ class TestConversionEndpointValidation:
     def test_over_one_hundred_is_rejected(self, db, salesperson_user, program, assigned_lead):
         resp = make_client(salesperson_user).post(
             self.url(assigned_lead),
-            {'cedula': '1713175071', 'program_id': str(program.id), 'discount_percentage': '101'},
+            {'cedula': '1713175071', 'program_id': str(program.id), 'discount_percentage': '101', 'email': 'over100@test.com'},
             format='json',
         )
         assert resp.status_code == 400
@@ -83,7 +91,7 @@ class TestConversionEndpointValidation:
     def test_negative_is_rejected(self, db, salesperson_user, program, assigned_lead):
         resp = make_client(salesperson_user).post(
             self.url(assigned_lead),
-            {'cedula': '1713175071', 'program_id': str(program.id), 'discount_percentage': '-5'},
+            {'cedula': '1713175071', 'program_id': str(program.id), 'discount_percentage': '-5', 'email': 'negative@test.com'},
             format='json',
         )
         assert resp.status_code == 400
@@ -91,6 +99,7 @@ class TestConversionEndpointValidation:
 
     def test_the_client_cannot_set_the_final_price(self, db, salesperson_user, program, assigned_lead):
         """La cuenta la hace el backend: un precio mandado por el cliente se ignora."""
+        qualify(assigned_lead)
         resp = make_client(salesperson_user).post(
             self.url(assigned_lead),
             {
@@ -98,6 +107,7 @@ class TestConversionEndpointValidation:
                 'program_id': str(program.id),
                 'discount_percentage': '10',
                 'agreed_price': '1.00',
+                'email': 'cannot.set.price@test.com',
             },
             format='json',
         )
@@ -106,9 +116,10 @@ class TestConversionEndpointValidation:
         assert enrollment.agreed_price == apply_discount(program.total_cost, Decimal('10'))
 
     def test_omitting_it_defaults_to_zero(self, db, salesperson_user, program, assigned_lead):
+        qualify(assigned_lead)
         resp = make_client(salesperson_user).post(
             self.url(assigned_lead),
-            {'cedula': '1713175071', 'program_id': str(program.id)},
+            {'cedula': '1713175071', 'program_id': str(program.id), 'email': 'omitting@test.com'},
             format='json',
         )
         assert resp.status_code in (200, 201)

@@ -11,6 +11,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.authentication.models import CustomUser
+from apps.leads.models import Lead
 from apps.payments.models import Payment
 
 PORTFOLIO_URL = '/api/users/finance/'
@@ -204,6 +205,9 @@ class TestConversionLeavesTheLink:
         que hizo la conversión.
         """
         from apps.leads.services import convert_lead_to_bootcamper
+
+        assigned_lead.status = Lead.Status.QUALIFIED
+        assigned_lead.save(update_fields=['status'])
 
         result = convert_lead_to_bootcamper(assigned_lead, {
             'cedula': '1713175071',

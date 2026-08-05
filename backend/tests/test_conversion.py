@@ -1,5 +1,6 @@
 """Tests for lead-to-bootcamper conversion and returning bootcamper endpoints."""
 from unittest.mock import patch
+import pytest
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -60,12 +61,14 @@ class TestConvertLead:
             resp = client.post(CONVERT_URL.format(id=lead.id), {
                 'cedula':     '1713175071',
                 'program_id': str(program.id),
+                'email':      'juan.perez@test.com',
             }, format='json')
 
         assert resp.status_code == 201
         data = resp.json()
         assert data['is_returning'] is False
-        assert data['temporary_password'] is not None
+        assert data['invitation_link'] is not None
+        assert 'temporary_password' not in data
         assert data['lead_status'] == Lead.Status.CONVERTED
 
         lead.refresh_from_db()
@@ -79,6 +82,43 @@ class TestConvertLead:
         assert enrollment.start_date == program.start_date
         assert enrollment.agreed_price == program.total_cost
 
+    def test_convert_lead_single_word_name_leaves_last_name_blank(self, db, salesperson_user, program):
+        lead = Lead.objects.create(
+            name='Cher', phone='0991111111',
+            status=Lead.Status.QUALIFIED,
+            owner=salesperson_user,
+        )
+        client = make_client(salesperson_user)
+        with patch('apps.notifications.tasks.send_conversion_notification.delay'):
+            resp = client.post(CONVERT_URL.format(id=lead.id), {
+                'cedula': '1713175071', 'program_id': str(program.id),
+                'email': 'cher@test.com',
+            }, format='json')
+        assert resp.status_code == 201
+        new_user = CustomUser.objects.get(id=resp.json()['bootcamper_id'])
+        assert new_user.first_name == 'Cher'
+        assert new_user.last_name == ''
+
+    @pytest.mark.parametrize('status', [
+        Lead.Status.NEW,
+        Lead.Status.INTERESTED,
+        Lead.Status.NOT_INTERESTED,
+        Lead.Status.CONVERTED,
+    ])
+    def test_convert_lead_requires_qualified_status(self, db, salesperson_user, program, status):
+        lead = Lead.objects.create(
+            name='Estado Invalido', phone='0990000001',
+            status=status,
+            owner=salesperson_user,
+        )
+        client = make_client(salesperson_user)
+        resp = client.post(CONVERT_URL.format(id=lead.id), {
+            'cedula': '1713175071', 'program_id': str(program.id),
+            'email': 'estado.invalido@test.com',
+        }, format='json')
+        assert resp.status_code == 400
+        assert resp.json()['code'] == 'LEAD_NOT_QUALIFIED'
+
     def test_convert_lead_invalid_cedula(self, db, salesperson_user, program):
         lead = Lead.objects.create(
             name='Test', phone='0992222222',
@@ -89,9 +129,39 @@ class TestConvertLead:
         with patch('apps.notifications.tasks.send_conversion_notification.delay'):
             resp = client.post(CONVERT_URL.format(id=lead.id), {
                 'cedula': '0000000000', 'program_id': str(program.id),
+                'email': 'invalid.cedula@test.com',
             }, format='json')
         assert resp.status_code == 400
         assert resp.json()['code'] == 'INVALID_CEDULA'
+
+    def test_convert_lead_without_email_returns_400(self, db, salesperson_user, program):
+        lead = Lead.objects.create(
+            name='Sin Email', phone='0990000002',
+            status=Lead.Status.QUALIFIED,
+            owner=salesperson_user,
+        )
+        client = make_client(salesperson_user)
+        resp = client.post(CONVERT_URL.format(id=lead.id), {
+            'cedula': '1713175071', 'program_id': str(program.id),
+        }, format='json')
+        assert resp.status_code == 400
+
+    def test_convert_lead_new_account_has_unusable_password(self, db, salesperson_user, program):
+        lead = Lead.objects.create(
+            name='Sin Password', phone='0990000003',
+            status=Lead.Status.QUALIFIED,
+            owner=salesperson_user,
+        )
+        client = make_client(salesperson_user)
+        with patch('apps.notifications.tasks.send_conversion_notification.delay'):
+            resp = client.post(CONVERT_URL.format(id=lead.id), {
+                'cedula': '1713175071', 'program_id': str(program.id),
+                'email': 'sin.password@test.com',
+            }, format='json')
+        assert resp.status_code == 201
+        new_user = CustomUser.objects.get(id=resp.json()['bootcamper_id'])
+        assert new_user.has_usable_password() is False
+        assert new_user.verification_status == CustomUser.VerificationStatus.INVITED
 
     def test_convert_lead_program_not_found(self, db, salesperson_user):
         import uuid
@@ -103,6 +173,7 @@ class TestConvertLead:
         client = make_client(salesperson_user)
         resp = client.post(CONVERT_URL.format(id=lead.id), {
             'cedula': '1713175071', 'program_id': str(uuid.uuid4()),
+            'email': 'program.not.found@test.com',
         }, format='json')
         assert resp.status_code == 404
         assert resp.json()['code'] == 'PROGRAM_NOT_FOUND'
@@ -123,13 +194,14 @@ class TestConvertLead:
         with patch('apps.notifications.tasks.send_conversion_notification.delay'):
             resp = client.post(CONVERT_URL.format(id=lead.id), {
                 'cedula': '1713175071', 'program_id': str(program.id),
+                'email': 'returning@test.com',
             }, format='json')
 
         assert resp.status_code == 201
         data = resp.json()
         assert data['is_returning'] is True
         assert data['bootcamper_id'] == str(existing.id)
-        assert data['temporary_password'] is None
+        assert data['invitation_link'] is None
 
         # <-- NUEVA ASERCIÓN: Verificar Enrollment para bootcamper recurrente -->
         assert Enrollment.objects.filter(bootcamper=existing, bootcamp=program).exists()
@@ -149,6 +221,7 @@ class TestConvertLead:
         client = make_client(salesperson_user)
         resp = client.post(CONVERT_URL.format(id=lead.id), {
             'cedula': '1713175071', 'program_id': str(program.id),
+            'email': 'admin.conflict@test.com',
         }, format='json')
         assert resp.status_code == 409
         assert resp.json()['code'] == 'EMAIL_CONFLICT'
@@ -164,6 +237,7 @@ class TestConvertLead:
         with patch('apps.notifications.tasks.send_conversion_notification.delay') as mock_delay:
             resp = client.post(CONVERT_URL.format(id=lead.id), {
                 'cedula': '1713175071', 'program_id': str(program.id),
+                'email': 'celery.test@test.com',
             }, format='json')
         assert resp.status_code == 201
         mock_delay.assert_called_once()
@@ -173,6 +247,7 @@ class TestConvertLead:
         client = make_client(bootcamper_user)
         resp = client.post(CONVERT_URL.format(id=lead.id), {
             'cedula': '1713175071', 'program_id': str(program.id),
+            'email': 'unauthorized@test.com',
         }, format='json')
         assert resp.status_code == 403
 
@@ -188,6 +263,7 @@ class TestConvertLead:
         client = make_client(salesperson_user)
         resp = client.post(CONVERT_URL.format(id=lead.id), {
             'cedula': '1713175071', 'program_id': str(program.id),
+            'email': 'no.tuyo@test.com',
         }, format='json')
         assert resp.status_code == 403
         assert resp.json()['code'] == 'NOT_OWNER'

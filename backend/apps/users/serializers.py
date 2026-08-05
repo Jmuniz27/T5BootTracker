@@ -72,9 +72,10 @@ class AdminUserSerializer(CoordinatorScopeMixin, UserDataSerializer):
     coordinator_program_names = serializers.SerializerMethodField()
 
     class Meta(UserDataSerializer.Meta):
-        fields = UserDataSerializer.Meta.fields + ('cedula',) + COORDINATOR_FIELDS + (
+        fields = UserDataSerializer.Meta.fields + ('cedula', 'verification_status') + COORDINATOR_FIELDS + (
             'coordinator_program_names',
         )
+        read_only_fields = UserDataSerializer.Meta.read_only_fields + ('verification_status',)
 
     def get_coordinator_program_names(self, obj):
         """Nombres para pintar la tabla sin que el cliente cruce ids."""

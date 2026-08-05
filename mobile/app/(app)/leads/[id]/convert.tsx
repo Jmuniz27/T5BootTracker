@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
 import { convertLead, getPrograms, type Program } from '../../../../src/api/leads.api';
 import ProgramSelect from '../../../../src/components/ProgramSelect';
+import { validateIdentificacion } from '../../../../src/utils/identificacion';
 
 export default function ConvertLeadScreen() {
   const router = useRouter();
@@ -40,7 +41,8 @@ export default function ConvertLeadScreen() {
       .catch(() => {});
   }, [program]);
 
-  const canSubmit = cedula.trim().length === 10 && programId !== '' && !loading;
+  const canSubmit =
+    validateIdentificacion(cedula.trim()) && programId !== '' && email.trim() !== '' && !loading;
 
   async function submit() {
     setLoading(true);
@@ -49,7 +51,7 @@ export default function ConvertLeadScreen() {
       await convertLead(id, {
         cedula: cedula.trim(),
         program_id: programId,
-        email: email.trim() || undefined,
+        email: email.trim(),
         phone: phone.trim() || undefined,
       });
       router.back();
@@ -90,21 +92,21 @@ export default function ConvertLeadScreen() {
           {name ? <Text style={s.leadName}>{name}</Text> : null}
 
           <View style={s.card}>
-            <Text style={s.label}>Cédula *</Text>
+            <Text style={s.label}>Cédula / RUC *</Text>
             <TextInput
               style={s.input}
               value={cedula}
-              onChangeText={(v) => setCedula(v.replace(/[^0-9]/g, '').slice(0, 10))}
-              placeholder="10 dígitos"
+              onChangeText={(v) => setCedula(v.replace(/[^0-9]/g, '').slice(0, 13))}
+              placeholder="10 dígitos (cédula) o 13 (RUC)"
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
-              maxLength={10}
+              maxLength={13}
             />
 
             <Text style={s.label}>Programa *</Text>
             <ProgramSelect programs={programs} selectedId={programId || null} onSelect={setProgramId} />
 
-            <Text style={s.label}>Email</Text>
+            <Text style={s.label}>Email *</Text>
             <TextInput
               style={s.input}
               value={email}

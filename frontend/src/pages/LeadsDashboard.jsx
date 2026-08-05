@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
+import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
 import CustomSelect from '../components/CustomSelect'
 import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
@@ -1453,18 +1454,88 @@ function validateCedulaEcuatoriana(cedula) {
   return checkDigit === digits[9]
 }
 
+function mod11CheckDigit(digits, coefficients) {
+  const sum = digits.reduce((acc, d, i) => acc + d * coefficients[i], 0)
+  const r = sum % 11
+  const expected = r === 0 ? 0 : 11 - r
+  return expected === 10 ? null : expected
+}
+
+function validateRucEcuatoriano(ruc) {
+  if (!/^\d{13}$/.test(ruc)) return false
+  const digits = ruc.split('').map(Number)
+  const province = digits[0] * 10 + digits[1]
+  if (province < 1 || province > 24) return false
+  const thirdDigit = digits[2]
+  if (thirdDigit <= 5) {
+    return validateCedulaEcuatoriana(ruc.slice(0, 10)) && ruc.endsWith('001')
+  }
+  if (thirdDigit === 6) {
+    const expected = mod11CheckDigit(digits.slice(0, 8), [3, 2, 7, 6, 5, 4, 3, 2])
+    return expected !== null && expected === digits[8]
+  }
+  if (thirdDigit === 9) {
+    const expected = mod11CheckDigit(digits.slice(0, 9), [4, 3, 2, 7, 6, 5, 4, 3, 2])
+    return expected !== null && expected === digits[9]
+  }
+  return false
+}
+
+function validateIdentificacion(value) {
+  if (value.length === 10) return validateCedulaEcuatoriana(value)
+  if (value.length === 13) return validateRucEcuatoriano(value)
+  return false
+}
+
 function cedulaInputBorderClass(hasError, cedula) {
   if (hasError) return 'border-red-400'
-  if (cedula.length === 10 && validateCedulaEcuatoriana(cedula)) return 'border-green-400'
+  if ((cedula.length === 10 || cedula.length === 13) && validateIdentificacion(cedula)) return 'border-green-400'
   return 'border-gray-200'
 }
 
 // ─── Convert Lead Modal ───────────────────────────────────────────────────────
 
+const CONVERT_MONTHS = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+]
+
+/**
+ * "2026-09-01" -> "septiembre 2026".
+ *
+ * Se parte la cadena en vez de usar new Date(): esa forma la interpreta en UTC y
+ * en husos negativos -como el de Ecuador- devuelve el mes anterior.
+ */
+function formatCohortMonth(value) {
+  if (!value) return '-'
+  const [year, month] = value.split('-')
+  return `${CONVERT_MONTHS[Number(month) - 1] ?? month} ${year}`
+}
+
+function formatMoney(value) {
+  const n = parseFloat(value)
+  if (Number.isNaN(n)) return '-'
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+/**
+ * Espejo de `apply_discount` en backend/apps/programs/services.py. Sólo para
+ * mostrar: el precio que se guarda lo calcula el backend, acá no se envía nunca.
+ */
+function previewDiscountedPrice(totalCost, discountPercentage) {
+  const cost = parseFloat(totalCost)
+  const pct = parseFloat(discountPercentage)
+  if (Number.isNaN(cost)) return null
+  const safePct = Number.isNaN(pct) ? 0 : Math.min(Math.max(pct, 0), 100)
+  return (cost * (100 - safePct)) / 100
+}
+
 function ConvertLeadModal({ lead, onClose, onSuccess }) {
   const queryClient = useQueryClient()
   const [cedula, setCedula]   = useState('')
   const [programId, setProgramId] = useState('')
+  const [cohortId, setCohortId]   = useState('')
+  const [discount, setDiscount]   = useState('0')
   const [email, setEmail]     = useState(lead.email || '')
   const [phone, setPhone]     = useState(lead.phone || '')
   const [errors, setErrors]   = useState({})
@@ -1474,6 +1545,28 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     queryKey: ['programs'],
     queryFn: getPrograms,
   })
+
+  // Cohortes del programa elegido. El backend sólo admite inscribir en próximas
+  // o en curso, así que las finalizadas se filtran acá y no se ofrecen: es la
+  // misma regla de `resolve_assignable_cohort`, para no proponer algo que va a
+  // ser rechazado.
+  const { data: cohorts = [], isLoading: loadingCohorts } = useQuery({
+    queryKey: ['cohorts', programId],
+    queryFn: () => getCohorts(programId),
+    enabled: Boolean(programId),
+  })
+  const assignableCohorts = cohorts.filter(
+    (c) => c.status === 'UPCOMING' || c.status === 'IN_PROGRESS',
+  )
+
+  const selectedProgram = programs.find((p) => p.id === programId)
+  const discountedPrice = selectedProgram
+    ? previewDiscountedPrice(selectedProgram.total_cost, discount)
+    : null
+
+  // Al cambiar de programa la cohorte elegida deja de ser válida: pertenecía al
+  // programa anterior y el backend la rechazaría por no corresponder.
+  useEffect(() => { setCohortId('') }, [programId])
 
   // Auto-selecciona el programa de interés del lead (sigue siendo editable).
   useEffect(() => {
@@ -1498,9 +1591,14 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
   const validate = () => {
     const errs = {}
-    if (!cedula.trim()) errs.cedula = 'La cédula es requerida.'
-    else if (!validateCedulaEcuatoriana(cedula)) errs.cedula = 'Cédula ecuatoriana inválida.'
+    if (!cedula.trim()) errs.cedula = 'La cédula o RUC es requerida.'
+    else if (!validateIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
+    if (!email.trim()) errs.email = 'El email es requerido para enviar la invitación.'
     if (!programId) errs.programId = 'Selecciona un programa.'
+    const pct = Number(discount)
+    if (discount !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
+      errs.discount = 'El descuento va de 0 a 100.'
+    }
     return errs
   }
 
@@ -1509,8 +1607,10 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     setErrors({})
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
-    const payload = { cedula, program_id: programId }
-    if (email) payload.email = email
+    const payload = { cedula, program_id: programId, email }
+    if (cohortId) payload.cohort_id = cohortId
+    // Se manda el porcentaje y nunca el precio: la cuenta la hace el backend.
+    if (Number(discount) > 0) payload.discount_percentage = discount
     if (phone) payload.phone = phone
     convertMutation.mutate({ id: lead.id, payload })
   }
@@ -1535,12 +1635,10 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               <span className="text-gray-500">Email</span>
               <span className="font-medium text-gray-800">{result.email}</span>
             </div>
-            {result.temporary_password && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">Contraseña temporal</span>
-                <span className="font-mono font-bold text-[#213A8E] bg-blue-50 px-2 py-0.5 rounded">
-                  {result.temporary_password}
-                </span>
+            {result.invitation_link && (
+              <div className="space-y-1">
+                <span className="text-gray-500">Enlace de invitación enviado</span>
+                <p className="text-xs text-gray-400 break-all">{result.invitation_link}</p>
               </div>
             )}
             {result.is_returning && (
@@ -1574,24 +1672,28 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           Convirtiendo a <span className="font-semibold text-gray-800">{lead.name}</span> en Bootcamper.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* noValidate: con `max` en el descuento, el navegador bloquea el envío
+            antes de que corra la validación de abajo y muestra un tooltip nativo
+            en inglés. El resto del formulario ya usa mensajes propios en
+            español, así que la validación es toda nuestra. */}
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           {/* Cédula */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cédula <span className="text-red-500">*</span>
+              Cédula / RUC <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               data-testid="convert-cedula"
-              maxLength={10}
+              maxLength={13}
               value={cedula}
               onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
-              placeholder="10 dígitos"
+              placeholder="10 dígitos (cédula) o 13 (RUC)"
               className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${cedulaInputBorderClass(errors.cedula, cedula)}`}
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
-            {cedula.length === 10 && validateCedulaEcuatoriana(cedula) && (
-              <p className="text-xs text-green-600 mt-1">✓ Cédula válida</p>
+            {(cedula.length === 10 || cedula.length === 13) && validateIdentificacion(cedula) && (
+              <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? 'Cédula válida' : 'RUC válido'}</p>
             )}
           </div>
 
@@ -1610,15 +1712,74 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             {errors.programId && <p className="text-xs text-red-500 mt-1">{errors.programId}</p>}
           </div>
 
-          {/* Email */}
+          {/* Cohorte — sólo tiene sentido con un programa elegido */}
+          {programId && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Cohorte <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+              </label>
+              {loadingCohorts && <p className="text-sm text-gray-400">Cargando cohortes…</p>}
+              {!loadingCohorts && assignableCohorts.length === 0 && (
+                <p className="text-sm text-gray-400">
+                  Este programa no tiene cohortes próximas ni en curso.
+                </p>
+              )}
+              {!loadingCohorts && assignableCohorts.length > 0 && (
+                <CustomSelect
+                  testId="convert-cohort"
+                  value={cohortId}
+                  onChange={(val) => setCohortId(val)}
+                  placeholder="Selecciona una cohorte"
+                  options={assignableCohorts.map((c) => ({
+                    value: c.id,
+                    label: `Cohorte ${c.number} — ${c.status_label} · inicia ${formatCohortMonth(c.start_month)}`,
+                  }))}
+                />
+              )}
+              {errors.cohortId && <p className="text-xs text-red-500 mt-1">{errors.cohortId}</p>}
+            </div>
+          )}
+
+          {/* Descuento */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="convert-discount">
+              Descuento <span className="text-xs text-gray-400 font-normal">(%)</span>
+            </label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="convert-discount"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              data-testid="convert-discount"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
+            {errors.discount && <p className="text-xs text-red-500 mt-1">{errors.discount}</p>}
+            {selectedProgram && (
+              <p className="text-xs text-gray-500 mt-1">
+                Pagará <span className="font-semibold text-gray-700">{formatMoney(discountedPrice)}</span>
+                {Number(discount) > 0 && (
+                  <> en vez de <span className="line-through">{formatMoney(selectedProgram.total_cost)}</span></>
+                )}
+              </p>
+            )}
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              data-testid="convert-email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${errors.email ? 'border-red-400' : 'border-gray-200'}`}
+            />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           {/* Phone */}

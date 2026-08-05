@@ -2,6 +2,7 @@
 import logging
 import mimetypes
 from django.core import signing
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.utils.timezone import now
@@ -12,14 +13,18 @@ from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.authentication.permissions import IsFinance, IsFinanceOrAdmin
-from .models import Payment
+from apps.authentication.permissions import IsAdmin, IsFinanceOrAdmin
+from .models import BootcamperAssignmentSetting, Payment
 from .serializers import (
     PaymentUploadSerializer, PaymentListSerializer, PaymentDetailSerializer,
     PaymentApproveSerializer, PaymentRejectSerializer,
     PaymentOCRStatusSerializer, PaymentConfirmSerializer,
+    BootcamperAssignmentSettingSerializer,
 )
-from .services import PaymentProgressService, read_receipt_token
+from .services import (
+    PaymentProgressService, read_receipt_token,
+    get_bootcamper_self_assignment_enabled, set_bootcamper_self_assignment_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +262,67 @@ class PaymentConfirmView(APIView):
 # ──────────────────────────────────────────────────────────────────────────────
 # Salesperson / Admin views
 # ──────────────────────────────────────────────────────────────────────────────
+
+class PaymentHistoryView(APIView):
+    """GET /api/payments/history/ — todas las solicitudes de un bootcamper.
+
+    La cola (`/queue/`) fija `status=PENDING`, así que no había forma de ver lo
+    aprobado ni lo rechazado: una vez revisada, la solicitud desaparecía de la
+    pantalla y con ella el motivo del rechazo y quién la validó.
+    """
+    permission_classes = [IsFinanceOrAdmin]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter('bootcamper_id', str, required=True, description='UUID del bootcamper'),
+            OpenApiParameter('program_id', str, required=False, description='Filtrar por UUID del programa'),
+            OpenApiParameter(
+                'status', str, required=False,
+                description='Filtrar por estado: DRAFT, PENDING, APPROVED, REJECTED.',
+            ),
+        ],
+        responses={
+            200: PaymentListSerializer(many=True),
+            400: OpenApiResponse(description='Falta bootcamper_id'),
+        },
+        summary='Historial de solicitudes de pago (Finanzas/Admin)',
+        description=(
+            'Todas las solicitudes del bootcamper, de la más reciente a la más antigua, '
+            'con su estado, el motivo del rechazo cuando aplica, y quién validó y cuándo. '
+            'A diferencia de /queue/, incluye las ya revisadas. Sólo lectura: aprobar y '
+            'rechazar siguen en sus propios endpoints.'
+        ),
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def get(self, request):
+        bootcamper_id = request.query_params.get('bootcamper_id')
+        if not bootcamper_id:
+            return Response(
+                {'error': 'bootcamper_id es requerido.', 'code': 'BOOTCAMPER_ID_REQUIRED'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qs = (
+            Payment.objects
+            .filter(bootcamper_id=bootcamper_id)
+            .select_related('bootcamper', 'program', 'validated_by')
+        )
+
+        program_id = request.query_params.get('program_id')
+        if program_id:
+            qs = qs.filter(program_id=program_id)
+
+        estado = request.query_params.get('status')
+        if estado:
+            # Un estado desconocido devuelve vacío en vez de 400: el filtro es
+            # una comodidad de lectura, no una operación que deba fallar.
+            qs = qs.filter(status=estado)
+
+        # El orden del modelo ya es -submitted_at, pero se deja explícito: el
+        # historial se lee de lo más nuevo a lo más viejo y no debe depender de
+        # que nadie cambie el Meta.ordering.
+        return Response(PaymentListSerializer(qs.order_by('-submitted_at'), many=True).data)
+
 
 class PaymentQueueView(APIView):
     """GET /api/payments/queue/ — pending payments for review."""
@@ -521,6 +587,7 @@ class BootcamperPoolView(APIView):
         parameters=[
             OpenApiParameter('search', str, required=False, description='Buscar por nombre o email'),
             OpenApiParameter('program_id', str, required=False, description='Filtrar por UUID del programa'),
+            OpenApiParameter('cohort_id', str, required=False, description='Filtrar por UUID de la cohorte'),
             OpenApiParameter('status', str, required=False, description='CRITICAL | AT_RISK | ON_TRACK'),
             OpenApiParameter('page', int, required=False, description='Número de página (default 1)'),
             OpenApiParameter('page_size', int, required=False, description=f'Default {DEFAULT_PAGE_SIZE}, máx {MAX_PAGE_SIZE}'),
@@ -569,11 +636,16 @@ class BootcamperPoolView(APIView):
         available = service.get_bootcamper_summaries(bootcampers.filter(finance_owner__isnull=True))
 
         program_id    = request.query_params.get('program_id')
+        cohort_id     = request.query_params.get('cohort_id')
         status_filter = request.query_params.get('status')
 
         def _filter(cards):
             if program_id:
                 cards = [c for c in cards if c['program_id'] == program_id]
+            if cohort_id:
+                # El cobro se monitorea por edición: filtrar sólo por programa
+                # mezcla cohortes que arrancaron en meses distintos.
+                cards = [c for c in cards if c['cohort_id'] == cohort_id]
             if status_filter:
                 cards = [c for c in cards if c['payment_status'] == status_filter]
             return cards
@@ -600,22 +672,60 @@ class BootcamperPoolView(APIView):
 
 
 class BootcamperAssignView(APIView):
-    """PATCH /api/payments/bootcampers/{id}/assign/ — tomar del pool."""
-    permission_classes = [IsFinance]
+    """PATCH /api/payments/bootcampers/{id}/assign/ — tomar del pool o repartirlo.
+
+    Dos usos según quién llama, porque son dos gestos distintos:
+
+      - **Finanzas** se lo asigna a sí misma y el cuerpo se ignora.
+      - **Administrador** reparte: tiene que indicar `finance_owner_id`, porque
+        no tiene cartera propia y asignárselo a sí mismo no querría decir nada.
+
+    Antes era sólo `IsFinance`, así que el administrador veía el aviso de
+    "N bootcampers sin responsable" y no podía hacer nada al respecto.
+    """
+    permission_classes = [IsFinanceOrAdmin]
 
     @extend_schema(
+        request=inline_serializer('AssignBootcamperRequest', fields={
+            'finance_owner_id': drf_serializers.UUIDField(required=False),
+        }),
         responses={
             200: inline_serializer('AssignedBootcamper', fields=BOOTCAMPER_CARD_FIELDS, many=True),
+            400: OpenApiResponse(description='Falta finance_owner_id, o no es de Finanzas'),
             404: OpenApiResponse(description='Bootcamper no encontrado'),
             409: OpenApiResponse(description='Ya tiene responsable de cobro'),
         },
-        summary='Asignarse un bootcamper',
-        description='Toma un bootcamper del pool. Con bloqueo: si dos personas de Finanzas lo piden a la vez, la segunda recibe 409.',
+        summary='Asignar un bootcamper del pool',
+        description=(
+            'Finanzas se lo asigna a sí misma. El Administrador debe mandar '
+            'finance_owner_id, que tiene que ser una persona de Finanzas activa. '
+            'Con bloqueo: si dos peticiones llegan a la vez, la segunda recibe 409.'
+        ),
         tags=['Pagos — Finanzas/Admin'],
     )
     def patch(self, request, bootcamper_id):
         from django.db import transaction
         from apps.authentication.models import CustomUser
+
+        from apps.authentication.models import CustomUser as _User
+
+        # El control sólo limita a Finanzas. El administrador reparte siempre:
+        # apagarlo justamente deja el reparto en sus manos.
+        if (
+            request.user.role != _User.Role.ADMINISTRATOR
+            and not get_bootcamper_self_assignment_enabled()
+        ):
+            return Response(
+                {
+                    'error': 'La asignación de bootcampers la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        owner, error = self._resolve_owner(request)
+        if error is not None:
+            return error
 
         with transaction.atomic():
             try:
@@ -635,16 +745,55 @@ class BootcamperAssignView(APIView):
                     },
                     status=status.HTTP_409_CONFLICT,
                 )
-            bootcamper.finance_owner       = request.user
+            bootcamper.finance_owner       = owner
             bootcamper.finance_assigned_at = now()
             bootcamper.save(update_fields=['finance_owner', 'finance_assigned_at', 'updated_at'])
 
         return Response(PaymentProgressService().get_bootcamper_summaries([bootcamper]))
 
+    @staticmethod
+    def _resolve_owner(request):
+        """A quién se le asigna. Devuelve `(owner, None)` o `(None, respuesta)`."""
+        from apps.authentication.models import CustomUser
+
+        if request.user.role != CustomUser.Role.ADMINISTRATOR:
+            return request.user, None
+
+        owner_id = request.data.get('finance_owner_id')
+        if not owner_id:
+            return None, Response(
+                {
+                    'error': 'Indica a qué persona de Finanzas se le asigna.',
+                    'code': 'FINANCE_OWNER_REQUIRED',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Se exige el rol y que esté activa: asignar la cartera a alguien que no
+        # cobra —o a una cuenta dada de baja— deja al bootcamper sin seguimiento
+        # real, que es justo lo que el pool intenta evitar.
+        try:
+            return CustomUser.objects.get(
+                pk=owner_id, role=CustomUser.Role.FINANCE, is_active=True,
+            ), None
+        except (CustomUser.DoesNotExist, ValidationError, ValueError):
+            return None, Response(
+                {
+                    'error': 'Esa persona no existe o no es de Finanzas.',
+                    'code': 'INVALID_FINANCE_OWNER',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
 
 class BootcamperReleaseView(APIView):
-    """PATCH /api/payments/bootcampers/{id}/release/ — devolver al pool."""
-    permission_classes = [IsFinance]
+    """PATCH /api/payments/bootcampers/{id}/release/ — devolver al pool.
+
+    Finanzas sólo puede liberar lo propio. El Administrador puede liberar
+    cualquiera: si reparte el pool y se equivoca de persona, sin esto quedaría
+    sin forma de corregirlo.
+    """
+    permission_classes = [IsFinanceOrAdmin]
 
     @extend_schema(
         responses={
@@ -653,6 +802,10 @@ class BootcamperReleaseView(APIView):
             404: OpenApiResponse(description='Bootcamper no encontrado'),
         },
         summary='Liberar un bootcamper',
+        description=(
+            'Devuelve el bootcamper al pool. Finanzas sólo puede liberar los suyos; '
+            'el Administrador puede liberar cualquiera para corregir un reparto.'
+        ),
         tags=['Pagos — Finanzas/Admin'],
     )
     def patch(self, request, bootcamper_id):
@@ -661,7 +814,8 @@ class BootcamperReleaseView(APIView):
         bootcamper = get_object_or_404(
             CustomUser, pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER,
         )
-        if bootcamper.finance_owner_id != request.user.id:
+        is_admin = request.user.role == CustomUser.Role.ADMINISTRATOR
+        if not is_admin and bootcamper.finance_owner_id != request.user.id:
             return Response(
                 {
                     'error': 'Solo quien monitorea a este bootcamper puede liberarlo.',
@@ -674,3 +828,54 @@ class BootcamperReleaseView(APIView):
         bootcamper.save(update_fields=['finance_owner', 'finance_assigned_at', 'updated_at'])
 
         return Response(PaymentProgressService().get_bootcamper_summaries([bootcamper]))
+
+
+class BootcamperAssignmentSettingView(APIView):
+    """GET/PATCH /payments/settings/self-assignment/ — control global del pool.
+
+    Espejo de `LeadAssignmentSettingView` (CR-004) para el pool de bootcampers.
+    Lo lee cualquier rol autenticado —Finanzas necesita saber si su botón está
+    habilitado— pero sólo el Administrador lo cambia.
+    """
+    permission_classes = [IsFinanceOrAdmin]
+
+    def get_permissions(self):
+        if self.request.method == 'PATCH':
+            return [IsAdmin()]
+        return super().get_permissions()
+
+    @extend_schema(
+        responses={200: BootcamperAssignmentSettingSerializer},
+        summary='Consultar auto-asignación de cobro',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def get(self, request):
+        setting = BootcamperAssignmentSetting.get_solo()
+        return Response(BootcamperAssignmentSettingSerializer(setting).data)
+
+    @extend_schema(
+        request=BootcamperAssignmentSettingSerializer,
+        responses={
+            200: BootcamperAssignmentSettingSerializer,
+            400: OpenApiResponse(description='Falta self_assign_enabled'),
+            403: OpenApiResponse(description='Solo el Administrador puede cambiar este control'),
+        },
+        summary='Habilitar/deshabilitar auto-asignación de cobro',
+        description=(
+            'Apagado, Finanzas no puede tomar bootcampers del pool: sólo el Administrador '
+            'reparte quién cobra a quién. No afecta a lo ya asignado.'
+        ),
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def patch(self, request):
+        serializer = BootcamperAssignmentSettingSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        if 'self_assign_enabled' not in serializer.validated_data:
+            return Response(
+                {'error': 'self_assign_enabled es requerido.', 'code': 'MISSING_FIELD'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        setting = set_bootcamper_self_assignment_enabled(
+            serializer.validated_data['self_assign_enabled'], request.user,
+        )
+        return Response(BootcamperAssignmentSettingSerializer(setting).data)

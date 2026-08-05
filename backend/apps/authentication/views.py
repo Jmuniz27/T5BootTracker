@@ -4,6 +4,7 @@ import uuid
 
 import redis
 from django.conf import settings
+from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
 from rest_framework import status, serializers as drf_serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -21,7 +22,9 @@ from .serializers import (
     UserDataSerializer,
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
+    OnboardingActivateSerializer,
 )
+from .services import read_onboarding_token
 
 logger = logging.getLogger(__name__)
 
@@ -275,3 +278,79 @@ class PasswordResetConfirmView(APIView):
         logger.info(f'Password reset successful for {user.email}')
 
         return Response({'detail': 'Contraseña actualizada exitosamente.'}, status=status.HTTP_200_OK)
+
+
+class OnboardingView(APIView):
+    """GET /api/auth/onboarding/{token}/ — read-only, no side effects."""
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
+
+    @extend_schema(
+        responses={
+            200: inline_serializer('OnboardingPreview', fields={
+                'first_name':   drf_serializers.CharField(),
+                'last_name':    drf_serializers.CharField(),
+                'email':        drf_serializers.EmailField(),
+                'phone':        drf_serializers.CharField(allow_null=True),
+                'cedula':       drf_serializers.CharField(allow_null=True),
+                'program_name': drf_serializers.CharField(allow_null=True),
+            }),
+            400: OpenApiResponse(description='Token inválido, expirado o reemplazado por un reenvío'),
+            409: OpenApiResponse(description='La cuenta ya fue activada'),
+        },
+        summary='Consultar datos prellenables de una invitación',
+        description='Sin efectos secundarios. Devuelve los datos que el bootcamper puede confirmar o corregir al activar su cuenta.',
+        tags=['Auth'],
+    )
+    def get(self, request, token):
+        user = read_onboarding_token(token)
+        enrollment = user.enrollments.select_related('bootcamp').order_by('-id').first()
+        return Response({
+            'first_name':   user.first_name,
+            'last_name':    user.last_name,
+            'email':        user.email,
+            'phone':        user.phone,
+            'cedula':       user.cedula,
+            'program_name': enrollment.bootcamp.name if enrollment else None,
+        })
+
+
+class OnboardingActivateView(APIView):
+    """POST /api/auth/onboarding/{token}/activate/ — set password and activate the account."""
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
+
+    @extend_schema(
+        request=OnboardingActivateSerializer,
+        responses={
+            200: OpenApiResponse(description='Cuenta activada'),
+            400: OpenApiResponse(description='Token inválido/expirado/reemplazado, contraseñas no coinciden o identificación inválida'),
+            409: OpenApiResponse(description='La cuenta ya fue activada'),
+        },
+        summary='Activar cuenta de bootcamper',
+        tags=['Auth'],
+    )
+    def post(self, request, token):
+        user = read_onboarding_token(token)
+
+        serializer = OnboardingActivateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        user.set_password(data['password'])
+        if data.get('first_name'):
+            user.first_name = data['first_name']
+        if data.get('last_name'):
+            user.last_name = data['last_name']
+        if data.get('phone'):
+            user.phone = data['phone']
+        if data.get('cedula'):
+            user.cedula = data['cedula']
+        user.verification_status = CustomUser.VerificationStatus.PENDING_VERIFICATION
+        user.onboarding_completed_at = now()
+        user.save()
+
+        logger.info('Bootcamper %s activated their account.', user.email)
+        return Response({'detail': 'Cuenta activada exitosamente.'}, status=status.HTTP_200_OK)

@@ -1,0 +1,9 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+¡Bienvenido a Boot-Tracker! Ya quedaste inscrito en {{ program_name }}.
+
+Para activar tu cuenta y elegir tu contraseña, entra al siguiente enlace:
+{{ invitation_link }}
+
+Este enlace expira en {{ expiry_hours }} horas. Si vence antes de que lo uses, pídele a tu vendedor que te reenvíe la invitación.
+{% endblock %}

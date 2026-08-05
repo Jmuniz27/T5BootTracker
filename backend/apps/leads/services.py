@@ -1,6 +1,5 @@
 """Business logic for leads app."""
 import logging
-import secrets
 from decimal import Decimal
 
 from django.db import transaction, IntegrityError
@@ -10,10 +9,11 @@ from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import status
 
 from apps.authentication.models import CustomUser
-from apps.authentication.validators import validate_cedula_ecuatoriana
+from apps.authentication.validators import validate_identificacion
+from apps.authentication.services import make_onboarding_token, build_invitation_link
 from apps.programs.models import Program, Enrollment
 from apps.programs.services import apply_discount, resolve_assignable_cohort
-from apps.notifications.tasks import send_conversion_notification
+from apps.notifications.tasks import send_conversion_notification, send_bootcamper_invitation_email
 from .models import Interaction, Lead, LeadAssignmentSetting
 
 logger = logging.getLogger(__name__)
@@ -60,8 +60,14 @@ def register_interaction(lead, user, validated_data):
 
 @transaction.atomic
 def convert_lead_to_bootcamper(lead, validated_data):
-    if not validate_cedula_ecuatoriana(validated_data['cedula']):
-        raise ValidationError({'error': 'La cédula ingresada no es válida.', 'code': 'INVALID_CEDULA'})
+    if lead.status != Lead.Status.QUALIFIED:
+        raise ValidationError({
+            'error': 'Solo se puede convertir un lead en estado Calificado.',
+            'code': 'LEAD_NOT_QUALIFIED',
+        })
+
+    if not validate_identificacion(validated_data['cedula']):
+        raise ValidationError({'error': 'La identificación ingresada no es válida.', 'code': 'INVALID_CEDULA'})
 
     try:
         program = Program.objects.get(pk=validated_data['program_id'])
@@ -72,42 +78,48 @@ def convert_lead_to_bootcamper(lead, validated_data):
     # Antes de crear nada: si la cohorte no sirve, la conversión no debe empezar.
     cohort = resolve_assignable_cohort(program, validated_data.get('cohort_id'))
 
-    email = validated_data.get('email') or lead.email
+    email = validated_data['email']
     phone = validated_data.get('phone') or lead.phone
 
-    temporary_password = None
+    invitation_link = None
     is_returning = False
     bootcamper = None
 
-    if email:
-        try:
-            existing = CustomUser.objects.get(email=email)
-            if existing.role != CustomUser.Role.BOOTCAMPER:
-                # 4. LANZAR CONFLICTERROR (409)
-                raise ConflictError({'error': 'El email ya está asociado a otro rol.', 'code': 'EMAIL_CONFLICT'})
-            bootcamper = existing
-            is_returning = True
-        except CustomUser.DoesNotExist:
-            pass
+    try:
+        existing = CustomUser.objects.get(email=email)
+        if existing.role != CustomUser.Role.BOOTCAMPER:
+            # 4. LANZAR CONFLICTERROR (409)
+            raise ConflictError({'error': 'El email ya está asociado a otro rol.', 'code': 'EMAIL_CONFLICT'})
+        bootcamper = existing
+        is_returning = True
+    except CustomUser.DoesNotExist:
+        pass
 
     if bootcamper is None:
-        temporary_password = secrets.token_urlsafe(12)
         try:
-            first_name = lead.name.split()[0] if lead.name else 'Bootcamper'
-            last_name = ' '.join(lead.name.split()[1:]) if len(lead.name.split()) > 1 else 'N/A'
+            parts = lead.name.split() if lead.name else []
+            first_name = parts[0] if parts else 'Bootcamper'
+            last_name = ' '.join(parts[1:])
 
+            # password=None deja la cuenta con contraseña no utilizable
+            # (CustomUserManager.create_user -> set_password(None)); la
+            # persona la define ella misma al activar la invitación.
             bootcamper = CustomUser.objects.create_user(
-                email=email or f'bootcamper_{validated_data["cedula"]}@placeholder.com',
-                password=temporary_password,
+                email=email,
+                password=None,
                 first_name=first_name,
                 last_name=last_name,
                 role=CustomUser.Role.BOOTCAMPER,
                 cedula=validated_data['cedula'],
                 phone=phone,
+                verification_status=CustomUser.VerificationStatus.INVITED,
             )
         except IntegrityError:
             # 5. LANZAR CONFLICTERROR (409)
             raise ConflictError({'error': 'Esta cédula ya está registrada en el sistema.', 'code': 'CEDULA_ALREADY_EXISTS'})
+
+        token = make_onboarding_token(bootcamper)
+        invitation_link = build_invitation_link(token)
 
     discount = validated_data.get('discount_percentage') or Decimal('0.00')
     agreed_price = apply_discount(program.total_cost, discount)
@@ -135,6 +147,11 @@ def convert_lead_to_bootcamper(lead, validated_data):
 
     try:
         send_conversion_notification.delay(str(lead.id), str(bootcamper.id))
+        # Complementa la notificación a coordinadores — esta es la única que
+        # efectivamente llega al bootcamper. Sólo aplica a cuentas nuevas: un
+        # recurrente no recibe invitación porque no se le tocó la contraseña.
+        if invitation_link:
+            send_bootcamper_invitation_email.delay(str(bootcamper.id), invitation_link)
     except Exception:
         logger.warning(
             'Could not enqueue conversion notification for lead %s — Celery/Redis may be unavailable.',
@@ -144,7 +161,7 @@ def convert_lead_to_bootcamper(lead, validated_data):
     return {
         'bootcamper_id': str(bootcamper.id),
         'email': bootcamper.email,
-        'temporary_password': temporary_password,
+        'invitation_link': invitation_link,
         'is_returning': is_returning,
         'lead_status': lead.status,
         # Se devuelven para que el vendedor confirme en pantalla lo que quedó
@@ -154,6 +171,39 @@ def convert_lead_to_bootcamper(lead, validated_data):
         'cohort_id': str(cohort.id) if cohort else None,
         'cohort_number': cohort.number if cohort else None,
     }
+
+
+def resend_invitation(lead):
+    """Issue a new onboarding token for `lead.bootcamper` and re-send the email (#255).
+
+    Generating a new token via `make_onboarding_token` already invalidates
+    the previous link (TOKEN_SUPERSEDED, see `read_onboarding_token`) — no
+    separate revocation step is needed.
+    """
+    bootcamper = lead.bootcamper
+    if bootcamper is None:
+        raise ValidationError({
+            'error': 'Este lead todavía no fue convertido a bootcamper.',
+            'code': 'NOT_CONVERTED',
+        })
+    if bootcamper.verification_status != CustomUser.VerificationStatus.INVITED:
+        raise ValidationError({
+            'error': 'Esta cuenta ya fue activada; no se puede reenviar la invitación.',
+            'code': 'ALREADY_ACTIVATED',
+        })
+
+    token = make_onboarding_token(bootcamper)
+    invitation_link = build_invitation_link(token)
+
+    try:
+        send_bootcamper_invitation_email.delay(str(bootcamper.id), invitation_link)
+    except Exception:
+        logger.warning(
+            'Could not enqueue invitation resend for bootcamper %s — Celery/Redis may be unavailable.',
+            bootcamper.id,
+        )
+
+    return {'invitation_link': invitation_link}
 
 
 def get_self_assignment_enabled():

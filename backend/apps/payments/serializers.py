@@ -2,8 +2,8 @@
 
 from django.urls import reverse
 from rest_framework import serializers
-from apps.authentication.validators import validate_cedula_ecuatoriana
-from .models import Payment
+from apps.authentication.validators import validate_identificacion
+from .models import BootcamperAssignmentSetting, Payment
 from .services import make_receipt_token
 
 MAX_FILE_SIZE_MB = 10
@@ -169,16 +169,14 @@ class PaymentConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "La identificación debe contener solo dígitos."
             )
-        if len(value) == 10:
-            if not validate_cedula_ecuatoriana(value):
-                raise serializers.ValidationError("Cédula ecuatoriana inválida.")
-        elif len(value) == 13:
-            if not (validate_cedula_ecuatoriana(value[:10]) and value.endswith("001")):
-                raise serializers.ValidationError("RUC ecuatoriano inválido.")
-        else:
+        if len(value) not in (10, 13):
             raise serializers.ValidationError(
                 "La identificación debe tener 10 dígitos (cédula) o 13 (RUC)."
             )
+        if not validate_identificacion(value):
+            if len(value) == 10:
+                raise serializers.ValidationError("Cédula ecuatoriana inválida.")
+            raise serializers.ValidationError("RUC ecuatoriano inválido.")
         return value
 
 
@@ -187,3 +185,16 @@ class PaymentDetailSerializer(PaymentListSerializer):
 
     class Meta(PaymentListSerializer.Meta):
         fields = PaymentListSerializer.Meta.fields + ("ocr_raw_text",)
+
+
+class BootcamperAssignmentSettingSerializer(serializers.ModelSerializer):
+    """Espejo de LeadAssignmentSettingSerializer, para el pool de bootcampers."""
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BootcamperAssignmentSetting
+        fields = ('self_assign_enabled', 'updated_by_name', 'updated_at')
+        read_only_fields = ('updated_by_name', 'updated_at')
+
+    def get_updated_by_name(self, obj):
+        return obj.updated_by.get_full_name() if obj.updated_by else None
