@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMyHistory, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
+import { getMyHistory, getMyStatus, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
 import CustomSelect from '../components/CustomSelect'
 import { useModalA11y } from '../hooks/use-modal-a11y'
 import Skeleton from '../components/ui/Skeleton'
@@ -693,6 +693,39 @@ export default function PaymentsPage() {
   const pending = payments.filter((p) => p.status === 'PENDING')
   const pendingCount = pending.length
 
+  // `my-status` responde por programa, y una persona puede estar inscrita en más
+  // de uno: se consulta cada uno y se suma el adeudado. Va en una sola query con
+  // Promise.all en vez de useQueries porque ese hook no se usa en el proyecto.
+  const programIds = programs.map((p) => p.id).filter(Boolean)
+  const { data: totalDebt, isLoading: debtLoading } = useQuery({
+    queryKey: ['my-debt', programIds],
+    queryFn: () =>
+      Promise.all(programIds.map((id) => getMyStatus(id))).then((summaries) =>
+        summaries.reduce((sum, s) => sum + parseFloat(s?.deficit || 0), 0)
+      ),
+    enabled: programIds.length > 0,
+  })
+
+  // Sin programas descubribles (un bootcamper que todavía no subió ningún pago)
+  // no hay nada que consultar: se muestra un guion en vez de un cero que diría
+  // "no debes nada", que es justo lo contrario de su situación.
+  let debtValue = '—'
+  let debtSub = 'Sube un comprobante para ver tu saldo'
+  if (programIds.length > 0 && totalDebt !== undefined) {
+    debtValue = totalDebt > 0
+      ? `$${totalDebt.toLocaleString('en-US', { minimumFractionDigits: 0 })}`
+      : 'Sin deuda'
+    if (totalDebt <= 0) {
+      debtSub = 'Completaste el pago de tu programa'
+    } else if (pendingCount > 0) {
+      // Sólo los pagos aprobados descuentan, así que quien acaba de subir un
+      // comprobante ve su pago en la lista y la deuda intacta. Se avisa acá.
+      debtSub = 'No incluye tus pagos en revisión'
+    } else {
+      debtSub = 'Sobre el precio acordado de tu programa'
+    }
+  }
+
   const sorted = [...payments].sort((a, b) => {
     const da = new Date(a.ocr_payment_date || a.submitted_at || 0)
     const db = new Date(b.ocr_payment_date || b.submitted_at || 0)
@@ -711,8 +744,8 @@ export default function PaymentsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">💰 Payments</h1>
-          <p className="text-sm text-gray-500 mt-1">Upload proof of payment and track your transactions</p>
+          <h1 className="text-2xl font-bold text-gray-900">Pagos</h1>
+          <p className="text-sm text-gray-500 mt-1">Sube tus comprobantes y sigue el estado de tus pagos</p>
         </div>
         <button
           data-testid="upload-button"
@@ -722,30 +755,36 @@ export default function PaymentsPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
-          Upload payment
+          Subir pago
         </button>
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 sm:flex sm:gap-4 mb-6 sm:mb-8">
         <StatCard
-          label="Total Paid"
+          label="Total pagado"
           value={`$${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 0 })}`}
-          sub={`${approved.length} approved payment${approved.length !== 1 ? 's' : ''}`}
+          sub={approved.length === 1 ? '1 pago aprobado' : `${approved.length} pagos aprobados`}
           loading={isLoading}
         />
         <StatCard
-          label="Pending"
+          label="Pendientes"
           value={`${pendingCount}`}
-          sub={pendingCount === 1 ? '1 payment awaiting approval' : `${pendingCount} payments awaiting approval`}
+          sub={pendingCount === 1 ? '1 pago en espera de aprobación' : `${pendingCount} pagos en espera de aprobación`}
           loading={isLoading}
+        />
+        <StatCard
+          label="Adeudado"
+          value={debtValue}
+          sub={debtSub}
+          loading={isLoading || debtLoading}
         />
       </div>
 
       {/* Payment History */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Payment History</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Historial de pagos</h2>
 
           <div className="relative" ref={sortRef}>
             <button
@@ -755,7 +794,7 @@ export default function PaymentsPage() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
               </svg>
-              Sort by date
+              Ordenar por fecha
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>

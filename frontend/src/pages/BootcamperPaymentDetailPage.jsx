@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { getMonitoring, getPaymentQueue, notifyCoordinator } from '../api/payments.api'
+import { getMonitoring, getPaymentQueue, getPaymentHistory, notifyCoordinator } from '../api/payments.api'
 import PaymentDetailModal from '../components/PaymentDetailModal'
 import Toast from '../components/Toast'
 import Skeleton from '../components/ui/Skeleton'
+import PaymentHistory from '../components/payments/PaymentHistory'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -149,6 +150,13 @@ export default function BootcamperPaymentDetailPage() {
   const bc = monitoringData.find(
     (b) => b.bootcamper_id === bootcamperId && b.program_id === programId,
   ) || initialBc
+
+  // Historial: incluye las ya revisadas, que es lo que la cola no devuelve.
+  const { data: history = [], isLoading: loadingHistory } = useQuery({
+    queryKey: ['payment-history', bootcamperId, programId],
+    queryFn: () => getPaymentHistory({ bootcamper_id: bootcamperId, program_id: programId }),
+    enabled: Boolean(bootcamperId),
+  })
 
   const { data: payments = [], isLoading: loadingPayments } = useQuery({
     queryKey: ['payment-queue-bootcamper', bc?.email, programId],
@@ -376,6 +384,12 @@ export default function BootcamperPaymentDetailPage() {
               ))}
             </div>
           )}
+
+          <PaymentHistory
+            items={history}
+            isLoading={loadingHistory}
+            onViewDetail={setSelectedPayment}
+          />
         </div>
       </div>
 
