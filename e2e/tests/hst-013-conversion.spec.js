@@ -76,7 +76,7 @@ test.describe('HST-013 · Conversión de lead a bootcamper con validación de c�
         // Ya no se muestra ninguna contraseña: el bootcamper activa su cuenta
         // por el link de invitación (#253/#257).
         await expect(page.getByText('Contraseña temporal')).not.toBeVisible()
-        const inputLink = page.getByDisplayValue(/\/onboarding\//)
+        const inputLink = page.locator('input[value*="/onboarding/"]')
         await expect(inputLink).toBeVisible()
         await expect(page.getByRole('button', { name: 'Copiar' })).toBeVisible()
       })
@@ -106,7 +106,7 @@ test.describe('HST-013 · Conversión de lead a bootcamper con validación de c�
       })
 
       await entonces('se muestra el link nuevo con opción de copiar', async () => {
-        const inputLink = page.getByDisplayValue(/\/onboarding\//)
+        const inputLink = page.locator('input[value*="/onboarding/"]')
         await expect(inputLink).toBeVisible()
         await expect(page.getByRole('button', { name: 'Copiar' })).toBeVisible()
       })
