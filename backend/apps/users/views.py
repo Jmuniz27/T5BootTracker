@@ -25,6 +25,33 @@ class UserViewSet(viewsets.ModelViewSet):
         response_serializer = AdminUserSerializer(user)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
+    def update(self, request, *args, **kwargs):
+        """PUT/PATCH — nunca toca password ni credenciales; sólo sincroniza is_staff.
+
+        Cambiar el rol por aquí no debe reenviar ninguna invitación ni tocar la
+        contraseña (issue #295): eso sólo pasa al crear. Lo único que faltaba
+        sincronizar era `is_staff`, que hoy sólo se setea en `create_user` — un
+        PATCH que promueve a alguien a ADMINISTRATOR (o lo degrada) lo dejaba
+        desincronizado del rol.
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        new_role = serializer.validated_data.get('role', user.role)
+        should_be_staff = new_role == CustomUser.Role.ADMINISTRATOR
+        if user.is_staff != should_be_staff:
+            user.is_staff = should_be_staff
+            user.save(update_fields=['is_staff'])
+
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
     def destroy(self, request, *args, **kwargs):
         """Desactiva al usuario (soft delete)."""
         user = self.get_object()

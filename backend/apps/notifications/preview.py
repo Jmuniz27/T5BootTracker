@@ -32,6 +32,12 @@ PREVIEWS = {
         'expiry_hours': 72,
         'program_name': 'Data Science Bootcamp',
     },
+    'staff_invitation': {
+        'recipient_name': 'Carlos Vera',
+        'invitation_link': 'http://localhost:5173/onboarding/preview-token',
+        'expiry_hours': 72,
+        'role_display': 'Finanzas',
+    },
     'conversion_notification': {
         'lead_name': 'María Gómez',
         'bootcamper_name': 'María Gómez',
