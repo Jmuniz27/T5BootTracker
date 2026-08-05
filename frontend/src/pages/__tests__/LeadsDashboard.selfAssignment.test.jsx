@@ -111,3 +111,34 @@ describe('LeadsDashboard — control de auto-asignación (CR-004)', () => {
     expect(assignLead.mock.calls[0][0]).toBe('lead-1');
   });
 });
+
+describe('LeadsDashboard — el admin no se asigna leads', () => {
+  async function abrirFormulario(user, role) {
+    useAuthStore.setState({ user: { id: 'u1', role } });
+    getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
+    getLeads.mockResolvedValue({ my_leads: [], available_leads: [], pagination: {} });
+    renderDashboard();
+    await screen.findByText('Dashboard de Leads');
+    await user.click(screen.getByRole('button', { name: /nuevo lead/i }));
+    return screen.findByPlaceholderText(/josé|nombre/i);
+  }
+
+  it('no le muestra la casilla al administrador', async () => {
+    const user = userEvent.setup();
+    await abrirFormulario(user, 'ADMINISTRATOR');
+
+    // No se esconde por el interruptor global —que está encendido— sino por el
+    // rol: LeadAssignView exige IsSalesperson, así que un admin nunca puede ser
+    // dueño de un lead y tildarla fallaba en silencio tras crearlo.
+    expect(screen.queryByTestId('create-lead-autoassign')).not.toBeInTheDocument();
+  });
+
+  it('sí se la muestra al vendedor', async () => {
+    const user = userEvent.setup();
+    await abrirFormulario(user, 'SALESPERSON');
+
+    // El contraste importa: confirma que la ausencia es por rol y no una
+    // regresión que esconde la casilla para todos.
+    expect(await screen.findByTestId('create-lead-autoassign')).toBeInTheDocument();
+  });
+});
