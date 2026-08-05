@@ -895,9 +895,11 @@ class TestPaymentDetailIncludesRawText:
 
 
 class TestNotifyCoordinator:
-    def test_notify_coordinator_dispatches_task(
+    def test_notify_coordinator_dispatches_task_when_critical(
         self, db, finance_user, converted_bootcamper, program
     ):
+        # Sin Enrollment ni pagos aprobados, el déficit es el costo completo del
+        # programa: siempre supera el 10%, así que este bootcamper es crítico.
         client = make_client(finance_user)
         with patch(
             "apps.notifications.tasks.send_late_payment_alert.delay"
@@ -911,3 +913,37 @@ class TestNotifyCoordinator:
         mock_delay.assert_called_once_with(
             str(converted_bootcamper.id), str(program.id)
         )
+
+    def test_notify_coordinator_rejects_non_critical_payment(
+        self, db, finance_user, converted_bootcamper, program
+    ):
+        from apps.programs.models import Enrollment
+
+        # Pagó el costo completo: deficit == 0, muy por debajo del umbral del 10%.
+        Enrollment.objects.create(
+            bootcamper=converted_bootcamper,
+            bootcamp=program,
+            start_date=program.start_date,
+            agreed_price=Decimal("1200.00"),
+        )
+        Payment.objects.create(
+            bootcamper=converted_bootcamper,
+            program=program,
+            receipt_file="receipts/paid.jpg",
+            receipt_file_type="image",
+            status=Payment.Status.APPROVED,
+            confirmed_amount=Decimal("1200.00"),
+        )
+
+        client = make_client(finance_user)
+        with patch(
+            "apps.notifications.tasks.send_late_payment_alert.delay"
+        ) as mock_delay:
+            resp = client.post(
+                NOTIFY_COORD_URL.format(bootcamper_id=converted_bootcamper.id),
+                {"program_id": str(program.id)},
+                format="json",
+            )
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_CRITICAL"
+        mock_delay.assert_not_called()
