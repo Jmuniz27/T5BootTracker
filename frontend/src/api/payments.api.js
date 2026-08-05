@@ -79,12 +79,10 @@ export const releaseBootcamper = (bootcamperId) =>
   client.patch(`/payments/bootcampers/${bootcamperId}/release/`).then((r) => r.data)
 
 // ── Editar / eliminar pagos propios (CB-117 T6) ───────────────────────────────
-// Contrato ASUMIDO — pendiente de implementación en backend:
 //   PATCH  /payments/my-payments/<id>/  → el bootcamper corrige un pago REJECTED
 //                                          y lo reenvía (backend: REJECTED → PENDING).
 //   DELETE /payments/my-payments/<id>/  → el bootcamper elimina un pago propio en
 //                                          estado DRAFT (en revisión) o REJECTED.
-// Ambos deben validar propiedad (payment.bootcamper == request.user).
 export const updateMyPayment = (id, data) =>
   client.patch(`/payments/my-payments/${id}/`, data).then((r) => r.data)
 

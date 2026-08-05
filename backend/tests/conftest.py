@@ -2,6 +2,7 @@
 import pytest
 from decimal import Decimal
 from datetime import date, timedelta
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -180,4 +181,21 @@ def approved_payment(db, converted_bootcamper, program):
         status=Payment.Status.APPROVED,
         confirmed_amount=Decimal('400.00'),
         confirmed_bank_name='Banco Pichincha',
+    )
+
+
+@pytest.fixture
+def rejected_payment(db, converted_bootcamper, program, finance_user):
+    from apps.payments.models import Payment
+    return Payment.objects.create(
+        bootcamper=converted_bootcamper,
+        program=program,
+        receipt_file='receipts/test3.jpg',
+        receipt_file_type='image',
+        status=Payment.Status.REJECTED,
+        ocr_bank_name='Banco Pichincha',
+        ocr_amount=Decimal('150.00'),
+        rejection_reason='El monto no coincide con el comprobante.',
+        validated_by=finance_user,
+        validated_at=timezone.now(),
     )
