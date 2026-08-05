@@ -13,20 +13,38 @@ ALLOWED_MIME_TYPES = {
     "image/jpg": "image",
     "application/pdf": "pdf",
 }
+# Al arrastrar un archivo, algunos SO/navegadores declaran "application/octet-stream"
+# en vez del MIME real — sobre todo con PDFs. Ese tipo pasa el filtro del frontend
+# (que valida por extensión) y el backend lo rechazaba, así que se acepta acá
+# revalidando por extensión.
+ALLOWED_EXTENSIONS = {
+    ".jpg": "image",
+    ".jpeg": "image",
+    ".png": "image",
+    ".pdf": "pdf",
+}
 
 
 class PaymentUploadSerializer(serializers.Serializer):
     """Validates an uploaded receipt file."""
 
     receipt_file = serializers.FileField()
-    program_id = serializers.UUIDField()
+    # Opcional: el bootcamper no elige el programa al subir, se deduce de su
+    # inscripción activa (ver `services.resolve_upload_program`). Se sigue
+    # aceptando para los clientes que ya lo enviaban y para desempatar a quien
+    # curse dos programas a la vez.
+    program_id = serializers.UUIDField(required=False, allow_null=True)
 
     def validate_receipt_file(self, file):
+        import os
+
         mime_type = file.content_type
         if mime_type not in ALLOWED_MIME_TYPES:
-            raise serializers.ValidationError(
-                "Tipo de archivo no permitido. Use JPG, PNG o PDF."
-            )
+            extension = os.path.splitext(file.name or "")[1].lower()
+            if mime_type != "application/octet-stream" or extension not in ALLOWED_EXTENSIONS:
+                raise serializers.ValidationError(
+                    "Tipo de archivo no permitido. Use JPG, PNG o PDF."
+                )
         if file.size > MAX_FILE_SIZE_MB * 1024 * 1024:
             raise serializers.ValidationError(
                 f"El archivo no puede superar {MAX_FILE_SIZE_MB} MB."

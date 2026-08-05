@@ -91,30 +91,49 @@ class PaymentUploadView(APIView):
 
     @extend_schema(
         request={'multipart/form-data': PaymentUploadSerializer},
-        responses={201: PaymentListSerializer, 400: OpenApiResponse(description='Archivo inválido o muy grande'), 404: OpenApiResponse(description='Programa no encontrado')},
+        responses={
+            201: PaymentListSerializer,
+            400: OpenApiResponse(description='Archivo inválido, muy grande, o sin inscripción activa de la cual deducir el programa'),
+            404: OpenApiResponse(description='Programa no encontrado'),
+        },
         summary='Subir comprobante de pago',
-        description='El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR asíncrono.',
+        description=(
+            'El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR '
+            'asíncrono. `program_id` es opcional: sin él, el programa se deduce de la '
+            'inscripción activa del bootcamper.'
+        ),
         tags=['Pagos — Bootcamper'],
     )
     def post(self, request):
+        import os
         from apps.programs.models import Program
         from .tasks import process_payment_ocr
-        from .serializers import ALLOWED_MIME_TYPES
+        from .serializers import ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
+        from .services import UploadProgramError, resolve_upload_program
 
         serializer = PaymentUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
         try:
-            program = Program.objects.get(pk=data['program_id'])
+            program = resolve_upload_program(request.user, data.get('program_id'))
         except Program.DoesNotExist:
             return Response(
                 {'error': 'Programa no encontrado.', 'code': 'PROGRAM_NOT_FOUND'},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        except UploadProgramError as exc:
+            return Response(
+                {'error': exc.message, 'code': exc.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        file      = data['receipt_file']
-        file_type = ALLOWED_MIME_TYPES.get(file.content_type, 'image')
+        file = data['receipt_file']
+        if file.content_type in ALLOWED_MIME_TYPES:
+            file_type = ALLOWED_MIME_TYPES[file.content_type]
+        else:
+            extension = os.path.splitext(file.name or '')[1].lower()
+            file_type = ALLOWED_EXTENSIONS.get(extension, 'image')
 
         payment = Payment.objects.create(
             bootcamper=request.user,
@@ -127,6 +146,39 @@ class PaymentUploadView(APIView):
         process_payment_ocr.delay(str(payment.id))
 
         return Response(PaymentListSerializer(payment).data, status=status.HTTP_201_CREATED)
+
+
+class PaymentMyProgramsView(APIView):
+    """GET /api/payments/my-programs/ — programas en los que el bootcamper tiene Enrollment activa.
+
+    El bootcamper recibe 403 en /programs/, así que el selector de subida no
+    puede usar ese endpoint. Antes se armaba desde el historial de pagos, pero
+    un bootcamper recién convertido no tiene ninguno todavía y el selector
+    quedaba vacío. Enrollment es la fuente correcta: existe desde la conversión.
+    """
+    permission_classes = [IsBootcamper]
+
+    @extend_schema(
+        responses={200: inline_serializer('MyProgram', fields={
+            'id':   drf_serializers.UUIDField(),
+            'name': drf_serializers.CharField(),
+        }, many=True)},
+        summary='Mis programas inscritos',
+        description='Programas con Enrollment activa del bootcamper autenticado, para el selector de subida de comprobantes.',
+        tags=['Pagos — Bootcamper'],
+    )
+    def get(self, request):
+        from apps.programs.models import Enrollment, Program
+
+        programs = (
+            Program.objects
+            .filter(
+                enrollments__bootcamper=request.user,
+                enrollments__status=Enrollment.Status.ACTIVE,
+            )
+            .distinct()
+        )
+        return Response([{'id': str(p.id), 'name': p.name} for p in programs])
 
 
 class PaymentMyStatusView(APIView):
@@ -592,8 +644,8 @@ class NotifyCoordinatorView(APIView):
         parameters=[OpenApiParameter('program_id', str, required=True, description='UUID del programa')],
         responses={
             200: OpenApiResponse(description='Alerta enviada'),
-            400: OpenApiResponse(description='program_id requerido'),
-            404: OpenApiResponse(description='Bootcamper no encontrado'),
+            400: OpenApiResponse(description='program_id requerido, o el pago no está en estado crítico'),
+            404: OpenApiResponse(description='Bootcamper o programa no encontrado'),
         },
         summary='Alertar coordinador por pago atrasado',
         description='Dispara una notificación manual al coordinador del programa sobre pagos críticos.',
@@ -602,6 +654,7 @@ class NotifyCoordinatorView(APIView):
     def post(self, request, bootcamper_id):
         from apps.notifications.tasks import send_late_payment_alert
         from apps.authentication.models import CustomUser
+        from apps.programs.models import Program
 
         program_id = request.data.get('program_id') or request.query_params.get('program_id')
         if not program_id:
@@ -611,6 +664,23 @@ class NotifyCoordinatorView(APIView):
             CustomUser.objects.get(pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER)
         except CustomUser.DoesNotExist:
             return Response({'error': 'Bootcamper no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # El gate del 10% debe validarse en el servidor: el frontend sólo lo usaba
+        # para mostrar u ocultar el botón, así que una llamada directa a la API
+        # podía notificar al coordinador sobre un pago que no era crítico.
+        try:
+            summary = PaymentProgressService().get_payment_summary(str(bootcamper_id), str(program_id))
+        except Program.DoesNotExist:
+            return Response({'error': 'Programa no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not summary['is_critical']:
+            return Response(
+                {
+                    'error': 'El pago de este bootcamper no está en estado crítico.',
+                    'code': 'NOT_CRITICAL',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         send_late_payment_alert.delay(str(bootcamper_id), str(program_id))
         return Response({'detail': 'Alerta enviada.'}, status=status.HTTP_200_OK)

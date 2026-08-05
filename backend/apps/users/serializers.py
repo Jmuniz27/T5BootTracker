@@ -83,10 +83,11 @@ class AdminUserSerializer(CoordinatorScopeMixin, UserDataSerializer):
 
 
 class CreateUserSerializer(CoordinatorScopeMixin, serializers.ModelSerializer):
-    # No `required=True`: el coordinador es una persona de contacto y no entra a
-    # la aplicación, así que no se le pide contraseña. La exigencia por rol se
-    # resuelve en validate(); `create_user` deja la contraseña inutilizable
-    # cuando no viene ninguna.
+    # No `required=True`: si el administrador la deja en blanco, el usuario
+    # recibe una invitación por correo para elegir su propia contraseña (issue
+    # #295) en vez de que se la comuniquen en texto plano. El coordinador es la
+    # única excepción real — no entra a la aplicación, así que ni siquiera se
+    # le invita; `create_user` resuelve ambos casos.
     password = serializers.CharField(
         write_only=True, required=False, allow_blank=True, style={'input_type': 'password'},
     )
@@ -97,18 +98,6 @@ class CreateUserSerializer(CoordinatorScopeMixin, serializers.ModelSerializer):
             'email', 'cedula', 'first_name', 'last_name', 'role', 'password', 'phone',
             *COORDINATOR_FIELDS,
         ]
-
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-
-        # Todos los roles que sí usan la aplicación necesitan contraseña; el
-        # coordinador es la única excepción.
-        if attrs.get('role') != CustomUser.Role.COORDINATOR and not attrs.get('password'):
-            raise serializers.ValidationError({
-                'password': 'Este campo es obligatorio.',
-            })
-
-        return attrs
 
     def validate_email(self, value):
         if CustomUser.objects.filter(email=value).exists():
