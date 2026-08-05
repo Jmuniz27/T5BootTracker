@@ -6,6 +6,9 @@ export const getLeads = (params = {}) =>
 export const convertLead = (id, data) =>
   client.post(`/leads/${id}/convert/`, data).then((r) => r.data)
 
+export const verifyBootcamper = (id) =>
+  client.patch(`/leads/${id}/verify-bootcamper/`).then((r) => r.data)
+
 export const getPrograms = () =>
   client.get('/programs/').then((r) => r.data)
 

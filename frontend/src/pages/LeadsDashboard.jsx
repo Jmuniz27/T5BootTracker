@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
@@ -83,6 +83,29 @@ function LeadStatusBadge({ status, lastOutcome }) {
   }
   const label = STATUS_LABELS[status] ?? OUTCOME_LABELS[lastOutcome] ?? status
   const color = STATUS_COLORS[status] ?? OUTCOME_COLORS[lastOutcome] ?? 'bg-gray-100 text-gray-500'
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
+      {label}
+    </span>
+  )
+}
+
+const VERIFICATION_LABELS = {
+  INVITED: 'Invitado',
+  PENDING_VERIFICATION: 'Pendiente de verificación',
+  VERIFIED: 'Verificado',
+}
+
+const VERIFICATION_COLORS = {
+  INVITED: 'bg-gray-100 text-gray-500',
+  PENDING_VERIFICATION: 'bg-yellow-100 text-yellow-700',
+  VERIFIED: 'bg-green-100 text-green-700',
+}
+
+function VerificationBadge({ status }) {
+  if (!status) return null
+  const label = VERIFICATION_LABELS[status] ?? status
+  const color = VERIFICATION_COLORS[status] ?? 'bg-gray-100 text-gray-500'
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
       {label}
@@ -693,7 +716,8 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
 // ─── View Lead Modal ──────────────────────────────────────────────────────────
 
-function ViewLeadModal({ lead, onClose }) {
+function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
+  const queryClient = useQueryClient()
   const { data: interactions = [] } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -701,10 +725,19 @@ function ViewLeadModal({ lead, onClose }) {
 
   const lastInteraction = interactions[0]
   const rating = lastInteraction?.interest_level ?? null
+  const isConverted = lead.status === 'CONVERTED'
+  const profile = lead.bootcamper_profile
+
+  const verifyMutation = useMutation({
+    mutationFn: () => verifyBootcamper(lead.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-sm shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-md shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -765,6 +798,34 @@ function ViewLeadModal({ lead, onClose }) {
             <div>
               <p className="font-semibold text-gray-700 mb-0.5">Interés en programa:</p>
               <p className="text-gray-600">{lead.program_interest}</p>
+            </div>
+          )}
+          {isConverted && profile && (
+            <div className="pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-semibold text-gray-700">Datos del bootcamper:</p>
+                <VerificationBadge status={profile.verification_status} />
+              </div>
+              <div className="text-gray-600 space-y-0.5">
+                <p>{profile.first_name} {profile.last_name}</p>
+                <p>{profile.email}</p>
+                {profile.cedula && <p>Cédula/RUC: {profile.cedula}</p>}
+                {profile.phone && <p>{profile.phone}</p>}
+              </div>
+              {profile.verification_status === 'VERIFIED' && profile.verified_by_name && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Verificado por {profile.verified_by_name}
+                </p>
+              )}
+              {(isOwned || isAdmin) && profile.verification_status === 'PENDING_VERIFICATION' && (
+                <button
+                  onClick={() => verifyMutation.mutate()}
+                  disabled={verifyMutation.isPending}
+                  className="mt-3 w-full py-2 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
+                >
+                  {verifyMutation.isPending ? 'Verificando...' : 'Marcar como verificado'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -2441,7 +2502,14 @@ export default function LeadsDashboard() {
       </div>
 
       {/* Modals */}
-      {viewLead && <ViewLeadModal lead={viewLead} onClose={() => setViewLead(null)} />}
+      {viewLead && (
+        <ViewLeadModal
+          lead={viewLead}
+          isOwned={viewLead._isOwned}
+          isAdmin={isAdmin}
+          onClose={() => setViewLead(null)}
+        />
+      )}
 
       {historyLead && (
         <ViewHistoryModal lead={historyLead} onClose={() => setHistoryLead(null)} />
