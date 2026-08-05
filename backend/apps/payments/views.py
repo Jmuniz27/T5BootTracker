@@ -515,8 +515,8 @@ class NotifyCoordinatorView(APIView):
         parameters=[OpenApiParameter('program_id', str, required=True, description='UUID del programa')],
         responses={
             200: OpenApiResponse(description='Alerta enviada'),
-            400: OpenApiResponse(description='program_id requerido'),
-            404: OpenApiResponse(description='Bootcamper no encontrado'),
+            400: OpenApiResponse(description='program_id requerido, o el pago no está en estado crítico'),
+            404: OpenApiResponse(description='Bootcamper o programa no encontrado'),
         },
         summary='Alertar coordinador por pago atrasado',
         description='Dispara una notificación manual al coordinador del programa sobre pagos críticos.',
@@ -525,6 +525,7 @@ class NotifyCoordinatorView(APIView):
     def post(self, request, bootcamper_id):
         from apps.notifications.tasks import send_late_payment_alert
         from apps.authentication.models import CustomUser
+        from apps.programs.models import Program
 
         program_id = request.data.get('program_id') or request.query_params.get('program_id')
         if not program_id:
@@ -534,6 +535,23 @@ class NotifyCoordinatorView(APIView):
             CustomUser.objects.get(pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER)
         except CustomUser.DoesNotExist:
             return Response({'error': 'Bootcamper no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # El gate del 10% debe validarse en el servidor: el frontend sólo lo usaba
+        # para mostrar u ocultar el botón, así que una llamada directa a la API
+        # podía notificar al coordinador sobre un pago que no era crítico.
+        try:
+            summary = PaymentProgressService().get_payment_summary(str(bootcamper_id), str(program_id))
+        except Program.DoesNotExist:
+            return Response({'error': 'Programa no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not summary['is_critical']:
+            return Response(
+                {
+                    'error': 'El pago de este bootcamper no está en estado crítico.',
+                    'code': 'NOT_CRITICAL',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         send_late_payment_alert.delay(str(bootcamper_id), str(program_id))
         return Response({'detail': 'Alerta enviada.'}, status=status.HTTP_200_OK)

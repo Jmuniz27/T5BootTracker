@@ -50,7 +50,7 @@ captación de leads → seguimiento comercial → conversión a bootcamper → p
 | Mobile | Expo SDK 54 + Expo Router (file-based en `app/`) |
 | Auth mobile | expo-secure-store (nunca AsyncStorage para JWT) |
 | Storage | MinIO local → S3 prod |
-| Emails | Resend via Celery |
+| Emails | SMTP (Gmail) via Celery |
 | Docs API | drf-spectacular → `/api/schema/swagger-ui/` |
 
 ---
