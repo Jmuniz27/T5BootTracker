@@ -41,7 +41,8 @@ export default function ConvertLeadScreen() {
       .catch(() => {});
   }, [program]);
 
-  const canSubmit = validateIdentificacion(cedula.trim()) && programId !== '' && !loading;
+  const canSubmit =
+    validateIdentificacion(cedula.trim()) && programId !== '' && email.trim() !== '' && !loading;
 
   async function submit() {
     setLoading(true);
@@ -50,7 +51,7 @@ export default function ConvertLeadScreen() {
       await convertLead(id, {
         cedula: cedula.trim(),
         program_id: programId,
-        email: email.trim() || undefined,
+        email: email.trim(),
         phone: phone.trim() || undefined,
       });
       router.back();
@@ -105,7 +106,7 @@ export default function ConvertLeadScreen() {
             <Text style={s.label}>Programa *</Text>
             <ProgramSelect programs={programs} selectedId={programId || null} onSelect={setProgramId} />
 
-            <Text style={s.label}>Email</Text>
+            <Text style={s.label}>Email *</Text>
             <TextInput
               style={s.input}
               value={email}

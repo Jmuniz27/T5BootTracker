@@ -543,22 +543,28 @@ class ConvertLeadView(APIView):
         request=ConvertLeadSerializer,
         responses={
             201: inline_serializer('ConversionResponse', fields={
-                'bootcamper_id':      drf_serializers.UUIDField(),
-                'email':              drf_serializers.EmailField(),
-                'temporary_password': drf_serializers.CharField(allow_null=True),
-                'is_returning':       drf_serializers.BooleanField(),
-                'lead_status':        drf_serializers.CharField(),
+                'bootcamper_id':        drf_serializers.UUIDField(),
+                'email':                drf_serializers.EmailField(),
+                'invitation_link':      drf_serializers.CharField(allow_null=True),
+                'is_returning':         drf_serializers.BooleanField(),
+                'lead_status':          drf_serializers.CharField(),
+                'discount_percentage':  drf_serializers.CharField(),
+                'agreed_price':         drf_serializers.CharField(),
+                'cohort_id':            drf_serializers.UUIDField(allow_null=True),
+                'cohort_number':        drf_serializers.IntegerField(allow_null=True),
             }),
-            400: OpenApiResponse(description='Estado inválido o cédula inválida'),
+            400: OpenApiResponse(description='Estado inválido o cédula/RUC inválido'),
             403: OpenApiResponse(description='No eres el dueño del lead'),
             404: OpenApiResponse(description='Lead o programa no encontrado'),
             409: OpenApiResponse(description='Email ya asociado a otro rol, cédula ya registrada o bootcamper ya inscrito en el programa'),
         },
         summary='Convertir lead a bootcamper',
         description=(
-            'Valida la cédula ecuatoriana, crea o reutiliza un usuario BOOTCAMPER, '
+            'Valida la identificación (cédula o RUC), crea o reutiliza un usuario BOOTCAMPER, '
             'crea la inscripción (Enrollment), marca el lead como CONVERTED '
-            'y dispara notificación a coordinadores. Requiere que el Lead sea QUALIFIED.'
+            'y dispara notificación a coordinadores. Requiere que el Lead sea QUALIFIED. '
+            'Si es una cuenta nueva, la respuesta incluye invitation_link para que active su '
+            'contraseña; un bootcamper recurrente (is_returning=True) no recibe invitación.'
         ),
         tags=['Leads'],
     )
