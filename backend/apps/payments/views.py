@@ -583,7 +583,12 @@ class BootcamperPoolView(APIView):
         parameters=[
             OpenApiParameter('search', str, required=False, description='Buscar por nombre o email'),
             OpenApiParameter('program_id', str, required=False, description='Filtrar por UUID del programa'),
+            OpenApiParameter('cohort_id', str, required=False, description='Filtrar por UUID de la cohorte'),
             OpenApiParameter('status', str, required=False, description='CRITICAL | AT_RISK | ON_TRACK'),
+            OpenApiParameter(
+                'fully_paid', str, required=False,
+                description="'true' sólo quienes completaron el pago, 'false' sólo los que aún deben.",
+            ),
             OpenApiParameter('page', int, required=False, description='Número de página (default 1)'),
             OpenApiParameter('page_size', int, required=False, description=f'Default {DEFAULT_PAGE_SIZE}, máx {MAX_PAGE_SIZE}'),
         ],
@@ -631,13 +636,25 @@ class BootcamperPoolView(APIView):
         available = service.get_bootcamper_summaries(bootcampers.filter(finance_owner__isnull=True))
 
         program_id    = request.query_params.get('program_id')
+        cohort_id     = request.query_params.get('cohort_id')
         status_filter = request.query_params.get('status')
+        # 'true' | 'false': quién ya terminó de pagar. Se filtra acá y no con
+        # `status`, porque `payment_status` sigue diciendo ON_TRACK para alguien
+        # que ya pagó todo — son dos preguntas distintas.
+        fully_paid    = request.query_params.get('fully_paid')
 
         def _filter(cards):
             if program_id:
                 cards = [c for c in cards if c['program_id'] == program_id]
+            if cohort_id:
+                # El cobro se monitorea por edición: filtrar sólo por programa
+                # mezcla cohortes que arrancaron en meses distintos.
+                cards = [c for c in cards if c['cohort_id'] == cohort_id]
             if status_filter:
                 cards = [c for c in cards if c['payment_status'] == status_filter]
+            if fully_paid in ('true', 'false'):
+                wanted = fully_paid == 'true'
+                cards = [c for c in cards if c['is_fully_paid'] is wanted]
             return cards
 
         mine      = _filter(mine)

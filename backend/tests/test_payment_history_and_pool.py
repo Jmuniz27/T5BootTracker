@@ -288,3 +288,77 @@ class TestAdminReleasesPool:
         resp = make_client(finance_user).patch(release_url(converted_bootcamper))
         assert resp.status_code == 403
         assert resp.json()['code'] == 'NOT_OWNER'
+
+
+class TestFullyPaidAndCohort:
+    """Separar "en cobro" de "pagos finalizados", y saber de qué cohorte se cobra."""
+
+    def test_is_fully_paid_is_false_while_something_is_owed(
+        self, db, admin_user, converted_bootcamper, program
+    ):
+        from apps.payments.services import PaymentProgressService
+
+        pay(converted_bootcamper, program, Payment.Status.APPROVED, Decimal('100.00'))
+
+        summary = PaymentProgressService().get_payment_summary(
+            str(converted_bootcamper.id), str(program.id),
+        )
+        assert summary['is_fully_paid'] is False
+
+    def test_is_fully_paid_flips_when_the_debt_is_cleared(
+        self, db, converted_bootcamper, program
+    ):
+        from apps.payments.services import PaymentProgressService
+
+        pay(converted_bootcamper, program, Payment.Status.APPROVED, program.total_cost)
+
+        summary = PaymentProgressService().get_payment_summary(
+            str(converted_bootcamper.id), str(program.id),
+        )
+        assert summary['is_fully_paid'] is True
+        assert summary['deficit'] == Decimal('0.00')
+
+    def test_payment_status_is_untouched(self, db, converted_bootcamper, program):
+        """La bandera es aparte: `payment_status` lo consume el filtro `?status=`."""
+        from apps.payments.services import PaymentProgressService
+
+        pay(converted_bootcamper, program, Payment.Status.APPROVED, program.total_cost)
+
+        summary = PaymentProgressService().get_payment_summary(
+            str(converted_bootcamper.id), str(program.id),
+        )
+        assert summary['payment_status'] in ('ON_TRACK', 'AT_RISK', 'CRITICAL')
+
+    def test_summary_carries_the_cohort(self, db, converted_bootcamper, program):
+        """`Payment` apunta al programa: la cohorte sólo puede salir de la inscripción."""
+        import datetime
+
+        from apps.programs.models import Cohort, Enrollment
+        from apps.payments.services import PaymentProgressService
+
+        start = datetime.date.today().replace(day=1)
+        cohort = Cohort.objects.create(
+            program=program, number=7, start_month=start,
+            end_month=(start + datetime.timedelta(days=90)).replace(day=1),
+            status=Cohort.Status.IN_PROGRESS,
+        )
+        Enrollment.objects.create(
+            bootcamper=converted_bootcamper, bootcamp=program, cohort=cohort,
+            start_date=start, agreed_price=program.total_cost,
+        )
+
+        summary = PaymentProgressService().get_payment_summary(
+            str(converted_bootcamper.id), str(program.id),
+        )
+        assert summary['cohort_number'] == 7
+        assert summary['cohort_id'] == str(cohort.id)
+
+    def test_cohort_is_none_without_enrollment(self, db, converted_bootcamper, program):
+        """Hay pagos sin inscripción (datos viejos): no debe reventar."""
+        from apps.payments.services import PaymentProgressService
+
+        summary = PaymentProgressService().get_payment_summary(
+            str(converted_bootcamper.id), str(program.id),
+        )
+        assert summary['cohort_id'] is None
+        assert summary['cohort_number'] is None
