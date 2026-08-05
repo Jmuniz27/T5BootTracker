@@ -626,3 +626,177 @@ class TestLeadManagementUnassignedCount:
         borrado.soft_delete()
 
         assert make_client(admin_user).get(LEAD_MANAGEMENT_URL).json()['unassigned_leads'] == 1
+
+
+# ==========================================
+# DETALLE DE LEADS POR VENDEDOR (drill-down de CR-006)
+# ==========================================
+
+SALESPERSON_LEADS_URL = '/api/analytics/lead-management/leads/'
+
+
+class TestSalespersonLeadsPermissions:
+    def test_unauthenticated_rejected(self, db, salesperson_user):
+        resp = APIClient().get(SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)})
+        assert resp.status_code == 401
+
+    def test_salesperson_rejected(self, db, salesperson_user):
+        resp = make_client(salesperson_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        )
+        assert resp.status_code == 403
+
+    def test_bootcamper_rejected(self, db, bootcamper_user, salesperson_user):
+        resp = make_client(bootcamper_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        )
+        assert resp.status_code == 403
+
+    def test_salesperson_param_is_required(self, db, admin_user):
+        resp = make_client(admin_user).get(SALESPERSON_LEADS_URL)
+        assert resp.status_code == 400
+        assert 'salesperson' in resp.json()
+
+
+class TestSalespersonLeadsDetail:
+    def test_returns_one_row_per_assigned_lead(self, db, admin_user, salesperson_user):
+        now = timezone.now()
+        _assign(_make_lead('Uno', '0990000040'), salesperson_user, now - timedelta(hours=3))
+        _assign(_make_lead('Dos', '0990000041'), salesperson_user, now - timedelta(hours=1))
+
+        data = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        ).json()
+
+        assert data['leads_count'] == 2
+        assert {row['name'] for row in data['leads']} == {'Uno', 'Dos'}
+
+    def test_excludes_leads_of_other_salespeople(self, db, admin_user, salesperson_user):
+        other = CustomUser.objects.create_user(
+            email='otro_vendedor@test.com', password='x', role=CustomUser.Role.SALESPERSON,
+        )
+        now = timezone.now()
+        _assign(_make_lead('Mío', '0990000042'), salesperson_user, now - timedelta(hours=2))
+        _assign(_make_lead('Ajeno', '0990000043'), other, now - timedelta(hours=2))
+
+        data = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        ).json()
+
+        assert data['leads_count'] == 1
+        assert data['leads'][0]['name'] == 'Mío'
+
+    def test_never_assigned_leads_are_excluded(self, db, admin_user, salesperson_user):
+        _make_lead('Sin dueño', '0990000044')
+
+        data = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        ).json()
+
+        assert data['leads_count'] == 0
+
+    def test_retention_and_first_contact_match_the_aggregate_rule(
+        self, db, admin_user, salesperson_user
+    ):
+        assigned = timezone.now() - timedelta(hours=10)
+        lead = _make_lead('Con contacto', '0990000045')
+        _assign(lead, salesperson_user, assigned, released_at=assigned + timedelta(hours=6))
+        _make_interaction(lead, salesperson_user, created_at=assigned + timedelta(hours=2))
+
+        row = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        ).json()['leads'][0]
+
+        assert row['retention_hours'] == pytest.approx(6.0, abs=0.1)
+        assert row['hours_to_first_contact'] == pytest.approx(2.0, abs=0.1)
+        assert row['is_released'] is True
+
+    def test_lead_without_interactions_reports_null_first_contact(
+        self, db, admin_user, salesperson_user
+    ):
+        _assign(_make_lead('Sin tocar', '0990000046'), salesperson_user, timezone.now() - timedelta(hours=4))
+
+        row = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        ).json()['leads'][0]
+
+        # None y no 0: nadie lo contactó, no es que lo contactaran al instante.
+        assert row['hours_to_first_contact'] is None
+        assert row['interaction_count'] == 0
+        assert row['last_outcome'] is None
+
+    def test_interaction_before_assignment_is_not_counted(self, db, admin_user, salesperson_user):
+        assigned = timezone.now() - timedelta(hours=5)
+        lead = _make_lead('Contacto previo', '0990000047')
+        _assign(lead, salesperson_user, assigned)
+        _make_interaction(lead, salesperson_user, created_at=assigned - timedelta(hours=3))
+
+        row = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        ).json()['leads'][0]
+
+        assert row['hours_to_first_contact'] is None
+
+    def test_last_outcome_comes_from_the_newest_interaction(self, db, admin_user, salesperson_user):
+        assigned = timezone.now() - timedelta(hours=8)
+        lead = _make_lead('Varias', '0990000048')
+        _assign(lead, salesperson_user, assigned)
+        old = _make_interaction(lead, salesperson_user, created_at=assigned + timedelta(hours=1))
+        Interaction.objects.filter(pk=old.pk).update(outcome=Interaction.Outcome.SEND_INFO)
+        new = _make_interaction(lead, salesperson_user, created_at=assigned + timedelta(hours=4))
+        Interaction.objects.filter(pk=new.pk).update(outcome=Interaction.Outcome.CALL_AGAIN)
+
+        row = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        ).json()['leads'][0]
+
+        assert row['interaction_count'] == 2
+        assert row['last_outcome'] == Interaction.Outcome.CALL_AGAIN
+
+    def test_segment_filter_applies(self, db, admin_user, salesperson_user):
+        now = timezone.now()
+        _assign(
+            _make_lead('Insta', '0990000049', source=Lead.Source.INSTAGRAM),
+            salesperson_user, now - timedelta(hours=2),
+        )
+        _assign(
+            _make_lead('Manual', '0990000050', source=Lead.Source.MANUAL),
+            salesperson_user, now - timedelta(hours=2),
+        )
+
+        data = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL,
+            {'salesperson': str(salesperson_user.id), 'segment': 'INSTAGRAM'},
+        ).json()
+
+        assert data['leads_count'] == 1
+        assert data['leads'][0]['source'] == Lead.Source.INSTAGRAM
+
+    def test_date_filter_applies(self, db, admin_user, salesperson_user):
+        now = timezone.now()
+        _assign(
+            _make_lead('Viejo', '0990000051', created_at=now - timedelta(days=30)),
+            salesperson_user, now - timedelta(days=29),
+        )
+        _assign(_make_lead('Nuevo', '0990000052'), salesperson_user, now - timedelta(hours=2))
+
+        desde = (now - timedelta(days=1)).date().isoformat()
+        data = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id), 'fecha_desde': desde},
+        ).json()
+
+        assert data['leads_count'] == 1
+        assert data['leads'][0]['name'] == 'Nuevo'
+
+    def test_soft_deleted_leads_excluded(self, db, admin_user, salesperson_user):
+        now = timezone.now()
+        _assign(_make_lead('Vivo', '0990000053'), salesperson_user, now - timedelta(hours=2))
+        borrado = _assign(_make_lead('Borrado', '0990000054'), salesperson_user, now - timedelta(hours=2))
+        borrado.soft_delete()
+
+        data = make_client(admin_user).get(
+            SALESPERSON_LEADS_URL, {'salesperson': str(salesperson_user.id)}
+        ).json()
+
+        assert data['leads_count'] == 1
+        assert data['leads'][0]['name'] == 'Vivo'

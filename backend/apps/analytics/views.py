@@ -4,6 +4,7 @@ from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParam
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError
 
 from apps.leads.permissions import IsAdministrator
 from .services import AnalyticsService
@@ -84,6 +85,54 @@ class LeadManagementMetricsView(APIView):
     def get(self, request):
         params = request.query_params
         data = AnalyticsService().get_lead_management_metrics(
+            fecha_desde=parse_date(params.get('fecha_desde', '') or ''),
+            fecha_hasta=parse_date(params.get('fecha_hasta', '') or ''),
+            segment=params.get('segment') or None,
+            campaign=params.get('campaign') or None,
+        )
+        return Response(data)
+
+
+class SalespersonLeadDetailView(APIView):
+    """GET /api/analytics/lead-management/leads/ — leads de un vendedor (solo Admin).
+
+    Drill-down de LeadManagementMetricsView: esa vista promedia, esta muestra
+    los leads que produjeron el promedio. `salesperson` es obligatorio — sin
+    vendedor no hay detalle que dar, y devolver todos los leads del sistema
+    sería otra cosa (y otra consulta mucho más cara).
+    """
+    permission_classes = [IsAdministrator]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter('salesperson', str, required=True, description='UUID del vendedor (obligatorio).'),
+            OpenApiParameter('fecha_desde', str, description='Filtrar leads creados desde (YYYY-MM-DD).'),
+            OpenApiParameter('fecha_hasta', str, description='Filtrar leads creados hasta (YYYY-MM-DD).'),
+            OpenApiParameter('segment', str, description='Lead.source: INSTAGRAM, WHATSAPP, LANDING_PAGE, MANUAL'),
+            OpenApiParameter('campaign', str, description='Interaction.campaign (coincidencia parcial, case-insensitive)'),
+        ],
+        responses={200: inline_serializer('SalespersonLeadDetailResponse', fields={
+            'filters_applied': drf_serializers.DictField(),
+            'leads_count':     drf_serializers.IntegerField(),
+            'leads':           drf_serializers.ListField(),
+        })},
+        summary='Detalle de leads de un vendedor (solo Admin)',
+        description=(
+            'Una fila por lead asignado al vendedor, con fuente, estado, programa de interés, '
+            'fechas de ingreso y asignación, horas de retención, horas hasta el primer contacto, '
+            'conteo de interacciones y último resultado. Incluye leads ya liberados, marcados '
+            'con is_released. Retención y primer contacto usan la misma regla que el agregado.'
+        ),
+        tags=['Analytics'],
+    )
+    def get(self, request):
+        params = request.query_params
+        salesperson_id = params.get('salesperson') or None
+        if not salesperson_id:
+            raise ValidationError({'salesperson': 'Este parámetro es obligatorio.'})
+
+        data = AnalyticsService().get_salesperson_lead_detail(
+            salesperson_id=salesperson_id,
             fecha_desde=parse_date(params.get('fecha_desde', '') or ''),
             fecha_hasta=parse_date(params.get('fecha_hasta', '') or ''),
             segment=params.get('segment') or None,
