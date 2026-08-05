@@ -16,13 +16,14 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.authentication.models import CustomUser
+from apps.authentication.services import reject_bootcamper, verify_bootcamper
 from apps.programs.models import Program
 from .models import Lead, Interaction, LeadAssignmentSetting
 from .permissions import COMMERCIAL_ROLES, IsAdministrator, IsCommercial, IsCommercialOrAdmin
 from .serializers import (
     LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
     InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
-    LeadAssignmentSettingSerializer,
+    LeadAssignmentSettingSerializer, VerificationRejectSerializer,
 )
 from .services import (
     register_interaction, convert_lead_to_bootcamper,
@@ -51,7 +52,7 @@ class LeadListCreateView(APIView):
             .exclude(interaction_type=Interaction.InteractionType.SYSTEM)
             .order_by('-created_at')
         )
-        return Lead.objects.annotate(
+        return Lead.objects.select_related('bootcamper').annotate(
             interaction_count=Count('interactions', filter=real),
             last_outcome=Subquery(latest.values('outcome')[:1]),
             last_interaction_at=Subquery(latest.values('created_at')[:1]),
@@ -439,7 +440,7 @@ class LeadDetailView(APIView):
     )
     def get(self, request, pk):
         lead = get_object_or_404(
-            Lead.objects.annotate(
+            Lead.objects.select_related('bootcamper').annotate(
                 interaction_count=Count(
                     'interactions',
                     filter=~Q(interactions__interaction_type=Interaction.InteractionType.SYSTEM),
@@ -645,6 +646,88 @@ class ResendInvitationView(APIView):
 
         result_data = resend_invitation(lead)
         return Response(result_data, status=status.HTTP_200_OK)
+
+
+class VerifyBootcamperView(APIView):
+    """PATCH /api/leads/{id}/verify-bootcamper/ — mark the resulting bootcamper as verified (#259)."""
+    permission_classes = [IsCommercialOrAdmin]
+
+    @extend_schema(
+        responses={
+            200: LeadDetailSerializer,
+            400: OpenApiResponse(description='El lead no fue convertido, o el bootcamper no está pendiente de verificación'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Verificar datos del bootcamper',
+        description=(
+            'El vendedor dueño del lead (o un administrador) confirma que los datos que el '
+            'bootcamper completó en el onboarding son correctos. Sólo válido si el bootcamper '
+            'está en PENDING_VERIFICATION.'
+        ),
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        lead = get_object_or_404(Lead.objects.select_related('bootcamper'), pk=pk)
+        if not request.user.is_administrator and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede verificar este bootcamper.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if lead.bootcamper is None:
+            return Response(
+                {'error': 'Este lead todavía no fue convertido a bootcamper.', 'code': 'NOT_CONVERTED'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        verify_bootcamper(lead.bootcamper, request.user)
+        lead = Lead.objects.select_related('bootcamper').annotate(
+            interaction_count=Count('interactions'),
+        ).get(pk=lead.pk)
+        return Response(LeadDetailSerializer(lead).data)
+
+
+class RejectBootcamperView(APIView):
+    """PATCH /api/leads/{id}/reject-bootcamper/ — señalar que hay datos que corregir (#309)."""
+    permission_classes = [IsCommercialOrAdmin]
+
+    @extend_schema(
+        request=VerificationRejectSerializer,
+        responses={
+            200: LeadDetailSerializer,
+            400: OpenApiResponse(description='Motivo vacío, lead no convertido, o el bootcamper no está en un estado revisable'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Rechazar datos del bootcamper',
+        description=(
+            'El vendedor dueño del lead (o un administrador) marca que los datos del onboarding '
+            'tienen algo que corregir, indicando qué. Se le notifica al bootcamper por correo. '
+            'El rechazo no es terminal: una vez corregidos los datos se puede verificar.'
+        ),
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        lead = get_object_or_404(Lead.objects.select_related('bootcamper'), pk=pk)
+        if not request.user.is_administrator and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede rechazar los datos de este bootcamper.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if lead.bootcamper is None:
+            return Response(
+                {'error': 'Este lead todavía no fue convertido a bootcamper.', 'code': 'NOT_CONVERTED'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = VerificationRejectSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        reject_bootcamper(lead.bootcamper, request.user, serializer.validated_data['reason'])
+        lead = Lead.objects.select_related('bootcamper').annotate(
+            interaction_count=Count('interactions'),
+        ).get(pk=lead.pk)
+        return Response(LeadDetailSerializer(lead).data)
 
 
 class ReturningBootcamperView(APIView):

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getPayment, approvePayment, rejectPayment, notifyCoordinator } from '../api/payments.api'
+import { getPayment, approvePayment, rejectPayment, notifyCoordinator, getMonitoring } from '../api/payments.api'
 import { useModalA11y } from '../hooks/use-modal-a11y'
 import Spinner from './ui/Spinner'
 import Skeleton from './ui/Skeleton'
@@ -29,6 +29,18 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
     queryKey: ['payment-detail', paymentId],
     queryFn: () => getPayment(paymentId),
   })
+
+  // Mismo criterio que BootcamperPaymentDetailPage: sólo se puede notificar al
+  // coordinador si el pago está en estado crítico. El backend es la fuente de
+  // verdad (devuelve 400 si no lo está); esto sólo evita mostrar el botón
+  // habilitado cuando de todas formas va a fallar.
+  const { data: monitoring } = useQuery({
+    queryKey: ['payment-monitoring-for-notify', payment?.program],
+    queryFn: () => getMonitoring({ program_id: payment.program }),
+    enabled: !!payment?.program,
+  })
+  const bootcamperSummary = monitoring?.find((row) => row.bootcamper_id === bootcamperId)
+  const isCritical = bootcamperSummary?.payment_status === 'CRITICAL'
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['payment-queue'] })
@@ -210,21 +222,23 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                 </button>
               </div>
 
-              <div className="border border-gray-200 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700">Notificar coordinador</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Envía una alerta al coordinador del programa.</p>
+              {isCritical && (
+                <div className="border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700">Notificar coordinador</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">Envía una alerta al coordinador del programa.</p>
+                    </div>
+                    <button
+                      disabled={notifyMutation.isPending}
+                      onClick={() => notifyMutation.mutate()}
+                      className="text-sm text-[#213A8E] font-medium border border-[#213A8E] px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition-colors"
+                    >
+                      {notifyMutation.isPending ? 'Enviando...' : 'Notificar'}
+                    </button>
                   </div>
-                  <button
-                    disabled={notifyMutation.isPending}
-                    onClick={() => notifyMutation.mutate()}
-                    className="text-sm text-[#213A8E] font-medium border border-[#213A8E] px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition-colors"
-                  >
-                    {notifyMutation.isPending ? 'Enviando...' : 'Notificar'}
-                  </button>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

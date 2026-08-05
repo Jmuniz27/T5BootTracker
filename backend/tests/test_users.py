@@ -356,15 +356,26 @@ def test_coordinator_without_password_cannot_log_in(api_client, admin_user):
     assert not created.check_password('password_segura_123')
 
 
-def test_other_roles_still_require_a_password(api_client, admin_user):
+def test_other_roles_without_password_get_invited_by_email(api_client, admin_user):
+    """Issue #295: dejar la contraseña en blanco ya no es un error — el
+    usuario recibe una invitación por correo con link de activación."""
+    from unittest.mock import patch
+
     api_client.force_authenticate(user=admin_user)
     data = _coordinator_payload(role=CustomUser.Role.SALESPERSON)
     data.pop('password')
 
-    response = api_client.post(reverse('user-list'), data=data)
+    with patch(
+        'apps.notifications.tasks.send_staff_invitation_email.delay'
+    ) as mock_delay:
+        response = api_client.post(reverse('user-list'), data=data)
 
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert 'password' in response.data
+    assert response.status_code == status.HTTP_201_CREATED
+    created = CustomUser.objects.get(email=data['email'])
+    assert not created.has_usable_password()
+    assert created.verification_status == CustomUser.VerificationStatus.INVITED
+    mock_delay.assert_called_once()
+    assert mock_delay.call_args[0][0] == str(created.id)
 
 
 def test_coordinator_with_explicit_password_keeps_it(api_client, admin_user):
@@ -428,3 +439,78 @@ def test_reset_password_generates_new_password(api_client, admin_user):
     user.refresh_from_db()
     assert user.password != old_password_hash
     assert user.check_password(new_password) is True # El nuevo password debe funcionar
+
+
+# --- PRUEBAS: PATCH de rol no reenvía invitación ni toca credenciales (#295) ---
+
+def test_patch_role_does_not_send_email_or_touch_password(api_client, admin_user, target_user):
+    """Cambiar el rol por PATCH no debe disparar ninguna invitación ni tocar
+    la contraseña — eso sólo pasa al crear el usuario."""
+    from unittest.mock import patch
+
+    target_user.role = CustomUser.Role.SALESPERSON
+    target_user.save()
+    old_password_hash = target_user.password
+
+    api_client.force_authenticate(user=admin_user)
+    with patch(
+        'apps.notifications.tasks.send_staff_invitation_email.delay'
+    ) as mock_delay:
+        response = api_client.patch(
+            reverse('user-detail', args=[target_user.id]),
+            data={'role': CustomUser.Role.FINANCE},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    mock_delay.assert_not_called()
+    target_user.refresh_from_db()
+    assert target_user.password == old_password_hash
+
+
+def test_promoting_to_administrator_sets_is_staff(api_client, admin_user, target_user):
+    api_client.force_authenticate(user=admin_user)
+    target_user.role = CustomUser.Role.SALESPERSON
+    target_user.is_staff = False
+    target_user.save()
+
+    response = api_client.patch(
+        reverse('user-detail', args=[target_user.id]),
+        data={'role': CustomUser.Role.ADMINISTRATOR},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    target_user.refresh_from_db()
+    assert target_user.is_staff is True
+
+
+def test_demoting_from_administrator_clears_is_staff(api_client, admin_user, target_user):
+    api_client.force_authenticate(user=admin_user)
+    target_user.role = CustomUser.Role.ADMINISTRATOR
+    target_user.is_staff = True
+    target_user.save()
+
+    response = api_client.patch(
+        reverse('user-detail', args=[target_user.id]),
+        data={'role': CustomUser.Role.SALESPERSON},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    target_user.refresh_from_db()
+    assert target_user.is_staff is False
+
+
+def test_unrelated_patch_does_not_change_is_staff(api_client, admin_user, target_user):
+    """Un PATCH que no toca el rol no debe alterar is_staff."""
+    api_client.force_authenticate(user=admin_user)
+    target_user.role = CustomUser.Role.ADMINISTRATOR
+    target_user.is_staff = True
+    target_user.save()
+
+    response = api_client.patch(
+        reverse('user-detail', args=[target_user.id]),
+        data={'first_name': 'Otro'},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    target_user.refresh_from_db()
+    assert target_user.is_staff is True

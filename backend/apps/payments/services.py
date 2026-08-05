@@ -31,6 +31,62 @@ def read_receipt_token(token: str) -> str:
     return signing.loads(token, salt=RECEIPT_TOKEN_SALT, max_age=RECEIPT_TOKEN_MAX_AGE)
 
 
+class UploadProgramError(Exception):
+    """El programa del comprobante no se pudo determinar.
+
+    Lleva el mensaje que verá el bootcamper y un código para el cliente.
+    """
+
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.message = message
+        self.code = code
+
+
+def resolve_upload_program(bootcamper, program_id=None):
+    """Return the Program a receipt belongs to.
+
+    El bootcamper no elige el programa al subir: ya está inscrito en uno, así que
+    se deduce de su inscripción activa. `program_id` se sigue aceptando para los
+    clientes que ya lo mandaban y para desempatar a quien curse dos programas.
+
+    Se exige **exactamente una** inscripción activa en vez de tomar la primera:
+    adivinar acá imputaría el pago al programa equivocado, y eso descuadra el
+    saldo de los dos programas a la vez.
+
+    Raises:
+        UploadProgramError: sin inscripción activa, o con más de una y sin
+            `program_id` que desempate.
+        Program.DoesNotExist: el `program_id` recibido no existe.
+    """
+    from apps.programs.models import Enrollment, Program
+
+    if program_id:
+        return Program.objects.get(pk=program_id)
+
+    active = list(
+        Enrollment.objects
+        .filter(bootcamper=bootcamper, status=Enrollment.Status.ACTIVE)
+        .select_related('bootcamp')[:2]
+    )
+
+    if not active:
+        raise UploadProgramError(
+            'No tienes una inscripción activa a la cual asociar el comprobante. '
+            'Escríbele a tu asesor para que la registre.',
+            'NO_ACTIVE_ENROLLMENT',
+        )
+
+    if len(active) > 1:
+        raise UploadProgramError(
+            'Tienes más de un programa activo, así que hay que indicar a cuál '
+            'corresponde el comprobante. Escríbele a tu asesor.',
+            'AMBIGUOUS_ENROLLMENT',
+        )
+
+    return active[0].bootcamp
+
+
 class PaymentProgressService:
     """Calculate payment progress for a bootcamper in a program."""
 

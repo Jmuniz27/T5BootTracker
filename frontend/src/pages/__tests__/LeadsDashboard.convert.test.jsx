@@ -18,6 +18,8 @@ vi.mock('../../api/leads.api', () => ({
   createInteraction: vi.fn(),
   updateInteraction: vi.fn(),
   convertLead: vi.fn(),
+  resendInvitation: vi.fn(),
+  verifyBootcamper: vi.fn(),
   getPrograms: vi.fn(),
   updateLeadStatus: vi.fn(),
   updateLead: vi.fn(),
@@ -274,5 +276,19 @@ describe('LeadsDashboard — convertir con cohorte y descuento', () => {
     // Como la cohorte es obligatoria y quedó vacía, no se convierte hasta elegir otra.
     expect(convertLead).not.toHaveBeenCalled();
     expect(await screen.findByText(/selecciona una cohorte/i)).toBeInTheDocument();
+  });
+
+  it('la pantalla de éxito muestra el link de invitación y ninguna contraseña', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    await abrirModal(user);
+    await elegirPrograma(user);
+
+    await user.type(screen.getByTestId('convert-cedula'), '1713175071');
+    await user.click(screen.getByRole('button', { name: /convertir a bootcamper/i }));
+
+    expect(await screen.findByDisplayValue('https://app.test/onboarding/tok')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copiar/i })).toBeInTheDocument();
+    expect(screen.queryByText(/contraseña temporal/i)).not.toBeInTheDocument();
   });
 });
