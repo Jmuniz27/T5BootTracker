@@ -1330,6 +1330,55 @@ function FilterDropdown({ value, onChange }) {
   )
 }
 
+// ─── Source Filter Dropdown ───────────────────────────────────────────────────
+
+function SourceFilterDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const options = [
+    { value: '', label: 'Todas las fuentes' },
+    ...Object.entries(SOURCE_LABELS).map(([v, label]) => ({ value: v, label })),
+  ]
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
+          value ? 'border-[#213A8E] text-[#213A8E] bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+        </svg>
+        {value ? SOURCE_LABELS[value] : 'Fuente'}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                value === opt.value ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Sort Dropdown ────────────────────────────────────────────────────────────
 
 function SortDropdown({ value, onChange }) {
@@ -2013,6 +2062,7 @@ export default function LeadsDashboard() {
     !!l && l.status !== 'CONVERTED' && (isAdmin || !l.owner || l.owner === currentUser?.id)
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('')
   const [companyFilter, setCompanyFilter] = useState(false)
   const [sortKey, setSortKey]         = useState('default')
   const [page, setPage]               = useState(1)
@@ -2040,11 +2090,12 @@ export default function LeadsDashboard() {
   }
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey, vendorFilter])
+  useEffect(() => { setPage(1) }, [search, statusFilter, sourceFilter, companyFilter, sortKey, vendorFilter])
 
   const queryParams = { page, page_size: PAGE_SIZE }
   if (search) queryParams.search = search
   if (statusFilter) queryParams.status = statusFilter
+  if (sourceFilter) queryParams.source = sourceFilter
   if (isAdmin && vendorFilter) queryParams.vendedor = vendorFilter
 
   const { data, isLoading, isError } = useQuery({
@@ -2261,6 +2312,7 @@ export default function LeadsDashboard() {
           </button>
           <SortDropdown value={sortKey} onChange={setSortKey} />
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
+          <SourceFilterDropdown value={sourceFilter} onChange={setSourceFilter} />
           {isAdmin && <VendorFilterDropdown value={vendorFilter} onChange={setVendorFilter} />}
         </div>
 
