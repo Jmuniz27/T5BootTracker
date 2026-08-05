@@ -67,12 +67,8 @@ function HistoryRow({ item, onViewDetail }) {
           Ver
         </button>
       </div>
-
-      {item.status === 'REJECTED' && item.rejection_reason && (
-        <p className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          <span className="font-medium">Motivo del rechazo:</span> {item.rejection_reason}
-        </p>
-      )}
+      {/* El motivo del rechazo no se muestra acá: la lista resume y el detalle
+          explica. Se lee en la pestaña "Motivo del rechazo" al abrir "Ver". */}
     </li>
   )
 }
