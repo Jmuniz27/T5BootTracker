@@ -48,6 +48,16 @@ export const getMonitoring = (params = {}) =>
 export const getPaymentHistory = (params = {}) =>
   client.get('/payments/history/', { params }).then((r) => r.data)
 
+// Control global de auto-asignación del pool (espejo del de leads, CR-004).
+// Lo lee Finanzas para saber si su botón está habilitado; sólo el admin lo cambia.
+export const getBootcamperAssignmentSetting = () =>
+  client.get('/payments/settings/self-assignment/').then((r) => r.data)
+
+export const updateBootcamperAssignmentSetting = (enabled) =>
+  client
+    .patch('/payments/settings/self-assignment/', { self_assign_enabled: enabled })
+    .then((r) => r.data)
+
 // ── Pool de bootcampers ───────────────────────────────────────────────────────
 // Misma mecánica que el pool de leads: al convertirse, un bootcamper queda sin
 // responsable de cobro y quien es de Finanzas se lo asigna para monitorearlo.

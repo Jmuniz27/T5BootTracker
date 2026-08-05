@@ -13,14 +13,18 @@ from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.authentication.permissions import IsFinanceOrAdmin
-from .models import Payment
+from apps.authentication.permissions import IsAdmin, IsFinanceOrAdmin
+from .models import BootcamperAssignmentSetting, Payment
 from .serializers import (
     PaymentUploadSerializer, PaymentListSerializer, PaymentDetailSerializer,
     PaymentApproveSerializer, PaymentRejectSerializer,
     PaymentOCRStatusSerializer, PaymentConfirmSerializer,
+    BootcamperAssignmentSettingSerializer,
 )
-from .services import PaymentProgressService, read_receipt_token
+from .services import (
+    PaymentProgressService, read_receipt_token,
+    get_bootcamper_self_assignment_enabled, set_bootcamper_self_assignment_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -585,10 +589,6 @@ class BootcamperPoolView(APIView):
             OpenApiParameter('program_id', str, required=False, description='Filtrar por UUID del programa'),
             OpenApiParameter('cohort_id', str, required=False, description='Filtrar por UUID de la cohorte'),
             OpenApiParameter('status', str, required=False, description='CRITICAL | AT_RISK | ON_TRACK'),
-            OpenApiParameter(
-                'fully_paid', str, required=False,
-                description="'true' sólo quienes completaron el pago, 'false' sólo los que aún deben.",
-            ),
             OpenApiParameter('page', int, required=False, description='Número de página (default 1)'),
             OpenApiParameter('page_size', int, required=False, description=f'Default {DEFAULT_PAGE_SIZE}, máx {MAX_PAGE_SIZE}'),
         ],
@@ -638,10 +638,6 @@ class BootcamperPoolView(APIView):
         program_id    = request.query_params.get('program_id')
         cohort_id     = request.query_params.get('cohort_id')
         status_filter = request.query_params.get('status')
-        # 'true' | 'false': quién ya terminó de pagar. Se filtra acá y no con
-        # `status`, porque `payment_status` sigue diciendo ON_TRACK para alguien
-        # que ya pagó todo — son dos preguntas distintas.
-        fully_paid    = request.query_params.get('fully_paid')
 
         def _filter(cards):
             if program_id:
@@ -652,9 +648,6 @@ class BootcamperPoolView(APIView):
                 cards = [c for c in cards if c['cohort_id'] == cohort_id]
             if status_filter:
                 cards = [c for c in cards if c['payment_status'] == status_filter]
-            if fully_paid in ('true', 'false'):
-                wanted = fully_paid == 'true'
-                cards = [c for c in cards if c['is_fully_paid'] is wanted]
             return cards
 
         mine      = _filter(mine)
@@ -713,6 +706,22 @@ class BootcamperAssignView(APIView):
     def patch(self, request, bootcamper_id):
         from django.db import transaction
         from apps.authentication.models import CustomUser
+
+        from apps.authentication.models import CustomUser as _User
+
+        # El control sólo limita a Finanzas. El administrador reparte siempre:
+        # apagarlo justamente deja el reparto en sus manos.
+        if (
+            request.user.role != _User.Role.ADMINISTRATOR
+            and not get_bootcamper_self_assignment_enabled()
+        ):
+            return Response(
+                {
+                    'error': 'La asignación de bootcampers la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         owner, error = self._resolve_owner(request)
         if error is not None:
@@ -819,3 +828,54 @@ class BootcamperReleaseView(APIView):
         bootcamper.save(update_fields=['finance_owner', 'finance_assigned_at', 'updated_at'])
 
         return Response(PaymentProgressService().get_bootcamper_summaries([bootcamper]))
+
+
+class BootcamperAssignmentSettingView(APIView):
+    """GET/PATCH /payments/settings/self-assignment/ — control global del pool.
+
+    Espejo de `LeadAssignmentSettingView` (CR-004) para el pool de bootcampers.
+    Lo lee cualquier rol autenticado —Finanzas necesita saber si su botón está
+    habilitado— pero sólo el Administrador lo cambia.
+    """
+    permission_classes = [IsFinanceOrAdmin]
+
+    def get_permissions(self):
+        if self.request.method == 'PATCH':
+            return [IsAdmin()]
+        return super().get_permissions()
+
+    @extend_schema(
+        responses={200: BootcamperAssignmentSettingSerializer},
+        summary='Consultar auto-asignación de cobro',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def get(self, request):
+        setting = BootcamperAssignmentSetting.get_solo()
+        return Response(BootcamperAssignmentSettingSerializer(setting).data)
+
+    @extend_schema(
+        request=BootcamperAssignmentSettingSerializer,
+        responses={
+            200: BootcamperAssignmentSettingSerializer,
+            400: OpenApiResponse(description='Falta self_assign_enabled'),
+            403: OpenApiResponse(description='Solo el Administrador puede cambiar este control'),
+        },
+        summary='Habilitar/deshabilitar auto-asignación de cobro',
+        description=(
+            'Apagado, Finanzas no puede tomar bootcampers del pool: sólo el Administrador '
+            'reparte quién cobra a quién. No afecta a lo ya asignado.'
+        ),
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def patch(self, request):
+        serializer = BootcamperAssignmentSettingSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        if 'self_assign_enabled' not in serializer.validated_data:
+            return Response(
+                {'error': 'self_assign_enabled es requerido.', 'code': 'MISSING_FIELD'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        setting = set_bootcamper_self_assignment_enabled(
+            serializer.validated_data['self_assign_enabled'], request.user,
+        )
+        return Response(BootcamperAssignmentSettingSerializer(setting).data)

@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminFinanceDetailPage from '../AdminFinanceDetailPage';
@@ -128,5 +129,99 @@ describe('AdminFinanceDetailPage', () => {
     renderPage();
 
     expect(await screen.findByText(/no existe o no es de finanzas/i)).toBeInTheDocument();
+  });
+});
+
+describe('AdminFinanceDetailPage — pagos finalizados y cohorte', () => {
+  const EN_COBRO = {
+    bootcamper_id: 'bc-10',
+    bootcamper_name: 'Ana Debe',
+    email: 'debe@test.com',
+    program_name: 'Python Full Stack',
+    cohort_number: 2,
+    pending_payments: 1,
+    expected_amount: '1200.00',
+    total_paid: '400.00',
+    deficit: '800.00',
+    critical_count: 1,
+    is_fully_paid: false,
+  };
+
+  const FINALIZADO = {
+    bootcamper_id: 'bc-11',
+    bootcamper_name: 'Luis Pago',
+    email: 'pago@test.com',
+    program_name: 'Data Science',
+    cohort_number: 5,
+    pending_payments: 0,
+    expected_amount: '1200.00',
+    total_paid: '1200.00',
+    deficit: '0.00',
+    critical_count: 0,
+    is_fully_paid: true,
+  };
+
+  function renderConCartera(bootcampers) {
+    getFinanceBootcampers.mockResolvedValue({ ...CARTERA, bootcampers });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <AdminFinanceDetailPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('arranca en En cobro y esconde a quien ya pagó', async () => {
+    renderConCartera([EN_COBRO, FINALIZADO]);
+
+    expect(await screen.findByText('Ana Debe')).toBeInTheDocument();
+    expect(screen.queryByText('Luis Pago')).not.toBeInTheDocument();
+  });
+
+  it('muestra el conteo de cada pestaña', async () => {
+    renderConCartera([EN_COBRO, FINALIZADO]);
+
+    expect(await screen.findByRole('tab', { name: /en cobro \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /pagos finalizados \(1\)/i })).toBeInTheDocument();
+  });
+
+  it('al cambiar de pestaña aparece quien ya pagó', async () => {
+    const user = userEvent.setup();
+    renderConCartera([EN_COBRO, FINALIZADO]);
+    await screen.findByText('Ana Debe');
+
+    await user.click(screen.getByRole('tab', { name: /pagos finalizados/i }));
+
+    expect(screen.getByText('Luis Pago')).toBeInTheDocument();
+    expect(screen.queryByText('Ana Debe')).not.toBeInTheDocument();
+  });
+
+  it('la tarjeta dice programa y cohorte', async () => {
+    renderConCartera([EN_COBRO]);
+    await screen.findByText('Ana Debe');
+
+    // El cobro se sigue por edición, no sólo por programa.
+    expect(screen.getByText(/Python Full Stack/)).toBeInTheDocument();
+    expect(screen.getByText(/Cohorte 2/)).toBeInTheDocument();
+  });
+
+  it('avisa cuando nadie de la cartera completó el pago', async () => {
+    const user = userEvent.setup();
+    renderConCartera([EN_COBRO]);
+    await screen.findByText('Ana Debe');
+
+    await user.click(screen.getByRole('tab', { name: /pagos finalizados/i }));
+
+    expect(screen.getByText(/nadie de su cartera completó el pago/i)).toBeInTheDocument();
+  });
+
+  it('avisa cuando toda la cartera ya pagó', async () => {
+    renderConCartera([FINALIZADO]);
+
+    expect(await screen.findByText(/toda su cartera ya completó el pago/i)).toBeInTheDocument();
   });
 });
