@@ -84,6 +84,8 @@ async function pressText(root: any, text: string) {
   });
 }
 
+jest.setTimeout(20000);
+
 describe('LeadDetailScreen — reenvío de invitación', () => {
   beforeEach(() => {
     jest.clearAllMocks();

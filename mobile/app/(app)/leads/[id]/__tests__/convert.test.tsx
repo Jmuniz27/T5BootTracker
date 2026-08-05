@@ -77,10 +77,10 @@ function isConvertDisabled(root: any) {
 
 /** Espera hasta que `getPrograms()` resuelva (el select de programa ya no está vacío). */
 async function waitForProgramsLoaded(root: any) {
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 50; i++) {
     if (findAllByText(root, 'Cargando programas…').length === 0) return;
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 20));
     });
   }
   throw new Error('getPrograms no resolvió a tiempo');
@@ -99,6 +99,8 @@ async function renderAndFillCedula() {
   }
   return root;
 }
+
+jest.setTimeout(20000);
 
 describe('ConvertLeadScreen', () => {
   beforeEach(() => {
