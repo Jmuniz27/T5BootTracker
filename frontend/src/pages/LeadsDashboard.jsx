@@ -904,7 +904,7 @@ function leadFieldClass(errors, key) {
   }`
 }
 
-function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true }) {
+function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, isAdmin = false }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
@@ -997,26 +997,32 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
             />
           </div>
 
-          <div>
-            <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-              <input
-                type="checkbox"
-                data-testid="create-lead-autoassign"
-                checked={form.autoAssign && canSelfAssign}
-                disabled={!canSelfAssign}
-                onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
-                className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
-              />
-              <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
-                Asignarme este lead
-              </span>
-            </label>
-            {!canSelfAssign && (
-              <p className="text-xs text-gray-500 mt-1 ml-7">
-                La asignación la realiza el Administrador.
-              </p>
-            )}
-          </div>
+          {/* CB-QA: un Administrador nunca puede ser owner de un lead (ver
+              LeadAssignView, permission_classes=[IsSalesperson] en el backend),
+              así que este checkbox ni se le muestra — antes se veía habilitado
+              y al tildarlo la asignación fallaba en silencio tras crear el lead. */}
+          {!isAdmin && (
+            <div>
+              <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                <input
+                  type="checkbox"
+                  data-testid="create-lead-autoassign"
+                  checked={form.autoAssign && canSelfAssign}
+                  disabled={!canSelfAssign}
+                  onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
+                  className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
+                />
+                <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
+                  Asignarme este lead
+                </span>
+              </label>
+              {!canSelfAssign && (
+                <p className="text-xs text-gray-500 mt-1 ml-7">
+                  La asignación la realiza el Administrador.
+                </p>
+              )}
+            </div>
+          )}
 
 
           <div className="flex gap-3 pt-2">
@@ -2243,7 +2249,15 @@ export default function LeadsDashboard() {
           {isAdmin && <VendorFilterDropdown value={vendorFilter} onChange={setVendorFilter} />}
         </div>
 
-        {/* Tabs */}
+        {/* Tabs
+            CB-QA: se evaluó ocultar "Disponibles" para el Admin porque el
+            backend (LeadListCreateView.get) manda todos los leads dentro de
+            my_leads y deja available_leads vacío para ese rol. Se revierte:
+            CB-223/CB-225 agregaron el flujo "Asignar a" sobre leads sin dueño
+            para el Admin, y sus tests asumen que ambas pestañas siguen
+            existiendo — separar la vista real de Admin (all/assigned/
+            unassigned_leads, ya expuestos por el backend) queda pendiente de
+            hacer en el frontend, pero no acá para no romper CB-225. */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
           {isAdmin ? (
             <>
@@ -2503,12 +2517,14 @@ export default function LeadsDashboard() {
           onSubmit={(data, autoAssign) => { autoAssignRef.current = autoAssign; createMutation.mutate(data) }}
           isLoading={createMutation.isPending}
           canSelfAssign={selfAssignEnabled}
+          isAdmin={isAdmin}
         />
       )}
 
       {duplicateWarning && (
         <DuplicateLeadModal
           duplicate={duplicateWarning.duplicate}
+          payload={duplicateWarning.payload}
           isLoading={createMutation.isPending}
           onClose={() => setDuplicateWarning(null)}
           onConfirm={() =>

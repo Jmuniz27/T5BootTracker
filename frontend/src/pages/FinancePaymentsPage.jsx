@@ -9,6 +9,8 @@ import {
 } from '../api/payments.api'
 import StatCard from '../components/StatCard'
 import CustomSelect from '../components/CustomSelect'
+import { getCohorts } from '../api/programs.api'
+import { getBootcamperAssignmentSetting } from '../api/payments.api'
 import Toast from '../components/Toast'
 import Skeleton from '../components/ui/Skeleton'
 
@@ -64,8 +66,13 @@ function BootcamperCard({ bc, onClick, action }) {
         </span>
       </div>
 
-      {/* Program */}
-      <p className="text-xs text-gray-500 mb-3 truncate">{bc.program_name}</p>
+      {/* Programa y cohorte: sin la edición no se sabe de qué grupo se cobra */}
+      <p className="text-xs text-gray-500 mb-3 truncate">
+        {bc.program_name}
+        {bc.cohort_number != null && (
+          <span className="text-gray-400"> · Cohorte {bc.cohort_number}</span>
+        )}
+      </p>
 
       {/* Progress bar */}
       <div className="mb-3">
@@ -131,21 +138,38 @@ export default function FinancePaymentsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [search, setSearch]             = useState('')
+  const [tab, setTab]                   = useState('cobro')
   const [programId, setProgramId]       = useState('')
+  const [cohortId, setCohortId]         = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [toast, setToast]               = useState(null) // { message, type }
 
   const showToast = (message, type = 'success') => setToast({ message, type })
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['bootcamper-pool', { programId, statusFilter, search }],
+    queryKey: ['bootcamper-pool', { programId, cohortId, statusFilter, search }],
     queryFn: () => getBootcamperPool({
       program_id: programId || undefined,
+      cohort_id:  cohortId || undefined,
       status:     statusFilter || undefined,
       search:     search || undefined,
       page_size:  PAGE_SIZE,
     }),
   })
+
+  const { data: cohorts = [] } = useQuery({
+    queryKey: ['cohorts', programId],
+    queryFn: () => getCohorts(programId),
+    enabled: Boolean(programId),
+  })
+
+  // Si el Administrador apagó la auto-asignación, el botón de tomar del pool no
+  // debe ofrecerse: el backend responde 403 igual, y ofrecerlo sería engañoso.
+  const { data: assignSetting } = useQuery({
+    queryKey: ['bootcamper-assignment-setting'],
+    queryFn: getBootcamperAssignmentSetting,
+  })
+  const puedeAutoasignarse = assignSetting?.self_assign_enabled ?? true
 
   const mine      = data?.my_bootcampers ?? []
   const available = data?.available_bootcampers ?? []
@@ -185,11 +209,22 @@ export default function FinancePaymentsPage() {
     },
   })
 
+  // Quien terminó de pagar sigue asignado a la misma persona de Finanzas: se
+  // separa la vista, no la responsabilidad. Liberarlo automáticamente borraría
+  // el rastro de quién lo cobró.
+  const enCobro    = mine.filter((b) => !b.is_fully_paid)
+  const finalizados = mine.filter((b) => b.is_fully_paid)
+  const visibles   = tab === 'finalizados' ? finalizados : enCobro
+
+  let mensajeVacio = 'Todavía no monitoreás a nadie. Tomá uno del pool de abajo.'
+  if (tab === 'finalizados') mensajeVacio = 'Todavía nadie completó el pago.'
+  else if (search) mensajeVacio = 'Ninguno de tus bootcampers coincide con la búsqueda.'
+
   const stats = {
-    total:    mine.length,
-    critical: mine.filter((b) => b.payment_status === 'CRITICAL').length,
-    atRisk:   mine.filter((b) => b.payment_status === 'AT_RISK').length,
-    onTrack:  mine.filter((b) => b.payment_status === 'ON_TRACK').length,
+    total:    enCobro.length,
+    critical: enCobro.filter((b) => b.payment_status === 'CRITICAL').length,
+    atRisk:   enCobro.filter((b) => b.payment_status === 'AT_RISK').length,
+    onTrack:  enCobro.filter((b) => b.payment_status === 'ON_TRACK').length,
   }
 
   const handleCardClick = (bc) => {
@@ -252,13 +287,30 @@ export default function FinancePaymentsPage() {
         </div>
         <CustomSelect
           value={programId}
-          onChange={setProgramId}
+          onChange={(val) => { setProgramId(val); setCohortId('') }}
           options={[
             { value: '', label: 'Todos los programas' },
             ...programs.map((p) => ({ value: p.id, label: p.name })),
           ]}
           placeholder="Todos los programas"
         />
+        {/* Sólo con un programa elegido: una cohorte suelta no identifica nada,
+            porque el número se repite entre programas. */}
+        {programId && (
+          <CustomSelect
+            value={cohortId}
+            onChange={setCohortId}
+            options={[
+              { value: '', label: 'Todas las cohortes' },
+              ...cohorts.map((c) => ({
+                value: c.id,
+                label: `Cohorte ${c.number} · ${c.status_label}`,
+              })),
+            ]}
+            placeholder="Todas las cohortes"
+            ariaLabel="Filtrar por cohorte"
+          />
+        )}
         <CustomSelect
           value={statusFilter}
           onChange={setStatusFilter}
@@ -286,15 +338,34 @@ export default function FinancePaymentsPage() {
 
       {!isLoading && (
         <>
+          {/* Quien completó el pago no desaparece ni se libera: pasa de pestaña.
+              Así se distingue a quién hay que seguir cobrando. */}
+          <div role="tablist" aria-label="Estado de cobro" className="flex gap-1 mb-5 border-b border-gray-200">
+            {[
+              { id: 'cobro', label: `En cobro (${enCobro.length})` },
+              { id: 'finalizados', label: `Pagos finalizados (${finalizados.length})` },
+            ].map(({ id, label }) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => setTab(id)}
+                className={`px-4 py-2.5 text-sm font-medium -mb-px border-b-2 transition-colors ${
+                  tab === id
+                    ? 'border-[#1D3176] text-[#1D3176]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <Section
-            title="Mis bootcampers"
-            count={mine.length}
-            empty={
-              search
-                ? 'Ninguno de tus bootcampers coincide con la búsqueda.'
-                : 'Todavía no monitoreás a nadie. Tomá uno del pool de abajo.'
-            }
-            cards={mine}
+            title={tab === 'finalizados' ? 'Pagos finalizados' : 'Mis bootcampers'}
+            count={visibles.length}
+            empty={mensajeVacio}
+            cards={visibles}
             onCardClick={handleCardClick}
             renderAction={(bc) => (
               <CardAction
@@ -309,7 +380,11 @@ export default function FinancePaymentsPage() {
 
           <Section
             title="Disponibles"
-            subtitle="Bootcampers sin responsable de cobro"
+            subtitle={
+              puedeAutoasignarse
+                ? 'Bootcampers sin responsable de cobro'
+                : 'El Administrador deshabilitó la auto-asignación: él reparte el cobro.'
+            }
             count={available.length}
             empty="No hay bootcampers esperando en el pool."
             cards={available}
@@ -318,6 +393,7 @@ export default function FinancePaymentsPage() {
               <CardAction
                 label="Asignarme"
                 pendingLabel="Asignando…"
+                disabled={!puedeAutoasignarse}
                 isPending={assignMutation.isPending && assignMutation.variables === bc.bootcamper_id}
                 onClick={() => assignMutation.mutate(bc.bootcamper_id)}
               />
@@ -366,7 +442,7 @@ function Section({ title, subtitle, count, empty, cards, onCardClick, renderActi
   )
 }
 
-function CardAction({ label, pendingLabel, onClick, isPending, variant = 'primary' }) {
+function CardAction({ label, pendingLabel, onClick, isPending, disabled = false, variant = 'primary' }) {
   const styles =
     variant === 'primary'
       ? 'bg-[#213A8E] text-white hover:bg-[#1a2f72]'
@@ -375,7 +451,7 @@ function CardAction({ label, pendingLabel, onClick, isPending, variant = 'primar
   return (
     <button
       onClick={onClick}
-      disabled={isPending}
+      disabled={isPending || disabled}
       className={`w-full py-2 rounded-xl text-xs font-semibold transition-colors disabled:opacity-60 ${styles}`}
     >
       {isPending ? pendingLabel : label}

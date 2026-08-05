@@ -68,7 +68,8 @@ class PaymentProgressService:
         enrollment = (
             Enrollment.objects
             .filter(bootcamper_id=bootcamper_id, bootcamp_id=program_id)
-            .only('agreed_price', 'discount_percentage')
+            .select_related('cohort')
+            .only('agreed_price', 'discount_percentage', 'cohort')
             .first()
         )
 
@@ -79,6 +80,8 @@ class PaymentProgressService:
             payments.count(),
             agreed_price=enrollment.agreed_price if enrollment else None,
             discount_percentage=enrollment.discount_percentage if enrollment else None,
+            cohort_id=enrollment.cohort_id if enrollment else None,
+            cohort_number=enrollment.cohort.number if enrollment and enrollment.cohort else None,
         )
 
     def get_monitoring_summaries(self, programs, status_filter=None) -> list[dict]:
@@ -136,8 +139,8 @@ class PaymentProgressService:
         for row in visible:
             bootcamper = bootcampers[row['bootcamper_id']]
             program = program_map[row['program_id']]
-            price, discount = enrollments.get(
-                (row['bootcamper_id'], row['program_id']), (None, None),
+            price, discount, cohort_id, cohort_number = enrollments.get(
+                (row['bootcamper_id'], row['program_id']), (None, None, None, None),
             )
             summary = self._build_summary(
                 program,
@@ -146,6 +149,8 @@ class PaymentProgressService:
                 row['payment_count'],
                 agreed_price=price,
                 discount_percentage=discount,
+                cohort_id=cohort_id,
+                cohort_number=cohort_number,
             )
             if status_filter and summary['payment_status'] != status_filter:
                 continue
@@ -203,16 +208,17 @@ class PaymentProgressService:
             )
         }
 
-        # La misma consulta que ya daba los pares ahora trae el precio acordado:
-        # no se agrega ninguna consulta al camino.
+        # La misma consulta que ya daba los pares trae el precio acordado y la
+        # cohorte: no se agrega ninguna consulta al camino.
         enrollments = {
-            (bootcamper_id, program_id): (price, discount)
-            for bootcamper_id, program_id, price, discount in (
+            (bootcamper_id, program_id): (price, discount, cohort_id, cohort_number)
+            for bootcamper_id, program_id, price, discount, cohort_id, cohort_number in (
                 Enrollment.objects
                 .filter(bootcamper_id__in=by_id)
                 .values_list(
                     'bootcamper_id', 'bootcamp_id',
                     'agreed_price', 'discount_percentage',
+                    'cohort_id', 'cohort__number',
                 )
             )
         }
@@ -240,7 +246,9 @@ class PaymentProgressService:
             bootcamper = by_id[bootcamper_id]
             program    = programs[program_id]
             row        = totals.get((bootcamper_id, program_id), {})
-            price, discount = enrollments.get((bootcamper_id, program_id), (None, None))
+            price, discount, cohort_id, cohort_number = enrollments.get(
+                (bootcamper_id, program_id), (None, None, None, None),
+            )
             summary    = self._build_summary(
                 program,
                 row.get('total_paid') or Decimal('0.00'),
@@ -248,6 +256,8 @@ class PaymentProgressService:
                 row.get('payment_count') or 0,
                 agreed_price=price,
                 discount_percentage=discount,
+                cohort_id=cohort_id,
+                cohort_number=cohort_number,
             )
             data.append({
                 'bootcamper_id':   str(bootcamper.id),
@@ -261,10 +271,15 @@ class PaymentProgressService:
 
     @staticmethod
     def _enrollment_map(bootcamper_ids, program_ids):
-        """{(bootcamper, programa): (precio acordado, descuento)} en una consulta.
+        """{(bootcamper, programa): (precio, descuento, cohorte, número)} en una consulta.
 
         Es la única fuente del precio real: el descuento se concede al convertir
         y queda en la inscripción, no en el programa.
+
+        También es la única fuente de la cohorte. `Payment` apunta al programa,
+        no a la edición, así que sin la inscripción no se sabe en qué cohorte
+        está la persona a la que se le cobra. La inscripción es única por
+        (bootcamper, programa), así que hay exactamente una cohorte por par.
         """
         from apps.programs.models import Enrollment
 
@@ -272,13 +287,14 @@ class PaymentProgressService:
             return {}
 
         return {
-            (bootcamper_id, program_id): (price, discount)
-            for bootcamper_id, program_id, price, discount in (
+            (bootcamper_id, program_id): (price, discount, cohort_id, cohort_number)
+            for bootcamper_id, program_id, price, discount, cohort_id, cohort_number in (
                 Enrollment.objects
                 .filter(bootcamper_id__in=bootcamper_ids, bootcamp_id__in=program_ids)
                 .values_list(
                     'bootcamper_id', 'bootcamp_id',
                     'agreed_price', 'discount_percentage',
+                    'cohort_id', 'cohort__number',
                 )
             )
         }
@@ -286,6 +302,7 @@ class PaymentProgressService:
     def _build_summary(
         self, program, total_paid, pending_count, payment_count,
         agreed_price=None, discount_percentage=None,
+        cohort_id=None, cohort_number=None,
     ) -> dict:
         """Métricas de avance de pago de un par bootcamper/programa.
 
@@ -339,8 +356,52 @@ class PaymentProgressService:
             'payment_count':           payment_count,
             'payment_percentage':      payment_percentage,
             'payment_status':          payment_status,
+            # Bandera aparte y no un cuarto valor de `payment_status`: ese enum
+            # ya lo consume el filtro `?status=` y los badges del frontend, y
+            # cambiarlo haría que quien terminó de pagar deje de contar como
+            # ON_TRACK en pantallas que hoy funcionan. Con esto, separar en
+            # pestañas no toca nada de lo existente.
+            'is_fully_paid':           deficit <= Decimal('0.00'),
+            'cohort_id':               str(cohort_id) if cohort_id else None,
+            'cohort_number':           cohort_number,
             'expected_payment_by_now': expected_payment_by_now,
             'surplus_amount':          surplus_amount,
             'program_start':           str(program.start_date),
             'program_end':             str(program.end_date),
         }
+
+
+def get_bootcamper_self_assignment_enabled():
+    """Si Finanzas puede tomar bootcampers del pool por su cuenta.
+
+    Espejo de `leads.services.get_self_assignment_enabled`, aplicado al pool de
+    bootcampers.
+    """
+    from .models import BootcamperAssignmentSetting
+
+    return BootcamperAssignmentSetting.get_solo().self_assign_enabled
+
+
+def set_bootcamper_self_assignment_enabled(enabled, user):
+    """Cambia el control global, dejando registrado quién y cuándo.
+
+    `select_for_update` sobre el singleton: dos administradores cambiándolo a la
+    vez dejarían el último valor sin saber cuál quedó, y acá interesa que el
+    registro de quién lo cambió sea el del valor que efectivamente quedó.
+    """
+    from django.db import transaction
+
+    from .models import BootcamperAssignmentSetting
+
+    with transaction.atomic():
+        setting = BootcamperAssignmentSetting.objects.select_for_update().get_or_create(pk=1)[0]
+        setting.self_assign_enabled = enabled
+        setting.updated_by = user
+        setting.save(update_fields=['self_assign_enabled', 'updated_by', 'updated_at'])
+
+    logger.info(
+        'Bootcamper self-assignment %s by %s',
+        'enabled' if enabled else 'disabled',
+        user.email,
+    )
+    return setting

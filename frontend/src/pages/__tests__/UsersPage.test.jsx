@@ -102,6 +102,14 @@ function rowFor(name) {
   return screen.getByText(name).closest('tr');
 }
 
+/**
+ * Las acciones por fila viven en un dropdown (antes eran botones sueltos) —
+ * hay que abrirlo antes de poder ver/clickear "Editar" o "Desactivar/Activar".
+ */
+async function abrirAcciones(user, fullName) {
+  await user.click(within(rowFor(fullName)).getByRole('button', { name: new RegExp(`acciones para ${fullName}`, 'i') }));
+}
+
 describe('UsersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -142,11 +150,15 @@ describe('UsersPage', () => {
   });
 
   it('deshabilita el cambio de estado sobre la propia cuenta', async () => {
+    const user = userEvent.setup();
     renderPage();
     await screen.findByText('Admin Uno');
 
-    expect(within(rowFor('Admin Uno')).getByRole('button', { name: /desactivar/i })).toBeDisabled();
-    expect(within(rowFor('Vendedor Uno')).getByRole('button', { name: /desactivar/i })).toBeEnabled();
+    await abrirAcciones(user, 'Admin Uno');
+    expect(within(rowFor('Admin Uno')).getByRole('menuitem', { name: /desactivar/i })).toBeDisabled();
+
+    await abrirAcciones(user, 'Vendedor Uno');
+    expect(within(rowFor('Vendedor Uno')).getByRole('menuitem', { name: /desactivar/i })).toBeEnabled();
   });
 
   it('pide confirmación antes de desactivar y muestra un toast al lograrlo', async () => {
@@ -155,7 +167,8 @@ describe('UsersPage', () => {
     renderPage();
     await screen.findByText('Vendedor Uno');
 
-    await user.click(within(rowFor('Vendedor Uno')).getByRole('button', { name: /desactivar/i }));
+    await abrirAcciones(user, 'Vendedor Uno');
+    await user.click(within(rowFor('Vendedor Uno')).getByRole('menuitem', { name: /desactivar/i }));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/no podrá volver a iniciar sesión/i)).toBeInTheDocument();
@@ -172,7 +185,8 @@ describe('UsersPage', () => {
     renderPage();
     await screen.findByText('Vendedor Uno');
 
-    await user.click(within(rowFor('Vendedor Uno')).getByRole('button', { name: /desactivar/i }));
+    await abrirAcciones(user, 'Vendedor Uno');
+    await user.click(within(rowFor('Vendedor Uno')).getByRole('menuitem', { name: /desactivar/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /cancelar/i }));
 
@@ -187,7 +201,8 @@ describe('UsersPage', () => {
     renderPage();
     await screen.findByText('Vendedor Uno');
 
-    await user.click(within(rowFor('Vendedor Uno')).getByRole('button', { name: /desactivar/i }));
+    await abrirAcciones(user, 'Vendedor Uno');
+    await user.click(within(rowFor('Vendedor Uno')).getByRole('menuitem', { name: /desactivar/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /^desactivar$/i }));
 
