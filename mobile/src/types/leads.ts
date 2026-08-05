@@ -21,6 +21,8 @@ export interface Lead {
   owner: string | null;
   owner_name: string | null;
   created_at: string;
+  bootcamper?: string | null;
+  bootcamper_verification_status?: 'INVITED' | 'PENDING_VERIFICATION' | 'VERIFIED' | null;
 }
 
 export interface LeadsResponse {
