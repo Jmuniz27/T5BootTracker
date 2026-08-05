@@ -6,6 +6,9 @@ export const getLeads = (params = {}) =>
 export const convertLead = (id, data) =>
   client.post(`/leads/${id}/convert/`, data).then((r) => r.data)
 
+export const resendInvitation = (id) =>
+  client.post(`/leads/${id}/resend-invitation/`).then((r) => r.data)
+
 export const getPrograms = () =>
   client.get('/programs/').then((r) => r.data)
 

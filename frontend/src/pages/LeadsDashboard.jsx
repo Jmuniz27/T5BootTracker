@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
@@ -1434,6 +1434,94 @@ function VendorFilterDropdown({ value, onChange }) {
   )
 }
 
+// ─── Resend Invitation Modal ────────────────────────────────────────────────
+
+function ResendInvitationModal({ lead, onClose }) {
+  const queryClient = useQueryClient()
+  const [copied, setCopied] = useState(false)
+
+  const resendMutation = useMutation({
+    mutationFn: () => resendInvitation(lead.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
+
+  const errorMsg = resendMutation.error
+    ? resendMutation.error.response?.status === 429
+      ? 'Demasiados reenvíos en poco tiempo. Intenta de nuevo más tarde.'
+      : (resendMutation.error.response?.data?.error ?? 'No pudimos reenviar la invitación. Intenta de nuevo.')
+    : null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Reenviar invitación</h2>
+
+        {!resendMutation.data && !resendMutation.isPending && (
+          <>
+            <p className="text-sm text-gray-500 mb-6">
+              Se generará un link nuevo para <span className="font-semibold text-gray-800">{lead.name}</span> y el
+              anterior dejará de funcionar.
+            </p>
+            {errorMsg && <p className="text-red-500 text-sm mb-4">{errorMsg}</p>}
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => resendMutation.mutate()}
+                className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
+              >
+                Reenviar
+              </button>
+            </div>
+          </>
+        )}
+
+        {resendMutation.isPending && <p className="text-sm text-gray-500 py-4">Reenviando...</p>}
+
+        {resendMutation.data && (
+          <>
+            <p className="text-sm text-gray-500 mb-6">Se generó un link nuevo. El anterior ya no funciona.</p>
+            <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-1.5 mb-6">
+              <span className="text-gray-500">Nuevo enlace de invitación</span>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={resendMutation.data.invitation_link}
+                  onFocus={(e) => e.target.select()}
+                  className="flex-1 min-w-0 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2 py-1.5 truncate"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(resendMutation.data.invitation_link)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                  className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
+                >
+                  {copied ? '¡Copiado!' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
+            >
+              Listo
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Row Actions Dropdown ─────────────────────────────────────────────────────
 
 // ─── Cédula Validator ─────────────────────────────────────────────────────────
@@ -1491,6 +1579,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   const [phone, setPhone]     = useState(lead.phone || '')
   const [errors, setErrors]   = useState({})
   const [result, setResult]   = useState(null) // conversion success data
+  const [copied, setCopied]   = useState(false)
 
   const { data: programs = [], isLoading: loadingPrograms } = useQuery({
     queryKey: ['programs'],
@@ -1587,9 +1676,30 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               <span className="font-medium text-gray-800">{result.email}</span>
             </div>
             {result.invitation_link && (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <span className="text-gray-500">Enlace de invitación enviado</span>
-                <p className="text-xs text-gray-400 break-all">{result.invitation_link}</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={result.invitation_link}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 min-w-0 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2 py-1.5 truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(result.invitation_link)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
+                  >
+                    {copied ? '¡Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Si el correo no llega, comparte este link por WhatsApp. Expira en 72 horas.
+                </p>
               </div>
             )}
             {result.is_returning && (
@@ -1774,8 +1884,12 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit }) {
+function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit, onResendInvitation }) {
   const isConverted = lead.status === 'CONVERTED'
+  // El botón de reenvío sólo tiene sentido mientras el bootcamper no activó su
+  // cuenta — una vez PENDING_VERIFICATION o VERIFIED el link ya no sirve para
+  // nada (backend lo rechazaría con ALREADY_ACTIVATED).
+  const canResendInvitation = isConverted && lead.bootcamper_verification_status === 'INVITED'
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -1797,11 +1911,11 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
   const handleToggle = () => {
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect()
-      const upward = window.innerHeight - rect.bottom < 220
+      const upward = window.innerHeight - rect.bottom < 260
       setOpenUpward(upward)
       setPos({
         top: upward ? rect.top - 4 : rect.bottom + 4,
-        left: rect.right - 160,
+        left: rect.right - 176,
       })
     }
     setOpen((v) => !v)
@@ -1823,7 +1937,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
       {open && (
         <div
           ref={menuRef}
-          className={`fixed w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 ${openUpward ? '-translate-y-full' : ''}`}
+          className={`fixed w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 ${openUpward ? '-translate-y-full' : ''}`}
           style={{ top: pos.top, left: pos.left }}
         >
           <button
@@ -1868,6 +1982,14 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
             >
               Convertir lead
+            </button>
+          )}
+          {(isOwned || isAdmin) && canResendInvitation && (
+            <button
+              onClick={() => { onResendInvitation(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Reenviar invitación
             </button>
           )}
           {!isAdmin && !isConverted && (isOwned ? (
@@ -1959,6 +2081,7 @@ export default function LeadsDashboard() {
   const [releaseTarget, setReleaseTarget] = useState(null)
   const [reassignTarget, setReassignTarget] = useState(null)
   const [convertTarget, setConvertTarget] = useState(null)
+  const [resendTarget, setResendTarget]   = useState(null)
   const [editLead, setEditLead]           = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState(null) // { duplicate, payload }
@@ -2389,6 +2512,7 @@ export default function LeadsDashboard() {
                     onAssign={() => assignMutation.mutate(lead.id)}
                     onConvert={() => setConvertTarget(lead)}
                     onEdit={() => setEditLead(lead)}
+                    onResendInvitation={() => setResendTarget(lead)}
                   />
                 </td>
               </tr>
@@ -2425,6 +2549,13 @@ export default function LeadsDashboard() {
           lead={convertTarget}
           onClose={() => setConvertTarget(null)}
           onSuccess={() => { flashLead(convertTarget.id); showToast(`${convertTarget.name} convertido correctamente.`) }}
+        />
+      )}
+
+      {resendTarget && (
+        <ResendInvitationModal
+          lead={resendTarget}
+          onClose={() => setResendTarget(null)}
         />
       )}
 

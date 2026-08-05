@@ -72,6 +72,43 @@ test.describe('HST-013 · Conversión de lead a bootcamper con validación de c�
         // La conversión exitosa muestra el modal de resultado, no un toast.
         await expect(page.getByRole('heading', { name: '¡Lead convertido!' })).toBeVisible()
         await expect(page.getByText('ahora es Bootcamper.')).toBeVisible()
+
+        // Ya no se muestra ninguna contraseña: el bootcamper activa su cuenta
+        // por el link de invitación (#253/#257).
+        await expect(page.getByText('Contraseña temporal')).not.toBeVisible()
+        const inputLink = page.locator('input[value*="/onboarding/"]')
+        await expect(inputLink).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Copiar' })).toBeVisible()
+      })
+    },
+  )
+
+  test(
+    titulo({
+      hst: 'HST-013',
+      dado: 'un lead recién convertido cuyo bootcamper sigue sin activar la cuenta',
+      cuando: 'el vendedor reenvía la invitación',
+      entonces: 'recibe un link nuevo para compartir',
+    }),
+    async ({ page }) => {
+      await dado('que el vendedor ve el lead ya convertido', async () => {
+        await page.goto('/dashboard')
+        await page.getByTestId('tab-converted').click()
+        await page.getByTestId('lead-search').fill(TELEFONO)
+        await expect(filaDeLead(page, TELEFONO)).toBeVisible()
+      })
+
+      await cuando('reenvía la invitación desde el menú de acciones', async () => {
+        await abrirAccionesDeLead(page, TELEFONO, NOMBRE)
+        await page.getByRole('button', { name: 'Reenviar invitación' }).click()
+        await expect(page.getByRole('heading', { name: 'Reenviar invitación' })).toBeVisible()
+        await page.getByRole('button', { name: 'Reenviar', exact: true }).click()
+      })
+
+      await entonces('se muestra el link nuevo con opción de copiar', async () => {
+        const inputLink = page.locator('input[value*="/onboarding/"]')
+        await expect(inputLink).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Copiar' })).toBeVisible()
       })
     },
   )
