@@ -14,9 +14,11 @@ class IsAdminOrMeetingOwner(permissions.BasePermission):
         # Ejemplo: asumiendo que los admins tienen is_staff=True.
         # Ajusta "request.user.role == 'SALESPERSON'" según cómo esté en tu modelo CustomUser.
         is_admin = request.user.is_staff
-        is_salesperson = getattr(request.user, 'role', '') == 'SALESPERSON' or request.user.groups.filter(name='Salesperson').exists()
+        # La agenda es del equipo comercial: vendedores y finanzas.
+        role = getattr(request.user, 'role', '')
+        is_commercial = role in ('SALESPERSON', 'FINANCE') or request.user.groups.filter(name='Salesperson').exists()
 
-        return is_admin or is_salesperson
+        return is_admin or is_commercial
 
     def has_object_permission(self, request, view, obj):
         # Los administradores pueden hacer lo que quieran

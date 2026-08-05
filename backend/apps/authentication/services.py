@@ -73,22 +73,72 @@ def build_invitation_link(token: str) -> str:
     return f'{settings.FRONTEND_URL}/onboarding/{token}'
 
 
+# Desde dónde se puede resolver una revisión (issue #309). REJECTED entra en la
+# lista porque un rechazo no puede ser terminal: el vendedor corrige los datos
+# con la persona y después tiene que poder verificar. Sin esto, un rechazo
+# dejaría al bootcamper en ese estado para siempre.
+REVIEWABLE_VERIFICATION_STATUSES = (
+    CustomUser.VerificationStatus.PENDING_VERIFICATION,
+    CustomUser.VerificationStatus.REJECTED,
+)
+
+
 @transaction.atomic
 def verify_bootcamper(bootcamper, verified_by):
     """Mark a bootcamper's profile as verified (CR-254).
 
-    Only allowed from PENDING_VERIFICATION — a bootcamper can't skip straight
-    from INVITED (never activated their account, so there's nothing to
-    verify yet) to VERIFIED.
+    Allowed from PENDING_VERIFICATION or REJECTED — nunca desde INVITED, que es
+    quien todavía no activó la cuenta y por lo tanto no tiene datos que revisar.
+    Al verificar se limpia el motivo de un rechazo anterior: ya no aplica.
     """
-    if bootcamper.verification_status != CustomUser.VerificationStatus.PENDING_VERIFICATION:
+    if bootcamper.verification_status not in REVIEWABLE_VERIFICATION_STATUSES:
         raise ValidationError({
-            'error': 'Sólo se puede verificar a un bootcamper en estado Pendiente de verificación.',
+            'error': 'Sólo se puede verificar a un bootcamper pendiente de verificación o rechazado.',
             'code': 'INVALID_VERIFICATION_TRANSITION',
         })
 
     bootcamper.verification_status = CustomUser.VerificationStatus.VERIFIED
     bootcamper.verified_by = verified_by
     bootcamper.verified_at = now()
-    bootcamper.save(update_fields=['verification_status', 'verified_by', 'verified_at', 'updated_at'])
+    bootcamper.verification_rejection_reason = ''
+    bootcamper.save(update_fields=[
+        'verification_status', 'verified_by', 'verified_at',
+        'verification_rejection_reason', 'updated_at',
+    ])
+
+    # Se encola desde acá y no desde la vista para que cualquier vía futura de
+    # verificación notifique igual, sin depender de que quien la escriba se
+    # acuerde.
+    from apps.notifications.tasks import send_verification_approved_email
+    send_verification_approved_email.delay(str(bootcamper.id))
+
+    return bootcamper
+
+
+@transaction.atomic
+def reject_bootcamper(bootcamper, rejected_by, reason):
+    """Mark a bootcamper's profile as rejected, with what needs fixing (#309).
+
+    Espejo de `verify_bootcamper`. El motivo es obligatorio: sin él el correo no
+    le sirve de nada a quien lo recibe, que se quedaría sabiendo que algo está
+    mal pero no qué.
+    """
+    if bootcamper.verification_status not in REVIEWABLE_VERIFICATION_STATUSES:
+        raise ValidationError({
+            'error': 'Sólo se puede rechazar a un bootcamper pendiente de verificación.',
+            'code': 'INVALID_VERIFICATION_TRANSITION',
+        })
+
+    bootcamper.verification_status = CustomUser.VerificationStatus.REJECTED
+    bootcamper.verified_by = rejected_by
+    bootcamper.verified_at = now()
+    bootcamper.verification_rejection_reason = reason.strip()
+    bootcamper.save(update_fields=[
+        'verification_status', 'verified_by', 'verified_at',
+        'verification_rejection_reason', 'updated_at',
+    ])
+
+    from apps.notifications.tasks import send_verification_rejected_email
+    send_verification_rejected_email.delay(str(bootcamper.id))
+
     return bootcamper

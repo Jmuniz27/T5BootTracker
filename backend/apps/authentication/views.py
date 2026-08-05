@@ -348,9 +348,17 @@ class OnboardingActivateView(APIView):
             user.phone = data['phone']
         if data.get('cedula'):
             user.cedula = data['cedula']
-        user.verification_status = CustomUser.VerificationStatus.PENDING_VERIFICATION
+        # La verificación del perfil (PENDING_VERIFICATION → VERIFIED por un
+        # vendedor) sólo aplica a bootcampers (issue #295 generalizó la
+        # invitación a cualquier rol). El resto pasa directo a VERIFIED, que es
+        # el estado normal para cuentas que no pasan por ese flujo.
+        user.verification_status = (
+            CustomUser.VerificationStatus.PENDING_VERIFICATION
+            if user.role == CustomUser.Role.BOOTCAMPER
+            else CustomUser.VerificationStatus.VERIFIED
+        )
         user.onboarding_completed_at = now()
         user.save()
 
-        logger.info('Bootcamper %s activated their account.', user.email)
+        logger.info('User %s activated their account.', user.email)
         return Response({'detail': 'Cuenta activada exitosamente.'}, status=status.HTTP_200_OK)

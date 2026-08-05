@@ -17,6 +17,8 @@ from apps.notifications.tasks import (
     send_conversion_notification,
     send_late_payment_alert,
     send_password_reset_email,
+    send_verification_approved_email,
+    send_verification_rejected_email,
 )
 from apps.payments.models import Payment
 from apps.payments.tasks import send_payment_status_notification
@@ -106,6 +108,53 @@ class TestPaymentStatusEmails:
             assert 'vuelve a subir' in body.lower()
             assert payment.rejection_reason in body
             assert settings.FRONTEND_URL in body
+
+
+class TestVerificationEmails:
+    """Correos de la revisión de datos del onboarding (#309)."""
+
+    MOTIVO = 'La cédula registrada no coincide con la del documento que enviaste.'
+
+    def test_approved_email_names_the_program(self, db, converted_bootcamper, active_enrollment, program):
+        send_verification_approved_email(str(converted_bootcamper.id))
+
+        assert len(mail.outbox) == 1
+        msg = mail.outbox[0]
+        assert msg.to == [converted_bootcamper.email]
+        assert 'verificados' in msg.subject.lower()
+        for body in (msg.alternatives[0][0], msg.body):
+            assert program.name in body
+
+    def test_rejected_email_carries_the_reason(self, db, converted_bootcamper, active_enrollment):
+        converted_bootcamper.verification_rejection_reason = self.MOTIVO
+        converted_bootcamper.save(update_fields=['verification_rejection_reason'])
+
+        send_verification_rejected_email(str(converted_bootcamper.id))
+
+        assert len(mail.outbox) == 1
+        msg = mail.outbox[0]
+        assert msg.to == [converted_bootcamper.email]
+        for body in (msg.alternatives[0][0], msg.body):
+            assert self.MOTIVO in body, 'sin el motivo el correo no sirve de nada'
+            assert 'asesor' in body.lower(), 'la corrección es asistida: hay que decir a quién escribir'
+
+    def test_rejected_email_does_not_send_them_to_the_app(self, db, converted_bootcamper, active_enrollment):
+        """Hoy el bootcamper no puede autocorregir sus datos: no hay a dónde mandarlo."""
+        converted_bootcamper.verification_rejection_reason = self.MOTIVO
+        converted_bootcamper.save(update_fields=['verification_rejection_reason'])
+
+        send_verification_rejected_email(str(converted_bootcamper.id))
+
+        msg = mail.outbox[0]
+        for body in (msg.alternatives[0][0], msg.body):
+            assert settings.FRONTEND_URL not in body
+
+    def test_both_emails_work_without_an_enrollment(self, db, converted_bootcamper):
+        """Hay bootcampers sin inscripción (datos viejos): el correo no debe reventar."""
+        send_verification_approved_email(str(converted_bootcamper.id))
+        send_verification_rejected_email(str(converted_bootcamper.id))
+
+        assert len(mail.outbox) == 2
 
 
 class TestCoordinatorEmails:

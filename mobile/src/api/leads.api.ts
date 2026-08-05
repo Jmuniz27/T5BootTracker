@@ -97,14 +97,51 @@ export async function getPrograms(): Promise<Program[]> {
   return Array.isArray(data) ? data : (data?.results ?? []);
 }
 
+export interface Cohort {
+  id: string;
+  number: number;
+  status: string;        // UPCOMING | IN_PROGRESS | FINISHED
+  status_label: string;
+  start_month: string;
+}
+
+export async function getCohorts(programId: string): Promise<Cohort[]> {
+  const { data } = await api.get(`/programs/${programId}/cohorts/`);
+  return Array.isArray(data) ? data : (data?.results ?? []);
+}
+
 export interface ConvertPayload {
   cedula: string;
   program_id: string;
-  email?: string;
+  cohort_id: string;
+  email: string;
   phone?: string;
+  discount_percentage?: string;
 }
 
-export async function convertLead(leadId: string, payload: ConvertPayload) {
+export interface ConvertResponse {
+  bootcamper_id: string;
+  email: string;
+  // null cuando is_returning: la cuenta ya existía y su contraseña no se toca.
+  invitation_link: string | null;
+  is_returning: boolean;
+  lead_status: string;
+  discount_percentage: string;
+  agreed_price: string;
+  cohort_id: string | null;
+  cohort_number: number | null;
+}
+
+export async function convertLead(leadId: string, payload: ConvertPayload): Promise<ConvertResponse> {
   const { data } = await api.post(`/leads/${leadId}/convert/`, payload);
+  return data;
+}
+
+export interface ResendInvitationResponse {
+  invitation_link: string;
+}
+
+export async function resendInvitation(leadId: string): Promise<ResendInvitationResponse> {
+  const { data } = await api.post(`/leads/${leadId}/resend-invitation/`);
   return data;
 }

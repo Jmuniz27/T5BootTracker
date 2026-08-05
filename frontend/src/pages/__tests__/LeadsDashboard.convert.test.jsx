@@ -18,6 +18,8 @@ vi.mock('../../api/leads.api', () => ({
   createInteraction: vi.fn(),
   updateInteraction: vi.fn(),
   convertLead: vi.fn(),
+  resendInvitation: vi.fn(),
+  verifyBootcamper: vi.fn(),
   getPrograms: vi.fn(),
   updateLeadStatus: vi.fn(),
   updateLead: vi.fn(),
@@ -238,6 +240,13 @@ describe('LeadsDashboard — convertir con cohorte y descuento', () => {
     await elegirPrograma(user);
 
     await user.type(screen.getByTestId('convert-cedula'), '1713175071');
+    await user.click(await screen.findByTestId('convert-cohort'));
+    await user.click(screen.getByText(/Cohorte 3/));
+
+    // El descuento es obligatorio: se ingresa 0 explícito y no se manda al backend.
+    const campo = screen.getByTestId('convert-discount');
+    await user.clear(campo);
+    await user.type(campo, '0');
     await user.click(screen.getByRole('button', { name: /convertir a bootcamper/i }));
 
     expect(convertLead.mock.calls[0][1]).not.toHaveProperty('discount_percentage');
@@ -254,14 +263,38 @@ describe('LeadsDashboard — convertir con cohorte y descuento', () => {
     await user.click(await screen.findByTestId('convert-cohort'));
     await user.click(screen.getByText(/Cohorte 3/));
 
-    // Cambiar de programa invalida la elección: el backend rechazaría una
-    // cohorte que no pertenece al programa enviado.
+    // Cambiar de programa invalida la elección anterior: la cohorte se resetea.
     await user.click(screen.getByTestId('convert-program'));
     await user.click(await screen.findByText(/Data Science/));
 
     await user.type(screen.getByTestId('convert-cedula'), '1713175071');
+    const campo = screen.getByTestId('convert-discount');
+    await user.clear(campo);
+    await user.type(campo, '0');
     await user.click(screen.getByRole('button', { name: /convertir a bootcamper/i }));
 
-    expect(convertLead.mock.calls[0][1]).not.toHaveProperty('cohort_id');
+    // Como la cohorte es obligatoria y quedó vacía, no se convierte hasta elegir otra.
+    // Se busca el error exacto (con punto) para no chocar con el placeholder del select.
+    expect(convertLead).not.toHaveBeenCalled();
+    expect(await screen.findByText('Selecciona una cohorte.')).toBeInTheDocument();
+  });
+
+  it('la pantalla de éxito muestra el link de invitación y ninguna contraseña', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    await abrirModal(user);
+    await elegirPrograma(user);
+
+    await user.type(screen.getByTestId('convert-cedula'), '1713175071');
+    await user.click(await screen.findByTestId('convert-cohort'));
+    await user.click(screen.getByText(/Cohorte 3/));
+    const campo = screen.getByTestId('convert-discount');
+    await user.clear(campo);
+    await user.type(campo, '0');
+    await user.click(screen.getByRole('button', { name: /convertir a bootcamper/i }));
+
+    expect(await screen.findByDisplayValue('https://app.test/onboarding/tok')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copiar/i })).toBeInTheDocument();
+    expect(screen.queryByText(/contraseña temporal/i)).not.toBeInTheDocument();
   });
 });

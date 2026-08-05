@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
-import SalespersonRoute from './components/SalespersonRoute'
 import RoleRoute from './components/RoleRoute'
 import AppLayout from './components/layout/AppLayout'
 import LoginPage from './pages/LoginPage'
@@ -9,6 +8,8 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import CheckEmailPage from './pages/CheckEmailPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import ResetSuccessPage from './pages/ResetSuccessPage'
+import OnboardingPage from './pages/OnboardingPage'
+import OnboardingSuccessPage from './pages/OnboardingSuccessPage'
 import LeadsDashboard from './pages/LeadsDashboard'
 import UsersPage from './pages/UsersPage'
 import AnalyticsPage from './pages/AnalyticsPage'
@@ -51,6 +52,8 @@ export default function App() {
         <Route path="/check-email" element={<CheckEmailPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/reset-success" element={<ResetSuccessPage />} />
+        <Route path="/onboarding/:token" element={<OnboardingPage />} />
+        <Route path="/onboarding-success" element={<OnboardingSuccessPage />} />
 
         {/* Protected app routes */}
         <Route
@@ -62,8 +65,8 @@ export default function App() {
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardRoute />} />
-          <Route path="/schedule" element={<SalespersonRoute><AgendaPage /></SalespersonRoute>} />
-          <Route path="/agenda" element={<SalespersonRoute><AgendaPage /></SalespersonRoute>} />
+          <Route path="/schedule" element={<RoleRoute allow={['SALESPERSON', 'FINANCE']}><AgendaPage /></RoleRoute>} />
+          <Route path="/agenda" element={<RoleRoute allow={['SALESPERSON', 'FINANCE']}><AgendaPage /></RoleRoute>} />
           <Route path="/payments" element={<PaymentsRoute />} />
           <Route
             path="/payments/:bootcamperId/:programId"

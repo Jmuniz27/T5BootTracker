@@ -44,9 +44,9 @@ describe('AnalyticsCharts', () => {
   it('renderiza los cuatro gráficos con datos', () => {
     useAnalyticsKpis.mockReturnValue({ data: sampleKpis })
     render(<AnalyticsCharts />)
-    expect(screen.getByText(/Tasa de conversión por segmento/i)).toBeInTheDocument()
+    expect(screen.getByText(/Tasa de conversión por fuente/i)).toBeInTheDocument()
     expect(screen.getByText(/Tiempo de respuesta promedio/i)).toBeInTheDocument()
-    expect(screen.getByText(/Velocidad de leads/i)).toBeInTheDocument()
+    expect(screen.getByText(/Leads nuevos/i)).toBeInTheDocument()
     expect(screen.getByText(/Cobro por programa/i)).toBeInTheDocument()
   })
 

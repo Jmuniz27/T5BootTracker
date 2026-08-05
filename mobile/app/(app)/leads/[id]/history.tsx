@@ -239,7 +239,7 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
 
 // ─── interaction card ─────────────────────────────────────────────────────────
 
-function InteractionCard({ item, onEdit }: { item: Interaction; onEdit: () => void }) {
+function InteractionCard({ item, onEdit, editable }: { item: Interaction; onEdit: () => void; editable: boolean }) {
   const cfg = TYPE_CONFIG[item.interaction_type] ?? TYPE_CONFIG.NOTE;
   const hasStars = item.interest_level != null && item.interest_level > 0;
 
@@ -290,9 +290,11 @@ function InteractionCard({ item, onEdit }: { item: Interaction; onEdit: () => vo
 
       {/* Right: edit + fecha/hora */}
       <View style={s.rowRight}>
-        <TouchableOpacity style={s.editBtn} onPress={onEdit} activeOpacity={0.8}>
-          <Ionicons name="pencil" size={13} color={colors.white} />
-        </TouchableOpacity>
+        {editable && (
+          <TouchableOpacity style={s.editBtn} onPress={onEdit} activeOpacity={0.8}>
+            <Ionicons name="pencil" size={13} color={colors.white} />
+          </TouchableOpacity>
+        )}
         <Text style={s.dateSmall}>{formatDate(item.created_at)}</Text>
         <Text style={s.dateSmall}>{formatTime(item.created_at)}</Text>
       </View>
@@ -304,7 +306,8 @@ function InteractionCard({ item, onEdit }: { item: Interaction; onEdit: () => vo
 
 export default function LeadHistoryScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, status } = useLocalSearchParams<{ id: string; status?: string }>();
+  const isConverted = status === 'CONVERTED';
 
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -366,7 +369,7 @@ export default function LeadHistoryScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <InteractionCard item={item} onEdit={() => setEditing(item)} />
+            <InteractionCard item={item} onEdit={() => setEditing(item)} editable={!isConverted} />
           )}
         />
       )}

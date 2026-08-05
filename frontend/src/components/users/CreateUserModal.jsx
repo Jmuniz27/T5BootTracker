@@ -23,8 +23,9 @@ const schema = z
       ROLE_OPTIONS.map((r) => r.value),
       { message: 'Selecciona un rol' },
     ),
-    // Sin `min` aquí: el coordinador no lleva contraseña y el mínimo se exige
-    // más abajo, sólo para los roles que sí inician sesión.
+    // Sin `min` aquí: dejarla en blanco es válido para cualquier rol que sí
+    // inicia sesión — el backend manda una invitación por correo en ese caso.
+    // Si se escribe algo, sí debe cumplir el mínimo (se valida más abajo).
     password: z.string(),
     cedula: z
       .string()
@@ -36,6 +37,7 @@ const schema = z
   .superRefine(refineCoordinatorScope)
   .superRefine((values, ctx) => {
     if (values.role === 'COORDINATOR') return
+    if (values.password === '') return
 
     if (values.password.length < 8) {
       ctx.addIssue({
@@ -72,9 +74,12 @@ export default function CreateUserModal({ onClose, onSuccess, onError }) {
 
   const mutation = useMutation({
     mutationFn: createUser,
-    onSuccess: (user) => {
+    onSuccess: (user, variables) => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      onSuccess(`Usuario ${user.full_name} creado correctamente.`)
+      const message = variables.password
+        ? `Usuario ${user.full_name} creado correctamente.`
+        : `Usuario ${user.full_name} creado. Se envió un correo de activación a ${user.email}.`
+      onSuccess(message)
       onClose()
     },
     onError: (error) => {
@@ -99,7 +104,7 @@ export default function CreateUserModal({ onClose, onSuccess, onError }) {
   return (
     <ModalShell
       title="Nuevo usuario"
-      subtitle="El usuario podrá iniciar sesión con el email y la contraseña temporal."
+      subtitle="Deja la contraseña en blanco para enviarle un correo de activación, o escribe una temporal tú mismo."
       onClose={onClose}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>

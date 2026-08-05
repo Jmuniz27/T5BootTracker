@@ -14,8 +14,9 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
 import { useQuickCall } from '../../../../src/hooks/use-quick-call';
-import { assignLead, releaseLead, updateLeadStatus, getLead } from '../../../../src/api/leads.api';
+import { assignLead, releaseLead, updateLeadStatus, getLead, resendInvitation } from '../../../../src/api/leads.api';
 import type { Lead, LeadStatus } from '../../../../src/types/leads';
+import { copyInvitationLink, shareInvitationLink } from '../../../../src/lib/invitation';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   NEW:            { label: 'Nuevo',         bg: '#fefce8', color: '#a16207' },
@@ -65,6 +66,10 @@ export default function LeadDetailScreen() {
 
   const [statusOpen, setStatusOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendLink, setResendLink] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -82,7 +87,7 @@ export default function LeadDetailScreen() {
   const isConverted = status === 'CONVERTED';
 
   function go(path: '/(app)/leads/[id]/log-interaction' | '/(app)/leads/[id]/history' | '/(app)/leads/[id]/convert') {
-    router.push({ pathname: path, params: { id: lead.id, name: lead.name } });
+    router.push({ pathname: path, params: { id: lead.id, name: lead.name, status: lead.status ?? '' } });
   }
 
   async function changeStatus(next: LeadStatus) {
@@ -118,6 +123,40 @@ export default function LeadDetailScreen() {
     }
   }
 
+  const canResendInvitation = isConverted && lead.bootcamper_verification_status === 'INVITED';
+
+  async function resend() {
+    setResendBusy(true);
+    setResendError(null);
+    try {
+      const { invitation_link } = await resendInvitation(lead.id);
+      setResendLink(invitation_link);
+    } catch (err: any) {
+      setResendError(
+        err?.response?.data?.error ?? 'No pudimos reenviar la invitación. Intenta de nuevo.',
+      );
+    } finally {
+      setResendBusy(false);
+    }
+  }
+
+  async function copyResendLink() {
+    if (!resendLink) return;
+    await copyInvitationLink(resendLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function shareResendLink() {
+    if (!resendLink) return;
+    await shareInvitationLink(resendLink, lead.name);
+  }
+
+  function closeResendModal() {
+    setResendLink(null);
+    setResendError(null);
+  }
+
   return (
     <SafeAreaView style={s.screen}>
       <View style={s.header}>
@@ -142,7 +181,7 @@ export default function LeadDetailScreen() {
                 </View>
               ) : null}
             </View>
-            {owned && !isConverted && (
+            {!isConverted && (
               <TouchableOpacity
                 style={s.editIcon}
                 hitSlop={8}
@@ -184,10 +223,27 @@ export default function LeadDetailScreen() {
 
         <View style={s.actions}>
           {isConverted ? (
-            <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.85}>
-              <Ionicons name="time-outline" size={18} color={colors.white} />
-              <Text style={s.actionPrimaryText}>Ver historial</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.85}>
+                <Ionicons name="time-outline" size={18} color={colors.white} />
+                <Text style={s.actionPrimaryText}>Ver historial</Text>
+              </TouchableOpacity>
+              {canResendInvitation && (
+                <TouchableOpacity style={s.actionGhost} onPress={resend} disabled={resendBusy} activeOpacity={0.8}>
+                  {resendBusy ? (
+                    <ActivityIndicator size="small" color={colors.navy} />
+                  ) : (
+                    <>
+                      <Ionicons name="paper-plane-outline" size={18} color={colors.navy} />
+                      <Text style={s.actionGhostText}>Reenviar invitación</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+              {resendError && (
+                <Text style={s.hint}>{resendError}</Text>
+              )}
+            </>
           ) : owned ? (
             <>
               <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/log-interaction')} activeOpacity={0.85}>
@@ -275,6 +331,29 @@ export default function LeadDetailScreen() {
               );
             })}
           </View>
+        </Pressable>
+      </Modal>
+
+      {/* Resultado del reenvío de invitación */}
+      <Modal visible={resendLink !== null} transparent animationType="fade" onRequestClose={closeResendModal}>
+        <Pressable style={s.overlay} onPress={closeResendModal}>
+          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>Invitación reenviada</Text>
+            <Text style={s.resultLink} selectable numberOfLines={2}>
+              {resendLink}
+            </Text>
+            <View style={s.resultActions}>
+              <TouchableOpacity style={s.actionGhost} onPress={copyResendLink} activeOpacity={0.8}>
+                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>{copied ? 'Copiado' : 'Copiar'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.actionPrimary} onPress={shareResendLink} activeOpacity={0.85}>
+                <Ionicons name="share-social-outline" size={18} color={colors.white} />
+                <Text style={s.actionPrimaryText}>Compartir</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -380,6 +459,8 @@ const s = StyleSheet.create({
   },
   handle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
   sheetTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, textAlign: 'center', marginBottom: 16 },
+  resultLink: { fontSize: 12, color: colors.textMuted, marginBottom: 16 },
+  resultActions: { flexDirection: 'row', gap: 10 },
   statusOption: {
     flexDirection: 'row',
     alignItems: 'center',
