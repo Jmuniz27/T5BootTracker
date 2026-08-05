@@ -67,6 +67,9 @@ test.describe('HST-013 · Conversión de lead a bootcamper con validación de c�
       await y('al corregirla por una cédula válida, la conversión se completa', async () => {
         await page.getByTestId('convert-cedula').fill(CEDULA_VALIDA)
         await expect(page.getByText('✓ Cédula válida')).toBeVisible()
+        // Cohorte y descuento son obligatorios para convertir.
+        await elegirOpcion(page, 'convert-cohort', 'Cohorte 3')
+        await page.getByTestId('convert-discount').fill('0')
         await page.getByTestId('convert-submit').click()
 
         // La conversión exitosa muestra el modal de resultado, no un toast.

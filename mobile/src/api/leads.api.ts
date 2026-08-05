@@ -97,11 +97,26 @@ export async function getPrograms(): Promise<Program[]> {
   return Array.isArray(data) ? data : (data?.results ?? []);
 }
 
+export interface Cohort {
+  id: string;
+  number: number;
+  status: string;        // UPCOMING | IN_PROGRESS | FINISHED
+  status_label: string;
+  start_month: string;
+}
+
+export async function getCohorts(programId: string): Promise<Cohort[]> {
+  const { data } = await api.get(`/programs/${programId}/cohorts/`);
+  return Array.isArray(data) ? data : (data?.results ?? []);
+}
+
 export interface ConvertPayload {
   cedula: string;
   program_id: string;
+  cohort_id: string;
   email: string;
   phone?: string;
+  discount_percentage?: string;
 }
 
 export interface ConvertResponse {

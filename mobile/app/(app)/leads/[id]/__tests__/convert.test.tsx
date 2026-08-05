@@ -17,10 +17,12 @@ jest.mock('expo-router', () => ({
 
 const mockConvertLead = jest.fn();
 const mockGetPrograms = jest.fn();
+const mockGetCohorts = jest.fn();
 
 jest.mock('../../../../../src/api/leads.api', () => ({
   convertLead: (...args: any[]) => mockConvertLead(...args),
   getPrograms: (...args: any[]) => mockGetPrograms(...args),
+  getCohorts: (...args: any[]) => mockGetCohorts(...args),
 }));
 
 const mockCopy = jest.fn();
@@ -45,14 +47,14 @@ function findByPlaceholder(root: any, placeholder: string) {
   return root.root.find((node: any) => node.props?.placeholder === placeholder);
 }
 
-function findPressable(root: any, text: string) {
+function findPressable(root: any, text: string | RegExp) {
   const [textNode] = findAllByText(root, text);
   let node = textNode;
   while (node && typeof node.props?.onPress !== 'function') node = node.parent;
   return node;
 }
 
-async function pressText(root: any, text: string) {
+async function pressText(root: any, text: string | RegExp) {
   const node = findPressable(root, text);
   await act(async () => {
     node.props.onPress();
@@ -86,16 +88,37 @@ async function waitForProgramsLoaded(root: any) {
   throw new Error('getPrograms no resolvió a tiempo');
 }
 
+/** Espera hasta que `getCohorts()` resuelva y el selector de cohorte aparezca. */
+async function waitForCohortsLoaded(root: any) {
+  for (let i = 0; i < 50; i++) {
+    if (findAllByText(root, 'Selecciona una cohorte').length > 0) return;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+  }
+  throw new Error('getCohorts no resolvió a tiempo');
+}
+
+/** Cohorte y descuento son obligatorios: se eligen para habilitar el convertir. */
+async function elegirCohorteYDescuento(root: any) {
+  await pressText(root, 'Selecciona una cohorte');
+  await pressText(root, /Cohorte 1/);
+  const descuento = findByPlaceholder(root, '0 si no aplica');
+  await changeText(descuento, '0');
+}
+
 async function renderAndFillCedula() {
   let root: any;
   await act(async () => {
     root = renderer.create(<ConvertLeadScreen />);
   });
   await waitForProgramsLoaded(root);
+  await waitForCohortsLoaded(root);
   const cedulaInput = findByPlaceholder(root, '10 dígitos (cédula) o 13 (RUC)');
   await changeText(cedulaInput, '1710034065');
+  await elegirCohorteYDescuento(root);
   if (isConvertDisabled(root)) {
-    throw new Error('El botón Convertir sigue deshabilitado tras completar cédula/email/programa');
+    throw new Error('El botón Convertir sigue deshabilitado tras completar el formulario');
   }
   return root;
 }
@@ -106,6 +129,9 @@ describe('ConvertLeadScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetPrograms.mockResolvedValue([{ id: 'prog-1', name: 'Full Stack' }]);
+    mockGetCohorts.mockResolvedValue([
+      { id: 'coh-1', number: 1, status: 'UPCOMING', status_label: 'Próximamente', start_month: '2026-10-01' },
+    ]);
   });
 
   it('lee la respuesta de convertLead y muestra el link en vez de descartarla', async () => {
@@ -186,13 +212,15 @@ describe('ConvertLeadScreen', () => {
       root = renderer.create(<ConvertLeadScreen />);
     });
     await waitForProgramsLoaded(root);
+    await waitForCohortsLoaded(root);
 
     const emailInput = findByPlaceholder(root, 'correo@ejemplo.com');
     const cedulaInput = findByPlaceholder(root, '10 dígitos (cédula) o 13 (RUC)');
     await changeText(cedulaInput, '1710034065');
-    // Con email lleno el botón se habilita...
+    await elegirCohorteYDescuento(root);
+    // Con todos los campos requeridos completos el botón se habilita...
     expect(isConvertDisabled(root)).toBe(false);
-    // ...y se deshabilita de nuevo en cuanto el campo requerido queda vacío.
+    // ...y se deshabilita de nuevo en cuanto el email (requerido) queda vacío.
     await changeText(emailInput, '');
     expect(isConvertDisabled(root)).toBe(true);
   });

@@ -87,7 +87,7 @@ export default function LeadDetailScreen() {
   const isConverted = status === 'CONVERTED';
 
   function go(path: '/(app)/leads/[id]/log-interaction' | '/(app)/leads/[id]/history' | '/(app)/leads/[id]/convert') {
-    router.push({ pathname: path, params: { id: lead.id, name: lead.name } });
+    router.push({ pathname: path, params: { id: lead.id, name: lead.name, status: lead.status ?? '' } });
   }
 
   async function changeStatus(next: LeadStatus) {
@@ -181,7 +181,7 @@ export default function LeadDetailScreen() {
                 </View>
               ) : null}
             </View>
-            {owned && !isConverted && (
+            {!isConverted && (
               <TouchableOpacity
                 style={s.editIcon}
                 hitSlop={8}
