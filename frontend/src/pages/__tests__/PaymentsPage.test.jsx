@@ -76,6 +76,13 @@ const PAGO_BORRADOR = {
   rejection_reason: null,
 };
 
+/** Abre el menú de acciones de la fila que corresponde a un pago. */
+async function abrirAcciones(user, programName = PROGRAMA.name) {
+  const fila = (await screen.findByText(programName)).closest('tr');
+  await user.click(within(fila).getByRole('button', { name: /^Acciones del pago/ }));
+  return fila;
+}
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -90,7 +97,7 @@ function renderPage() {
 describe('PaymentsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // /my-programs/ (Enrollment activa) es la fuente primaria del selector.
+    // /my-programs/ (Enrollment activa) alimenta la tarjeta de "adeudado".
     getMyPrograms.mockResolvedValue([PROGRAMA]);
     // Los bootcampers reciben 403 en /programs/; se deja como red de seguridad.
     getPrograms.mockResolvedValue([]);
@@ -121,30 +128,107 @@ describe('PaymentsPage', () => {
       expect(within(tarjeta).getByText('1 pago aprobado')).toBeInTheDocument();
     });
 
-    it('muestra el motivo del rechazo al bootcamper (HST-023)', async () => {
+    it('muestra el motivo del rechazo en su propia ventana (HST-023)', async () => {
+      const user = userEvent.setup();
       getMyHistory.mockResolvedValue([PAGO_RECHAZADO]);
       renderPage();
 
+      // Ya no se imprime en la fila: compite por espacio y se corta.
       expect(
-        await screen.findByText('El monto no coincide con el comprobante.'),
+        screen.queryByText('El monto no coincide con el comprobante.'),
+      ).not.toBeInTheDocument();
+
+      await abrirAcciones(user);
+      await user.click(screen.getByRole('button', { name: 'Ver motivo' }));
+
+      expect(screen.getByRole('heading', { name: 'Motivo del rechazo' })).toBeInTheDocument();
+      expect(
+        screen.getByText('El monto no coincide con el comprobante.'),
       ).toBeInTheDocument();
     });
 
-    it('ofrece editar un pago rechazado y revisar uno en borrador', async () => {
-      getMyHistory.mockResolvedValue([PAGO_RECHAZADO, PAGO_BORRADOR]);
+    it('ofrece editar, ver motivo y eliminar en un pago rechazado', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([PAGO_RECHAZADO]);
       renderPage();
 
-      expect(await screen.findByRole('button', { name: 'Editar' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Revisar' })).toBeInTheDocument();
+      await abrirAcciones(user);
+
+      expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ver motivo' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Eliminar' })).toBeInTheDocument();
     });
 
-    it('no permite eliminar un pago aprobado', async () => {
+    it('ofrece revisar y eliminar un borrador', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([PAGO_BORRADOR]);
+      renderPage();
+
+      await abrirAcciones(user);
+
+      expect(screen.getByRole('button', { name: 'Revisar' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Eliminar' })).toBeInTheDocument();
+    });
+
+    it('en un pago aprobado sólo ofrece consultarlo', async () => {
+      const user = userEvent.setup();
       getMyHistory.mockResolvedValue([PAGO_APROBADO]);
       renderPage();
 
-      await screen.findByText('Aprobado');
+      await abrirAcciones(user);
+
+      expect(screen.getByRole('button', { name: 'Ver información' })).toBeInTheDocument();
       // Sólo los pagos en revisión o rechazados son subsanables.
-      expect(screen.queryByRole('button', { name: 'Eliminar pago' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Eliminar' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument();
+    });
+
+    it('un pago pendiente también se puede consultar', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([PAGO_PENDIENTE]);
+      renderPage();
+
+      await abrirAcciones(user, PAGO_PENDIENTE.program_name);
+
+      expect(screen.getByRole('button', { name: 'Ver información' })).toBeInTheDocument();
+    });
+
+    it('la ventana de consulta muestra los datos sin permitir editarlos', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([PAGO_APROBADO]);
+      renderPage();
+
+      await abrirAcciones(user);
+      await user.click(screen.getByRole('button', { name: 'Ver información' }));
+
+      expect(screen.getByRole('heading', { name: 'Detalle del pago' })).toBeInTheDocument();
+      // Sin envío posible: la ventana es sólo de lectura.
+      expect(screen.queryByTestId('confirm-payment-submit')).not.toBeInTheDocument();
+      const monto = screen.getByDisplayValue(PAGO_APROBADO.confirmed_amount);
+      expect(monto).toHaveAttribute('readonly');
+    });
+
+    it('presenta el historial como tabla, con una fila por pago', async () => {
+      getMyHistory.mockResolvedValue([PAGO_APROBADO, PAGO_RECHAZADO]);
+      renderPage();
+
+      await screen.findByText('Aprobado');
+      const tabla = screen.getByRole('table');
+      for (const encabezado of ['Programa', 'Fecha', 'Monto', 'Estado', 'Acciones']) {
+        expect(within(tabla).getByRole('columnheader', { name: encabezado })).toBeInTheDocument();
+      }
+      expect(screen.getAllByTestId('payment-row')).toHaveLength(2);
+    });
+
+    it('pone el estado en su columna, no junto a las acciones', async () => {
+      getMyHistory.mockResolvedValue([PAGO_APROBADO]);
+      renderPage();
+
+      const fila = (await screen.findByText(PROGRAMA.name)).closest('tr');
+      const celdas = within(fila).getAllByRole('cell');
+      // Programa · Fecha · Monto · Estado · Acciones
+      expect(celdas).toHaveLength(5);
+      expect(within(celdas[3]).getByText('Aprobado')).toBeInTheDocument();
     });
 
     it('avisa cuando el bootcamper no tiene pagos registrados', async () => {
@@ -221,13 +305,9 @@ describe('PaymentsPage', () => {
       await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
 
       const archivo = new File(['comprobante'], 'comprobante.png', { type: 'image/png' });
-      const modal = screen.getByText('📄 Subir comprobante').closest('div.bg-white');
+      const modal = screen.getByRole('heading', { name: 'Subir comprobante' }).closest('div.bg-white');
       const input = modal.querySelector('input[type="file"]');
       await user.upload(input, archivo);
-
-      // CustomSelect no es un <select> nativo: se abre y se elige la opción.
-      await user.click(screen.getByText('Selecciona un programa'));
-      await user.click(screen.getByText(PROGRAMA.name));
 
       await user.click(within(modal).getByRole('button', { name: 'Subir comprobante' }));
 
@@ -235,20 +315,33 @@ describe('PaymentsPage', () => {
       const enviado = uploadPayment.mock.calls[0][0];
       expect(enviado).toBeInstanceOf(FormData);
       expect(enviado.get('receipt_file')).toBe(archivo);
-      expect(enviado.get('program_id')).toBe(PROGRAMA.id);
+      // El programa lo deduce el backend de la inscripción activa: el bootcamper
+      // ya no lo elige, y sin esto no podía subir su primer comprobante.
+      expect(enviado.get('program_id')).toBeNull();
     });
 
-    it('no envía nada si falta el archivo o el programa', async () => {
+    it('no pide elegir programa', async () => {
       const user = userEvent.setup();
       getMyHistory.mockResolvedValue([]);
       renderPage();
 
       await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
-      const modal = screen.getByText('📄 Subir comprobante').closest('div.bg-white');
+      const modal = screen.getByRole('heading', { name: 'Subir comprobante' }).closest('div.bg-white');
+
+      expect(within(modal).queryByText('Programa')).not.toBeInTheDocument();
+      expect(screen.queryByText('Selecciona un programa')).not.toBeInTheDocument();
+    });
+
+    it('no envía nada si falta el archivo', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([]);
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
+      const modal = screen.getByRole('heading', { name: 'Subir comprobante' }).closest('div.bg-white');
       await user.click(within(modal).getByRole('button', { name: 'Subir comprobante' }));
 
-      expect(await screen.findByText('Selecciona un programa.')).toBeInTheDocument();
-      expect(screen.getByText('Selecciona un comprobante.')).toBeInTheDocument();
+      expect(await screen.findByText('Selecciona un comprobante.')).toBeInTheDocument();
       expect(uploadPayment).not.toHaveBeenCalled();
     });
 
@@ -295,11 +388,9 @@ describe('PaymentsPage', () => {
       renderPage();
 
       await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
-      const modal = screen.getByText('📄 Subir comprobante').closest('div.bg-white');
+      const modal = screen.getByRole('heading', { name: 'Subir comprobante' }).closest('div.bg-white');
       const input = modal.querySelector('input[type="file"]');
       await user.upload(input, new File(['x'], 'c.png', { type: 'image/png' }));
-      await user.click(screen.getByText('Selecciona un programa'));
-      await user.click(screen.getByText(PROGRAMA.name));
       await user.click(within(modal).getByRole('button', { name: 'Subir comprobante' }));
 
       expect(await screen.findByText('Comprobante duplicado.')).toBeInTheDocument();
@@ -314,44 +405,13 @@ describe('PaymentsPage', () => {
       renderPage();
 
       await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
-      const modal = screen.getByText('📄 Subir comprobante').closest('div.bg-white');
+      const modal = screen.getByRole('heading', { name: 'Subir comprobante' }).closest('div.bg-white');
       const input = modal.querySelector('input[type="file"]');
       await user.upload(input, new File(['x'], 'c.png', { type: 'image/png' }));
-      await user.click(screen.getByText('Selecciona un programa'));
-      await user.click(screen.getByText(PROGRAMA.name));
       await user.click(within(modal).getByRole('button', { name: 'Subir comprobante' }));
 
       expect(await screen.findByText('El archivo no puede superar 10 MB.')).toBeInTheDocument();
       expect(screen.queryByText('Error al subir el comprobante.')).not.toBeInTheDocument();
-    });
-
-    it('un bootcamper recién convertido sin pagos previos ve su programa inscrito (issue #293)', async () => {
-      const user = userEvent.setup();
-      // Sin pagos previos: el fallback por historial daría lista vacía.
-      // /my-programs/ debe alimentar el selector igual.
-      getMyHistory.mockResolvedValue([]);
-      getMyPrograms.mockResolvedValue([PROGRAMA]);
-      renderPage();
-
-      await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
-
-      expect(screen.getByText('Selecciona un programa')).toBeInTheDocument();
-      await user.click(screen.getByText('Selecciona un programa'));
-      expect(screen.getByText(PROGRAMA.name)).toBeInTheDocument();
-    });
-
-    it('muestra un estado vacío explícito si no tiene ninguna inscripción', async () => {
-      getMyHistory.mockResolvedValue([]);
-      getMyPrograms.mockResolvedValue([]);
-      getPrograms.mockResolvedValue([]);
-      const user = userEvent.setup();
-      renderPage();
-
-      await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
-
-      expect(await screen.findByTestId('upload-no-programs')).toBeInTheDocument();
-      expect(screen.queryByText('Selecciona un programa')).not.toBeInTheDocument();
-      expect(within(screen.getByText('📄 Subir comprobante').closest('div.bg-white')).getByRole('button', { name: 'Subir comprobante' })).toBeDisabled();
     });
   });
 
@@ -361,7 +421,8 @@ describe('PaymentsPage', () => {
       getMyHistory.mockResolvedValue([PAGO_RECHAZADO]);
       renderPage();
 
-      await user.click(await screen.findByRole('button', { name: 'Eliminar pago' }));
+      await abrirAcciones(user);
+      await user.click(screen.getByRole('button', { name: 'Eliminar' }));
 
       expect(screen.getByRole('heading', { name: 'Eliminar pago' })).toBeInTheDocument();
       // Todavía no se llamó a la API: la confirmación es un paso aparte.
@@ -379,7 +440,8 @@ describe('PaymentsPage', () => {
       getMyHistory.mockResolvedValue([PAGO_RECHAZADO]);
       renderPage();
 
-      await user.click(await screen.findByRole('button', { name: 'Eliminar pago' }));
+      await abrirAcciones(user);
+      await user.click(screen.getByRole('button', { name: 'Eliminar' }));
       await user.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       expect(deleteMyPayment).not.toHaveBeenCalled();
