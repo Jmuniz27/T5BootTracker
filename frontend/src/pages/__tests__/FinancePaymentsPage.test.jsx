@@ -293,3 +293,68 @@ describe('FinancePaymentsPage — pagos finalizados y cohorte', () => {
     expect(screen.queryByRole('button', { name: /filtrar por cohorte/i })).not.toBeInTheDocument();
   });
 });
+
+describe('FinancePaymentsPage — auto-asignación deshabilitada', () => {
+  const DISPONIBLE = {
+    bootcamper_id: 'bc-80',
+    bootcamper_name: 'Sin Responsable',
+    email: 'pool@test.com',
+    program_id: 'prog-1',
+    program_name: 'Python Full Stack',
+    total_cost: '1200.00',
+    total_paid: '0.00',
+    pending_payments: 0,
+    payment_status: 'CRITICAL',
+    is_fully_paid: false,
+  };
+
+  function renderCon(enabled) {
+    getBootcamperPool.mockResolvedValue({
+      my_bootcampers: [], available_bootcampers: [DISPONIBLE], pagination: {},
+    });
+    getBootcamperAssignmentSetting.mockResolvedValue({ self_assign_enabled: enabled });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <FinancePaymentsPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('deja asignarse cuando está habilitada', async () => {
+    renderCon(true);
+    await screen.findByText('Sin Responsable');
+
+    expect(screen.getByRole('button', { name: /asignarme/i })).toBeEnabled();
+  });
+
+  it('deshabilita el botón cuando el admin la apagó', async () => {
+    renderCon(false);
+    await screen.findByText('Sin Responsable');
+
+    // Ofrecerlo sería engañoso: el backend responde 403.
+    expect(await screen.findByRole('button', { name: /asignarme/i })).toBeDisabled();
+  });
+
+  it('explica por qué no se puede tomar del pool', async () => {
+    renderCon(false);
+
+    expect(
+      await screen.findByText(/el administrador deshabilitó la auto-asignación/i),
+    ).toBeInTheDocument();
+  });
+
+  it('no llama al backend si el botón está deshabilitado', async () => {
+    const user = userEvent.setup();
+    renderCon(false);
+    await screen.findByText('Sin Responsable');
+
+    await user.click(await screen.findByRole('button', { name: /asignarme/i }));
+
+    expect(assignBootcamper).not.toHaveBeenCalled();
+  });
+});
