@@ -205,7 +205,7 @@ describe('UsersPage', () => {
     await user.type(within(dialog).getByPlaceholderText('Ana'), 'Nueva');
     await user.type(within(dialog).getByPlaceholderText('Vera'), 'Persona');
     await user.type(within(dialog).getByPlaceholderText(/@espol/i), 'nueva@espol.edu.ec');
-    await user.type(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i), CLAVE_TEMPORAL);
+    await user.type(within(dialog).getByPlaceholderText(/déjalo en blanco para invitar/i), CLAVE_TEMPORAL);
     await user.type(within(dialog).getByPlaceholderText('0912345678'), '0926687857');
 
     await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
@@ -229,7 +229,7 @@ describe('UsersPage', () => {
     await user.type(within(dialog).getByPlaceholderText('Ana'), 'Nueva');
     await user.type(within(dialog).getByPlaceholderText('Vera'), 'Persona');
     await user.type(within(dialog).getByPlaceholderText(/@espol/i), 'nueva@espol.edu.ec');
-    await user.type(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i), CLAVE_TEMPORAL);
+    await user.type(within(dialog).getByPlaceholderText(/déjalo en blanco para invitar/i), CLAVE_TEMPORAL);
 
     await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
     await user.click(within(dialog).getByText('Vendedor'));
@@ -251,6 +251,28 @@ describe('UsersPage', () => {
     expect(await screen.findByText(/creado correctamente/i)).toBeInTheDocument();
   });
 
+  it('crea un usuario sin contraseña y avisa que se envió invitación por correo', async () => {
+    const user = userEvent.setup();
+    createUser.mockResolvedValue({ ...VENDEDOR, id: 'new-2', email: 'nueva@espol.edu.ec', full_name: 'Nueva Persona' });
+    renderPage();
+    await screen.findByText('Vendedor Uno');
+
+    await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
+    const dialog = await screen.findByRole('dialog', { name: /nuevo usuario/i });
+
+    await user.type(within(dialog).getByPlaceholderText('Ana'), 'Nueva');
+    await user.type(within(dialog).getByPlaceholderText('Vera'), 'Persona');
+    await user.type(within(dialog).getByPlaceholderText(/@espol/i), 'nueva@espol.edu.ec');
+
+    await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
+    await user.click(within(dialog).getByText('Vendedor'));
+
+    await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+    expect(createUser.mock.calls[0][0]).toMatchObject({ password: '' });
+    expect(await screen.findByText(/se envió un correo de activación/i)).toBeInTheDocument();
+  });
+
   describe('alcance del coordinador', () => {
     /** Abre el modal y llena los campos comunes con el rol Coordinador. */
     async function openCoordinatorForm(user) {
@@ -260,7 +282,7 @@ describe('UsersPage', () => {
       await user.type(within(dialog).getByPlaceholderText('Ana'), 'Nueva');
       await user.type(within(dialog).getByPlaceholderText('Vera'), 'Coord');
       await user.type(within(dialog).getByPlaceholderText(/@espol/i), 'coord@espol.edu.ec');
-      await user.type(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i), CLAVE_TEMPORAL);
+      await user.type(within(dialog).getByPlaceholderText(/déjalo en blanco para invitar/i), CLAVE_TEMPORAL);
 
       await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
       await user.click(within(dialog).getByText('Coordinador'));
@@ -369,13 +391,13 @@ describe('UsersPage', () => {
       await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
       const dialog = await screen.findByRole('dialog', { name: /nuevo usuario/i });
 
-      expect(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i)).toBeInTheDocument();
+      expect(within(dialog).getByPlaceholderText(/déjalo en blanco para invitar/i)).toBeInTheDocument();
 
       await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
       await user.click(within(dialog).getByText('Coordinador'));
 
       expect(
-        within(dialog).queryByPlaceholderText(/mínimo 8 caracteres/i),
+        within(dialog).queryByPlaceholderText(/déjalo en blanco para invitar/i),
       ).not.toBeInTheDocument();
     });
 

@@ -165,17 +165,19 @@ export default function UserFormFields({ register, errors, control, includePassw
       </Field>
 
       {/* El coordinador no inicia sesión: pedirle contraseña sería crear una
-          credencial que nadie usa. */}
+          credencial que nadie usa. Para el resto de roles es opcional: si se
+          deja en blanco, el backend envía una invitación por correo para que
+          la persona elija su propia contraseña. */}
       {includePassword && role !== 'COORDINATOR' && (
-        <Field label="Contraseña temporal" required error={errors.password?.message}>
+        <Field label="Contraseña temporal" hint="opcional" error={errors.password?.message}>
           <input
             {...register('password')}
             type="text"
-            placeholder="Mínimo 8 caracteres"
+            placeholder="Déjalo en blanco para invitar por correo"
             className={inputClass}
           />
           <p className="text-xs text-gray-500 mt-1">
-            Se le comparte al usuario para su primer ingreso.
+            En blanco, se le envía un correo de activación. Si escribes una, se le comparte a la persona para su primer ingreso.
           </p>
         </Field>
       )}

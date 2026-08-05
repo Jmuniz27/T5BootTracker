@@ -62,6 +62,38 @@ def send_bootcamper_invitation_email(self, bootcamper_id, invitation_link):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_staff_invitation_email(self, user_id, invitation_link):
+    """Send the one-time onboarding invitation link to a newly created staff user.
+
+    Espejo de `send_bootcamper_invitation_email` (issue #295): mismo mecanismo
+    de link firmado de 72h, pero para roles de staff (vendedor, finanzas,
+    administrador) creados desde el panel de usuarios en vez de convertidos
+    desde un lead.
+    """
+    try:
+        from apps.authentication.models import CustomUser
+        from apps.authentication.services import ONBOARDING_TOKEN_MAX_AGE
+
+        user = CustomUser.objects.get(id=user_id)
+
+        send_templated_email(
+            template='staff_invitation',
+            context={
+                'recipient_name': user.get_full_name(),
+                'invitation_link': invitation_link,
+                'expiry_hours': ONBOARDING_TOKEN_MAX_AGE // 3600,
+                'role_display': user.get_role_display(),
+            },
+            subject='Activa tu cuenta — Boot-Tracker',
+            to=[user.email],
+        )
+        logger.info('Staff invitation email sent to %s.', user.email)
+    except Exception as exc:
+        logger.exception('Error sending staff invitation email for %s.', user_id)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def send_conversion_notification(self, lead_id, bootcamper_id):
     """Notify program coordinators when a lead is converted to a bootcamper."""
     try:
