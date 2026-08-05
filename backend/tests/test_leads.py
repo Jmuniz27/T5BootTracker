@@ -120,6 +120,22 @@ class TestLeadList:
         assert client.get(f'{LEADS_URL}{lead.id}/').status_code == 200
         assert client.get(f'{LEADS_URL}{lead.id}/interactions/').status_code == 200
 
+    def test_available_lead_history_visible_to_other_salesperson(self, db, salesperson_user, sample_lead):
+        worker = CustomUser.objects.create_user(
+            email='worker@test.com', password='testpass123',
+            first_name='W', last_name='K', role=CustomUser.Role.SALESPERSON,
+        )
+        Interaction.objects.create(
+            lead=sample_lead, salesperson=worker,
+            interaction_type=Interaction.InteractionType.CALL,
+            outcome=Interaction.Outcome.CALL_AGAIN, notes='llamada',
+        )
+        client = make_client(salesperson_user)
+        # sample_lead está sin asignar: su historial es visible para todo el equipo.
+        resp = client.get(f'{LEADS_URL}{sample_lead.id}/interactions/')
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
     def test_conversion_persists_convert_form_contact_and_program(self, db, salesperson_user, program):
         lead = Lead.objects.create(
             name='Ana Vera', phone='0990000000', email='old@test.com',

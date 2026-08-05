@@ -510,11 +510,13 @@ class InteractionListCreateView(APIView):
     )
     def get(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
-        # El historial de un convertido es visible para todo el equipo comercial;
-        # el de un lead activo, sólo para su dueño o el admin.
+        # El historial es visible para todo el equipo comercial cuando el lead
+        # está disponible (sin dueño) o convertido; si está asignado a otro
+        # vendedor, sólo su dueño o el admin lo ven.
         if (
             not request.user.is_administrator
             and lead.status != Lead.Status.CONVERTED
+            and lead.owner is not None
             and lead.owner != request.user
         ):
             return Response(
