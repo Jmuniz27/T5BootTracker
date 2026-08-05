@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import AuthInput, { EmailIcon } from '../components/AuthInput';
 import PasswordInput from '../components/PasswordInput';

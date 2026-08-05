@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -12,6 +12,9 @@ vi.mock('../../api/auth.api', () => ({
 }));
 
 import { getOnboardingInfo, activateOnboarding } from '../../api/auth.api';
+
+/** Credencial de prueba, no un secreto real. */
+const CLAVE_PRUEBA = 'password123';
 
 const VALID_INFO = {
   first_name: 'Ana',
@@ -89,7 +92,7 @@ describe('OnboardingPage', () => {
     await user.click(screen.getByRole('button', { name: /continuar/i }));
 
     const [passwordInput, confirmInput] = await screen.findAllByPlaceholderText('••••••••');
-    await user.type(passwordInput, 'password123');
+    await user.type(passwordInput, CLAVE_PRUEBA);
     await user.type(confirmInput, 'diferente123');
     await user.click(screen.getByRole('button', { name: /activar mi cuenta/i }));
 
@@ -107,14 +110,14 @@ describe('OnboardingPage', () => {
     await user.click(screen.getByRole('button', { name: /continuar/i }));
 
     const [passwordInput, confirmInput] = await screen.findAllByPlaceholderText('••••••••');
-    await user.type(passwordInput, 'password123');
-    await user.type(confirmInput, 'password123');
+    await user.type(passwordInput, CLAVE_PRUEBA);
+    await user.type(confirmInput, CLAVE_PRUEBA);
     await user.click(screen.getByRole('button', { name: /activar mi cuenta/i }));
 
     await waitFor(() => expect(screen.getByText('Cuenta activada')).toBeInTheDocument());
     expect(activateOnboarding).toHaveBeenCalledWith(
       'tok123',
-      expect.objectContaining({ password: 'password123', password_confirm: 'password123' })
+      expect.objectContaining({ password: CLAVE_PRUEBA, password_confirm: CLAVE_PRUEBA })
     );
   });
 });
