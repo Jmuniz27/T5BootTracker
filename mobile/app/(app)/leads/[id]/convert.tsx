@@ -62,7 +62,7 @@ export default function ConvertLeadScreen() {
   const cohortOptions = cohorts.map((c) => ({ id: c.id, name: `Cohorte ${c.number} — ${c.status_label}` }));
 
   const pct = Number(discount);
-  const discountValid = discount === '' || (!Number.isNaN(pct) && pct >= 0 && pct <= 100);
+  const discountValid = discount.trim() !== '' && !Number.isNaN(pct) && pct >= 0 && pct <= 100;
 
   const canSubmit =
     validateIdentificacion(cedula.trim()) &&
@@ -173,16 +173,16 @@ export default function ConvertLeadScreen() {
               keyboardType="phone-pad"
             />
 
-            <Text style={s.label}>Descuento (%)</Text>
+            <Text style={s.label}>Descuento (%) *</Text>
             <TextInput
-              style={[s.input, !discountValid && s.inputError]}
+              style={[s.input, discount !== '' && !discountValid && s.inputError]}
               value={discount}
               onChangeText={(v) => setDiscount(v.replace(/[^0-9.]/g, '').slice(0, 6))}
-              placeholder="0"
+              placeholder="0 si no aplica"
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
-            {!discountValid && <Text style={s.errorHint}>El descuento va de 0 a 100.</Text>}
+            {discount !== '' && !discountValid && <Text style={s.errorHint}>El descuento va de 0 a 100.</Text>}
           </View>
 
           {error && (

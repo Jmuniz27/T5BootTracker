@@ -1580,7 +1580,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   const [cedula, setCedula]   = useState('')
   const [programId, setProgramId] = useState('')
   const [cohortId, setCohortId]   = useState('')
-  const [discount, setDiscount]   = useState('0')
+  const [discount, setDiscount]   = useState('')
   const [email, setEmail]     = useState(lead.email || '')
   const [phone, setPhone]     = useState(lead.phone || '')
   const [errors, setErrors]   = useState({})
@@ -1642,7 +1642,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     if (!programId) errs.programId = 'Selecciona un programa.'
     else if (!cohortId) errs.cohortId = 'Selecciona una cohorte.'
     const pct = Number(discount)
-    if (discount !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
+    if (discount.trim() === '') {
+      errs.discount = 'Ingresa el descuento (0 si no aplica).'
+    } else if (Number.isNaN(pct) || pct < 0 || pct > 100) {
       errs.discount = 'El descuento va de 0 a 100.'
     }
     return errs
@@ -1789,7 +1791,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Descuento */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="convert-discount">
-              Descuento <span className="text-xs text-gray-400 font-normal">(%)</span>
+              Descuento <span className="text-red-500">*</span> <span className="text-xs text-gray-400 font-normal">(%)</span>
             </label>
             <input
               id="convert-discount"
