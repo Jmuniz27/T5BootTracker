@@ -48,10 +48,14 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         PENDING_VERIFICATION: activó la cuenta y confirmó sus datos, falta que
         el vendedor los verifique. No bloquea nada — es informativo.
         VERIFIED: el vendedor confirmó los datos.
+        REJECTED: el vendedor encontró algo mal (issue #309). El motivo queda en
+        `verification_rejection_reason` y se le notifica por correo. No es
+        terminal: una vez corregidos los datos se puede pasar a VERIFIED.
         """
         INVITED              = 'INVITED',              'Invitado'
         PENDING_VERIFICATION = 'PENDING_VERIFICATION', 'Pendiente de verificación'
         VERIFIED             = 'VERIFIED',              'Verificado'
+        REJECTED             = 'REJECTED',             'Rechazado'
 
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email      = models.EmailField(unique=True, verbose_name='Correo electrónico')
@@ -107,15 +111,25 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         default=VerificationStatus.VERIFIED,
         verbose_name='Estado de verificación',
     )
+    # `verified_by` / `verified_at` son el rastro de la revisión en los DOS
+    # desenlaces (issue #309): quién revisó y cuándo, tanto al verificar como al
+    # rechazar. Conservan el nombre porque los leen el serializador de leads, la
+    # UI y el móvil; renombrarlos costaría una migración de datos por una
+    # ganancia sólo nominal.
     verified_by = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='verified_bootcampers',
-        verbose_name='Verificado por',
+        verbose_name='Revisado por',
     )
     verified_at = models.DateTimeField(null=True, blank=True)
+    # Qué hay que corregir, según el vendedor. Se limpia al verificar.
+    verification_rejection_reason = models.TextField(
+        blank=True,
+        verbose_name='Motivo del rechazo de verificación',
+    )
     onboarding_completed_at = models.DateTimeField(null=True, blank=True)
     # Token de invitación vigente (issue #253/#255): comparado contra el
     # `iat` firmado en el token para invalidar el link anterior al reenviar.

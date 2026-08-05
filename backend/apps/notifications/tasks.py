@@ -61,6 +61,73 @@ def send_bootcamper_invitation_email(self, bootcamper_id, invitation_link):
         raise self.retry(exc=exc)
 
 
+def _bootcamper_program_name(bootcamper):
+    """Name of the program this bootcamper is enrolled in, or None."""
+    from apps.programs.models import Enrollment
+
+    enrollment = (
+        Enrollment.objects
+        .filter(bootcamper=bootcamper)
+        .select_related('bootcamp')
+        .order_by('-id')
+        .first()
+    )
+    return enrollment.bootcamp.name if enrollment else None
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_verification_approved_email(self, bootcamper_id):
+    """Tell the bootcamper their onboarding data was verified (#309)."""
+    try:
+        from apps.authentication.models import CustomUser
+
+        bootcamper = CustomUser.objects.get(id=bootcamper_id)
+
+        send_templated_email(
+            template='verification_approved',
+            context={
+                'recipient_name': bootcamper.get_full_name(),
+                'program_name': _bootcamper_program_name(bootcamper),
+            },
+            subject='Tus datos fueron verificados — Boot-Tracker',
+            to=[bootcamper.email],
+        )
+        logger.info('Verification approved email sent to %s.', bootcamper.email)
+    except Exception as exc:
+        logger.exception('Error sending verification approved email for %s.', bootcamper_id)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_verification_rejected_email(self, bootcamper_id):
+    """Tell the bootcamper what to fix in their onboarding data (#309).
+
+    El correo no enlaza a ninguna pantalla a propósito: hoy el bootcamper no
+    puede autocorregir sus datos (el onboarding es un token de un solo uso ya
+    consumido, y `/auth/me/` no expone la cédula). La corrección es asistida, así
+    que el correo pide contactar al asesor.
+    """
+    try:
+        from apps.authentication.models import CustomUser
+
+        bootcamper = CustomUser.objects.get(id=bootcamper_id)
+
+        send_templated_email(
+            template='verification_rejected',
+            context={
+                'recipient_name': bootcamper.get_full_name(),
+                'program_name': _bootcamper_program_name(bootcamper),
+                'rejection_reason': bootcamper.verification_rejection_reason,
+            },
+            subject='Hay que corregir tus datos — Boot-Tracker',
+            to=[bootcamper.email],
+        )
+        logger.info('Verification rejected email sent to %s.', bootcamper.email)
+    except Exception as exc:
+        logger.exception('Error sending verification rejected email for %s.', bootcamper_id)
+        raise self.retry(exc=exc)
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def send_staff_invitation_email(self, user_id, invitation_link):
     """Send the one-time onboarding invitation link to a newly created staff user.

@@ -39,11 +39,25 @@ class BootcamperSummarySerializer(serializers.ModelSerializer):
         fields = (
             'id', 'first_name', 'last_name', 'email', 'phone', 'cedula',
             'verification_status', 'verified_at', 'verified_by_name',
-            'onboarding_completed_at',
+            'verification_rejection_reason', 'onboarding_completed_at',
         )
 
     def get_verified_by_name(self, obj):
         return obj.verified_by.get_full_name() if obj.verified_by else None
+
+
+class VerificationRejectSerializer(serializers.Serializer):
+    """Motivo con el que se rechazan los datos de un bootcamper (#309).
+
+    Espejo de `PaymentRejectSerializer`: el motivo es obligatorio porque es todo
+    lo que el bootcamper va a recibir para saber qué corregir.
+    """
+    reason = serializers.CharField(min_length=1)
+
+    def validate_reason(self, value):
+        if not value.strip():
+            raise serializers.ValidationError('El motivo del rechazo no puede estar vacío.')
+        return value
 
 
 class LeadListSerializer(serializers.ModelSerializer):

@@ -1,0 +1,10 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Revisamos los datos que registraste{% if program_name %} para {{ program_name }}{% endif %} y encontramos algo que hay que corregir.
+
+Qué corregir: {{ rejection_reason }}
+
+Qué hacer: escríbele a tu asesor con el dato correcto. Él lo actualiza por ti y vuelve
+a revisarlo. No hace falta que entres a la plataforma: estos datos no se editan desde
+tu cuenta.
+{% endblock %}
