@@ -19,7 +19,11 @@ class PaymentUploadSerializer(serializers.Serializer):
     """Validates an uploaded receipt file."""
 
     receipt_file = serializers.FileField()
-    program_id = serializers.UUIDField()
+    # Opcional: el bootcamper no elige el programa al subir, se deduce de su
+    # inscripción activa (ver `services.resolve_upload_program`). Se sigue
+    # aceptando para los clientes que ya lo enviaban y para desempatar a quien
+    # curse dos programas a la vez.
+    program_id = serializers.UUIDField(required=False, allow_null=True)
 
     def validate_receipt_file(self, file):
         mime_type = file.content_type

@@ -115,6 +115,124 @@ class TestPaymentUpload:
         assert resp.status_code == 403
 
 
+class TestPaymentUploadResolvesProgram:
+    """Sin `program_id`, el programa se deduce de la inscripción activa.
+
+    El bootcamper no elige programa al subir: ya está inscrito en uno. Antes el
+    campo era obligatorio y quien no tuviera pagos previos no podía subir el
+    primero, porque el cliente no tenía de dónde sacar el id.
+    """
+
+    def _upload(self, client, **extra):
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch("apps.payments.tasks.process_payment_ocr.delay"):
+            return client.post(
+                UPLOAD_URL, {"receipt_file": fake_file, **extra}, format="multipart"
+            )
+
+    def _enroll(self, bootcamper, program, status=None):
+        from apps.programs.models import Enrollment
+
+        return Enrollment.objects.create(
+            bootcamper=bootcamper,
+            bootcamp=program,
+            start_date=program.start_date,
+            agreed_price=program.total_cost,
+            **({"status": status} if status else {}),
+        )
+
+    def test_infers_program_from_the_single_active_enrollment(
+        self, db, converted_bootcamper, program
+    ):
+        self._enroll(converted_bootcamper, program)
+
+        resp = self._upload(make_client(converted_bootcamper))
+
+        assert resp.status_code == 201
+        assert Payment.objects.get(id=resp.json()["id"]).program_id == program.id
+
+    def test_first_upload_works_without_previous_payments(
+        self, db, converted_bootcamper, program
+    ):
+        """El caso que estaba roto: primera subida, sin historial del cual deducir."""
+        self._enroll(converted_bootcamper, program)
+        assert not Payment.objects.filter(bootcamper=converted_bootcamper).exists()
+
+        assert self._upload(make_client(converted_bootcamper)).status_code == 201
+
+    def test_rejects_when_there_is_no_active_enrollment(
+        self, db, converted_bootcamper, program
+    ):
+        from apps.programs.models import Enrollment
+
+        self._enroll(converted_bootcamper, program, status=Enrollment.Status.DROPPED)
+
+        resp = self._upload(make_client(converted_bootcamper))
+
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NO_ACTIVE_ENROLLMENT"
+        assert not Payment.objects.exists()
+
+    def test_rejects_when_two_active_enrollments_are_ambiguous(
+        self, db, converted_bootcamper, program
+    ):
+        from datetime import date, timedelta
+
+        from apps.programs.models import Program
+
+        other = Program.objects.create(
+            name="Data Science Junio 2026",
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=60),
+            total_cost=Decimal("900.00"),
+        )
+        self._enroll(converted_bootcamper, program)
+        self._enroll(converted_bootcamper, other)
+
+        resp = self._upload(make_client(converted_bootcamper))
+
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "AMBIGUOUS_ENROLLMENT"
+        assert not Payment.objects.exists()
+
+    def test_explicit_program_id_still_wins_over_the_inference(
+        self, db, converted_bootcamper, program
+    ):
+        """Dos programas activos siguen pudiendo subir si el cliente desempata."""
+        from datetime import date, timedelta
+
+        from apps.programs.models import Program
+
+        other = Program.objects.create(
+            name="Data Analytics Julio 2026",
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=60),
+            total_cost=Decimal("800.00"),
+        )
+        self._enroll(converted_bootcamper, program)
+        self._enroll(converted_bootcamper, other)
+
+        resp = self._upload(make_client(converted_bootcamper), program_id=str(other.id))
+
+        assert resp.status_code == 201
+        assert Payment.objects.get(id=resp.json()["id"]).program_id == other.id
+
+    def test_unknown_program_id_still_returns_404(
+        self, db, converted_bootcamper, program
+    ):
+        self._enroll(converted_bootcamper, program)
+
+        resp = self._upload(
+            make_client(converted_bootcamper),
+            program_id="00000000-0000-0000-0000-000000000000",
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "PROGRAM_NOT_FOUND"
+
+
 class TestReceiptFile:
     RECEIPT_URL = "/api/payments/receipt/"
 
