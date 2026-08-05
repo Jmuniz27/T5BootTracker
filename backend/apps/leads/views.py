@@ -12,6 +12,7 @@ from rest_framework import status, serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.authentication.models import CustomUser
@@ -26,7 +27,7 @@ from .serializers import (
 from .services import (
     register_interaction, convert_lead_to_bootcamper,
     get_self_assignment_enabled, set_self_assignment_enabled,
-    find_duplicate_lead, reassign_lead_by_admin,
+    find_duplicate_lead, reassign_lead_by_admin, resend_invitation,
 )
 
 logger = logging.getLogger(__name__)
@@ -582,6 +583,42 @@ class ConvertLeadView(APIView):
         result_data = convert_lead_to_bootcamper(lead, serializer.validated_data)
 
         return Response(result_data, status=status.HTTP_201_CREATED)
+
+
+class ResendInvitationView(APIView):
+    """POST /api/leads/{id}/resend-invitation/ — reissue the onboarding link (#255)."""
+    permission_classes = [IsCommercial]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'invitation'
+
+    @extend_schema(
+        responses={
+            200: inline_serializer('ResendInvitationResponse', fields={
+                'invitation_link': drf_serializers.CharField(),
+            }),
+            400: OpenApiResponse(description='El lead no fue convertido, o la cuenta ya fue activada'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+            429: OpenApiResponse(description='Demasiados reenvíos'),
+        },
+        summary='Reenviar invitación de onboarding',
+        description=(
+            'Genera un token nuevo e invalida el anterior (deja de servir para activar la cuenta), '
+            'reenvía el email al bootcamper y devuelve el link nuevo. Sólo mientras la cuenta siga '
+            'en INVITED — si ya se activó, se rechaza.'
+        ),
+        tags=['Leads'],
+    )
+    def post(self, request, pk):
+        lead = get_object_or_404(Lead, pk=pk)
+        if not request.user.is_administrator and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede reenviar esta invitación.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        result_data = resend_invitation(lead)
+        return Response(result_data, status=status.HTTP_200_OK)
 
 
 class ReturningBootcamperView(APIView):

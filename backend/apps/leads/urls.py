@@ -11,6 +11,7 @@ from .views import (
     InteractionListCreateView,
     InteractionDetailView,
     ConvertLeadView,
+    ResendInvitationView,
     ReturningBootcamperView,
 )
 
@@ -22,6 +23,7 @@ urlpatterns = [
     path('<uuid:pk>/release/',                                        LeadReleaseView.as_view(),           name='lead-release'),
     path('<uuid:pk>/admin-reassign/',                                 LeadAdminReassignView.as_view(),     name='lead-admin-reassign'),
     path('<uuid:pk>/convert/',                                        ConvertLeadView.as_view(),           name='lead-convert'),
+    path('<uuid:pk>/resend-invitation/',                              ResendInvitationView.as_view(),      name='lead-resend-invitation'),
     path('<uuid:pk>/',                                                LeadDetailView.as_view(),            name='lead-detail'),
     path('<uuid:pk>/interactions/',                                   InteractionListCreateView.as_view(), name='lead-interactions'),
     path('<uuid:pk>/interactions/<uuid:interaction_pk>/',             InteractionDetailView.as_view(),     name='lead-interaction-detail'),
