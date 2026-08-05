@@ -278,6 +278,105 @@ def find_lead_by_phone(raw):
     return candidates.filter(phone_digits__endswith=subscriber).order_by('-created_at').first()
 
 
+# --- Superficie del bot de WhatsApp (#279) -----------------------------------
+
+def resolve_program_by_name(name):
+    """Return the active Program ``name`` unambiguously refers to, or None.
+
+    El bot manda el nombre que eligió la persona en el chat ("Data Science"), que
+    no tiene por qué coincidir con cómo se llama el programa en la base ("Data
+    Science Enero 2026"). Se intenta el nombre exacto y, si no, una coincidencia
+    parcial **sólo cuando es única**: con dos programas activos que contengan el
+    texto, elegir uno sería adivinar. Sin resolución la FK queda vacía y el texto
+    igual se conserva en ``program_interest``.
+    """
+    name = (name or '').strip()
+    if not name:
+        return None
+
+    active = Program.objects.filter(is_active=True)
+    exact = active.filter(name__iexact=name).first()
+    if exact is not None:
+        return exact
+
+    partial = list(active.filter(name__icontains=name)[:2])
+    return partial[0] if len(partial) == 1 else None
+
+
+def bot_lookup_payload(raw_phone):
+    """Build the dedup answer the bot's conversational flow branches on.
+
+    ``owner`` sale en cadena vacía —nunca ``None``— cuando el lead no tiene
+    vendedor. El flujo evalúa "no vacío" sobre el valor ya interpolado en una
+    plantilla, y un ``None`` se interpola como el texto ``None``, que daría
+    verdadero y mandaría todo lead sin asignar por la rama de "ya asignado".
+    Por lo mismo el resto de campos van vacíos, no nulos, cuando no hay lead.
+    """
+    lead = find_lead_by_phone(raw_phone)
+    if lead is None:
+        return {'exists': False, 'status': '', 'owner': '', 'lead_id': ''}
+
+    return {
+        'exists': True,
+        'status': lead.status,
+        'owner': lead.owner.get_full_name() if lead.owner else '',
+        'lead_id': str(lead.id),
+    }
+
+
+def bot_create_lead(validated_data):
+    """Create a WhatsApp lead in the unassigned pool. Returns ``(lead, created)``.
+
+    Con un teléfono que ya existe devuelve el lead existente en vez de crear otro:
+    el bot vuelve a pasar por aquí cada vez que la misma persona retoma la
+    conversación, y duplicar sería el defecto que este endpoint evita.
+    """
+    existing = find_lead_by_phone(validated_data['phone'])
+    if existing is not None:
+        return existing, False
+
+    program_interest = validated_data.get('program_interest', '')
+    lead = Lead.objects.create(
+        name=validated_data['name'],
+        phone=validated_data['phone'],
+        email=validated_data.get('email') or None,
+        program_interest=program_interest,
+        program=resolve_program_by_name(program_interest),
+        source=Lead.Source.WHATSAPP,
+        status=Lead.Status.NEW,
+    )
+    logger.info('Lead creado por el bot de WhatsApp: %s', lead.id)
+    return lead, True
+
+
+def bot_update_lead_by_phone(raw_phone, validated_data):
+    """Apply the bot's fields to the lead ``raw_phone`` resolves to, or None."""
+    lead = find_lead_by_phone(raw_phone)
+    if lead is None:
+        return None
+
+    updated_fields = []
+    if 'name' in validated_data:
+        lead.name = validated_data['name']
+        updated_fields.append('name')
+    if 'email' in validated_data:
+        lead.email = validated_data['email'] or None
+        updated_fields.append('email')
+    if 'program_interest' in validated_data:
+        lead.program_interest = validated_data['program_interest']
+        updated_fields.append('program_interest')
+        program = resolve_program_by_name(lead.program_interest)
+        if program is not None:
+            lead.program = program
+            updated_fields.append('program')
+
+    if updated_fields:
+        updated_fields.append('updated_at')
+        lead.save(update_fields=updated_fields)
+
+    return lead
+
+
 @transaction.atomic
 def reassign_lead_by_admin(lead_id, admin_user, new_owner=None):
     """Force-release or force-reassign a lead as an Administrator (CR-005).
