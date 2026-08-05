@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PaymentsPage from '../PaymentsPage';
 import {
   getMyHistory,
+  getMyStatus,
   getPrograms,
   uploadPayment,
   getOCRStatus,
@@ -14,6 +15,7 @@ import {
 
 vi.mock('../../api/payments.api', () => ({
   getMyHistory: vi.fn(),
+  getMyStatus: vi.fn(),
   getPrograms: vi.fn(),
   uploadPayment: vi.fn(),
   getOCRStatus: vi.fn(),
@@ -90,6 +92,7 @@ describe('PaymentsPage', () => {
     // que aparecen en su propio historial.
     getPrograms.mockResolvedValue([PROGRAMA]);
     getMyHistory.mockResolvedValue([]);
+    getMyStatus.mockResolvedValue({ deficit: '0.00' });
   });
 
   describe('estados de pago', () => {
@@ -110,9 +113,9 @@ describe('PaymentsPage', () => {
       // Sólo PAGO_APROBADO (450) cuenta: pendientes y rechazados no suman.
       // El importe aparece dos veces —en la tarjeta de resumen y en la fila—,
       // así que se afirma sobre la tarjeta, que es la que hace la suma.
-      const tarjeta = (await screen.findByText('Total Paid')).closest('div');
+      const tarjeta = (await screen.findByText('Total pagado')).closest('div');
       expect(within(tarjeta).getByText('$450')).toBeInTheDocument();
-      expect(within(tarjeta).getByText('1 approved payment')).toBeInTheDocument();
+      expect(within(tarjeta).getByText('1 pago aprobado')).toBeInTheDocument();
     });
 
     it('muestra el motivo del rechazo al bootcamper (HST-023)', async () => {
@@ -149,6 +152,60 @@ describe('PaymentsPage', () => {
     });
   });
 
+  describe('tarjeta de adeudado', () => {
+    const tarjetaAdeudado = async () =>
+      (await screen.findByText('Adeudado')).closest('div');
+
+    it('muestra lo que falta pagar del precio acordado', async () => {
+      getMyHistory.mockResolvedValue([PAGO_APROBADO]);
+      getMyStatus.mockResolvedValue({ deficit: '750.00' });
+      renderPage();
+
+      expect(within(await tarjetaAdeudado()).getByText('$750')).toBeInTheDocument();
+      expect(getMyStatus).toHaveBeenCalledWith(PROGRAMA.id);
+    });
+
+    it('suma el adeudado de todos los programas del bootcamper', async () => {
+      getPrograms.mockResolvedValue([PROGRAMA, { id: 'prog-2', name: 'Data Science Junio 2026' }]);
+      getMyHistory.mockResolvedValue([PAGO_APROBADO]);
+      getMyStatus.mockImplementation((id) =>
+        Promise.resolve({ deficit: id === PROGRAMA.id ? '750.00' : '250.00' }),
+      );
+      renderPage();
+
+      expect(within(await tarjetaAdeudado()).getByText('$1,000')).toBeInTheDocument();
+    });
+
+    it('dice "Sin deuda" cuando ya pagó todo', async () => {
+      getMyHistory.mockResolvedValue([PAGO_APROBADO]);
+      getMyStatus.mockResolvedValue({ deficit: '0.00' });
+      renderPage();
+
+      expect(within(await tarjetaAdeudado()).getByText('Sin deuda')).toBeInTheDocument();
+    });
+
+    it('aclara que los pagos en revisión no descuentan', async () => {
+      getMyHistory.mockResolvedValue([PAGO_APROBADO, PAGO_PENDIENTE]);
+      getMyStatus.mockResolvedValue({ deficit: '750.00' });
+      renderPage();
+
+      expect(
+        within(await tarjetaAdeudado()).getByText('No incluye tus pagos en revisión'),
+      ).toBeInTheDocument();
+    });
+
+    it('no inventa un cero cuando todavía no hay programa que consultar', async () => {
+      // Sin pagos y con /programs/ en 403, la página no conoce ningún programa:
+      // un "$0" diría que no debe nada, que es lo contrario de su situación.
+      getPrograms.mockRejectedValue(new Error('403'));
+      getMyHistory.mockResolvedValue([]);
+      renderPage();
+
+      expect(within(await tarjetaAdeudado()).getByText('—')).toBeInTheDocument();
+      expect(getMyStatus).not.toHaveBeenCalled();
+    });
+  });
+
   describe('subida de comprobante', () => {
     it('envía el archivo y el programa seleccionados (HST-016)', async () => {
       const user = userEvent.setup();
@@ -157,7 +214,7 @@ describe('PaymentsPage', () => {
       getOCRStatus.mockResolvedValue({ ocr_confidence: {} });
       renderPage();
 
-      await user.click(await screen.findByRole('button', { name: 'Upload payment' }));
+      await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
 
       const archivo = new File(['comprobante'], 'comprobante.png', { type: 'image/png' });
       const modal = screen.getByText('📄 Subir comprobante').closest('div.bg-white');
@@ -182,7 +239,7 @@ describe('PaymentsPage', () => {
       getMyHistory.mockResolvedValue([]);
       renderPage();
 
-      await user.click(await screen.findByRole('button', { name: 'Upload payment' }));
+      await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
       const modal = screen.getByText('📄 Subir comprobante').closest('div.bg-white');
       await user.click(within(modal).getByRole('button', { name: 'Subir comprobante' }));
 
@@ -196,7 +253,7 @@ describe('PaymentsPage', () => {
       getMyHistory.mockResolvedValue([]);
       renderPage();
 
-      await user.click(await screen.findByRole('button', { name: 'Upload payment' }));
+      await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
       const zona = screen.getByText('PNG, JPG o PDF (máx. 10 MB)').closest('div');
 
       // Se prueba por arrastre y no por el input: el input declara
@@ -216,7 +273,7 @@ describe('PaymentsPage', () => {
       getMyHistory.mockResolvedValue([]);
       renderPage();
 
-      await user.click(await screen.findByRole('button', { name: 'Upload payment' }));
+      await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
       const zona = screen.getByText('PNG, JPG o PDF (máx. 10 MB)').closest('div');
 
       const pesado = new File(['x'], 'grande.png', { type: 'image/png' });
@@ -233,7 +290,7 @@ describe('PaymentsPage', () => {
       uploadPayment.mockRejectedValue({ response: { data: { error: 'Comprobante duplicado.' } } });
       renderPage();
 
-      await user.click(await screen.findByRole('button', { name: 'Upload payment' }));
+      await user.click(await screen.findByRole('button', { name: 'Subir pago' }));
       const modal = screen.getByText('📄 Subir comprobante').closest('div.bg-white');
       const input = modal.querySelector('input[type="file"]');
       await user.upload(input, new File(['x'], 'c.png', { type: 'image/png' }));

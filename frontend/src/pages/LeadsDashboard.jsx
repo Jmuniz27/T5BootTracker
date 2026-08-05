@@ -9,6 +9,7 @@ import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
 import MeetingFormModal from '../components/MeetingFormModal'
 import { useMeetingMutations } from '../hooks/use-meetings'
 import { toDatetimeLocal } from '../lib/meetings'
+import { isValidIdentificacion } from '../utils/cedula'
 
 const PAGE_SIZE = 10
 
@@ -904,7 +905,7 @@ function leadFieldClass(errors, key) {
   }`
 }
 
-function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true }) {
+function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, isAdmin = false }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
@@ -997,26 +998,32 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
             />
           </div>
 
-          <div>
-            <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-              <input
-                type="checkbox"
-                data-testid="create-lead-autoassign"
-                checked={form.autoAssign && canSelfAssign}
-                disabled={!canSelfAssign}
-                onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
-                className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
-              />
-              <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
-                Asignarme este lead
-              </span>
-            </label>
-            {!canSelfAssign && (
-              <p className="text-xs text-gray-500 mt-1 ml-7">
-                La asignación la realiza el Administrador.
-              </p>
-            )}
-          </div>
+          {/* CB-QA: un Administrador nunca puede ser owner de un lead (ver
+              LeadAssignView, permission_classes=[IsSalesperson] en el backend),
+              así que este checkbox ni se le muestra — antes se veía habilitado
+              y al tildarlo la asignación fallaba en silencio tras crear el lead. */}
+          {!isAdmin && (
+            <div>
+              <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                <input
+                  type="checkbox"
+                  data-testid="create-lead-autoassign"
+                  checked={form.autoAssign && canSelfAssign}
+                  disabled={!canSelfAssign}
+                  onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
+                  className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
+                />
+                <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
+                  Asignarme este lead
+                </span>
+              </label>
+              {!canSelfAssign && (
+                <p className="text-xs text-gray-500 mt-1 ml-7">
+                  La asignación la realiza el Administrador.
+                </p>
+              )}
+            </div>
+          )}
 
 
           <div className="flex gap-3 pt-2">
@@ -1519,59 +1526,9 @@ function ResendInvitationModal({ lead, onClose }) {
 
 // ─── Cédula Validator ─────────────────────────────────────────────────────────
 
-function validateCedulaEcuatoriana(cedula) {
-  if (!/^\d{10}$/.test(cedula)) return false
-  const digits = cedula.split('').map(Number)
-  const province = digits[0] * 10 + digits[1]
-  if (province < 1 || province > 24) return false
-  if (digits[2] >= 6) return false
-  const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2]
-  let sum = 0
-  for (let i = 0; i < 9; i++) {
-    let val = digits[i] * coefficients[i]
-    if (val >= 10) val -= 9
-    sum += val
-  }
-  const checkDigit = sum % 10 === 0 ? 0 : 10 - (sum % 10)
-  return checkDigit === digits[9]
-}
-
-function mod11CheckDigit(digits, coefficients) {
-  const sum = digits.reduce((acc, d, i) => acc + d * coefficients[i], 0)
-  const r = sum % 11
-  const expected = r === 0 ? 0 : 11 - r
-  return expected === 10 ? null : expected
-}
-
-function validateRucEcuatoriano(ruc) {
-  if (!/^\d{13}$/.test(ruc)) return false
-  const digits = ruc.split('').map(Number)
-  const province = digits[0] * 10 + digits[1]
-  if (province < 1 || province > 24) return false
-  const thirdDigit = digits[2]
-  if (thirdDigit <= 5) {
-    return validateCedulaEcuatoriana(ruc.slice(0, 10)) && ruc.endsWith('001')
-  }
-  if (thirdDigit === 6) {
-    const expected = mod11CheckDigit(digits.slice(0, 8), [3, 2, 7, 6, 5, 4, 3, 2])
-    return expected !== null && expected === digits[8]
-  }
-  if (thirdDigit === 9) {
-    const expected = mod11CheckDigit(digits.slice(0, 9), [4, 3, 2, 7, 6, 5, 4, 3, 2])
-    return expected !== null && expected === digits[9]
-  }
-  return false
-}
-
-function validateIdentificacion(value) {
-  if (value.length === 10) return validateCedulaEcuatoriana(value)
-  if (value.length === 13) return validateRucEcuatoriano(value)
-  return false
-}
-
 function cedulaInputBorderClass(hasError, cedula) {
   if (hasError) return 'border-red-400'
-  if ((cedula.length === 10 || cedula.length === 13) && validateIdentificacion(cedula)) return 'border-green-400'
+  if ((cedula.length === 10 || cedula.length === 13) && isValidIdentificacion(cedula)) return 'border-green-400'
   return 'border-gray-200'
 }
 
@@ -1675,7 +1632,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   const validate = () => {
     const errs = {}
     if (!cedula.trim()) errs.cedula = 'La cédula o RUC es requerida.'
-    else if (!validateIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
+    else if (!isValidIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
     if (!email.trim()) errs.email = 'El email es requerido para enviar la invitación.'
     if (!programId) errs.programId = 'Selecciona un programa.'
     const pct = Number(discount)
@@ -1796,7 +1753,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${cedulaInputBorderClass(errors.cedula, cedula)}`}
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
-            {(cedula.length === 10 || cedula.length === 13) && validateIdentificacion(cedula) && (
+            {(cedula.length === 10 || cedula.length === 13) && isValidIdentificacion(cedula) && (
               <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? 'Cédula válida' : 'RUC válido'}</p>
             )}
           </div>
@@ -2366,7 +2323,15 @@ export default function LeadsDashboard() {
           {isAdmin && <VendorFilterDropdown value={vendorFilter} onChange={setVendorFilter} />}
         </div>
 
-        {/* Tabs */}
+        {/* Tabs
+            CB-QA: se evaluó ocultar "Disponibles" para el Admin porque el
+            backend (LeadListCreateView.get) manda todos los leads dentro de
+            my_leads y deja available_leads vacío para ese rol. Se revierte:
+            CB-223/CB-225 agregaron el flujo "Asignar a" sobre leads sin dueño
+            para el Admin, y sus tests asumen que ambas pestañas siguen
+            existiendo — separar la vista real de Admin (all/assigned/
+            unassigned_leads, ya expuestos por el backend) queda pendiente de
+            hacer en el frontend, pero no acá para no romper CB-225. */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
           {isAdmin ? (
             <>
@@ -2634,12 +2599,14 @@ export default function LeadsDashboard() {
           onSubmit={(data, autoAssign) => { autoAssignRef.current = autoAssign; createMutation.mutate(data) }}
           isLoading={createMutation.isPending}
           canSelfAssign={selfAssignEnabled}
+          isAdmin={isAdmin}
         />
       )}
 
       {duplicateWarning && (
         <DuplicateLeadModal
           duplicate={duplicateWarning.duplicate}
+          payload={duplicateWarning.payload}
           isLoading={createMutation.isPending}
           onClose={() => setDuplicateWarning(null)}
           onConfirm={() =>
