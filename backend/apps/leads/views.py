@@ -448,7 +448,14 @@ class LeadDetailView(APIView):
             ),
             pk=pk,
         )
-        if not request.user.is_administrator and lead.owner is not None and lead.owner != request.user:
+        # Los convertidos son visibles para todo el equipo comercial (info e
+        # historial); el resto sólo para su dueño o el admin.
+        if (
+            not request.user.is_administrator
+            and lead.status != Lead.Status.CONVERTED
+            and lead.owner is not None
+            and lead.owner != request.user
+        ):
             return Response(
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -503,7 +510,13 @@ class InteractionListCreateView(APIView):
     )
     def get(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
-        if not request.user.is_administrator and lead.owner != request.user:
+        # El historial de un convertido es visible para todo el equipo comercial;
+        # el de un lead activo, sólo para su dueño o el admin.
+        if (
+            not request.user.is_administrator
+            and lead.status != Lead.Status.CONVERTED
+            and lead.owner != request.user
+        ):
             return Response(
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
                 status=status.HTTP_403_FORBIDDEN,

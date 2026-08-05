@@ -102,6 +102,43 @@ class TestLeadList:
         data = client.get(LEADS_URL).json()
         assert str(assigned_lead.id) not in [lead['id'] for lead in data['converted_leads']]
 
+    def test_converted_lead_info_and_history_visible_to_other_salesperson(self, db, salesperson_user):
+        other = CustomUser.objects.create_user(
+            email='conv.owner@test.com', password='testpass123',
+            first_name='Owner', last_name='X', role=CustomUser.Role.SALESPERSON,
+        )
+        lead = Lead.objects.create(
+            name='Convertido', phone='0990001111', status=Lead.Status.CONVERTED, owner=other,
+        )
+        Interaction.objects.create(
+            lead=lead, salesperson=other,
+            interaction_type=Interaction.InteractionType.WHATSAPP,
+            outcome=Interaction.Outcome.SEND_INFO, notes='hola',
+        )
+        client = make_client(salesperson_user)
+        # Info e historial de un convertido son visibles para todo el equipo comercial.
+        assert client.get(f'{LEADS_URL}{lead.id}/').status_code == 200
+        assert client.get(f'{LEADS_URL}{lead.id}/interactions/').status_code == 200
+
+    def test_conversion_persists_convert_form_contact_and_program(self, db, salesperson_user, program):
+        lead = Lead.objects.create(
+            name='Ana Vera', phone='0990000000', email='old@test.com',
+            status=Lead.Status.QUALIFIED, owner=salesperson_user,
+        )
+        client = make_client(salesperson_user)
+        resp = client.post(
+            f'{LEADS_URL}{lead.id}/convert/',
+            {'cedula': '1713175071', 'program_id': str(program.id),
+             'email': 'nuevo@test.com', 'phone': '0991112223'},
+            format='json',
+        )
+        assert resp.status_code == 201
+        lead.refresh_from_db()
+        # El lead queda con lo confirmado al convertir, no con la captación original.
+        assert lead.email == 'nuevo@test.com'
+        assert lead.phone == '0991112223'
+        assert lead.program_interest == program.name
+
     def test_system_interactions_excluded_from_history_and_count(self, db, salesperson_user, assigned_lead):
         Interaction.objects.create(
             lead=assigned_lead, salesperson=salesperson_user,

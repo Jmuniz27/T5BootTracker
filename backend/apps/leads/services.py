@@ -140,10 +140,17 @@ def convert_lead_to_bootcamper(lead, validated_data):
 
     lead.status = Lead.Status.CONVERTED
     lead.program = program
+    # Consistencia: el lead queda con los datos que se confirmaron al convertir
+    # (programa, correo y teléfono), no con los de la captación original.
+    lead.program_interest = program.name
+    lead.email = email
+    lead.phone = phone
     # Deja el rastro vendedor → bootcamper: el vendedor es `lead.owner`, y sin
     # este enlace no se puede reconstruir a quién trajo cada bootcamper.
     lead.bootcamper = bootcamper
-    lead.save(update_fields=['status', 'program', 'bootcamper', 'updated_at'])
+    lead.save(update_fields=[
+        'status', 'program', 'program_interest', 'email', 'phone', 'bootcamper', 'updated_at',
+    ])
 
     try:
         send_conversion_notification.delay(str(lead.id), str(bootcamper.id))
