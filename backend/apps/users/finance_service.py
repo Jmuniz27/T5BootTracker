@@ -141,8 +141,40 @@ def list_finance_portfolios():
     return portfolios
 
 
+def _enrollment_context(bootcamper_ids):
+    """{(bootcamper, programa): (cohorte, número, estado)} en una consulta.
+
+    `Payment` apunta al programa y no a la edición, así que la cohorte sólo se
+    conoce por la inscripción, que es única por (bootcamper, programa).
+    """
+    from apps.programs.models import Enrollment
+
+    if not bootcamper_ids:
+        return {}
+
+    return {
+        (bootcamper_id, program_id): (cohort_id, number, cohort_status)
+        for bootcamper_id, program_id, cohort_id, number, cohort_status in (
+            Enrollment.objects
+            .filter(bootcamper_id__in=bootcamper_ids)
+            .values_list(
+                'bootcamper_id', 'bootcamp_id',
+                'cohort_id', 'cohort__number', 'cohort__status',
+            )
+        )
+    }
+
+
 def get_finance_bootcampers(finance_user):
-    """Los bootcampers de una persona de Finanzas, con su resumen por programa."""
+    """Una tarjeta por (bootcamper, programa) de la cartera de esa persona.
+
+    Antes agrupaba por bootcamper y sólo decía cuántos programas tenía, así que
+    no se podía mostrar de qué programa ni de qué cohorte se le cobra, ni
+    filtrar por programa. El cobro se sigue por edición, y una persona puede
+    estar en más de una.
+    """
+    from apps.programs.models import Program
+
     bootcampers = {
         user.id: user
         for user in CustomUser.objects.filter(
@@ -150,21 +182,50 @@ def get_finance_bootcampers(finance_user):
         )
     }
 
-    rows_by_bootcamper = {}
-    for row in _payment_rows(set(bootcampers)):
-        rows_by_bootcamper.setdefault(row['bootcamper_id'], []).append(row)
+    rows = _payment_rows(set(bootcampers))
+    enrollments = _enrollment_context(set(bootcampers))
+
+    # El par sale de la unión de pagos e inscripciones: alguien recién asignado
+    # todavía no subió comprobantes y debe verse igual en la cartera.
+    pairs = {(r['bootcamper_id'], r['program_id']) for r in rows}
+    pairs.update(enrollments)
+    if not pairs:
+        return []
+
+    programs = {
+        program.id: program
+        for program in Program.objects.filter(id__in={pid for _, pid in pairs})
+    }
+    rows_by_pair = {}
+    for row in rows:
+        rows_by_pair.setdefault((row['bootcamper_id'], row['program_id']), []).append(row)
 
     result = []
-    for bootcamper_id, bootcamper in bootcampers.items():
-        rows = rows_by_bootcamper.get(bootcamper_id, [])
+    for bootcamper_id, program_id in pairs:
+        bootcamper = bootcampers[bootcamper_id]
+        program = programs.get(program_id)
+        pair_rows = rows_by_pair.get((bootcamper_id, program_id), [])
+        cohort_id, cohort_number, cohort_status = enrollments.get(
+            (bootcamper_id, program_id), (None, None, None),
+        )
+        summary = _summarise(pair_rows)
+
         result.append({
             'bootcamper_id': str(bootcamper_id),
             'bootcamper_name': bootcamper.get_full_name(),
             'email': bootcamper.email,
-            'program_count': len({r['program_id'] for r in rows}),
-            'pending_payments': int(sum(r['pending'] or 0 for r in rows)),
-            **_summarise(rows),
+            'program_id': str(program_id),
+            'program_name': program.name if program else '—',
+            'cohort_id': str(cohort_id) if cohort_id else None,
+            'cohort_number': cohort_number,
+            # Sin cohorte no hay estado; el frontend la trata como activa, porque
+            # se le sigue cobrando igual.
+            'cohort_status': cohort_status,
+            'pending_payments': int(sum(r['pending'] or 0 for r in pair_rows)),
+            # Sin deuda ya no hay nada que cobrar: es lo que separa la vista.
+            'is_fully_paid': summary['deficit'] <= ZERO,
+            **summary,
         })
 
-    result.sort(key=lambda item: item['bootcamper_name'])
+    result.sort(key=lambda item: (item['bootcamper_name'], item['program_name']))
     return result

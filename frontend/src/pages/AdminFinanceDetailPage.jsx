@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getFinanceBootcampers } from '../api/finance.api'
 import StatCard from '../components/StatCard'
+import CustomSelect from '../components/CustomSelect'
 
 /**
  * Los bootcampers de una persona de Finanzas, vistos por el administrador.
@@ -87,7 +88,9 @@ function SkeletonCard() {
 export default function AdminFinanceDetailPage() {
   const { financeId } = useParams()
   const navigate = useNavigate()
-  const [tab, setTab] = useState('cobro')
+  // Slicer por estado de COHORTE, con el estilo de píldoras del resto de la app.
+  const [tab, setTab] = useState('en_curso')
+  const [programId, setProgramId] = useState('')
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['finance-bootcampers', financeId],
@@ -96,10 +99,20 @@ export default function AdminFinanceDetailPage() {
   })
 
   const bootcampers = data?.bootcampers ?? []
-  // Sigue asignado a la misma persona: se separa la vista, no la responsabilidad.
-  const enCobro     = bootcampers.filter((bc) => !bc.is_fully_paid)
-  const finalizados = bootcampers.filter((bc) => bc.is_fully_paid)
-  const visibles    = tab === 'finalizados' ? finalizados : enCobro
+  // El filtro por programa aplica antes de dividir, para que los conteos del
+  // slicer sean los del programa elegido y no del total.
+  const programas = [...new Map(
+    bootcampers.map((bc) => [bc.program_id, bc.program_name]),
+  ).entries()]
+  const filtrados = programId
+    ? bootcampers.filter((bc) => bc.program_id === programId)
+    : bootcampers
+
+  // Sin cohorte se cuenta como en curso: se le sigue cobrando igual, y dejarlo
+  // fuera de las dos listas lo haría invisible.
+  const enCurso     = filtrados.filter((bc) => bc.cohort_status !== 'FINISHED')
+  const finalizadas = filtrados.filter((bc) => bc.cohort_status === 'FINISHED')
+  const visibles    = tab === 'finalizadas' ? finalizadas : enCurso
 
   const totals = bootcampers.reduce(
     (acc, bc) => ({
@@ -162,25 +175,43 @@ export default function AdminFinanceDetailPage() {
       )}
 
       {!isLoading && bootcampers.length > 0 && (
-        <div role="tablist" aria-label="Estado de cobro" className="flex gap-1 mb-5 border-b border-gray-200">
-          {[
-            { id: 'cobro', label: `En cobro (${enCobro.length})` },
-            { id: 'finalizados', label: `Pagos finalizados (${finalizados.length})` },
-          ].map(({ id, label }) => (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={tab === id}
-              onClick={() => setTab(id)}
-              className={`px-4 py-2.5 text-sm font-medium -mb-px border-b-2 transition-colors ${
-                tab === id
-                  ? 'border-[#1D3176] text-[#1D3176]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-3 mb-5">
+          {/* Mismo slicer de píldoras que "Administrativos / Bootcampers". */}
+          <div role="tablist" aria-label="Estado de la cohorte" className="inline-flex bg-gray-100 rounded-xl p-1">
+            {[
+              { id: 'en_curso', label: `En curso (${enCurso.length})` },
+              { id: 'finalizadas', label: `Finalizadas (${finalizadas.length})` },
+            ].map(({ id, label }) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => setTab(id)}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  tab === id
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {programas.length > 1 && (
+            <div className="min-w-[220px]">
+              <CustomSelect
+                value={programId}
+                onChange={setProgramId}
+                options={[
+                  { value: '', label: 'Todos los programas' },
+                  ...programas.map(([id, name]) => ({ value: id, label: name })),
+                ]}
+                placeholder="Todos los programas"
+                ariaLabel="Filtrar por programa"
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -195,9 +226,9 @@ export default function AdminFinanceDetailPage() {
       {!isLoading && bootcampers.length > 0 && visibles.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
           <p className="text-sm text-gray-500">
-            {tab === 'finalizados'
-              ? 'Nadie de su cartera completó el pago todavía.'
-              : 'Toda su cartera ya completó el pago.'}
+            {tab === 'finalizadas'
+              ? 'No tiene bootcampers en cohortes finalizadas.'
+              : 'Toda su cartera está en cohortes finalizadas.'}
           </p>
         </div>
       )}
