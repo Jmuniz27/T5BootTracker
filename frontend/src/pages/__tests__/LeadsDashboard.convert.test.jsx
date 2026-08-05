@@ -19,6 +19,7 @@ vi.mock('../../api/leads.api', () => ({
   updateInteraction: vi.fn(),
   convertLead: vi.fn(),
   resendInvitation: vi.fn(),
+  verifyBootcamper: vi.fn(),
   getPrograms: vi.fn(),
   updateLeadStatus: vi.fn(),
   updateLead: vi.fn(),
