@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, rejectBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
@@ -95,12 +95,81 @@ const VERIFICATION_LABELS = {
   INVITED: 'Invitado',
   PENDING_VERIFICATION: 'Pendiente de verificación',
   VERIFIED: 'Verificado',
+  REJECTED: 'Rechazado',
 }
 
 const VERIFICATION_COLORS = {
   INVITED: 'bg-gray-100 text-gray-500',
   PENDING_VERIFICATION: 'bg-yellow-100 text-yellow-700',
   VERIFIED: 'bg-green-100 text-green-700',
+  REJECTED: 'bg-red-100 text-red-600',
+}
+
+// Desde qué estados el vendedor puede resolver la revisión. REJECTED entra
+// porque el rechazo no es terminal: una vez corregidos los datos con la persona,
+// hay que poder verificar (el backend lo permite a propósito).
+const REVIEWABLE_VERIFICATION = ['PENDING_VERIFICATION', 'REJECTED']
+
+function RejectVerificationModal({ isPending, error, onCancel, onConfirm }) {
+  const [reason, setReason] = useState('')
+  const [touched, setTouched] = useState(false)
+  const vacio = !reason.trim()
+
+  const handleConfirm = () => {
+    setTouched(true)
+    if (vacio) return
+    onConfirm(reason.trim())
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Rechazar datos del bootcamper"
+        className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-semibold text-gray-900">Rechazar datos</h2>
+        <p className="text-xs text-gray-500 mt-1">
+          Se le enviará un correo al bootcamper con lo que hay que corregir. Como estos datos no
+          se editan desde su cuenta, tendrá que escribirte para arreglarlos.
+        </p>
+
+        <label htmlFor="motivo-rechazo" className="block text-sm font-medium text-gray-700 mt-4 mb-1">
+          Qué hay que corregir
+        </label>
+        <textarea
+          id="motivo-rechazo"
+          rows={3}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Ej: la cédula no coincide con el documento que enviaste."
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent"
+        />
+        {touched && vacio && (
+          <p className="text-red-500 text-xs mt-1">Escribe qué hay que corregir.</p>
+        )}
+        {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+
+        <div className="flex gap-3 mt-5">
+          <button
+            onClick={onCancel}
+            className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isPending}
+            className="flex-1 bg-red-600 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-red-700 disabled:opacity-60 transition-colors"
+          >
+            {isPending ? 'Rechazando...' : 'Rechazar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function VerificationBadge({ status }) {
@@ -729,10 +798,20 @@ function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
   const isConverted = lead.status === 'CONVERTED'
   const profile = lead.bootcamper_profile
 
+  const [showReject, setShowReject] = useState(false)
+
   const verifyMutation = useMutation({
     mutationFn: () => verifyBootcamper(lead.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
+
+  const rejectMutation = useMutation({
+    mutationFn: (reason) => rejectBootcamper(lead.id, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      setShowReject(false)
     },
   })
 
@@ -818,14 +897,43 @@ function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
                   Verificado por {profile.verified_by_name}
                 </p>
               )}
-              {(isOwned || isAdmin) && profile.verification_status === 'PENDING_VERIFICATION' && (
-                <button
-                  onClick={() => verifyMutation.mutate()}
-                  disabled={verifyMutation.isPending}
-                  className="mt-3 w-full py-2 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
-                >
-                  {verifyMutation.isPending ? 'Verificando...' : 'Marcar como verificado'}
-                </button>
+              {profile.verification_status === 'REJECTED' && profile.verification_rejection_reason && (
+                <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  <span className="font-medium">Pendiente de corregir:</span>{' '}
+                  {profile.verification_rejection_reason}
+                  {profile.verified_by_name && (
+                    <span className="block text-red-500 mt-0.5">
+                      Rechazado por {profile.verified_by_name}
+                    </span>
+                  )}
+                </div>
+              )}
+              {(isOwned || isAdmin) && REVIEWABLE_VERIFICATION.includes(profile.verification_status) && (
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => verifyMutation.mutate()}
+                    disabled={verifyMutation.isPending}
+                    className="flex-1 py-2 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
+                  >
+                    {verifyMutation.isPending ? 'Verificando...' : 'Marcar como verificado'}
+                  </button>
+                  {profile.verification_status === 'PENDING_VERIFICATION' && (
+                    <button
+                      onClick={() => setShowReject(true)}
+                      className="flex-1 py-2 rounded-xl border border-red-300 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors"
+                    >
+                      Rechazar datos
+                    </button>
+                  )}
+                </div>
+              )}
+              {showReject && (
+                <RejectVerificationModal
+                  isPending={rejectMutation.isPending}
+                  error={rejectMutation.error?.response?.data?.error}
+                  onCancel={() => setShowReject(false)}
+                  onConfirm={(reason) => rejectMutation.mutate(reason)}
+                />
               )}
             </div>
           )}

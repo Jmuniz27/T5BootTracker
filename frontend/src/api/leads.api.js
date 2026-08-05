@@ -12,6 +12,9 @@ export const resendInvitation = (id) =>
 export const verifyBootcamper = (id) =>
   client.patch(`/leads/${id}/verify-bootcamper/`).then((r) => r.data)
 
+export const rejectBootcamper = (id, reason) =>
+  client.patch(`/leads/${id}/reject-bootcamper/`, { reason }).then((r) => r.data)
+
 export const getPrograms = () =>
   client.get('/programs/').then((r) => r.data)
 
