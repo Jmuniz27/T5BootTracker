@@ -3,7 +3,7 @@
 from django.urls import reverse
 from rest_framework import serializers
 from apps.authentication.validators import validate_identificacion
-from .models import Payment
+from .models import BootcamperAssignmentSetting, Payment
 from .services import make_receipt_token
 
 MAX_FILE_SIZE_MB = 10
@@ -189,3 +189,16 @@ class PaymentDetailSerializer(PaymentListSerializer):
 
     class Meta(PaymentListSerializer.Meta):
         fields = PaymentListSerializer.Meta.fields + ("ocr_raw_text",)
+
+
+class BootcamperAssignmentSettingSerializer(serializers.ModelSerializer):
+    """Espejo de LeadAssignmentSettingSerializer, para el pool de bootcampers."""
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BootcamperAssignmentSetting
+        fields = ('self_assign_enabled', 'updated_by_name', 'updated_at')
+        read_only_fields = ('updated_by_name', 'updated_at')
+
+    def get_updated_by_name(self, obj):
+        return obj.updated_by.get_full_name() if obj.updated_by else None

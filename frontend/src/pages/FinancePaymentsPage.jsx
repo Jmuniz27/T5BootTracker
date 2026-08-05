@@ -10,6 +10,7 @@ import {
 import StatCard from '../components/StatCard'
 import CustomSelect from '../components/CustomSelect'
 import { getCohorts } from '../api/programs.api'
+import { getBootcamperAssignmentSetting } from '../api/payments.api'
 import Toast from '../components/Toast'
 import Skeleton from '../components/ui/Skeleton'
 
@@ -161,6 +162,14 @@ export default function FinancePaymentsPage() {
     queryFn: () => getCohorts(programId),
     enabled: Boolean(programId),
   })
+
+  // Si el Administrador apagó la auto-asignación, el botón de tomar del pool no
+  // debe ofrecerse: el backend responde 403 igual, y ofrecerlo sería engañoso.
+  const { data: assignSetting } = useQuery({
+    queryKey: ['bootcamper-assignment-setting'],
+    queryFn: getBootcamperAssignmentSetting,
+  })
+  const puedeAutoasignarse = assignSetting?.self_assign_enabled ?? true
 
   const mine      = data?.my_bootcampers ?? []
   const available = data?.available_bootcampers ?? []
@@ -371,7 +380,11 @@ export default function FinancePaymentsPage() {
 
           <Section
             title="Disponibles"
-            subtitle="Bootcampers sin responsable de cobro"
+            subtitle={
+              puedeAutoasignarse
+                ? 'Bootcampers sin responsable de cobro'
+                : 'El Administrador deshabilitó la auto-asignación: él reparte el cobro.'
+            }
             count={available.length}
             empty="No hay bootcampers esperando en el pool."
             cards={available}
@@ -380,6 +393,7 @@ export default function FinancePaymentsPage() {
               <CardAction
                 label="Asignarme"
                 pendingLabel="Asignando…"
+                disabled={!puedeAutoasignarse}
                 isPending={assignMutation.isPending && assignMutation.variables === bc.bootcamper_id}
                 onClick={() => assignMutation.mutate(bc.bootcamper_id)}
               />
@@ -428,7 +442,7 @@ function Section({ title, subtitle, count, empty, cards, onCardClick, renderActi
   )
 }
 
-function CardAction({ label, pendingLabel, onClick, isPending, variant = 'primary' }) {
+function CardAction({ label, pendingLabel, onClick, isPending, disabled = false, variant = 'primary' }) {
   const styles =
     variant === 'primary'
       ? 'bg-[#213A8E] text-white hover:bg-[#1a2f72]'
@@ -437,7 +451,7 @@ function CardAction({ label, pendingLabel, onClick, isPending, variant = 'primar
   return (
     <button
       onClick={onClick}
-      disabled={isPending}
+      disabled={isPending || disabled}
       className={`w-full py-2 rounded-xl text-xs font-semibold transition-colors disabled:opacity-60 ${styles}`}
     >
       {isPending ? pendingLabel : label}
