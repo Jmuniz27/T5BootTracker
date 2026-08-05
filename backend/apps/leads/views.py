@@ -201,7 +201,9 @@ class LeadListCreateView(APIView):
 
         if request.user.is_administrator:
             all_leads_qs        = qs
-            assigned_leads_qs   = qs.filter(owner__isnull=False)
+            # Los convertidos viven en converted_leads; salen de "Asignados"
+            # aunque conserven dueño, para no contarlos dos veces.
+            assigned_leads_qs   = qs.filter(owner__isnull=False).exclude(status=Lead.Status.CONVERTED)
             unassigned_leads_qs = qs.filter(owner__isnull=True)
 
             all_paginator        = Paginator(all_leads_qs, page_size)
