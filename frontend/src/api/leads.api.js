@@ -9,6 +9,9 @@ export const convertLead = (id, data) =>
 export const resendInvitation = (id) =>
   client.post(`/leads/${id}/resend-invitation/`).then((r) => r.data)
 
+export const verifyBootcamper = (id) =>
+  client.patch(`/leads/${id}/verify-bootcamper/`).then((r) => r.data)
+
 export const getPrograms = () =>
   client.get('/programs/').then((r) => r.data)
 
