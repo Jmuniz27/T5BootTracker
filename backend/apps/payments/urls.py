@@ -5,6 +5,7 @@ from .views import (
     BootcamperAssignView,
     BootcamperReleaseView,
     PaymentUploadView,
+    PaymentMyProgramsView,
     PaymentMyStatusView,
     PaymentMyHistoryView,
     PaymentOCRStatusView,
@@ -24,6 +25,7 @@ from .views import (
 urlpatterns = [
     path('upload/',                                   PaymentUploadView.as_view(),       name='payment-upload'),
     path('receipt/',                                  ReceiptFileView.as_view(),         name='payment-receipt-file'),
+    path('my-programs/',                              PaymentMyProgramsView.as_view(),   name='payment-my-programs'),
     path('my-status/',                                PaymentMyStatusView.as_view(),     name='payment-my-status'),
     path('my-history/',                               PaymentMyHistoryView.as_view(),    name='payment-my-history'),
     path('my-payments/<uuid:pk>/ocr-status/',         PaymentOCRStatusView.as_view(),    name='payment-ocr-status'),
