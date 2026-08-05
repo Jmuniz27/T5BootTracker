@@ -9,7 +9,7 @@ from .health import health
 
 urlpatterns = [
     path('health/', health, name='health'),
-    path('admin/', admin.site.urls),
+    path('django-admin/', admin.site.urls),
     path('api/auth/', include('apps.authentication.urls')),
     path('api/leads/', include('apps.leads.urls')),
     path('api/payments/', include('apps.payments.urls')),
