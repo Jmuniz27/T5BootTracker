@@ -4,6 +4,7 @@ import { getMyHistory, getMyStatus, getMyPrograms, getOCRStatus, uploadPayment, 
 import { useModalA11y } from '../hooks/use-modal-a11y'
 import Skeleton from '../components/ui/Skeleton'
 import Spinner from '../components/ui/Spinner'
+import ReceiptPreview from '../components/payments/ReceiptPreview'
 import { flattenUploadError } from '../lib/payments'
 
 const STATUS_LABELS = {
@@ -244,38 +245,6 @@ function UploadModal({ onClose, onSuccess }) {
   )
 }
 
-// ─── Receipt Preview ──────────────────────────────────────────────────────────
-
-function ReceiptPreview({ url, type }) {
-  if (!url) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
-        <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        Comprobante no disponible
-      </div>
-    )
-  }
-  if (type === 'pdf') {
-    return (
-      <object data={url} type="application/pdf" className="w-full h-full rounded-lg">
-        <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm gap-2 p-4 text-center">
-          No se puede previsualizar el PDF aquí.
-          <a href={url} target="_blank" rel="noopener noreferrer" className="text-[#213A8E] font-medium hover:underline">
-            Abrir comprobante en pestaña nueva
-          </a>
-        </div>
-      </object>
-    )
-  }
-  return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
-      <img src={url} alt="Comprobante" className="w-full h-full object-contain rounded-lg" />
-    </a>
-  )
-}
-
 // ─── OCR Review Modal ─────────────────────────────────────────────────────────
 
 // mode='review' → confirmar un pago DRAFT recién escaneado (DRAFT → PENDING).
@@ -340,8 +309,14 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
 
   const confidence = ocrData?.ocr_confidence || payment.ocr_confidence || {}
 
+  // El backend emite las claves sin prefijo (`bank_name`, `amount`…, ver
+  // ocr.py), pero acá los campos se llaman `ocr_bank_name` porque así se
+  // llaman en el modelo. Indexar con el nombre del campo daba siempre
+  // `undefined`, así que nunca se mostraba ningún porcentaje de confianza.
+  const confidenceOf = (field) => confidence[field.replace(/^ocr_/, '')]
+
   const confColor = (field) => {
-    const v = confidence[field]
+    const v = confidenceOf(field)
     if (v == null) return 'text-gray-500'
     if (v >= 0.8) return 'text-green-600'
     if (v >= 0.5) return 'text-yellow-600'
@@ -349,7 +324,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   }
 
   const confLabel = (field) => {
-    const v = confidence[field]
+    const v = confidenceOf(field)
     if (v == null) return ''
     return `${Math.round(v * 100)}% confianza`
   }
@@ -450,7 +425,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
                 <div key={key}>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-sm font-medium text-gray-700">{label}</label>
-                    {!isEdit && confidence[key] != null && (
+                    {!isEdit && confidenceOf(key) != null && (
                       <span className={`text-xs font-medium ${confColor(key)}`}>{confLabel(key)}</span>
                     )}
                   </div>
