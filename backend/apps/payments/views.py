@@ -95,21 +95,29 @@ class PaymentUploadView(APIView):
             201: PaymentListSerializer,
             400: OpenApiResponse(description='Archivo inválido, muy grande, o sin inscripción activa de la cual deducir el programa'),
             404: OpenApiResponse(description='Programa no encontrado'),
+            503: OpenApiResponse(description='El comprobante no se pudo guardar en el storage'),
         },
         summary='Subir comprobante de pago',
         description=(
             'El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR '
             'asíncrono. `program_id` es opcional: sin él, el programa se deduce de la '
-            'inscripción activa del bootcamper.'
+            'inscripción activa del bootcamper. La respuesta incluye `ocr_queued`: en '
+            'false el comprobante se guardó pero el OCR no se pudo encolar y lo revisa '
+            'Finanzas a mano.'
         ),
         tags=['Pagos — Bootcamper'],
     )
     def post(self, request):
         import os
         from apps.programs.models import Program
-        from .tasks import process_payment_ocr
         from .serializers import ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
-        from .services import UploadProgramError, resolve_upload_program
+        from .services import (
+            ReceiptStorageError,
+            UploadProgramError,
+            create_payment_with_receipt,
+            queue_receipt_ocr,
+            resolve_upload_program,
+        )
 
         serializer = PaymentUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -135,17 +143,20 @@ class PaymentUploadView(APIView):
             extension = os.path.splitext(file.name or '')[1].lower()
             file_type = ALLOWED_EXTENSIONS.get(extension, 'image')
 
-        payment = Payment.objects.create(
-            bootcamper=request.user,
-            program=program,
-            receipt_file=file,
-            receipt_file_type=file_type,
-            status=Payment.Status.DRAFT,
-        )
+        try:
+            payment = create_payment_with_receipt(request.user, program, file, file_type)
+        except ReceiptStorageError as exc:
+            return Response(
+                {'error': exc.message, 'code': exc.code},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
-        process_payment_ocr.delay(str(payment.id))
+        # El pago ya existe aunque el OCR no se haya podido encolar: se avisa para
+        # que el bootcamper sepa que su comprobante entró y no lo vuelva a subir.
+        data = PaymentListSerializer(payment).data
+        data['ocr_queued'] = queue_receipt_ocr(payment.id)
 
-        return Response(PaymentListSerializer(payment).data, status=status.HTTP_201_CREATED)
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class PaymentMyProgramsView(APIView):
@@ -655,15 +666,34 @@ class NotifyCoordinatorView(APIView):
         from apps.notifications.tasks import send_late_payment_alert
         from apps.authentication.models import CustomUser
         from apps.programs.models import Program
+        from .serializers import NotifyCoordinatorSerializer
 
         program_id = request.data.get('program_id') or request.query_params.get('program_id')
         if not program_id:
             return Response({'error': 'program_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        context_serializer = NotifyCoordinatorSerializer(data=request.data)
+        context_serializer.is_valid(raise_exception=True)
+        source = context_serializer.validated_data.get('source')
+        payment_id = context_serializer.validated_data.get('payment_id')
+
         try:
             CustomUser.objects.get(pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER)
         except CustomUser.DoesNotExist:
             return Response({'error': 'Bootcamper no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # El comprobante tiene que ser de este bootcamper y este programa: si no,
+        # el correo al coordinador expondría datos de un pago ajeno.
+        if payment_id and not Payment.objects.filter(
+            pk=payment_id, bootcamper_id=bootcamper_id, program_id=program_id
+        ).exists():
+            return Response(
+                {
+                    'error': 'El comprobante no corresponde a este bootcamper.',
+                    'code': 'INVALID_PAYMENT',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # El gate del 10% debe validarse en el servidor: el frontend sólo lo usaba
         # para mostrar u ocultar el botón, así que una llamada directa a la API
@@ -682,7 +712,12 @@ class NotifyCoordinatorView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        send_late_payment_alert.delay(str(bootcamper_id), str(program_id))
+        send_late_payment_alert.delay(
+            str(bootcamper_id),
+            str(program_id),
+            source=source,
+            payment_id=str(payment_id) if payment_id else None,
+        )
         return Response({'detail': 'Alerta enviada.'}, status=status.HTTP_200_OK)
 
 

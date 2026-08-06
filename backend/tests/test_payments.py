@@ -156,6 +156,75 @@ class TestPaymentUpload:
         assert resp.status_code == 400
 
 
+class TestPaymentUploadInfrastructureFailures:
+    """Un fallo de infraestructura no puede salir como la página HTML de Django.
+
+    En producción gunicorn corre como appuser y el volumen de media estaba en
+    poder de root, así que escribir el comprobante levantaba PermissionError: el
+    bootcamper veía el HTML del error 500 renderizado dentro del modal.
+    """
+
+    def test_storage_failure_answers_json_not_html(self, db, converted_bootcamper, program):
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch(
+            "apps.payments.models.Payment.objects.create",
+            side_effect=PermissionError("Permission denied: /app/media/receipts"),
+        ):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+
+        assert resp.status_code == 503
+        assert resp["Content-Type"].startswith("application/json")
+        assert resp.json()["code"] == "RECEIPT_STORAGE_ERROR"
+
+    def test_broker_down_still_keeps_the_receipt(self, db, converted_bootcamper, program):
+        """Redis caído no puede invalidar la subida: el pago ya se guardó.
+
+        Devolver error haría que el bootcamper vuelva a subir el mismo archivo y
+        duplique comprobantes, cuando Finanzas ya puede revisarlo a mano.
+        """
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch(
+            "apps.payments.tasks.process_payment_ocr.delay",
+            side_effect=OSError("Error 111 connecting to redis:6379"),
+        ):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+
+        assert resp.status_code == 201
+        assert resp.json()["ocr_queued"] is False
+        assert Payment.objects.filter(
+            bootcamper=converted_bootcamper, program=program
+        ).exists()
+
+    def test_successful_upload_reports_the_ocr_as_queued(self, db, converted_bootcamper, program):
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch("apps.payments.tasks.process_payment_ocr.delay"):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+
+        assert resp.status_code == 201
+        assert resp.json()["ocr_queued"] is True
+
+
 class TestPaymentMyPrograms:
     def test_bootcamper_with_enrollment_sees_program(self, db, converted_bootcamper, active_enrollment, program):
         client = make_client(converted_bootcamper)
@@ -911,8 +980,104 @@ class TestNotifyCoordinator:
             )
         assert resp.status_code == 200
         mock_delay.assert_called_once_with(
-            str(converted_bootcamper.id), str(program.id)
+            str(converted_bootcamper.id), str(program.id), source=None, payment_id=None
         )
+
+    def test_notify_coordinator_forwards_the_source(
+        self, db, finance_user, converted_bootcamper, program
+    ):
+        """El correo tiene que decir desde qué pantalla se pidió el aviso."""
+        client = make_client(finance_user)
+        with patch(
+            "apps.notifications.tasks.send_late_payment_alert.delay"
+        ) as mock_delay:
+            resp = client.post(
+                NOTIFY_COORD_URL.format(bootcamper_id=converted_bootcamper.id),
+                {"program_id": str(program.id), "source": "critical_deficit"},
+                format="json",
+            )
+        assert resp.status_code == 200
+        mock_delay.assert_called_once_with(
+            str(converted_bootcamper.id),
+            str(program.id),
+            source="critical_deficit",
+            payment_id=None,
+        )
+
+    def test_notify_coordinator_forwards_the_receipt_under_review(
+        self, db, finance_user, converted_bootcamper, program
+    ):
+        payment = Payment.objects.create(
+            bootcamper=converted_bootcamper,
+            program=program,
+            receipt_file="receipts/test.jpg",
+            receipt_file_type="image",
+        )
+
+        client = make_client(finance_user)
+        with patch(
+            "apps.notifications.tasks.send_late_payment_alert.delay"
+        ) as mock_delay:
+            resp = client.post(
+                NOTIFY_COORD_URL.format(bootcamper_id=converted_bootcamper.id),
+                {
+                    "program_id": str(program.id),
+                    "source": "receipt_review",
+                    "payment_id": str(payment.id),
+                },
+                format="json",
+            )
+        assert resp.status_code == 200
+        mock_delay.assert_called_once_with(
+            str(converted_bootcamper.id),
+            str(program.id),
+            source="receipt_review",
+            payment_id=str(payment.id),
+        )
+
+    def test_notify_coordinator_rejects_an_unknown_source(
+        self, db, finance_user, converted_bootcamper, program
+    ):
+        """Un valor mal escrito mandaría el correo genérico sin que nadie se entere."""
+        client = make_client(finance_user)
+        with patch(
+            "apps.notifications.tasks.send_late_payment_alert.delay"
+        ) as mock_delay:
+            resp = client.post(
+                NOTIFY_COORD_URL.format(bootcamper_id=converted_bootcamper.id),
+                {"program_id": str(program.id), "source": "inventado"},
+                format="json",
+            )
+        assert resp.status_code == 400
+        mock_delay.assert_not_called()
+
+    def test_notify_coordinator_rejects_a_payment_of_someone_else(
+        self, db, finance_user, converted_bootcamper, bootcamper_user, program
+    ):
+        """El correo expondría datos de un pago ajeno."""
+        other_payment = Payment.objects.create(
+            bootcamper=bootcamper_user,
+            program=program,
+            receipt_file="receipts/other.jpg",
+            receipt_file_type="image",
+        )
+
+        client = make_client(finance_user)
+        with patch(
+            "apps.notifications.tasks.send_late_payment_alert.delay"
+        ) as mock_delay:
+            resp = client.post(
+                NOTIFY_COORD_URL.format(bootcamper_id=converted_bootcamper.id),
+                {
+                    "program_id": str(program.id),
+                    "source": "receipt_review",
+                    "payment_id": str(other_payment.id),
+                },
+                format="json",
+            )
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "INVALID_PAYMENT"
+        mock_delay.assert_not_called()
 
     def test_notify_coordinator_rejects_non_critical_payment(
         self, db, finance_user, converted_bootcamper, program

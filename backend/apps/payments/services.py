@@ -87,6 +87,59 @@ def resolve_upload_program(bootcamper, program_id=None):
     return active[0].bootcamp
 
 
+class ReceiptStorageError(Exception):
+    """El archivo del comprobante no se pudo escribir en el storage."""
+
+    message = 'No se pudo guardar el comprobante. Intenta de nuevo en unos minutos.'
+    code = 'RECEIPT_STORAGE_ERROR'
+
+
+def create_payment_with_receipt(bootcamper, program, file, file_type):
+    """Create the Payment, writing the receipt to storage.
+
+    El fallo de escritura (permisos del volumen de media, disco lleno) salía sin
+    capturar, así que Django respondía su página de error en HTML y el bootcamper
+    veía el traceback dentro del modal en vez de un mensaje.
+
+    Raises:
+        ReceiptStorageError: el archivo no se pudo escribir.
+    """
+    from django.core.exceptions import SuspiciousOperation
+
+    from .models import Payment
+
+    try:
+        return Payment.objects.create(
+            bootcamper=bootcamper,
+            program=program,
+            receipt_file=file,
+            receipt_file_type=file_type,
+            status=Payment.Status.DRAFT,
+        )
+    except (OSError, SuspiciousOperation) as exc:
+        logger.exception('Error guardando el comprobante del bootcamper %s.', bootcamper.id)
+        raise ReceiptStorageError from exc
+
+
+def queue_receipt_ocr(payment_id) -> bool:
+    """Encola el OCR del comprobante. Devuelve False si el broker no respondió.
+
+    `.delay()` publica en Redis dentro del request, así que si el broker está
+    caído levanta y tumbaba la subida entera con un 500. El comprobante ya está
+    guardado y Finanzas puede revisarlo a mano, así que se reporta el fallo y se
+    deja continuar: devolver error haría que el bootcamper vuelva a subir el
+    mismo archivo y duplique comprobantes.
+    """
+    from .tasks import process_payment_ocr
+
+    try:
+        process_payment_ocr.delay(str(payment_id))
+        return True
+    except Exception:
+        logger.exception('No se pudo encolar el OCR del pago %s.', payment_id)
+        return False
+
+
 class PaymentProgressService:
     """Calculate payment progress for a bootcamper in a program."""
 
