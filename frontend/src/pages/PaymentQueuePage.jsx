@@ -174,6 +174,7 @@ export default function PaymentQueuePage() {
             setSelectedPayment(null)
             showToast(msg)
           }}
+          onNotice={(msg, type) => showToast(msg, type)}
         />
       )}
 
