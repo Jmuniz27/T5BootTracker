@@ -261,24 +261,21 @@ def find_lead_by_phone(raw):
         return None
 
     subscriber = normalized[-SUBSCRIBER_DIGITS:]
-    matches = list(
-        Lead.objects
-        .annotate(phone_digits=Func(
-            F('phone'), Value('[^0-9]'), Value(''), Value('g'),
-            function='regexp_replace',
-        ))
-        .filter(phone_digits__endswith=subscriber)
-        .order_by('-created_at')
-    )
-    if not matches:
-        return None
+    candidates = Lead.objects.annotate(phone_digits=Func(
+        F('phone'), Value('[^0-9]'), Value(''), Value('g'),
+        function='regexp_replace',
+    ))
 
     # Dos leads pueden compartir el abonado si uno se guardó con código de país y
-    # el otro sin él: gana el que coincide entero, no el más reciente.
-    for lead in matches:
-        if normalize_phone(lead.phone) == normalized:
-            return lead
-    return matches[0]
+    # el otro sin él: gana el que coincide entero, no el más reciente. Son dos
+    # consultas acotadas y no una lista completa en memoria: el filtro corre por
+    # escaneo, y traerse todas las coincidencias alarga la ventana entre el SELECT
+    # y el INSERT del alta del bot.
+    exact = candidates.filter(phone_digits=normalized).order_by('-created_at').first()
+    if exact is not None:
+        return exact
+
+    return candidates.filter(phone_digits__endswith=subscriber).order_by('-created_at').first()
 
 
 @transaction.atomic
