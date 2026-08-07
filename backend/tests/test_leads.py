@@ -123,6 +123,89 @@ class TestLeadList:
         assert row['interaction_count'] == 1
 
 
+class TestLeadListReportFields:
+    """Campos que el reporte de leads (CB-58) exporta desde el listado.
+
+    La clienta pidió tres fechas —asignación, primera y última interacción— más
+    el último comentario registrado. Se anotan en LeadsListView._annotated_qs.
+    """
+
+    def _row(self, user, lead):
+        data = make_client(user).get(LEADS_URL).json()
+        todas = data['my_leads'] + data['available_leads']
+        return next(row for row in todas if row['id'] == str(lead.id))
+
+    def test_primera_y_ultima_interaccion_son_distintas(self, db, salesperson_user, assigned_lead):
+        vieja = Interaction.objects.create(
+            lead=assigned_lead, salesperson=salesperson_user,
+            interaction_type=Interaction.InteractionType.WHATSAPP,
+            outcome=Interaction.Outcome.SEND_INFO, notes='Primer contacto',
+        )
+        nueva = Interaction.objects.create(
+            lead=assigned_lead, salesperson=salesperson_user,
+            interaction_type=Interaction.InteractionType.CALL,
+            outcome=Interaction.Outcome.CALL_AGAIN, notes='Le volví a escribir',
+        )
+        # auto_now_add las deja casi simultáneas; se separan para que el orden
+        # sea inequívoco y el test no dependa de la resolución del reloj.
+        vieja.created_at = timezone.now() - timedelta(days=10)
+        vieja.save(update_fields=['created_at'])
+        nueva.created_at = timezone.now() - timedelta(days=1)
+        nueva.save(update_fields=['created_at'])
+
+        row = self._row(salesperson_user, assigned_lead)
+        assert row['first_interaction_at'][:10] == str(timezone.localtime(vieja.created_at).date())
+        assert row['last_interaction_at'][:10] == str(timezone.localtime(nueva.created_at).date())
+        assert row['last_note'] == 'Le volví a escribir'
+
+    def test_una_sola_interaccion_deja_ambas_fechas_iguales(self, db, salesperson_user, assigned_lead):
+        # La clienta lo dijo explícitamente: "si la última es igual a la primera
+        # no importa, pero igual que estén ahí las fechas".
+        Interaction.objects.create(
+            lead=assigned_lead, salesperson=salesperson_user,
+            interaction_type=Interaction.InteractionType.WHATSAPP,
+            outcome=Interaction.Outcome.AWAIT_REPLY, notes='Único contacto',
+        )
+
+        row = self._row(salesperson_user, assigned_lead)
+        assert row['first_interaction_at'] == row['last_interaction_at']
+        assert row['first_interaction_at'] is not None
+
+    def test_lead_sin_interacciones_devuelve_nulos(self, db, salesperson_user, sample_lead):
+        # Sin esto el reporte imprimiría "Invalid Date" en vez de una celda vacía.
+        row = self._row(salesperson_user, sample_lead)
+        assert row['first_interaction_at'] is None
+        assert row['last_interaction_at'] is None
+        assert row['last_note'] is None
+
+    def test_los_eventos_de_sistema_no_cuentan_como_contacto(self, db, salesperson_user, assigned_lead):
+        # Una reasignación no es un contacto con la persona: si contara, el
+        # reporte diría que se le escribió cuando en realidad nadie lo hizo.
+        Interaction.objects.create(
+            lead=assigned_lead, salesperson=salesperson_user,
+            interaction_type=Interaction.InteractionType.SYSTEM,
+            outcome=Interaction.Outcome.REASSIGNED, notes='Reasignado por admin',
+        )
+
+        row = self._row(salesperson_user, assigned_lead)
+        assert row['first_interaction_at'] is None
+        assert row['last_interaction_at'] is None
+        assert row['last_note'] is None
+
+    def test_el_listado_expone_la_fecha_de_asignacion(self, db, salesperson_user, assigned_lead):
+        # Vivía sólo en el serializer de detalle; el reporte la necesita por fila.
+        # La fecha la sella el service al asignar, así que acá se pone a mano.
+        assigned_lead.assigned_at = timezone.now() - timedelta(days=7)
+        assigned_lead.save(update_fields=['assigned_at'])
+
+        row = self._row(salesperson_user, assigned_lead)
+        assert row['assigned_at'][:10] == str(timezone.localtime(assigned_lead.assigned_at).date())
+
+    def test_un_lead_sin_dueno_no_trae_fecha_de_asignacion(self, db, salesperson_user, sample_lead):
+        row = self._row(salesperson_user, sample_lead)
+        assert row['assigned_at'] is None
+
+
 class TestLeadCreate:
     def test_lead_create_manual_with_is_company(self, db, salesperson_user):
         client = make_client(salesperson_user)
