@@ -27,6 +27,7 @@ export const STATUS_LABELS = {
   INTERESTED: 'Interesado',
   NOT_INTERESTED: 'No interesado',
   CONVERTED: 'Convertido',
+  DISCARDED: 'Descartado',
 }
 
 /**

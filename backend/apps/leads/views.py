@@ -24,11 +24,13 @@ from .serializers import (
     LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
     InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
     LeadAssignmentSettingSerializer, VerificationRejectSerializer,
+    LeadDiscardSerializer,
 )
 from .services import (
     register_interaction, convert_lead_to_bootcamper,
     get_self_assignment_enabled, set_self_assignment_enabled,
     find_duplicate_lead, reassign_lead_by_admin, resend_invitation,
+    discard_lead, restore_lead,
 )
 
 logger = logging.getLogger(__name__)
@@ -171,6 +173,12 @@ class LeadListCreateView(APIView):
 
         if status_filter:
             qs = qs.filter(status=status_filter)
+        else:
+            # #324: los descartados salen del seguimiento diario, que es para lo
+            # que la clienta pidió el estado ("como rayar los que ya no los
+            # llames"). Siguen siendo consultables filtrando por el estado —
+            # justamente para poder exportarlos.
+            qs = qs.exclude(status=Lead.Status.DISCARDED)
 
         only_mine = (params.get('my_leads', '').lower() in TRUTHY)
 
@@ -346,6 +354,71 @@ class LeadReleaseView(APIView):
         lead.assigned_at = None
         lead.save()
         return Response(LeadListSerializer(lead).data)
+
+
+class LeadDiscardView(APIView):
+    """PATCH /leads/{id}/discard/ — sacar el lead del listado, con motivo (#324)."""
+    permission_classes = [IsCommercialOrAdmin]
+
+    @extend_schema(
+        request=LeadDiscardSerializer,
+        responses={
+            200: LeadListSerializer,
+            400: OpenApiResponse(description='Motivo ausente/inválido, o lead ya descartado o convertido'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Descartar lead',
+        description=(
+            'Marca el lead como Descartado dejando la causal y, opcionalmente, un '
+            'detalle. La causal es obligatoria: es lo que permite agrupar por qué '
+            'se pierden los leads. Con la causal "Otro" el detalle pasa a ser obligatorio.'
+        ),
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        lead = get_object_or_404(Lead, pk=pk)
+        # El vendedor cierra lo suyo; el administrador, cualquiera.
+        if request.user.role != CustomUser.Role.ADMINISTRATOR and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede descartar este lead.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = LeadDiscardSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        lead = discard_lead(
+            pk, request.user,
+            serializer.validated_data['reason'],
+            serializer.validated_data.get('detail', ''),
+        )
+        return Response(LeadListSerializer(lead).data)
+
+
+class LeadRestoreView(APIView):
+    """PATCH /leads/{id}/restore/ — deshacer un descarte (#324)."""
+    permission_classes = [IsCommercialOrAdmin]
+
+    @extend_schema(
+        responses={
+            200: LeadListSerializer,
+            400: OpenApiResponse(description='El lead no está descartado'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Reactivar un lead descartado',
+        description='Devuelve el lead al estado que tenía antes de descartarlo.',
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        lead = get_object_or_404(Lead, pk=pk)
+        if request.user.role != CustomUser.Role.ADMINISTRATOR and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede reactivar este lead.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(LeadListSerializer(restore_lead(pk, request.user)).data)
 
 
 class LeadAdminReassignView(APIView):

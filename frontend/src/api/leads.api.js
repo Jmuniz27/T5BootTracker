@@ -88,6 +88,15 @@ export const updateInteraction = (leadId, interactionId, data) =>
 export const updateLeadStatus = (id, data) =>
   client.patch(`/leads/${id}/`, data).then((r) => r.data)
 
+// #324 — descartar exige motivo, por eso no va por el PATCH genérico: el
+// backend rechaza status=DISCARDED por esa vía justamente para que no haya
+// forma de cerrar un lead sin decir por qué.
+export const discardLead = (id, data) =>
+  client.patch(`/leads/${id}/discard/`, data).then((r) => r.data)
+
+export const restoreLead = (id) =>
+  client.patch(`/leads/${id}/restore/`).then((r) => r.data)
+
 export const updateLead = (id, data) =>
   client.patch(`/leads/${id}/`, data).then((r) => r.data)
 
