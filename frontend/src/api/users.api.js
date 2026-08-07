@@ -14,3 +14,10 @@ export const toggleUserActive = (id) =>
 
 export const resetUserPassword = (id) =>
   client.post(`/users/${id}/reset-password/`).then((r) => r.data)
+
+// CB-347: asignar/cambiar la cohorte de una inscripción de un bootcamper.
+// cohortId puede ser null para vaciarla.
+export const updateEnrollmentCohort = (bootcamperId, enrollmentId, cohortId) =>
+  client
+    .patch(`/users/${bootcamperId}/enrollments/${enrollmentId}/`, { cohort_id: cohortId })
+    .then((r) => r.data)
