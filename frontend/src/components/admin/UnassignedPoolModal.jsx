@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { assignBootcamper, getBootcamperPool } from '../../api/payments.api'
+import { assignBootcamper, bulkAssignBootcampers, getBootcamperPool } from '../../api/payments.api'
 import CustomSelect from '../CustomSelect'
 import Skeleton from '../ui/Skeleton'
 
@@ -21,17 +21,26 @@ function fmtMoney(value) {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function PoolRow({ item, financePeople, onAssign, isAssigning }) {
+function PoolRow({ item, financePeople, onAssign, isAssigning, isSelected, onToggleSelect }) {
   const [ownerId, setOwnerId] = useState('')
 
   return (
     <li className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="mb-3">
-        <p className="text-sm font-semibold text-gray-900 truncate">{item.bootcamper_name}</p>
-        <p className="text-xs text-gray-400 truncate">{item.email}</p>
-        <p className="text-xs text-gray-500 mt-1">
-          {item.program_name} · {fmtMoney(item.total_paid)} de {fmtMoney(item.total_cost)}
-        </p>
+      <div className="mb-3 flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect(item)}
+          aria-label={`Seleccionar a ${item.bootcamper_name}`}
+          className="mt-0.5 rounded border-gray-300 text-[#1D3176] focus:ring-[#1D3176]"
+        />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900 truncate">{item.bootcamper_name}</p>
+          <p className="text-xs text-gray-400 truncate">{item.email}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {item.program_name} · {fmtMoney(item.total_paid)} de {fmtMoney(item.total_cost)}
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
@@ -70,6 +79,20 @@ export default function UnassignedPoolModal({ financePeople = [], onClose, onDon
   })
   const pool = data?.available_bootcampers ?? []
 
+  // La selección va por bootcamper y no por fila: hay una fila por programa,
+  // pero el responsable de cobro es de la persona, no de su inscripción.
+  const [selected, setSelected] = useState(() => new Set())
+  const [bulkOwnerId, setBulkOwnerId] = useState('')
+
+  const toggleSelect = (item) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(item.bootcamper_id)) next.delete(item.bootcamper_id)
+      else next.add(item.bootcamper_id)
+      return next
+    })
+  }
+
   const mutation = useMutation({
     mutationFn: ({ item, ownerId }) => assignBootcamper(item.bootcamper_id, ownerId),
     onSuccess: (_data, { item }) => {
@@ -83,6 +106,41 @@ export default function UnassignedPoolModal({ financePeople = [], onClose, onDon
       onError(data?.error ?? 'No pudimos asignar. Intenta de nuevo.')
     },
   })
+
+  const bulkMutation = useMutation({
+    mutationFn: ({ ids, ownerId }) => bulkAssignBootcampers(ids, ownerId),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['bootcamper-pool'] })
+      queryClient.invalidateQueries({ queryKey: ['finance-portfolio'] })
+      setSelected(new Set())
+      setBulkOwnerId('')
+
+      const asignados = result?.assigned?.length ?? 0
+      const fallidos = result?.failed?.length ?? 0
+      // Se reporta lo que de verdad pasó: dar por asignada una tanda que falló
+      // a medias deja bootcampers sin responsable creyendo que están cubiertos.
+      if (fallidos > 0) {
+        onError(
+          `${asignados} asignado${asignados === 1 ? '' : 's'}, ` +
+          `${fallidos} no se pudo${fallidos === 1 ? '' : 'ieron'}: ${result.failed[0].error}`,
+        )
+      } else {
+        onDone(`${asignados} bootcamper${asignados === 1 ? '' : 's'} asignado${asignados === 1 ? '' : 's'}.`)
+      }
+    },
+    onError: (error) => {
+      onError(error?.response?.data?.error ?? 'No pudimos asignar la tanda. Intenta de nuevo.')
+    },
+  })
+
+  // Un bootcamper con dos programas aparece en dos filas: para el conteo y
+  // para la casilla de selección completa cuenta una sola vez.
+  const idsEnPool = [...new Set(pool.map((item) => item.bootcamper_id))]
+  const todosSeleccionados = idsEnPool.length > 0 && idsEnPool.every((id) => selected.has(id))
+
+  const toggleTodos = () => {
+    setSelected(todosSeleccionados ? new Set() : new Set(idsEnPool))
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -107,8 +165,21 @@ export default function UnassignedPoolModal({ financePeople = [], onClose, onDon
             </button>
           </div>
           <p className="text-sm text-gray-500">
-            Elige a quién de Finanzas le corresponde el cobro de cada uno.
+            Elige a quién de Finanzas le corresponde el cobro. Puedes marcar varios y
+            asignarlos de una vez.
           </p>
+
+          {pool.length > 0 && financePeople.length > 0 && (
+            <label className="mt-3 inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={todosSeleccionados}
+                onChange={toggleTodos}
+                className="rounded border-gray-300 text-[#1D3176] focus:ring-[#1D3176]"
+              />
+              Seleccionar todos ({idsEnPool.length})
+            </label>
+          )}
         </div>
 
         {/* pb generoso: sin él la última tarjeta queda cortada contra el borde. */}
@@ -147,13 +218,41 @@ export default function UnassignedPoolModal({ financePeople = [], onClose, onDon
                 key={`${item.bootcamper_id}-${item.program_id}`}
                 item={item}
                 financePeople={financePeople}
-                isAssigning={mutation.isPending}
+                isAssigning={mutation.isPending || bulkMutation.isPending}
+                isSelected={selected.has(item.bootcamper_id)}
+                onToggleSelect={toggleSelect}
                 onAssign={(target, ownerId) => mutation.mutate({ item: target, ownerId })}
               />
             ))}
           </ul>
         )}
         </div>
+
+        {selected.size > 0 && (
+          <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-5 sm:px-6 py-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">
+              {selected.size} seleccionado{selected.size === 1 ? '' : 's'}
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <div className="flex-1">
+                <CustomSelect
+                  value={bulkOwnerId}
+                  onChange={setBulkOwnerId}
+                  options={financePeople.map((p) => ({ value: p.finance_id, label: p.finance_name }))}
+                  placeholder="Asignar todos a…"
+                  ariaLabel="Responsable de cobro de la selección"
+                />
+              </div>
+              <button
+                onClick={() => bulkMutation.mutate({ ids: [...selected], ownerId: bulkOwnerId })}
+                disabled={!bulkOwnerId || bulkMutation.isPending}
+                className="px-4 py-2.5 bg-[#1D3176] text-white text-sm font-medium rounded-xl hover:bg-[#182861] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {bulkMutation.isPending ? 'Asignando…' : 'Asignar seleccionados'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
