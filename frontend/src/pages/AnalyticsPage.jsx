@@ -4,6 +4,7 @@ import AnalyticsFilters, { EMPTY_ANALYTICS_FILTERS } from '../components/analyti
 import AnalyticsKpiCards from '../components/analytics/AnalyticsKpiCards'
 import AnalyticsCharts from '../components/analytics/AnalyticsCharts'
 import SalespeopleActivity from '../components/admin/SalespeopleActivity'
+import SalespeopleComparison from '../components/analytics/SalespeopleComparison'
 
 /**
  * Dashboard de analítica (HST-024). Solo Administrador — la ruta va envuelta
@@ -29,6 +30,9 @@ import SalespeopleActivity from '../components/admin/SalespeopleActivity'
 const TABS = [
   { id: 'general', label: 'Vista General' },
   { id: 'vendedor', label: 'Vendedor' },
+  // #327: la de vendedor muestra a uno a la vez, así que comparar obligaba a
+  // cambiar de selección y acordarse de los números anteriores.
+  { id: 'comparativa', label: 'Comparativa' },
 ]
 
 const DEFAULT_TAB = 'general'
@@ -75,15 +79,15 @@ export default function AnalyticsPage() {
       </div>
 
       <div role="tabpanel" id={`panel-${activa}`} aria-labelledby={`tab-${activa}`}>
-        {activa === 'general' ? (
+        {activa === 'general' && (
           <>
             <AnalyticsFilters filters={filters} onChange={setFilters} />
             <AnalyticsKpiCards filters={filters} />
             <AnalyticsCharts filters={filters} />
           </>
-        ) : (
-          <SalespeopleActivity />
         )}
+        {activa === 'vendedor' && <SalespeopleActivity />}
+        {activa === 'comparativa' && <SalespeopleComparison />}
       </div>
     </div>
   )

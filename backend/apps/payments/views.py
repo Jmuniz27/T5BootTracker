@@ -95,21 +95,29 @@ class PaymentUploadView(APIView):
             201: PaymentListSerializer,
             400: OpenApiResponse(description='Archivo inválido, muy grande, o sin inscripción activa de la cual deducir el programa'),
             404: OpenApiResponse(description='Programa no encontrado'),
+            503: OpenApiResponse(description='El comprobante no se pudo guardar en el storage'),
         },
         summary='Subir comprobante de pago',
         description=(
             'El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR '
             'asíncrono. `program_id` es opcional: sin él, el programa se deduce de la '
-            'inscripción activa del bootcamper.'
+            'inscripción activa del bootcamper. La respuesta incluye `ocr_queued`: en '
+            'false el comprobante se guardó pero el OCR no se pudo encolar y lo revisa '
+            'Finanzas a mano.'
         ),
         tags=['Pagos — Bootcamper'],
     )
     def post(self, request):
         import os
         from apps.programs.models import Program
-        from .tasks import process_payment_ocr
         from .serializers import ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
-        from .services import UploadProgramError, resolve_upload_program
+        from .services import (
+            ReceiptStorageError,
+            UploadProgramError,
+            create_payment_with_receipt,
+            queue_receipt_ocr,
+            resolve_upload_program,
+        )
 
         serializer = PaymentUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -135,17 +143,20 @@ class PaymentUploadView(APIView):
             extension = os.path.splitext(file.name or '')[1].lower()
             file_type = ALLOWED_EXTENSIONS.get(extension, 'image')
 
-        payment = Payment.objects.create(
-            bootcamper=request.user,
-            program=program,
-            receipt_file=file,
-            receipt_file_type=file_type,
-            status=Payment.Status.DRAFT,
-        )
+        try:
+            payment = create_payment_with_receipt(request.user, program, file, file_type)
+        except ReceiptStorageError as exc:
+            return Response(
+                {'error': exc.message, 'code': exc.code},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
-        process_payment_ocr.delay(str(payment.id))
+        # El pago ya existe aunque el OCR no se haya podido encolar: se avisa para
+        # que el bootcamper sepa que su comprobante entró y no lo vuelva a subir.
+        data = PaymentListSerializer(payment).data
+        data['ocr_queued'] = queue_receipt_ocr(payment.id)
 
-        return Response(PaymentListSerializer(payment).data, status=status.HTTP_201_CREATED)
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class PaymentMyProgramsView(APIView):
@@ -931,6 +942,84 @@ class BootcamperAssignView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+
+class BootcamperBulkAssignView(APIView):
+    """PATCH /api/payments/bootcampers/bulk-assign/ — repartir varios de una (#326).
+
+    Mismo gesto que la asignación individual, en tanda. La clienta lo pidió
+    porque en su operación casi toda la cartera va a la misma persona de
+    Finanzas y sólo las empresas van a otra, así que repartir de a uno son N
+    clics para lo mismo.
+    """
+    permission_classes = [IsFinanceOrAdmin]
+
+    @extend_schema(
+        request=inline_serializer('BulkAssignBootcampersRequest', fields={
+            'bootcamper_ids':   drf_serializers.ListField(child=drf_serializers.UUIDField()),
+            'finance_owner_id': drf_serializers.UUIDField(required=False),
+        }),
+        responses={
+            200: inline_serializer('BulkAssignResult', fields={
+                'assigned': inline_serializer('BulkAssigned', fields=BOOTCAMPER_CARD_FIELDS, many=True),
+                'failed':   inline_serializer('BulkAssignFailure', fields={
+                    'bootcamper_id': drf_serializers.CharField(),
+                    'code':          drf_serializers.CharField(),
+                    'error':         drf_serializers.CharField(),
+                }, many=True),
+            }),
+            400: OpenApiResponse(description='Lista vacía, muy larga, o falta/es inválido finance_owner_id'),
+            403: OpenApiResponse(description='Auto-asignación deshabilitada por el Administrador'),
+        },
+        summary='Asignar varios bootcampers del pool',
+        description=(
+            'Asigna una tanda de bootcampers a una persona de Finanzas. Los que '
+            'fallan (ya asignados, inexistentes) no impiden que el resto se asigne: '
+            'la respuesta los lista en `failed` con su motivo.'
+        ),
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def patch(self, request):
+        from apps.authentication.models import CustomUser
+        from .services import MAX_BULK_ASSIGN, assign_bootcampers_in_bulk
+
+        if (
+            request.user.role != CustomUser.Role.ADMINISTRATOR
+            and not get_bootcamper_self_assignment_enabled()
+        ):
+            return Response(
+                {
+                    'error': 'La asignación de bootcampers la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        ids = request.data.get('bootcamper_ids') or []
+        if not isinstance(ids, list) or not ids:
+            return Response(
+                {'error': 'Indica al menos un bootcamper.', 'code': 'BOOTCAMPER_IDS_REQUIRED'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(ids) > MAX_BULK_ASSIGN:
+            return Response(
+                {
+                    'error': f'No se pueden asignar más de {MAX_BULK_ASSIGN} a la vez.',
+                    'code': 'BULK_LIMIT_EXCEEDED',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        owner, error = BootcamperAssignView._resolve_owner(request)
+        if error is not None:
+            return error
+
+        assigned, failed = assign_bootcampers_in_bulk(ids, owner)
+
+        return Response({
+            'assigned': PaymentProgressService().get_bootcamper_summaries(assigned),
+            'failed':   failed,
+        })
 
 
 class BootcamperReleaseView(APIView):

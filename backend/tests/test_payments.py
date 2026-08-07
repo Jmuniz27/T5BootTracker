@@ -156,6 +156,75 @@ class TestPaymentUpload:
         assert resp.status_code == 400
 
 
+class TestPaymentUploadInfrastructureFailures:
+    """Un fallo de infraestructura no puede salir como la página HTML de Django.
+
+    En producción gunicorn corre como appuser y el volumen de media estaba en
+    poder de root, así que escribir el comprobante levantaba PermissionError: el
+    bootcamper veía el HTML del error 500 renderizado dentro del modal.
+    """
+
+    def test_storage_failure_answers_json_not_html(self, db, converted_bootcamper, program):
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch(
+            "apps.payments.models.Payment.objects.create",
+            side_effect=PermissionError("Permission denied: /app/media/receipts"),
+        ):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+
+        assert resp.status_code == 503
+        assert resp["Content-Type"].startswith("application/json")
+        assert resp.json()["code"] == "RECEIPT_STORAGE_ERROR"
+
+    def test_broker_down_still_keeps_the_receipt(self, db, converted_bootcamper, program):
+        """Redis caído no puede invalidar la subida: el pago ya se guardó.
+
+        Devolver error haría que el bootcamper vuelva a subir el mismo archivo y
+        duplique comprobantes, cuando Finanzas ya puede revisarlo a mano.
+        """
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch(
+            "apps.payments.tasks.process_payment_ocr.delay",
+            side_effect=OSError("Error 111 connecting to redis:6379"),
+        ):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+
+        assert resp.status_code == 201
+        assert resp.json()["ocr_queued"] is False
+        assert Payment.objects.filter(
+            bootcamper=converted_bootcamper, program=program
+        ).exists()
+
+    def test_successful_upload_reports_the_ocr_as_queued(self, db, converted_bootcamper, program):
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch("apps.payments.tasks.process_payment_ocr.delay"):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+
+        assert resp.status_code == 201
+        assert resp.json()["ocr_queued"] is True
+
+
 class TestPaymentMyPrograms:
     def test_bootcamper_with_enrollment_sees_program(self, db, converted_bootcamper, active_enrollment, program):
         client = make_client(converted_bootcamper)

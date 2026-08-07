@@ -70,16 +70,43 @@ class AdminUserSerializer(CoordinatorScopeMixin, UserDataSerializer):
     asignación de coordinador exclusivamente para el panel de administración.
     """
     coordinator_program_names = serializers.SerializerMethodField()
+    enrollments = serializers.SerializerMethodField()
 
     class Meta(UserDataSerializer.Meta):
         fields = UserDataSerializer.Meta.fields + ('cedula', 'verification_status') + COORDINATOR_FIELDS + (
-            'coordinator_program_names',
+            'coordinator_program_names', 'enrollments',
         )
         read_only_fields = UserDataSerializer.Meta.read_only_fields + ('verification_status',)
 
     def get_coordinator_program_names(self, obj):
         """Nombres para pintar la tabla sin que el cliente cruce ids."""
         return [p.name for p in obj.coordinator_programs.all()]
+
+    def get_enrollments(self, obj):
+        """Programa y cohorte del bootcamper (#328).
+
+        La clienta los agrupa mentalmente por cohorte, así que la tabla de
+        usuarios tiene que decirlo. Se devuelve la lista completa —hay quien
+        cursa más de un programa— y la interfaz decide cómo mostrarla; resolver
+        acá cuál es "el" programa sería elegir por ella.
+
+        Sale de Enrollment, la misma fuente que usa la cartera de Finanzas, para
+        que las dos pantallas no digan cosas distintas del mismo bootcamper.
+        """
+        if obj.role != CustomUser.Role.BOOTCAMPER:
+            return []
+
+        return [
+            {
+                'program_id':    str(enrollment.bootcamp_id),
+                'program_name':  enrollment.bootcamp.name,
+                'cohort_id':     str(enrollment.cohort_id) if enrollment.cohort_id else None,
+                'cohort_number': enrollment.cohort.number if enrollment.cohort else None,
+                'cohort_status': enrollment.cohort.status if enrollment.cohort else None,
+            }
+            # Prefetch en UserViewSet.get_queryset: sin él esto sería un N+1 por fila.
+            for enrollment in obj.enrollments.all()
+        ]
 
 
 class CreateUserSerializer(CoordinatorScopeMixin, serializers.ModelSerializer):

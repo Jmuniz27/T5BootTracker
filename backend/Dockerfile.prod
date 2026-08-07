@@ -22,5 +22,12 @@ RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 COPY . .
 
+# `media/` está en .dockerignore, así que /app/media no existe en la imagen. Al
+# montar el volumen `media_data` encima, Docker crea el punto de montaje como
+# root:root y gunicorn —que corre como appuser— no puede escribir el comprobante:
+# la subida moría con PermissionError y un 500 de HTML.
+# Creándolo acá, el volumen hereda el dueño del directorio que ya existe.
+RUN mkdir -p /app/media /app/staticfiles
+
 RUN chown -R appuser:appgroup /app
 USER appuser
