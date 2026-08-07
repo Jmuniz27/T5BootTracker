@@ -144,6 +144,15 @@ describe('OnboardingPage — consentimiento de uso de datos (#329)', () => {
     expect(screen.getByRole('checkbox', { name: /acepto/i })).not.toBeChecked();
   });
 
+  it('la casilla no se deforma cuando el texto ocupa varias líneas', async () => {
+    const user = userEvent.setup();
+    await llegarAlPaso2(user);
+
+    // La frase del consentimiento envuelve en tres líneas en un teléfono, y un
+    // checkbox flex sin ancho intrínseco se aplastaba hasta quedar una elipse.
+    expect(screen.getByRole('checkbox', { name: /acepto/i })).toHaveClass('h-4', 'w-4', 'shrink-0');
+  });
+
   it('sin aceptar no se activa la cuenta', async () => {
     const user = userEvent.setup();
     const [passwordInput, confirmInput] = await llegarAlPaso2(user);
