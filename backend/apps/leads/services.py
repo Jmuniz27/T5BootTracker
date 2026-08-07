@@ -366,9 +366,22 @@ def bot_create_lead(validated_data):
 
 
 def bot_update_lead_by_phone(raw_phone, validated_data):
-    """Apply the bot's fields to the lead ``raw_phone`` resolves to, or None."""
+    """Apply the bot's fields to the lead ``raw_phone`` resolves to, or None.
+
+    Un lead convertido queda fuera de alcance. Detrás hay un bootcamper con
+    matrícula y pagos, y su correo es por donde le llegan las notificaciones de
+    cobro y la invitación de onboarding: dejar que el bot lo reescriba deja a
+    cualquiera que conozca el teléfono pisando ese canal. El resto de la
+    superficie ya parte de no confiar en el llamador —el backend fija ``source``,
+    ``status`` y ``owner``—, y esto es lo mismo. La vista lo responde como
+    ``updated: false``, que es una rama que el flujo del bot ya maneja.
+    """
     lead = find_lead_by_phone(raw_phone)
     if lead is None:
+        return None
+
+    if lead.status == Lead.Status.CONVERTED:
+        logger.warning('El bot intentó actualizar un lead ya convertido: %s', lead.id)
         return None
 
     updated_fields = []

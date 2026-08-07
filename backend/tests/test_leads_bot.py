@@ -387,6 +387,52 @@ class TestBotLeadUpdateByPhone:
 
         assert Lead.objects.get(phone='0991000012').program == program
 
+    def test_refuses_to_touch_a_converted_lead(self, bot_client):
+        """Detrás de un lead convertido hay un bootcamper con matrícula y pagos.
+
+        Su correo es el canal de las notificaciones de cobro y del onboarding: si
+        el bot puede reescribirlo, cualquiera que conozca el teléfono le desvía
+        esos avisos.
+        """
+        lead = Lead.objects.create(
+            name='Bootcamper Real', phone='0991000013',
+            email='real@espol.edu.ec', status=Lead.Status.CONVERTED,
+        )
+
+        response = bot_client.patch(by_phone_url('593991000013'), {
+            'name': 'Pisado Por El Bot',
+            'email': 'otro@example.com',
+        }, format='json')
+
+        assert response.status_code == 200
+        assert response.data['updated'] is False
+
+        lead.refresh_from_db()
+        assert lead.name == 'Bootcamper Real'
+        assert lead.email == 'real@espol.edu.ec'
+        assert lead.status == Lead.Status.CONVERTED
+
+    @pytest.mark.parametrize('status_value', [
+        Lead.Status.NEW,
+        Lead.Status.QUALIFIED,
+        Lead.Status.INTERESTED,
+        Lead.Status.NOT_INTERESTED,
+        Lead.Status.DISCARDED,
+    ])
+    def test_still_updates_every_non_converted_status(self, bot_client, status_value):
+        """Sólo CONVERTED queda fuera: un descartado que vuelve a escribir se recapta."""
+        lead = Lead.objects.create(
+            name='Antes', phone='0991000014', status=status_value,
+        )
+
+        response = bot_client.patch(
+            by_phone_url('593991000014'), {'name': 'Despues'}, format='json',
+        )
+
+        assert response.data['updated'] is True
+        lead.refresh_from_db()
+        assert lead.name == 'Despues'
+
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures('bot_secret')
