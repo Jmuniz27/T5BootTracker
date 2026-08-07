@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
+import ExportMenu from '../components/ExportMenu'
+import { LEAD_REPORT_COLUMNS, SOURCE_LABELS, STATUS_LABELS } from '../lib/leadsReport'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, getAllLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
@@ -15,13 +17,6 @@ const PAGE_SIZE = 10
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const SOURCE_LABELS = {
-  INSTAGRAM: 'Instagram',
-  WHATSAPP: 'WhatsApp',
-  LANDING_PAGE: 'Landing Page',
-  MANUAL: 'Manual',
-}
-
 const AVATAR_COLORS = [
   'bg-[#213A8E]',
   'bg-violet-500',
@@ -32,14 +27,6 @@ const AVATAR_COLORS = [
   'bg-pink-500',
   'bg-indigo-500',
 ]
-
-const STATUS_LABELS = {
-  NEW: 'Nuevo',
-  QUALIFIED: 'Calificado',
-  INTERESTED: 'Interesado',
-  NOT_INTERESTED: 'No interesado',
-  CONVERTED: 'Convertido',
-}
 
 const STATUS_COLORS = {
   NEW: 'bg-gray-100 text-gray-500',
@@ -719,6 +706,33 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
 // ─── View Lead Modal ──────────────────────────────────────────────────────────
 
+/**
+ * Quién tiene el lead y desde cuándo.
+ *
+ * La clienta lo pidió como su medida de leads abandonados: quiere ver de un
+ * vistazo cuánto lleva alguien sentado sobre el mismo lead. Por eso van juntos
+ * el vendedor, la fecha y los días — la fecha sola obliga a hacer la cuenta.
+ *
+ * `days_assigned` lo calcula el backend, que además lo congela en la fecha de
+ * liberación si el lead ya se soltó (CR-006).
+ */
+export function assignmentLabel(lead) {
+  if (!lead?.owner) return 'Sin asignar'
+
+  const nombre = lead.owner_name ?? 'Vendedor'
+  const fecha = lead.assigned_at ? new Date(lead.assigned_at) : null
+
+  if (!fecha || Number.isNaN(fecha.getTime())) return nombre
+
+  const desde = fecha.toLocaleDateString('es-EC', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  })
+  const dias = lead.days_assigned
+  if (dias == null) return `${nombre} · desde el ${desde}`
+
+  return `${nombre} · desde el ${desde} (${dias} ${dias === 1 ? 'día' : 'días'})`
+}
+
 function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
   const queryClient = useQueryClient()
   const { data: interactions = [] } = useQuery({
@@ -790,6 +804,10 @@ function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
           <div>
             <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
             <p className="text-gray-600">{SOURCE_LABELS[lead.source] || lead.source}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700 mb-0.5">Asignación:</p>
+            <p className="text-gray-600" data-testid="lead-assignment">{assignmentLabel(lead)}</p>
           </div>
           {lastInteraction?.notes && (
             <div>
@@ -2219,11 +2237,15 @@ export default function LeadsDashboard() {
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1) }, [search, statusFilter, sourceFilter, companyFilter, sortKey, vendorFilter])
 
-  const queryParams = { page, page_size: PAGE_SIZE }
-  if (search) queryParams.search = search
-  if (statusFilter) queryParams.status = statusFilter
-  if (sourceFilter) queryParams.source = sourceFilter
-  if (isAdmin && vendorFilter) queryParams.vendedor = vendorFilter
+  // Filtros de servidor, sin paginación: la grilla les suma la página y el
+  // reporte los reusa tal cual para recorrerlas todas.
+  const filterParams = {}
+  if (search) filterParams.search = search
+  if (statusFilter) filterParams.status = statusFilter
+  if (sourceFilter) filterParams.source = sourceFilter
+  if (isAdmin && vendorFilter) filterParams.vendedor = vendorFilter
+
+  const queryParams = { ...filterParams, page, page_size: PAGE_SIZE }
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['leads', queryParams],
@@ -2287,6 +2309,54 @@ export default function LeadsDashboard() {
     tabLeads.filter((l) => !companyFilter || l.is_company),
     sortKey,
   )
+
+  // ─── Reporte de leads (CB-58) ───────────────────────────────────────────────
+  // Se exporta la partición que se está viendo, con los mismos filtros que la
+  // pantalla. La clienta pidió justamente lo contrario de exportarlo entero:
+  // quiere sacar sólo a los interesados para escribirles.
+  const TAB_BUCKET = {
+    mine:       'my_leads',
+    available:  'available_leads',
+    converted:  'converted_leads',
+    all:        'all_leads',
+    assigned:   'assigned_leads',
+    unassigned: 'unassigned_leads',
+  }
+
+  const TAB_REPORT_LABEL = {
+    mine:       'Mis leads',
+    available:  'Disponibles',
+    converted:  'Convertidos',
+    all:        'Todos',
+    assigned:   'Asignados',
+    unassigned: 'Sin asignar',
+  }
+
+  const reportSubtitle = [
+    TAB_REPORT_LABEL[activeTab],
+    statusFilter && `Estado: ${STATUS_LABELS[statusFilter] ?? statusFilter}`,
+    sourceFilter && `Fuente: ${SOURCE_LABELS[sourceFilter] ?? sourceFilter}`,
+    search && `Búsqueda: "${search}"`,
+    companyFilter && 'Sólo empresas',
+  ].filter(Boolean).join(' · ')
+
+  const fetchReportRows = async () => {
+    const { rows, truncated } = await getAllLeads(TAB_BUCKET[activeTab], filterParams)
+
+    if (truncated) {
+      // Nunca truncar en silencio: un reporte incompleto que se ve completo es
+      // peor que no tenerlo.
+      showToast('El reporte es muy grande y se exportó sólo una parte. Filtra para acotarlo.', 'error')
+    }
+
+    // Mismos filtros de cliente que la grilla, para que el archivo diga lo
+    // mismo que la pantalla.
+    const visibles = activeTab === 'mine'
+      ? rows.filter((l) => l.status !== 'CONVERTED')
+      : rows
+
+    return sortLeads(visibles.filter((l) => !companyFilter || l.is_company), sortKey)
+  }
 
   const assignMutation = useMutation({
     mutationFn: assignLead,
@@ -2374,6 +2444,15 @@ export default function LeadsDashboard() {
         <h1 className="text-2xl font-bold text-gray-900">
           Dashboard de Leads
         </h1>
+        <div className="flex items-center gap-2">
+        <ExportMenu
+          columns={LEAD_REPORT_COLUMNS}
+          fetchRows={fetchReportRows}
+          baseName="reporte-leads"
+          title="Reporte de leads"
+          subtitle={reportSubtitle}
+          onError={(msg) => showToast(msg, 'error')}
+        />
         <button
           data-testid="new-lead-button"
           onClick={() => setShowCreate(true)}
@@ -2384,6 +2463,7 @@ export default function LeadsDashboard() {
           </svg>
           Nuevo lead
         </button>
+        </div>
       </div>
 
       {/* Stat Cards */}
