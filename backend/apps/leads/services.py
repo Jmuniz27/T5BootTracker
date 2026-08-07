@@ -55,6 +55,12 @@ def register_interaction(lead, user, validated_data):
         update_fields.append('status')
 
     lead.save(update_fields=update_fields)
+
+    # Se sella después de guardar el lead: la interacción se crea antes de que se
+    # recalcule el estado, así que hacerlo arriba grabaría el estado anterior.
+    interaction.lead_status = lead.status
+    interaction.save(update_fields=['lead_status'])
+
     return interaction
 
 
@@ -271,6 +277,7 @@ def reassign_lead_by_admin(lead_id, admin_user, new_owner=None):
         interaction_type=Interaction.InteractionType.SYSTEM,
         outcome=Interaction.Outcome.REASSIGNED,
         notes=notes,
+        lead_status=lead.status,
     )
 
     return lead
@@ -350,6 +357,7 @@ def discard_lead(lead_id, user, reason, detail=''):
             salesperson=user,
             interaction_type=Interaction.InteractionType.SYSTEM,
             outcome=Interaction.Outcome.DISCARDED,
+            lead_status=lead.status,
             notes=(
                 f'Lead descartado por {user.get_full_name()}. '
                 f'Motivo: {lead.get_discard_reason_display()}.'
@@ -398,6 +406,7 @@ def restore_lead(lead_id, user):
             salesperson=user,
             interaction_type=Interaction.InteractionType.SYSTEM,
             outcome=Interaction.Outcome.RESTORED,
+            lead_status=lead.status,
             notes=f'Descarte deshecho por {user.get_full_name()}. Vuelve a {lead.get_status_display()}.',
         )
 
