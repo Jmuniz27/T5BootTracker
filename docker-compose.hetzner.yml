@@ -40,6 +40,25 @@ services:
     networks:
       - boottracker-network
 
+  # El volumen media_data se creó cuando /app/media no existía en la imagen, así
+  # que Docker lo hizo root:root — y gunicorn corre como appuser (uid 100), que no
+  # podía escribir el comprobante: la subida devolvía un 500. El Dockerfile ya crea
+  # /app/media, pero eso sólo aplica a volúmenes vacíos: el que está en el VPS ya
+  # tiene comprobantes, así que hay que corregirle el dueño una vez.
+  #
+  # Corre como root, arregla y sale. Es idempotente: en los deploys siguientes no
+  # cambia nada. No se puede borrar hasta confirmar que ningún entorno arrastra un
+  # media_data root-owned.
+  media-permissions:
+    image: ghcr.io/jmuniz27/boot-tracker-backend:${IMAGE_TAG:-latest}
+    user: root
+    command: chown -R appuser:appgroup /app/media
+    volumes:
+      - media_data:/app/media
+    restart: "no"
+    networks:
+      - boottracker-network
+
   backend:
     image: ghcr.io/jmuniz27/boot-tracker-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -56,6 +75,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      media-permissions:
+        condition: service_completed_successfully
     networks:
       - boottracker-network
     volumes:
@@ -87,6 +108,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      media-permissions:
+        condition: service_completed_successfully
     networks:
       - boottracker-network
     volumes:
