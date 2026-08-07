@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
@@ -14,7 +15,15 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../src/theme/colors';
 import { useQuickCall } from '../../../../src/hooks/use-quick-call';
-import { assignLead, releaseLead, updateLeadStatus, getLead, resendInvitation } from '../../../../src/api/leads.api';
+import {
+  assignLead,
+  releaseLead,
+  updateLeadStatus,
+  getLead,
+  resendInvitation,
+  discardLead,
+  restoreLead,
+} from '../../../../src/api/leads.api';
 import type { Lead, LeadStatus } from '../../../../src/types/leads';
 import { copyInvitationLink, shareInvitationLink } from '../../../../src/lib/invitation';
 
@@ -24,10 +33,19 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }
   INTERESTED:     { label: 'Interesado',    bg: '#dcfce7', color: '#15803d' },
   NOT_INTERESTED: { label: 'No interesado', bg: '#fee2e2', color: '#dc2626' },
   CONVERTED:      { label: 'Convertido',    bg: '#f3e8ff', color: '#7e22ce' },
+  DISCARDED:      { label: 'Descartado',    bg: '#f1f5f9', color: '#64748b' },
 };
 
 // "Nuevo" no es una opción manual: un lead nace en NEW y avanza desde ahí.
 const ASSIGNABLE: LeadStatus[] = ['QUALIFIED', 'INTERESTED', 'NOT_INTERESTED'];
+
+const DISCARD_REASONS: { value: string; label: string }[] = [
+  { value: 'NO_BUDGET',   label: 'Sin presupuesto' },
+  { value: 'SCHEDULE',    label: 'Los horarios no le sirven' },
+  { value: 'NO_RESPONSE', label: 'No responde / los correos rebotan' },
+  { value: 'FREE_ONLY',   label: 'Sólo busca contenido gratis' },
+  { value: 'OTHER',       label: 'Otro' },
+];
 
 const SOURCE_LABEL: Record<string, string> = {
   INSTAGRAM: 'Instagram',
@@ -70,6 +88,10 @@ export default function LeadDetailScreen() {
   const [resendLink, setResendLink] = useState<string | null>(null);
   const [resendError, setResendError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [discardReason, setDiscardReason] = useState('');
+  const [discardDetail, setDiscardDetail] = useState('');
+  const [discardError, setDiscardError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,6 +107,7 @@ export default function LeadDetailScreen() {
   const cfg = status ? STATUS_CONFIG[status] : null;
   const isQualified = status === 'QUALIFIED';
   const isConverted = status === 'CONVERTED';
+  const isDiscarded = status === 'DISCARDED';
 
   function go(path: '/(app)/leads/[id]/log-interaction' | '/(app)/leads/[id]/history' | '/(app)/leads/[id]/convert') {
     router.push({ pathname: path, params: { id: lead.id, name: lead.name, status: lead.status ?? '' } });
@@ -117,6 +140,46 @@ export default function LeadDetailScreen() {
     setBusy(true);
     try {
       await releaseLead(lead.id);
+      router.back();
+    } catch {
+      setBusy(false);
+    }
+  }
+
+  function openDiscard() {
+    setDiscardReason('');
+    setDiscardDetail('');
+    setDiscardError(null);
+    setDiscardOpen(true);
+  }
+
+  async function submitDiscard() {
+    if (!discardReason) {
+      setDiscardError('Elige un motivo.');
+      return;
+    }
+    if (discardReason === 'OTHER' && !discardDetail.trim()) {
+      setDiscardError('Con el motivo “Otro” hay que escribir el detalle.');
+      return;
+    }
+    setBusy(true);
+    setDiscardError(null);
+    try {
+      await discardLead(lead.id, { reason: discardReason, detail: discardDetail.trim() });
+      setDiscardOpen(false);
+      // Al descartar se desasigna: volvemos al listado.
+      router.back();
+    } catch (err: any) {
+      setDiscardError(err?.response?.data?.error ?? 'No se pudo descartar el lead.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restore() {
+    setBusy(true);
+    try {
+      await restoreLead(lead.id);
       router.back();
     } catch {
       setBusy(false);
@@ -219,6 +282,12 @@ export default function LeadDetailScreen() {
           {isConverted ? (
             <InfoRow icon="ribbon-outline" label="Convertido por" value={lead.owner_name} />
           ) : null}
+          {isDiscarded ? (
+            <>
+              <InfoRow icon="close-circle-outline" label="Motivo" value={lead.discard_reason_display} />
+              <InfoRow icon="document-text-outline" label="Detalle" value={lead.discard_detail} />
+            </>
+          ) : null}
         </View>
 
         <View style={s.actions}>
@@ -243,6 +312,24 @@ export default function LeadDetailScreen() {
               {resendError && (
                 <Text style={s.hint}>{resendError}</Text>
               )}
+            </>
+          ) : isDiscarded ? (
+            <>
+              <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.85}>
+                <Ionicons name="time-outline" size={18} color={colors.white} />
+                <Text style={s.actionPrimaryText}>Ver historial</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={s.actionGhost} onPress={restore} disabled={busy} activeOpacity={0.8}>
+                {busy ? (
+                  <ActivityIndicator size="small" color={colors.navy} />
+                ) : (
+                  <>
+                    <Ionicons name="refresh-outline" size={18} color={colors.navy} />
+                    <Text style={s.actionGhostText}>Reactivar lead</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </>
           ) : owned ? (
             <>
@@ -281,6 +368,11 @@ export default function LeadDetailScreen() {
                 </TouchableOpacity>
               )}
 
+              <TouchableOpacity style={s.actionGhost} onPress={openDiscard} disabled={busy} activeOpacity={0.8}>
+                <Ionicons name="close-circle-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>Descartar lead</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity style={s.actionDanger} onPress={release} disabled={busy} activeOpacity={0.8}>
                 {busy ? (
                   <ActivityIndicator size="small" color={colors.error} />
@@ -294,16 +386,23 @@ export default function LeadDetailScreen() {
               )}
             </>
           ) : (
-            <TouchableOpacity style={s.actionPrimary} onPress={assign} disabled={busy} activeOpacity={0.85}>
-              {busy ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <>
-                  <Ionicons name="add-outline" size={18} color={colors.white} />
-                  <Text style={s.actionPrimaryText}>Asignarme</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.8}>
+                <Ionicons name="time-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>Ver historial</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={s.actionPrimary} onPress={assign} disabled={busy} activeOpacity={0.85}>
+                {busy ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <>
+                    <Ionicons name="add-outline" size={18} color={colors.white} />
+                    <Text style={s.actionPrimaryText}>Asignarme</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </ScrollView>
@@ -331,6 +430,57 @@ export default function LeadDetailScreen() {
               );
             })}
           </View>
+        </Pressable>
+      </Modal>
+
+      {/* Descartar lead */}
+      <Modal visible={discardOpen} transparent animationType="fade" onRequestClose={() => setDiscardOpen(false)}>
+        <Pressable style={s.overlay} onPress={() => setDiscardOpen(false)}>
+          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>Descartar lead</Text>
+            <Text style={s.discardHint}>Sale del listado de seguimiento. Se puede reactivar después.</Text>
+
+            {DISCARD_REASONS.map((r) => {
+              const active = discardReason === r.value;
+              return (
+                <TouchableOpacity
+                  key={r.value}
+                  style={[s.statusOption, active && { borderColor: colors.navy, backgroundColor: '#eff2fb' }]}
+                  onPress={() => setDiscardReason(r.value)}
+                  disabled={busy}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.statusOptionText, active && { color: colors.navy, fontWeight: '700' }]}>{r.label}</Text>
+                  {active && <Ionicons name="checkmark-circle" size={18} color={colors.navy} />}
+                </TouchableOpacity>
+              );
+            })}
+
+            <TextInput
+              style={s.discardInput}
+              value={discardDetail}
+              onChangeText={setDiscardDetail}
+              placeholder={discardReason === 'OTHER' ? 'Detalle (obligatorio)' : 'Detalle (opcional)'}
+              placeholderTextColor={colors.textMuted}
+              multiline
+            />
+
+            {discardError && <Text style={s.hint}>{discardError}</Text>}
+
+            <View style={s.resultActions}>
+              <TouchableOpacity style={[s.actionGhost, { flex: 1 }]} onPress={() => setDiscardOpen(false)} disabled={busy} activeOpacity={0.8}>
+                <Text style={s.actionGhostText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.actionPrimary, { flex: 1 }]} onPress={submitDiscard} disabled={busy} activeOpacity={0.85}>
+                {busy ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={s.actionPrimaryText}>Descartar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
         </Pressable>
       </Modal>
 
@@ -474,4 +624,18 @@ const s = StyleSheet.create({
     backgroundColor: '#f8f9fb',
   },
   statusOptionText: { fontSize: 14, fontWeight: '500', color: colors.textMuted },
+  discardHint: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: -8, marginBottom: 16 },
+  discardInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: colors.textPrimary,
+    minHeight: 64,
+    textAlignVertical: 'top',
+    marginTop: 8,
+    marginBottom: 12,
+  },
 });

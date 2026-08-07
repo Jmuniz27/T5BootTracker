@@ -45,6 +45,7 @@ const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: stri
   INTERESTED:     { bg: '#dcfce7', color: '#15803d', label: 'Interesado' },
   NOT_INTERESTED: { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
   CONVERTED:      { bg: '#f3e8ff', color: '#7e22ce', label: 'Convertido' },
+  DISCARDED:      { bg: '#f1f5f9', color: '#64748b', label: 'Descartado' },
 };
 
 const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
@@ -54,6 +55,7 @@ const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
   { value: 'INTERESTED',     label: 'Interesado' },
   { value: 'NOT_INTERESTED', label: 'No interesado' },
   { value: 'CONVERTED',      label: 'Convertido' },
+  { value: 'DISCARDED',      label: 'Descartado' },
 ];
 
 const AVATAR_PALETTE = ['#213A8E', '#8b5cf6', '#14b8a6', '#f43f5e', '#f59e0b', '#0891b2', '#ec4899', '#6366f1'];

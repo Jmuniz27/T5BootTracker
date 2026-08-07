@@ -339,10 +339,17 @@ def discard_lead(lead_id, user, reason, detail=''):
         lead.discard_detail = detail
         lead.discarded_at = now()
         lead.discarded_by = user
+        # Al descartar, el lead se desasigna: sale del vendedor y, al reactivarlo,
+        # queda Disponible para que cualquiera lo retome (CR-006 cierra la tenencia).
+        if lead.owner is not None:
+            lead.released_at = now()
+        lead.owner = None
+        lead.assigned_at = None
         lead.version += 1
         lead.save(update_fields=[
             'status', 'status_before_discard', 'discard_reason', 'discard_detail',
-            'discarded_at', 'discarded_by', 'version', 'updated_at',
+            'discarded_at', 'discarded_by', 'owner', 'assigned_at', 'released_at',
+            'version', 'updated_at',
         ])
 
         Interaction.objects.create(
