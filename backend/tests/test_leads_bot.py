@@ -292,6 +292,49 @@ class TestBotLeadCreate:
         assert bot_client.post(CREATE_URL, payload, format='json').status_code == 400
 
 
+@pytest.mark.django_db(transaction=True)
+class TestBotLeadCreateIsRaceFree:
+    """El alta concurrente del mismo teléfono no puede dejar dos leads.
+
+    Va aparte porque necesita ``transaction=True``: con la transacción envolvente
+    de pytest-django los hilos no verían nada de lo que insertan los demás y el
+    test pasaría con el defecto puesto. Es el caso real del bot, que reintenta por
+    diseño y manda varias veces la misma conversación.
+    """
+
+    THREADS = 8
+
+    def test_concurrent_creates_of_the_same_phone_leave_one_lead(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        from django.db import connection as db_connection
+
+        from apps.leads.services import bot_create_lead
+
+        def create():
+            try:
+                return bot_create_lead({'phone': '593991000099', 'name': 'Concurrente'})
+            finally:
+                # Cada hilo abre su propia conexión; sin cerrarla queda colgada y
+                # el teardown de la base se bloquea.
+                db_connection.close()
+
+        try:
+            with ThreadPoolExecutor(max_workers=self.THREADS) as pool:
+                results = [future.result() for future in
+                           [pool.submit(create) for _ in range(self.THREADS)]]
+
+            leads = Lead.objects.filter(phone='593991000099')
+            assert leads.count() == 1, (
+                f'{leads.count()} leads para el mismo teléfono: el alta duplica bajo '
+                f'concurrencia'
+            )
+            assert sum(1 for _, created in results if created) == 1, \
+                'exactamente una petición debe reportar created=True'
+        finally:
+            Lead.all_objects.filter(phone='593991000099').delete()
+
+
 @pytest.mark.django_db
 class TestBotLeadUpdateByPhone:
     """The bot only knows the phone, so the update resolves the lead from it."""

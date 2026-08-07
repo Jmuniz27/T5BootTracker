@@ -2,7 +2,7 @@
 import logging
 from decimal import Decimal
 
-from django.db import transaction, IntegrityError
+from django.db import connection, transaction, IntegrityError
 from django.db.models import F, Func, Q, Value
 from django.utils.timezone import now
 from rest_framework.exceptions import ValidationError, NotFound, APIException
@@ -324,6 +324,7 @@ def bot_lookup_payload(raw_phone):
     }
 
 
+@transaction.atomic
 def bot_create_lead(validated_data):
     """Create a WhatsApp lead in the unassigned pool. Returns ``(lead, created)``.
 
@@ -331,6 +332,21 @@ def bot_create_lead(validated_data):
     el bot vuelve a pasar por aquí cada vez que la misma persona retoma la
     conversación, y duplicar sería el defecto que este endpoint evita.
     """
+    # Comprobar-y-luego-crear no basta: el bot reintenta por diseño, y dos
+    # peticiones del mismo teléfono a la vez pasan las dos por el SELECT antes de
+    # que ninguna haya insertado. Medido, duplicaba hasta 4 veces el mismo número.
+    # El lock es por número de abonado y se libera al cerrar la transacción, así
+    # que serializa sólo a quien compite por ese teléfono; no hay fila que
+    # bloquear porque justamente todavía no existe.
+    #
+    # No se usa un índice único: el alta manual desde el dashboard admite
+    # teléfonos repetidos a propósito (find_duplicate_lead sólo avisa), y la tabla
+    # en producción ya los tiene.
+    subscriber = normalize_phone(validated_data['phone'])[-SUBSCRIBER_DIGITS:]
+    if subscriber:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', [subscriber])
+
     existing = find_lead_by_phone(validated_data['phone'])
     if existing is not None:
         return existing, False
