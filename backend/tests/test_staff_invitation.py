@@ -103,6 +103,7 @@ class TestStaffOnboardingActivation:
         resp = client.post(ACTIVATE_URL.format(token=token), {
             'password': 'nueva-clave-123',
             'password_confirm': 'nueva-clave-123',
+            'data_consent': True,
         }, format='json')
         assert resp.status_code == 200
 
@@ -125,6 +126,7 @@ class TestStaffOnboardingActivation:
         client.post(ACTIVATE_URL.format(token=token), {
             'password': 'otra-clave-456',
             'password_confirm': 'otra-clave-456',
+            'data_consent': True,
         }, format='json')
 
         user.refresh_from_db()

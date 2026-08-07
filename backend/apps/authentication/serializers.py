@@ -114,6 +114,8 @@ class OnboardingActivateSerializer(serializers.Serializer):
     last_name        = serializers.CharField(max_length=150, required=False)
     phone            = serializers.CharField(max_length=20, required=False, allow_blank=True)
     cedula           = serializers.CharField(max_length=13, required=False)
+    # Obligatorio y sin default (#329): omitirlo no puede equivaler a aceptarlo.
+    data_consent     = serializers.BooleanField()
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
