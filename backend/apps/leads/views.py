@@ -877,6 +877,7 @@ class ReturningBootcamperView(APIView):
                 interaction_type=Interaction.InteractionType.NOTE,
                 outcome=Interaction.Outcome.CALL_AGAIN,  # <-- ACTUALIZADO AQUÍ
                 notes=notes,
+                lead_status=lead.status,
             )
 
         return Response(LeadListSerializer(lead).data, status=status.HTTP_201_CREATED)

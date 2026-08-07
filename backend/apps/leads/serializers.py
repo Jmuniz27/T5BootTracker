@@ -12,6 +12,9 @@ from .services import reassign_lead_by_admin
 class InteractionSerializer(serializers.ModelSerializer):
     days_as_lead = serializers.SerializerMethodField()
     salesperson_name = serializers.SerializerMethodField()
+    lead_status_display = serializers.CharField(
+        source='get_lead_status_display', read_only=True, allow_null=True, default=None,
+    )
 
     class Meta:
         model = Interaction
@@ -20,8 +23,14 @@ class InteractionSerializer(serializers.ModelSerializer):
             'interaction_type', 'outcome', 'interest_level',
             'notes', 'campaign', 'duration_minutes', 'next_action',
             'next_action_date', 'days_as_lead', 'created_at',
+            'lead_status', 'lead_status_display',
         )
-        read_only_fields = ('id', 'lead', 'salesperson', 'salesperson_name', 'created_at', 'days_as_lead')
+        read_only_fields = (
+            'id', 'lead', 'salesperson', 'salesperson_name', 'created_at', 'days_as_lead',
+            # Lo sella el service según en qué quedó el lead: no se acepta del
+            # cliente, o sería una forma de escribir historia.
+            'lead_status', 'lead_status_display',
+        )
 
     def get_days_as_lead(self, obj):
         return obj.days_as_lead

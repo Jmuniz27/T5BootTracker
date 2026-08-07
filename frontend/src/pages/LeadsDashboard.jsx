@@ -324,11 +324,34 @@ function ViewHistoryModal({ lead, onClose }) {
                     </>
                   )}
                 </div>
-                {/* Badges: outcome (gris) + próxima acción (azul) */}
+                {/* Badges: outcome (gris) + estado resultante + próxima acción (azul) */}
                 <div className="flex items-center gap-1.5 flex-wrap mb-1">
                   <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">
                     {OUTCOME_LABELS[interaction.outcome]}
                   </span>
+                  {/* En qué quedó el lead tras esta interacción (#325). Se pinta
+                      con los mismos colores del estado en la grilla, para que
+                      leer la evolución no exija aprenderse otra paleta. */}
+                  {interaction.lead_status ? (
+                    <span
+                      data-testid="interaction-lead-status"
+                      className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
+                        STATUS_COLORS[interaction.lead_status] ?? 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      → {interaction.lead_status_display ?? STATUS_LABELS[interaction.lead_status]}
+                    </span>
+                  ) : (
+                    // Las interacciones anteriores a este campo no se pudieron
+                    // reconstruir sin inventar historia (ver migración 0014).
+                    <span
+                      data-testid="interaction-lead-status-missing"
+                      title="Esta interacción es anterior al registro de estados"
+                      className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-gray-50 text-gray-400"
+                    >
+                      Sin registro de estado
+                    </span>
+                  )}
                   {interaction.next_action && (
                     <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">
                       {interaction.next_action}
