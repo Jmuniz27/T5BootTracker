@@ -2225,7 +2225,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Descartar lead
             </button>
           )}
-          {(isOwned || isAdmin) && isDiscarded && (
+          {isDiscarded && (
             <button
               onClick={() => { onRestore(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-[#1e3164] font-medium hover:bg-blue-50"
@@ -2249,7 +2249,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Reenviar invitación
             </button>
           )}
-          {!isAdmin && !isConverted && (isOwned ? (
+          {!isAdmin && !isConverted && !isDiscarded && (isOwned ? (
             <button
               onClick={() => { onRelease(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
