@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PaymentDetailModal from '../PaymentDetailModal';
@@ -100,12 +100,29 @@ describe('PaymentDetailModal — el comprobante es la validación oficial', () =
   });
 });
 
+/**
+ * El campo del monto, ya precargado por el efecto que corre cuando llega la
+ * respuesta de `getPayment` (PaymentDetailModal.jsx:69).
+ *
+ * Esperar sólo a que exista el input no alcanza: se renderiza antes de que ese
+ * efecto escriba los valores, así que escribir en él a esa altura funciona y
+ * después el efecto lo pisa con lo que leyó el OCR. El síntoma es un fallo
+ * intermitente —más probable cuanto más cargada la máquina— donde el campo
+ * conserva '200.00' en vez del texto tecleado.
+ */
+async function montoPrecargado() {
+  const amount = await screen.findByTestId('approve-amount');
+  await waitFor(() => expect(amount).toHaveValue('200.00'));
+  return amount;
+}
+
 describe('PaymentDetailModal — campos precargados y editables', () => {
   it('precarga lo que leyó el escaneo en vez de pedir que se reescriba', async () => {
     getPayment.mockResolvedValue(PENDIENTE);
     renderModal();
 
-    expect(await screen.findByTestId('approve-amount')).toHaveValue('200.00');
+    // Por testid y no por valor: es justamente el valor lo que se afirma.
+    await waitFor(() => expect(screen.getByTestId('approve-amount')).toHaveValue('200.00'));
     expect(screen.getByTestId('confirmed_bank_name')).toHaveValue('Banco Pichincha');
     expect(screen.getByTestId('confirmed_transaction_id')).toHaveValue('TX-9');
   });
@@ -115,7 +132,7 @@ describe('PaymentDetailModal — campos precargados y editables', () => {
     getPayment.mockResolvedValue(PENDIENTE);
     renderModal();
 
-    const amount = await screen.findByTestId('approve-amount');
+    const amount = await montoPrecargado();
     await user.clear(amount);
     await user.type(amount, '250.50');
 
@@ -127,7 +144,7 @@ describe('PaymentDetailModal — campos precargados y editables', () => {
     getPayment.mockResolvedValue(PENDIENTE);
     renderModal();
 
-    const amount = await screen.findByTestId('approve-amount');
+    const amount = await montoPrecargado();
     await user.clear(amount);
     await user.type(amount, '12a3,4567');
 
