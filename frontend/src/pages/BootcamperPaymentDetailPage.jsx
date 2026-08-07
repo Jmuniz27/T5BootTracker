@@ -59,7 +59,12 @@ function DonutChart({ totalCost, totalPaid, deficit }) {
   const arcColor = '#10b981'
 
   return (
-    <svg width="136" height="136" viewBox="0 0 136 136">
+    <svg
+      viewBox="0 0 136 136"
+      role="img"
+      aria-label={`${Math.round(paidPct * 100)}% pagado`}
+      className="w-28 h-28 sm:w-[8.5rem] sm:h-[8.5rem]"
+    >
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth="13" />
       {defLen > 0.5 && (
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#ef4444" strokeWidth="13"
@@ -102,7 +107,7 @@ function ProgressBar({ value, barClass, label, sublabel }) {
 function PaymentRow({ payment, onViewDetail }) {
   const date = payment.ocr_payment_date || payment.submitted_at?.slice(0, 10)
   return (
-    <div className="flex items-center justify-between px-4 py-3.5 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
+    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
       <div>
         <p className="text-sm font-medium text-gray-900">
           {payment.ocr_amount ? fmt(payment.ocr_amount) : 'Sin monto'}
@@ -110,7 +115,7 @@ function PaymentRow({ payment, onViewDetail }) {
         </p>
         <p className="text-xs text-gray-500 mt-0.5">{date || 'Sin fecha'}</p>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_COLORS[payment.status]}`}>
           {PAYMENT_STATUS_LABELS[payment.status]}
         </span>
@@ -182,12 +187,12 @@ export default function BootcamperPaymentDetailPage() {
           <Skeleton className="w-14 h-14" rounded="rounded-full" />
           <div className="flex-1 space-y-2">
             <Skeleton className="h-5 w-48" />
-            <Skeleton className="h-3.5 w-64" />
+            <Skeleton className="h-3.5 w-full max-w-[16rem]" />
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div key={i} className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
               <Skeleton className="h-3 w-24 mb-3" />
               <Skeleton className="h-8 w-20" />
             </div>
@@ -225,16 +230,16 @@ export default function BootcamperPaymentDetailPage() {
       </button>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6 sm:mb-8">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <img
             src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(bc.bootcamper_name ?? 'bootcamper')}`}
             alt={bc.bootcamper_name}
-            className="w-14 h-14 rounded-full bg-gray-100 flex-shrink-0 object-cover"
+            className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gray-100 shrink-0 object-cover"
           />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{bc.bootcamper_name}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{bc.email} · {bc.program_name}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{bc.bootcamper_name}</h1>
+            <p className="text-sm text-gray-500 mt-0.5 break-words">{bc.email} · {bc.program_name}</p>
           </div>
         </div>
         <span className={`px-3 py-1.5 rounded-full text-sm font-medium flex-shrink-0 ${cfg.bg} ${cfg.text}`}>
@@ -242,15 +247,15 @@ export default function BootcamperPaymentDetailPage() {
         </span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
 
         {/* ── Avance de pagos ── */}
         <div className="space-y-5">
           <h2 className="text-base font-semibold text-gray-900">Avance de pagos</h2>
 
           {/* Donut + stats */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6">
-            <div className="flex gap-6 items-center">
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6">
+            <div className="flex items-center gap-4 sm:gap-6">
               <div className="flex-shrink-0">
                 <DonutChart
                   totalCost={totalCost}
@@ -258,7 +263,7 @@ export default function BootcamperPaymentDetailPage() {
                   deficit={deficit}
                 />
               </div>
-              <div className="flex-1 space-y-4">
+              <div className="flex-1 min-w-0 space-y-4">
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total pagado</p>
                   <p className="text-2xl font-bold text-gray-900">{fmt(totalPaid)}</p>
@@ -290,7 +295,7 @@ export default function BootcamperPaymentDetailPage() {
           </div>
 
           {/* Progress bars */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 space-y-4">
             <ProgressBar
               value={timePct}
               barClass="bg-slate-400"
@@ -307,7 +312,7 @@ export default function BootcamperPaymentDetailPage() {
 
           {/* Alert */}
           {bc.payment_status === 'CRITICAL' && (
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-start justify-between gap-4">
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
               <div className="flex items-start gap-3">
                 <svg className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -322,7 +327,7 @@ export default function BootcamperPaymentDetailPage() {
               <button
                 disabled={notifyMutation.isPending}
                 onClick={() => notifyMutation.mutate()}
-                className="flex-shrink-0 text-xs font-medium text-red-600 border border-red-300 px-3 py-1.5 rounded-lg hover:bg-red-100 disabled:opacity-60 transition-colors whitespace-nowrap"
+                className="w-full sm:w-auto shrink-0 text-xs font-medium text-red-600 border border-red-300 px-3 py-1.5 rounded-lg hover:bg-red-100 disabled:opacity-60 transition-colors whitespace-nowrap"
               >
                 {notifyMutation.isPending ? 'Enviando...' : 'Notificar coordinador'}
               </button>
@@ -369,7 +374,7 @@ export default function BootcamperPaymentDetailPage() {
             </div>
           )}
           {!loadingPayments && payments.length === 0 && (
-            <div className="bg-white border border-gray-200 rounded-2xl py-16 text-center">
+            <div className="bg-white border border-gray-200 rounded-2xl py-10 sm:py-16 text-center">
               <svg className="w-10 h-10 text-gray-200 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
