@@ -933,6 +933,84 @@ class BootcamperAssignView(APIView):
             )
 
 
+class BootcamperBulkAssignView(APIView):
+    """PATCH /api/payments/bootcampers/bulk-assign/ — repartir varios de una (#326).
+
+    Mismo gesto que la asignación individual, en tanda. La clienta lo pidió
+    porque en su operación casi toda la cartera va a la misma persona de
+    Finanzas y sólo las empresas van a otra, así que repartir de a uno son N
+    clics para lo mismo.
+    """
+    permission_classes = [IsFinanceOrAdmin]
+
+    @extend_schema(
+        request=inline_serializer('BulkAssignBootcampersRequest', fields={
+            'bootcamper_ids':   drf_serializers.ListField(child=drf_serializers.UUIDField()),
+            'finance_owner_id': drf_serializers.UUIDField(required=False),
+        }),
+        responses={
+            200: inline_serializer('BulkAssignResult', fields={
+                'assigned': inline_serializer('BulkAssigned', fields=BOOTCAMPER_CARD_FIELDS, many=True),
+                'failed':   inline_serializer('BulkAssignFailure', fields={
+                    'bootcamper_id': drf_serializers.CharField(),
+                    'code':          drf_serializers.CharField(),
+                    'error':         drf_serializers.CharField(),
+                }, many=True),
+            }),
+            400: OpenApiResponse(description='Lista vacía, muy larga, o falta/es inválido finance_owner_id'),
+            403: OpenApiResponse(description='Auto-asignación deshabilitada por el Administrador'),
+        },
+        summary='Asignar varios bootcampers del pool',
+        description=(
+            'Asigna una tanda de bootcampers a una persona de Finanzas. Los que '
+            'fallan (ya asignados, inexistentes) no impiden que el resto se asigne: '
+            'la respuesta los lista en `failed` con su motivo.'
+        ),
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def patch(self, request):
+        from apps.authentication.models import CustomUser
+        from .services import MAX_BULK_ASSIGN, assign_bootcampers_in_bulk
+
+        if (
+            request.user.role != CustomUser.Role.ADMINISTRATOR
+            and not get_bootcamper_self_assignment_enabled()
+        ):
+            return Response(
+                {
+                    'error': 'La asignación de bootcampers la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        ids = request.data.get('bootcamper_ids') or []
+        if not isinstance(ids, list) or not ids:
+            return Response(
+                {'error': 'Indica al menos un bootcamper.', 'code': 'BOOTCAMPER_IDS_REQUIRED'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(ids) > MAX_BULK_ASSIGN:
+            return Response(
+                {
+                    'error': f'No se pueden asignar más de {MAX_BULK_ASSIGN} a la vez.',
+                    'code': 'BULK_LIMIT_EXCEEDED',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        owner, error = BootcamperAssignView._resolve_owner(request)
+        if error is not None:
+            return error
+
+        assigned, failed = assign_bootcampers_in_bulk(ids, owner)
+
+        return Response({
+            'assigned': PaymentProgressService().get_bootcamper_summaries(assigned),
+            'failed':   failed,
+        })
+
+
 class BootcamperReleaseView(APIView):
     """PATCH /api/payments/bootcampers/{id}/release/ — devolver al pool.
 
