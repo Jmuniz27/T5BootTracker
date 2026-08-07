@@ -3,7 +3,10 @@
 Sólo `GET`: el administrador mira, no interviene. Reasignar leads ya tiene su
 propio endpoint en la app de leads.
 """
-from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
+from django.utils.dateparse import parse_date
+from drf_spectacular.utils import (
+    OpenApiParameter, OpenApiResponse, extend_schema, inline_serializer,
+)
 from rest_framework import serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
@@ -29,6 +32,10 @@ class SalespeopleActivityView(APIView):
     permission_classes = [IsAdmin]
 
     @extend_schema(
+        parameters=[
+            OpenApiParameter('fecha_desde', str, description='Leads asignados desde (YYYY-MM-DD)'),
+            OpenApiParameter('fecha_hasta', str, description='Leads asignados hasta (YYYY-MM-DD)'),
+        ],
         responses={200: inline_serializer('SalespersonActivity', fields=ACTIVITY_FIELDS, many=True)},
         summary='Actividad comercial por vendedor (solo Admin)',
         description=(
@@ -37,12 +44,20 @@ class SalespeopleActivityView(APIView):
             'conserva su vendedor, así que converted_leads es un subconjunto de '
             'assigned_leads. uncontacted_leads cuenta los leads asignados sin ninguna '
             'interacción registrada y todavía sin convertir. No incluye montos: el cobro '
-            'es de Finanzas y se consulta en /api/users/finance/.'
+            'es de Finanzas y se consulta en /api/users/finance/. '
+            'fecha_desde/fecha_hasta acotan por **fecha de asignación** del lead, no por '
+            'fecha de creación: esta vista mide gestión del vendedor, y lo que le '
+            'corresponde de un lead empieza cuando se lo asignan. Las tasas se recalculan '
+            'sobre el período, no se recortan después.'
         ),
         tags=['Usuarios'],
     )
     def get(self, request):
-        return Response(list_salespeople_activity())
+        params = request.query_params
+        return Response(list_salespeople_activity(
+            fecha_desde=parse_date(params.get('fecha_desde', '') or ''),
+            fecha_hasta=parse_date(params.get('fecha_hasta', '') or ''),
+        ))
 
 
 class SalespersonActivityDetailView(APIView):
