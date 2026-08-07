@@ -378,8 +378,13 @@ class LeadDiscardView(APIView):
     )
     def patch(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
-        # El vendedor cierra lo suyo; el administrador, cualquiera.
-        if request.user.role != CustomUser.Role.ADMINISTRATOR and lead.owner != request.user:
+        # El vendedor cierra lo suyo (o un lead sin dueño); el administrador,
+        # cualquiera. Solo se bloquea si está asignado a otro vendedor.
+        if (
+            request.user.role != CustomUser.Role.ADMINISTRATOR
+            and lead.owner is not None
+            and lead.owner != request.user
+        ):
             return Response(
                 {'error': 'Solo el vendedor asignado puede descartar este lead.', 'code': 'NOT_OWNER'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -413,7 +418,13 @@ class LeadRestoreView(APIView):
     )
     def patch(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
-        if request.user.role != CustomUser.Role.ADMINISTRATOR and lead.owner != request.user:
+        # Un descartado queda sin dueño: cualquiera del equipo comercial puede
+        # reactivarlo (vuelve a Disponible). Solo se restringe si sigue asignado a otro.
+        if (
+            request.user.role != CustomUser.Role.ADMINISTRATOR
+            and lead.owner is not None
+            and lead.owner != request.user
+        ):
             return Response(
                 {'error': 'Solo el vendedor asignado puede reactivar este lead.', 'code': 'NOT_OWNER'},
                 status=status.HTTP_403_FORBIDDEN,

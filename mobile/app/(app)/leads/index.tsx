@@ -36,6 +36,7 @@ const ROLE_LABEL: Record<string, string> = {
   ADMINISTRATOR: 'Administrador',
   COORDINATOR:   'Coordinador',
   BOOTCAMPER:    'Bootcamper',
+  FINANCE:       'Finanzas',
 };
 
 const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: string }> = {
@@ -44,6 +45,7 @@ const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: stri
   INTERESTED:     { bg: '#dcfce7', color: '#15803d', label: 'Interesado' },
   NOT_INTERESTED: { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
   CONVERTED:      { bg: '#f3e8ff', color: '#7e22ce', label: 'Convertido' },
+  DISCARDED:      { bg: '#f1f5f9', color: '#64748b', label: 'Descartado' },
 };
 
 const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
@@ -53,6 +55,7 @@ const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
   { value: 'INTERESTED',     label: 'Interesado' },
   { value: 'NOT_INTERESTED', label: 'No interesado' },
   { value: 'CONVERTED',      label: 'Convertido' },
+  { value: 'DISCARDED',      label: 'Descartado' },
 ];
 
 const AVATAR_PALETTE = ['#213A8E', '#8b5cf6', '#14b8a6', '#f43f5e', '#f59e0b', '#0891b2', '#ec4899', '#6366f1'];
@@ -144,7 +147,8 @@ type Tab = 'my' | 'available' | 'converted';
 
 export default function LeadsScreen() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const isSalesperson = user?.role === 'SALESPERSON';
 
   const [me, setMe]                     = useState<MeData | null>(null);
   const [tab, setTab]                   = useState<Tab>('my');
@@ -252,15 +256,17 @@ export default function LeadsScreen() {
                 <Text style={styles.headerSub}>Dashboard</Text>
               </View>
               <View style={styles.headerRight}>
-                <TouchableOpacity
-                  style={styles.agendaBtn}
-                  onPress={() => router.push('/(app)/agenda')}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Abrir agenda de seguimientos"
-                >
-                  <Ionicons name="calendar-outline" size={20} color={colors.navy} />
-                </TouchableOpacity>
+                {isSalesperson && (
+                  <TouchableOpacity
+                    style={styles.agendaBtn}
+                    onPress={() => router.push('/(app)/agenda')}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Abrir agenda de seguimientos"
+                  >
+                    <Ionicons name="calendar-outline" size={20} color={colors.navy} />
+                  </TouchableOpacity>
+                )}
                 <View style={styles.headerNameCol}>
                   <Text style={styles.headerName}>{me?.full_name ?? '—'}</Text>
                   <View style={styles.rolePill}>

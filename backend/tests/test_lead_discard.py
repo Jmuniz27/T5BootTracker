@@ -45,6 +45,17 @@ class TestDiscardLead:
         assert assigned_lead.discarded_by == salesperson_user
         assert assigned_lead.discarded_at is not None
 
+    def test_descartar_desasigna_el_lead(self, db, salesperson_user, assigned_lead):
+        client = make_client(salesperson_user)
+
+        resp = client.patch(discard_url(assigned_lead), {'reason': 'NO_BUDGET'}, format='json')
+
+        assert resp.status_code == 200
+        assigned_lead.refresh_from_db()
+        # Al descartar, el lead se desasigna del vendedor (queda disponible al reactivar).
+        assert assigned_lead.owner is None
+        assert assigned_lead.released_at is not None
+
     def test_el_motivo_es_obligatorio(self, db, salesperson_user, assigned_lead):
         client = make_client(salesperson_user)
 
@@ -146,7 +157,10 @@ class TestDiscardLead:
             'cedula': '0919184141', 'program_id': str(program.id), 'email': 'x@test.com',
         }, format='json')
 
-        assert resp.status_code == 400
+        # Descartado y desasignado: la conversión queda bloqueada y no se convierte.
+        assert resp.status_code in (400, 403)
+        assigned_lead.refresh_from_db()
+        assert assigned_lead.status == Lead.Status.DISCARDED
 
 
 class TestDiscardedLeadVisibility:
@@ -164,7 +178,8 @@ class TestDiscardedLeadVisibility:
         client.patch(discard_url(assigned_lead), {'reason': 'NO_RESPONSE'}, format='json')
 
         data = client.get(LEADS_URL, {'estado': 'DISCARDED'}).json()
-        fila = next(r for r in data['my_leads'] if r['id'] == str(assigned_lead.id))
+        # Descartar desasigna: el lead se ve al filtrar, ahora en available_leads.
+        fila = next(r for r in data['available_leads'] if r['id'] == str(assigned_lead.id))
         assert fila['discard_reason'] == 'NO_RESPONSE'
         assert fila['discard_reason_display'] == 'No responde / los correos rebotan'
 
@@ -214,7 +229,9 @@ class TestRestoreLead:
         client.patch(restore_url(assigned_lead), {}, format='json')
 
         data = client.get(LEADS_URL).json()
-        assert str(assigned_lead.id) in [row['id'] for row in data['my_leads']]
+        # Al descartar se desasignó, así que reactivado vuelve a Disponibles, no a Mis leads.
+        assert str(assigned_lead.id) in [row['id'] for row in data['available_leads']]
+        assert str(assigned_lead.id) not in [row['id'] for row in data['my_leads']]
 
 
 @pytest.mark.parametrize('reason', [c.value for c in Lead.DiscardReason])
