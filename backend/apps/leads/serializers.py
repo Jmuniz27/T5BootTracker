@@ -75,6 +75,11 @@ class LeadListSerializer(serializers.ModelSerializer):
     discard_reason_display = serializers.CharField(source='get_discard_reason_display', read_only=True)
     last_outcome = serializers.CharField(read_only=True, allow_null=True, default=None)
     last_interaction_at = serializers.DateTimeField(read_only=True, allow_null=True, default=None)
+    # Anotados sólo en el listado (ver LeadsListView._annotated_qs). El default
+    # los deja pasar cuando el serializer corre sobre un lead recién creado, que
+    # no viene de esa queryset.
+    first_interaction_at = serializers.DateTimeField(read_only=True, allow_null=True, default=None)
+    last_note = serializers.CharField(read_only=True, allow_null=True, default=None)
     days_assigned = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
     bootcamper_verification_status = serializers.CharField(
@@ -86,8 +91,9 @@ class LeadListSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'phone', 'email', 'source', 'status',
             'is_company', 'program_interest', 'interaction_count',
-            'last_outcome', 'last_interaction_at', 'days_assigned',
-            'owner', 'owner_name', 'created_at',
+            'last_outcome', 'last_interaction_at', 'first_interaction_at',
+            'last_note', 'days_assigned',
+            'owner', 'owner_name', 'assigned_at', 'created_at',
             'discard_reason', 'discard_reason_display', 'discard_detail', 'discarded_at',
             'bootcamper', 'bootcamper_verification_status',
         )

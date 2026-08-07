@@ -54,10 +54,16 @@ class LeadListCreateView(APIView):
             .exclude(interaction_type=Interaction.InteractionType.SYSTEM)
             .order_by('-created_at')
         )
+        # La primera interacción sale de la misma base que la última, invirtiendo
+        # el orden. El reporte de leads las necesita a las dos: la clienta mide
+        # el abandono por la distancia entre ambas.
+        earliest = latest.order_by('created_at')
         return Lead.objects.select_related('bootcamper').annotate(
             interaction_count=Count('interactions', filter=real),
             last_outcome=Subquery(latest.values('outcome')[:1]),
             last_interaction_at=Subquery(latest.values('created_at')[:1]),
+            first_interaction_at=Subquery(earliest.values('created_at')[:1]),
+            last_note=Subquery(latest.values('notes')[:1]),
         ).order_by(F('last_interaction_at').desc(nulls_last=True), 'name')
 
     def _page_params(self, request):
