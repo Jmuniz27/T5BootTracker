@@ -77,3 +77,40 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.bootcamper.get_full_name()} — {self.program.name} ({self.get_status_display()})"
+
+
+class BootcamperAssignmentSetting(models.Model):
+    """Singleton (pk=1) que habilita la auto-asignación de cobro por Finanzas.
+
+    Espejo de `LeadAssignmentSetting` en el pool de leads (CR-004): el mismo
+    control, aplicado al pool de bootcampers. Apagado, sólo el Administrador
+    reparte quién cobra a quién.
+
+    Se guarda quién lo cambió y cuándo porque decide sobre el reparto del cobro
+    de todo el equipo, y conviene saber de quién fue la decisión.
+    """
+
+    self_assign_enabled = models.BooleanField(
+        default=True, verbose_name='Auto-asignación habilitada',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        verbose_name='Actualizado por',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Configuración de auto-asignación de cobro'
+        verbose_name_plural = 'Configuración de auto-asignación de cobro'
+
+    def __str__(self):
+        estado = 'habilitada' if self.self_assign_enabled else 'deshabilitada'
+        return f'Auto-asignación de cobro: {estado}'
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

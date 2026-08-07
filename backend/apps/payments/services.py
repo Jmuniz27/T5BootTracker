@@ -3,6 +3,8 @@ import logging
 from datetime import date
 from decimal import Decimal
 from django.core import signing
+from django.utils.timezone import now
+from django.db import DatabaseError
 from django.db.models import Count, Q, Sum
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,115 @@ def read_receipt_token(token: str) -> str:
     Raises signing.BadSignature (or SignatureExpired) on tampered/expired tokens.
     """
     return signing.loads(token, salt=RECEIPT_TOKEN_SALT, max_age=RECEIPT_TOKEN_MAX_AGE)
+
+
+class UploadProgramError(Exception):
+    """El programa del comprobante no se pudo determinar.
+
+    Lleva el mensaje que verá el bootcamper y un código para el cliente.
+    """
+
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.message = message
+        self.code = code
+
+
+def resolve_upload_program(bootcamper, program_id=None):
+    """Return the Program a receipt belongs to.
+
+    El bootcamper no elige el programa al subir: ya está inscrito en uno, así que
+    se deduce de su inscripción activa. `program_id` se sigue aceptando para los
+    clientes que ya lo mandaban y para desempatar a quien curse dos programas.
+
+    Se exige **exactamente una** inscripción activa en vez de tomar la primera:
+    adivinar acá imputaría el pago al programa equivocado, y eso descuadra el
+    saldo de los dos programas a la vez.
+
+    Raises:
+        UploadProgramError: sin inscripción activa, o con más de una y sin
+            `program_id` que desempate.
+        Program.DoesNotExist: el `program_id` recibido no existe.
+    """
+    from apps.programs.models import Enrollment, Program
+
+    if program_id:
+        return Program.objects.get(pk=program_id)
+
+    active = list(
+        Enrollment.objects
+        .filter(bootcamper=bootcamper, status=Enrollment.Status.ACTIVE)
+        .select_related('bootcamp')[:2]
+    )
+
+    if not active:
+        raise UploadProgramError(
+            'No tienes una inscripción activa a la cual asociar el comprobante. '
+            'Escríbele a tu asesor para que la registre.',
+            'NO_ACTIVE_ENROLLMENT',
+        )
+
+    if len(active) > 1:
+        raise UploadProgramError(
+            'Tienes más de un programa activo, así que hay que indicar a cuál '
+            'corresponde el comprobante. Escríbele a tu asesor.',
+            'AMBIGUOUS_ENROLLMENT',
+        )
+
+    return active[0].bootcamp
+
+
+class ReceiptStorageError(Exception):
+    """El archivo del comprobante no se pudo escribir en el storage."""
+
+    message = 'No se pudo guardar el comprobante. Intenta de nuevo en unos minutos.'
+    code = 'RECEIPT_STORAGE_ERROR'
+
+
+def create_payment_with_receipt(bootcamper, program, file, file_type):
+    """Create the Payment, writing the receipt to storage.
+
+    El fallo de escritura (permisos del volumen de media, disco lleno) salía sin
+    capturar, así que Django respondía su página de error en HTML y el bootcamper
+    veía el traceback dentro del modal en vez de un mensaje.
+
+    Raises:
+        ReceiptStorageError: el archivo no se pudo escribir.
+    """
+    from django.core.exceptions import SuspiciousOperation
+
+    from .models import Payment
+
+    try:
+        return Payment.objects.create(
+            bootcamper=bootcamper,
+            program=program,
+            receipt_file=file,
+            receipt_file_type=file_type,
+            status=Payment.Status.DRAFT,
+        )
+    except (OSError, SuspiciousOperation) as exc:
+        logger.exception('Error guardando el comprobante del bootcamper %s.', bootcamper.id)
+        raise ReceiptStorageError from exc
+
+
+def queue_receipt_ocr(payment_id) -> bool:
+    """Encola el OCR del comprobante. Devuelve False si el broker no respondió.
+
+    `.delay()` publica en Redis dentro del request, así que si el broker está
+    caído levanta y tumbaba la subida entera con un 500. El comprobante ya está
+    guardado y Finanzas puede revisarlo a mano, así que se reporta el fallo y se
+    deja continuar: devolver error haría que el bootcamper vuelva a subir el
+    mismo archivo y duplique comprobantes.
+    """
+    from .tasks import process_payment_ocr
+
+    try:
+        process_payment_ocr.delay(str(payment_id))
+        return True
+    except Exception:
+        logger.exception('No se pudo encolar el OCR del pago %s.', payment_id)
+        return False
 
 
 class PaymentProgressService:
@@ -68,7 +179,8 @@ class PaymentProgressService:
         enrollment = (
             Enrollment.objects
             .filter(bootcamper_id=bootcamper_id, bootcamp_id=program_id)
-            .only('agreed_price', 'discount_percentage')
+            .select_related('cohort')
+            .only('agreed_price', 'discount_percentage', 'cohort')
             .first()
         )
 
@@ -79,6 +191,8 @@ class PaymentProgressService:
             payments.count(),
             agreed_price=enrollment.agreed_price if enrollment else None,
             discount_percentage=enrollment.discount_percentage if enrollment else None,
+            cohort_id=enrollment.cohort_id if enrollment else None,
+            cohort_number=enrollment.cohort.number if enrollment and enrollment.cohort else None,
         )
 
     def get_monitoring_summaries(self, programs, status_filter=None) -> list[dict]:
@@ -136,8 +250,8 @@ class PaymentProgressService:
         for row in visible:
             bootcamper = bootcampers[row['bootcamper_id']]
             program = program_map[row['program_id']]
-            price, discount = enrollments.get(
-                (row['bootcamper_id'], row['program_id']), (None, None),
+            price, discount, cohort_id, cohort_number = enrollments.get(
+                (row['bootcamper_id'], row['program_id']), (None, None, None, None),
             )
             summary = self._build_summary(
                 program,
@@ -146,6 +260,8 @@ class PaymentProgressService:
                 row['payment_count'],
                 agreed_price=price,
                 discount_percentage=discount,
+                cohort_id=cohort_id,
+                cohort_number=cohort_number,
             )
             if status_filter and summary['payment_status'] != status_filter:
                 continue
@@ -203,16 +319,17 @@ class PaymentProgressService:
             )
         }
 
-        # La misma consulta que ya daba los pares ahora trae el precio acordado:
-        # no se agrega ninguna consulta al camino.
+        # La misma consulta que ya daba los pares trae el precio acordado y la
+        # cohorte: no se agrega ninguna consulta al camino.
         enrollments = {
-            (bootcamper_id, program_id): (price, discount)
-            for bootcamper_id, program_id, price, discount in (
+            (bootcamper_id, program_id): (price, discount, cohort_id, cohort_number)
+            for bootcamper_id, program_id, price, discount, cohort_id, cohort_number in (
                 Enrollment.objects
                 .filter(bootcamper_id__in=by_id)
                 .values_list(
                     'bootcamper_id', 'bootcamp_id',
                     'agreed_price', 'discount_percentage',
+                    'cohort_id', 'cohort__number',
                 )
             )
         }
@@ -240,7 +357,9 @@ class PaymentProgressService:
             bootcamper = by_id[bootcamper_id]
             program    = programs[program_id]
             row        = totals.get((bootcamper_id, program_id), {})
-            price, discount = enrollments.get((bootcamper_id, program_id), (None, None))
+            price, discount, cohort_id, cohort_number = enrollments.get(
+                (bootcamper_id, program_id), (None, None, None, None),
+            )
             summary    = self._build_summary(
                 program,
                 row.get('total_paid') or Decimal('0.00'),
@@ -248,6 +367,8 @@ class PaymentProgressService:
                 row.get('payment_count') or 0,
                 agreed_price=price,
                 discount_percentage=discount,
+                cohort_id=cohort_id,
+                cohort_number=cohort_number,
             )
             data.append({
                 'bootcamper_id':   str(bootcamper.id),
@@ -261,10 +382,15 @@ class PaymentProgressService:
 
     @staticmethod
     def _enrollment_map(bootcamper_ids, program_ids):
-        """{(bootcamper, programa): (precio acordado, descuento)} en una consulta.
+        """{(bootcamper, programa): (precio, descuento, cohorte, número)} en una consulta.
 
         Es la única fuente del precio real: el descuento se concede al convertir
         y queda en la inscripción, no en el programa.
+
+        También es la única fuente de la cohorte. `Payment` apunta al programa,
+        no a la edición, así que sin la inscripción no se sabe en qué cohorte
+        está la persona a la que se le cobra. La inscripción es única por
+        (bootcamper, programa), así que hay exactamente una cohorte por par.
         """
         from apps.programs.models import Enrollment
 
@@ -272,13 +398,14 @@ class PaymentProgressService:
             return {}
 
         return {
-            (bootcamper_id, program_id): (price, discount)
-            for bootcamper_id, program_id, price, discount in (
+            (bootcamper_id, program_id): (price, discount, cohort_id, cohort_number)
+            for bootcamper_id, program_id, price, discount, cohort_id, cohort_number in (
                 Enrollment.objects
                 .filter(bootcamper_id__in=bootcamper_ids, bootcamp_id__in=program_ids)
                 .values_list(
                     'bootcamper_id', 'bootcamp_id',
                     'agreed_price', 'discount_percentage',
+                    'cohort_id', 'cohort__number',
                 )
             )
         }
@@ -286,6 +413,7 @@ class PaymentProgressService:
     def _build_summary(
         self, program, total_paid, pending_count, payment_count,
         agreed_price=None, discount_percentage=None,
+        cohort_id=None, cohort_number=None,
     ) -> dict:
         """Métricas de avance de pago de un par bootcamper/programa.
 
@@ -339,8 +467,123 @@ class PaymentProgressService:
             'payment_count':           payment_count,
             'payment_percentage':      payment_percentage,
             'payment_status':          payment_status,
+            # Bandera aparte y no un cuarto valor de `payment_status`: ese enum
+            # ya lo consume el filtro `?status=` y los badges del frontend, y
+            # cambiarlo haría que quien terminó de pagar deje de contar como
+            # ON_TRACK en pantallas que hoy funcionan. Con esto, separar en
+            # pestañas no toca nada de lo existente.
+            'is_fully_paid':           deficit <= Decimal('0.00'),
+            'cohort_id':               str(cohort_id) if cohort_id else None,
+            'cohort_number':           cohort_number,
             'expected_payment_by_now': expected_payment_by_now,
             'surplus_amount':          surplus_amount,
             'program_start':           str(program.start_date),
             'program_end':             str(program.end_date),
         }
+
+
+def get_bootcamper_self_assignment_enabled():
+    """Si Finanzas puede tomar bootcampers del pool por su cuenta.
+
+    Espejo de `leads.services.get_self_assignment_enabled`, aplicado al pool de
+    bootcampers.
+    """
+    from .models import BootcamperAssignmentSetting
+
+    return BootcamperAssignmentSetting.get_solo().self_assign_enabled
+
+
+def set_bootcamper_self_assignment_enabled(enabled, user):
+    """Cambia el control global, dejando registrado quién y cuándo.
+
+    `select_for_update` sobre el singleton: dos administradores cambiándolo a la
+    vez dejarían el último valor sin saber cuál quedó, y acá interesa que el
+    registro de quién lo cambió sea el del valor que efectivamente quedó.
+    """
+    from django.db import transaction
+
+    from .models import BootcamperAssignmentSetting
+
+    with transaction.atomic():
+        setting = BootcamperAssignmentSetting.objects.select_for_update().get_or_create(pk=1)[0]
+        setting.self_assign_enabled = enabled
+        setting.updated_by = user
+        setting.save(update_fields=['self_assign_enabled', 'updated_by', 'updated_at'])
+
+    logger.info(
+        'Bootcamper self-assignment %s by %s',
+        'enabled' if enabled else 'disabled',
+        user.email,
+    )
+    return setting
+
+
+# ─── Reparto en lote del pool de cobro (#326) ─────────────────────────────────
+
+# Tope por tanda. En la práctica el pool es de decenas, no de miles: el límite
+# está para que un cliente no mande una lista arbitraria, no para acotar un uso
+# real. Si alguna vez estorba, se sube.
+MAX_BULK_ASSIGN = 200
+
+
+def assign_bootcampers_in_bulk(bootcamper_ids, owner):
+    """Asignar varios bootcampers del pool a una persona de Finanzas.
+
+    La clienta pidió el lote porque en su día a día casi toda la cartera va a la
+    misma persona y sólo las empresas van a otra: repartir de a uno son N clics
+    para el mismo gesto.
+
+    Cada bootcamper se asigna en su propio bloque atómico. Si uno falla —lo tomó
+    alguien mientras tanto, o dejó de existir— el resto sí queda asignado y se
+    informa cuáles no. Envolver la tanda entera en una sola transacción haría
+    que un solo conflicto tirara abajo un reparto de cincuenta.
+
+    Returns:
+        (assigned, failed): lista de CustomUser asignados y lista de
+        ``{'bootcamper_id', 'code', 'error'}`` para los que no se pudo.
+    """
+    from django.db import transaction
+    from apps.authentication.models import CustomUser
+
+    assigned, failed = [], []
+
+    for bootcamper_id in bootcamper_ids:
+        try:
+            with transaction.atomic():
+                try:
+                    bootcamper = CustomUser.objects.select_for_update().get(
+                        pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER,
+                    )
+                except CustomUser.DoesNotExist:
+                    failed.append({
+                        'bootcamper_id': str(bootcamper_id),
+                        'code': 'BOOTCAMPER_NOT_FOUND',
+                        'error': 'Bootcamper no encontrado.',
+                    })
+                    continue
+
+                if bootcamper.finance_owner_id is not None:
+                    failed.append({
+                        'bootcamper_id': str(bootcamper_id),
+                        'code': 'BOOTCAMPER_ALREADY_ASSIGNED',
+                        'error': f'{bootcamper.get_full_name()} ya lo está monitoreando otra persona.',
+                    })
+                    continue
+
+                bootcamper.finance_owner       = owner
+                bootcamper.finance_assigned_at = now()
+                bootcamper.save(update_fields=['finance_owner', 'finance_assigned_at', 'updated_at'])
+                assigned.append(bootcamper)
+        except DatabaseError:
+            logger.exception('Fallo al asignar el bootcamper %s en lote', bootcamper_id)
+            failed.append({
+                'bootcamper_id': str(bootcamper_id),
+                'code': 'ASSIGN_FAILED',
+                'error': 'No se pudo asignar.',
+            })
+
+    logger.info(
+        'Reparto en lote a %s: %s asignados, %s con problema',
+        owner.id, len(assigned), len(failed),
+    )
+    return assigned, failed

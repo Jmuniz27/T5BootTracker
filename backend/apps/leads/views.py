@@ -12,21 +12,25 @@ from rest_framework import status, serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.authentication.models import CustomUser
+from apps.authentication.services import reject_bootcamper, verify_bootcamper
 from apps.programs.models import Program
 from .models import Lead, Interaction, LeadAssignmentSetting
 from .permissions import COMMERCIAL_ROLES, IsAdministrator, IsCommercial, IsCommercialOrAdmin
 from .serializers import (
     LeadListSerializer, LeadDetailSerializer, LeadWriteSerializer, LeadAdminWriteSerializer,
     InteractionSerializer, ConvertLeadSerializer, ReturningBootcamperSerializer,
-    LeadAssignmentSettingSerializer,
+    LeadAssignmentSettingSerializer, VerificationRejectSerializer,
+    LeadDiscardSerializer,
 )
 from .services import (
     register_interaction, convert_lead_to_bootcamper,
     get_self_assignment_enabled, set_self_assignment_enabled,
-    find_duplicate_lead, reassign_lead_by_admin,
+    find_duplicate_lead, reassign_lead_by_admin, resend_invitation,
+    discard_lead, restore_lead,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,11 +45,25 @@ class LeadListCreateView(APIView):
     permission_classes = [IsCommercialOrAdmin]
 
     def _annotated_qs(self):
-        latest = Interaction.objects.filter(lead=OuterRef('pk')).order_by('-created_at')
-        return Lead.objects.annotate(
-            interaction_count=Count('interactions'),
+        # Los eventos de sistema (asignación/reasignación) no son interacciones
+        # de venta: no cuentan ni pesan en la última interacción.
+        real = ~Q(interactions__interaction_type=Interaction.InteractionType.SYSTEM)
+        latest = (
+            Interaction.objects
+            .filter(lead=OuterRef('pk'))
+            .exclude(interaction_type=Interaction.InteractionType.SYSTEM)
+            .order_by('-created_at')
+        )
+        # La primera interacción sale de la misma base que la última, invirtiendo
+        # el orden. El reporte de leads las necesita a las dos: la clienta mide
+        # el abandono por la distancia entre ambas.
+        earliest = latest.order_by('created_at')
+        return Lead.objects.select_related('bootcamper').annotate(
+            interaction_count=Count('interactions', filter=real),
             last_outcome=Subquery(latest.values('outcome')[:1]),
             last_interaction_at=Subquery(latest.values('created_at')[:1]),
+            first_interaction_at=Subquery(earliest.values('created_at')[:1]),
+            last_note=Subquery(latest.values('notes')[:1]),
         ).order_by(F('last_interaction_at').desc(nulls_last=True), 'name')
 
     def _page_params(self, request):
@@ -155,6 +173,12 @@ class LeadListCreateView(APIView):
 
         if status_filter:
             qs = qs.filter(status=status_filter)
+        else:
+            # #324: los descartados salen del seguimiento diario, que es para lo
+            # que la clienta pidió el estado ("como rayar los que ya no los
+            # llames"). Siguen siendo consultables filtrando por el estado —
+            # justamente para poder exportarlos.
+            qs = qs.exclude(status=Lead.Status.DISCARDED)
 
         only_mine = (params.get('my_leads', '').lower() in TRUTHY)
 
@@ -166,10 +190,11 @@ class LeadListCreateView(APIView):
             my_leads_qs        = qs
             available_leads_qs = qs.none()
         elif only_mine:
-            my_leads_qs        = qs.filter(owner=request.user)
+            # Los convertidos viven en converted_leads, no en "Mis leads".
+            my_leads_qs        = qs.filter(owner=request.user).exclude(status=Lead.Status.CONVERTED)
             available_leads_qs = qs.none()
         else:
-            my_leads_qs        = qs.filter(owner=request.user)
+            my_leads_qs        = qs.filter(owner=request.user).exclude(status=Lead.Status.CONVERTED)
             available_leads_qs = qs.filter(owner__isnull=True)
 
         page_number, page_size = self._page_params(request)
@@ -199,7 +224,9 @@ class LeadListCreateView(APIView):
 
         if request.user.is_administrator:
             all_leads_qs        = qs
-            assigned_leads_qs   = qs.filter(owner__isnull=False)
+            # Los convertidos viven en converted_leads; salen de "Asignados"
+            # aunque conserven dueño, para no contarlos dos veces.
+            assigned_leads_qs   = qs.filter(owner__isnull=False).exclude(status=Lead.Status.CONVERTED)
             unassigned_leads_qs = qs.filter(owner__isnull=True)
 
             all_paginator        = Paginator(all_leads_qs, page_size)
@@ -329,6 +356,71 @@ class LeadReleaseView(APIView):
         return Response(LeadListSerializer(lead).data)
 
 
+class LeadDiscardView(APIView):
+    """PATCH /leads/{id}/discard/ — sacar el lead del listado, con motivo (#324)."""
+    permission_classes = [IsCommercialOrAdmin]
+
+    @extend_schema(
+        request=LeadDiscardSerializer,
+        responses={
+            200: LeadListSerializer,
+            400: OpenApiResponse(description='Motivo ausente/inválido, o lead ya descartado o convertido'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Descartar lead',
+        description=(
+            'Marca el lead como Descartado dejando la causal y, opcionalmente, un '
+            'detalle. La causal es obligatoria: es lo que permite agrupar por qué '
+            'se pierden los leads. Con la causal "Otro" el detalle pasa a ser obligatorio.'
+        ),
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        lead = get_object_or_404(Lead, pk=pk)
+        # El vendedor cierra lo suyo; el administrador, cualquiera.
+        if request.user.role != CustomUser.Role.ADMINISTRATOR and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede descartar este lead.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = LeadDiscardSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        lead = discard_lead(
+            pk, request.user,
+            serializer.validated_data['reason'],
+            serializer.validated_data.get('detail', ''),
+        )
+        return Response(LeadListSerializer(lead).data)
+
+
+class LeadRestoreView(APIView):
+    """PATCH /leads/{id}/restore/ — deshacer un descarte (#324)."""
+    permission_classes = [IsCommercialOrAdmin]
+
+    @extend_schema(
+        responses={
+            200: LeadListSerializer,
+            400: OpenApiResponse(description='El lead no está descartado'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Reactivar un lead descartado',
+        description='Devuelve el lead al estado que tenía antes de descartarlo.',
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        lead = get_object_or_404(Lead, pk=pk)
+        if request.user.role != CustomUser.Role.ADMINISTRATOR and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede reactivar este lead.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(LeadListSerializer(restore_lead(pk, request.user)).data)
+
+
 class LeadAdminReassignView(APIView):
     """PATCH /leads/{id}/admin-reassign/ — Admin liberación/reasignación forzada (CR-005)."""
     permission_classes = [IsAdministrator]
@@ -426,7 +518,15 @@ class LeadDetailView(APIView):
         tags=['Leads'],
     )
     def get(self, request, pk):
-        lead = get_object_or_404(Lead.objects.annotate(interaction_count=Count('interactions')), pk=pk)
+        lead = get_object_or_404(
+            Lead.objects.select_related('bootcamper').annotate(
+                interaction_count=Count(
+                    'interactions',
+                    filter=~Q(interactions__interaction_type=Interaction.InteractionType.SYSTEM),
+                ),
+            ),
+            pk=pk,
+        )
         if not request.user.is_administrator and lead.owner is not None and lead.owner != request.user:
             return Response(
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
@@ -487,7 +587,14 @@ class InteractionListCreateView(APIView):
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        interactions = lead.interactions.select_related('salesperson').order_by('-created_at')
+        # Los eventos de sistema (asignación/reasignación) son auditoría, no
+        # interacciones de venta: no se muestran en el historial.
+        interactions = (
+            lead.interactions
+            .exclude(interaction_type=Interaction.InteractionType.SYSTEM)
+            .select_related('salesperson')
+            .order_by('-created_at')
+        )
         return Response(InteractionSerializer(interactions, many=True).data)
 
     @extend_schema(
@@ -543,22 +650,28 @@ class ConvertLeadView(APIView):
         request=ConvertLeadSerializer,
         responses={
             201: inline_serializer('ConversionResponse', fields={
-                'bootcamper_id':      drf_serializers.UUIDField(),
-                'email':              drf_serializers.EmailField(),
-                'temporary_password': drf_serializers.CharField(allow_null=True),
-                'is_returning':       drf_serializers.BooleanField(),
-                'lead_status':        drf_serializers.CharField(),
+                'bootcamper_id':        drf_serializers.UUIDField(),
+                'email':                drf_serializers.EmailField(),
+                'invitation_link':      drf_serializers.CharField(allow_null=True),
+                'is_returning':         drf_serializers.BooleanField(),
+                'lead_status':          drf_serializers.CharField(),
+                'discount_percentage':  drf_serializers.CharField(),
+                'agreed_price':         drf_serializers.CharField(),
+                'cohort_id':            drf_serializers.UUIDField(allow_null=True),
+                'cohort_number':        drf_serializers.IntegerField(allow_null=True),
             }),
-            400: OpenApiResponse(description='Estado inválido o cédula inválida'),
+            400: OpenApiResponse(description='Estado inválido o cédula/RUC inválido'),
             403: OpenApiResponse(description='No eres el dueño del lead'),
             404: OpenApiResponse(description='Lead o programa no encontrado'),
             409: OpenApiResponse(description='Email ya asociado a otro rol, cédula ya registrada o bootcamper ya inscrito en el programa'),
         },
         summary='Convertir lead a bootcamper',
         description=(
-            'Valida la cédula ecuatoriana, crea o reutiliza un usuario BOOTCAMPER, '
+            'Valida la identificación (cédula o RUC), crea o reutiliza un usuario BOOTCAMPER, '
             'crea la inscripción (Enrollment), marca el lead como CONVERTED '
-            'y dispara notificación a coordinadores. Requiere que el Lead sea QUALIFIED.'
+            'y dispara notificación a coordinadores. Requiere que el Lead sea QUALIFIED. '
+            'Si es una cuenta nueva, la respuesta incluye invitation_link para que active su '
+            'contraseña; un bootcamper recurrente (is_returning=True) no recibe invitación.'
         ),
         tags=['Leads'],
     )
@@ -576,6 +689,124 @@ class ConvertLeadView(APIView):
         result_data = convert_lead_to_bootcamper(lead, serializer.validated_data)
 
         return Response(result_data, status=status.HTTP_201_CREATED)
+
+
+class ResendInvitationView(APIView):
+    """POST /api/leads/{id}/resend-invitation/ — reissue the onboarding link (#255)."""
+    permission_classes = [IsCommercial]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'invitation'
+
+    @extend_schema(
+        responses={
+            200: inline_serializer('ResendInvitationResponse', fields={
+                'invitation_link': drf_serializers.CharField(),
+            }),
+            400: OpenApiResponse(description='El lead no fue convertido, o la cuenta ya fue activada'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+            429: OpenApiResponse(description='Demasiados reenvíos'),
+        },
+        summary='Reenviar invitación de onboarding',
+        description=(
+            'Genera un token nuevo e invalida el anterior (deja de servir para activar la cuenta), '
+            'reenvía el email al bootcamper y devuelve el link nuevo. Sólo mientras la cuenta siga '
+            'en INVITED — si ya se activó, se rechaza.'
+        ),
+        tags=['Leads'],
+    )
+    def post(self, request, pk):
+        lead = get_object_or_404(Lead, pk=pk)
+        if not request.user.is_administrator and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede reenviar esta invitación.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        result_data = resend_invitation(lead)
+        return Response(result_data, status=status.HTTP_200_OK)
+
+
+class VerifyBootcamperView(APIView):
+    """PATCH /api/leads/{id}/verify-bootcamper/ — mark the resulting bootcamper as verified (#259)."""
+    permission_classes = [IsCommercialOrAdmin]
+
+    @extend_schema(
+        responses={
+            200: LeadDetailSerializer,
+            400: OpenApiResponse(description='El lead no fue convertido, o el bootcamper no está pendiente de verificación'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Verificar datos del bootcamper',
+        description=(
+            'El vendedor dueño del lead (o un administrador) confirma que los datos que el '
+            'bootcamper completó en el onboarding son correctos. Sólo válido si el bootcamper '
+            'está en PENDING_VERIFICATION.'
+        ),
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        lead = get_object_or_404(Lead.objects.select_related('bootcamper'), pk=pk)
+        if not request.user.is_administrator and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede verificar este bootcamper.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if lead.bootcamper is None:
+            return Response(
+                {'error': 'Este lead todavía no fue convertido a bootcamper.', 'code': 'NOT_CONVERTED'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        verify_bootcamper(lead.bootcamper, request.user)
+        lead = Lead.objects.select_related('bootcamper').annotate(
+            interaction_count=Count('interactions'),
+        ).get(pk=lead.pk)
+        return Response(LeadDetailSerializer(lead).data)
+
+
+class RejectBootcamperView(APIView):
+    """PATCH /api/leads/{id}/reject-bootcamper/ — señalar que hay datos que corregir (#309)."""
+    permission_classes = [IsCommercialOrAdmin]
+
+    @extend_schema(
+        request=VerificationRejectSerializer,
+        responses={
+            200: LeadDetailSerializer,
+            400: OpenApiResponse(description='Motivo vacío, lead no convertido, o el bootcamper no está en un estado revisable'),
+            403: OpenApiResponse(description='No eres el dueño del lead'),
+            404: OpenApiResponse(description='Lead no encontrado'),
+        },
+        summary='Rechazar datos del bootcamper',
+        description=(
+            'El vendedor dueño del lead (o un administrador) marca que los datos del onboarding '
+            'tienen algo que corregir, indicando qué. Se le notifica al bootcamper por correo. '
+            'El rechazo no es terminal: una vez corregidos los datos se puede verificar.'
+        ),
+        tags=['Leads'],
+    )
+    def patch(self, request, pk):
+        lead = get_object_or_404(Lead.objects.select_related('bootcamper'), pk=pk)
+        if not request.user.is_administrator and lead.owner != request.user:
+            return Response(
+                {'error': 'Solo el vendedor asignado puede rechazar los datos de este bootcamper.', 'code': 'NOT_OWNER'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if lead.bootcamper is None:
+            return Response(
+                {'error': 'Este lead todavía no fue convertido a bootcamper.', 'code': 'NOT_CONVERTED'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = VerificationRejectSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        reject_bootcamper(lead.bootcamper, request.user, serializer.validated_data['reason'])
+        lead = Lead.objects.select_related('bootcamper').annotate(
+            interaction_count=Count('interactions'),
+        ).get(pk=lead.pk)
+        return Response(LeadDetailSerializer(lead).data)
 
 
 class ReturningBootcamperView(APIView):

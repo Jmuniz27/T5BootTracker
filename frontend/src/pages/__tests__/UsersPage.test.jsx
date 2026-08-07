@@ -102,6 +102,14 @@ function rowFor(name) {
   return screen.getByText(name).closest('tr');
 }
 
+/**
+ * Las acciones por fila viven en un dropdown (antes eran botones sueltos) —
+ * hay que abrirlo antes de poder ver/clickear "Editar" o "Desactivar/Activar".
+ */
+async function abrirAcciones(user, fullName) {
+  await user.click(within(rowFor(fullName)).getByRole('button', { name: new RegExp(`acciones para ${fullName}`, 'i') }));
+}
+
 describe('UsersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -142,11 +150,15 @@ describe('UsersPage', () => {
   });
 
   it('deshabilita el cambio de estado sobre la propia cuenta', async () => {
+    const user = userEvent.setup();
     renderPage();
     await screen.findByText('Admin Uno');
 
-    expect(within(rowFor('Admin Uno')).getByRole('button', { name: /desactivar/i })).toBeDisabled();
-    expect(within(rowFor('Vendedor Uno')).getByRole('button', { name: /desactivar/i })).toBeEnabled();
+    await abrirAcciones(user, 'Admin Uno');
+    expect(within(rowFor('Admin Uno')).getByRole('menuitem', { name: /desactivar/i })).toBeDisabled();
+
+    await abrirAcciones(user, 'Vendedor Uno');
+    expect(within(rowFor('Vendedor Uno')).getByRole('menuitem', { name: /desactivar/i })).toBeEnabled();
   });
 
   it('pide confirmación antes de desactivar y muestra un toast al lograrlo', async () => {
@@ -155,7 +167,8 @@ describe('UsersPage', () => {
     renderPage();
     await screen.findByText('Vendedor Uno');
 
-    await user.click(within(rowFor('Vendedor Uno')).getByRole('button', { name: /desactivar/i }));
+    await abrirAcciones(user, 'Vendedor Uno');
+    await user.click(within(rowFor('Vendedor Uno')).getByRole('menuitem', { name: /desactivar/i }));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/no podrá volver a iniciar sesión/i)).toBeInTheDocument();
@@ -172,7 +185,8 @@ describe('UsersPage', () => {
     renderPage();
     await screen.findByText('Vendedor Uno');
 
-    await user.click(within(rowFor('Vendedor Uno')).getByRole('button', { name: /desactivar/i }));
+    await abrirAcciones(user, 'Vendedor Uno');
+    await user.click(within(rowFor('Vendedor Uno')).getByRole('menuitem', { name: /desactivar/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /cancelar/i }));
 
@@ -187,7 +201,8 @@ describe('UsersPage', () => {
     renderPage();
     await screen.findByText('Vendedor Uno');
 
-    await user.click(within(rowFor('Vendedor Uno')).getByRole('button', { name: /desactivar/i }));
+    await abrirAcciones(user, 'Vendedor Uno');
+    await user.click(within(rowFor('Vendedor Uno')).getByRole('menuitem', { name: /desactivar/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /^desactivar$/i }));
 
@@ -205,7 +220,7 @@ describe('UsersPage', () => {
     await user.type(within(dialog).getByPlaceholderText('Ana'), 'Nueva');
     await user.type(within(dialog).getByPlaceholderText('Vera'), 'Persona');
     await user.type(within(dialog).getByPlaceholderText(/@espol/i), 'nueva@espol.edu.ec');
-    await user.type(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i), CLAVE_TEMPORAL);
+    await user.type(within(dialog).getByPlaceholderText(/déjalo en blanco para invitar/i), CLAVE_TEMPORAL);
     await user.type(within(dialog).getByPlaceholderText('0912345678'), '0926687857');
 
     await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
@@ -229,7 +244,7 @@ describe('UsersPage', () => {
     await user.type(within(dialog).getByPlaceholderText('Ana'), 'Nueva');
     await user.type(within(dialog).getByPlaceholderText('Vera'), 'Persona');
     await user.type(within(dialog).getByPlaceholderText(/@espol/i), 'nueva@espol.edu.ec');
-    await user.type(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i), CLAVE_TEMPORAL);
+    await user.type(within(dialog).getByPlaceholderText(/déjalo en blanco para invitar/i), CLAVE_TEMPORAL);
 
     await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
     await user.click(within(dialog).getByText('Vendedor'));
@@ -251,6 +266,28 @@ describe('UsersPage', () => {
     expect(await screen.findByText(/creado correctamente/i)).toBeInTheDocument();
   });
 
+  it('crea un usuario sin contraseña y avisa que se envió invitación por correo', async () => {
+    const user = userEvent.setup();
+    createUser.mockResolvedValue({ ...VENDEDOR, id: 'new-2', email: 'nueva@espol.edu.ec', full_name: 'Nueva Persona' });
+    renderPage();
+    await screen.findByText('Vendedor Uno');
+
+    await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
+    const dialog = await screen.findByRole('dialog', { name: /nuevo usuario/i });
+
+    await user.type(within(dialog).getByPlaceholderText('Ana'), 'Nueva');
+    await user.type(within(dialog).getByPlaceholderText('Vera'), 'Persona');
+    await user.type(within(dialog).getByPlaceholderText(/@espol/i), 'nueva@espol.edu.ec');
+
+    await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
+    await user.click(within(dialog).getByText('Vendedor'));
+
+    await user.click(within(dialog).getByRole('button', { name: /crear usuario/i }));
+
+    expect(createUser.mock.calls[0][0]).toMatchObject({ password: '' });
+    expect(await screen.findByText(/se envió un correo de activación/i)).toBeInTheDocument();
+  });
+
   describe('alcance del coordinador', () => {
     /** Abre el modal y llena los campos comunes con el rol Coordinador. */
     async function openCoordinatorForm(user) {
@@ -260,7 +297,7 @@ describe('UsersPage', () => {
       await user.type(within(dialog).getByPlaceholderText('Ana'), 'Nueva');
       await user.type(within(dialog).getByPlaceholderText('Vera'), 'Coord');
       await user.type(within(dialog).getByPlaceholderText(/@espol/i), 'coord@espol.edu.ec');
-      await user.type(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i), CLAVE_TEMPORAL);
+      await user.type(within(dialog).getByPlaceholderText(/déjalo en blanco para invitar/i), CLAVE_TEMPORAL);
 
       await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
       await user.click(within(dialog).getByText('Coordinador'));
@@ -369,13 +406,13 @@ describe('UsersPage', () => {
       await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
       const dialog = await screen.findByRole('dialog', { name: /nuevo usuario/i });
 
-      expect(within(dialog).getByPlaceholderText(/mínimo 8 caracteres/i)).toBeInTheDocument();
+      expect(within(dialog).getByPlaceholderText(/déjalo en blanco para invitar/i)).toBeInTheDocument();
 
       await user.click(within(dialog).getByRole('button', { name: /seleccionar rol/i }));
       await user.click(within(dialog).getByText('Coordinador'));
 
       expect(
-        within(dialog).queryByPlaceholderText(/mínimo 8 caracteres/i),
+        within(dialog).queryByPlaceholderText(/déjalo en blanco para invitar/i),
       ).not.toBeInTheDocument();
     });
 
@@ -461,5 +498,104 @@ describe('UsersPage', () => {
       expect(screen.getByText('Boot Camper')).toBeInTheDocument();
       expect(screen.queryByText('Boot Inactivo')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('UsersPage — programa y cohorte del bootcamper (#328)', () => {
+  const CON_COHORTE = {
+    id: 'bc-1',
+    full_name: 'Ana Torres',
+    email: 'ana@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345678',
+    is_active: true,
+    enrollments: [{
+      program_id: 'prog-1', program_name: 'Python Full Stack',
+      cohort_id: 'coh-1', cohort_number: 3, cohort_status: 'IN_PROGRESS',
+    }],
+  };
+
+  const OTRO_PROGRAMA = {
+    id: 'bc-2',
+    full_name: 'Luis Vera',
+    email: 'luis@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345679',
+    is_active: true,
+    enrollments: [{
+      program_id: 'prog-2', program_name: 'Data Science',
+      cohort_id: 'coh-9', cohort_number: 1, cohort_status: 'FINISHED',
+    }],
+  };
+
+  const SIN_INSCRIPCION = {
+    id: 'bc-3',
+    full_name: 'Pedro Sin',
+    email: 'pedro@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345670',
+    is_active: true,
+    enrollments: [],
+  };
+
+  async function irABootcampers(user) {
+    await user.click(await screen.findByRole('button', { name: /bootcampers/i }));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getUsers.mockResolvedValue({ results: [CON_COHORTE, OTRO_PROGRAMA, SIN_INSCRIPCION] });
+    getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
+  });
+
+  it('la fila dice programa y cohorte', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    expect(screen.getByText(/Python Full Stack/)).toBeInTheDocument();
+    expect(screen.getByText(/Cohorte 3/)).toBeInTheDocument();
+  });
+
+  it('un bootcamper sin inscripción lo dice en vez de dejar el hueco', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    expect(screen.getByText('Sin inscripción')).toBeInTheDocument();
+  });
+
+  it('filtra por programa', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    await user.click(screen.getByRole('button', { name: /filtrar por programa/i }));
+    await user.click(screen.getByRole('option', { name: 'Data Science' }));
+
+    expect(screen.getByText('Luis Vera')).toBeInTheDocument();
+    expect(screen.queryByText('Ana Torres')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pedro Sin')).not.toBeInTheDocument();
+  });
+
+  it('la cohorte sólo aparece con un programa elegido', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    expect(screen.queryByRole('button', { name: /filtrar por cohorte/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /filtrar por programa/i }));
+    await user.click(screen.getByRole('option', { name: 'Python Full Stack' }));
+
+    expect(screen.getByRole('button', { name: /filtrar por cohorte/i })).toBeInTheDocument();
+  });
+
+  it('los filtros de inscripción no aparecen en Administrativos', async () => {
+    // Un vendedor no cursa nada: ahí no significan nada.
+    renderPage();
+    await screen.findByRole('button', { name: /bootcampers/i });
+
+    expect(screen.queryByRole('button', { name: /filtrar por programa/i })).not.toBeInTheDocument();
   });
 });

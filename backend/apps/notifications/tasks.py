@@ -34,6 +34,133 @@ def send_password_reset_email(self, email, reset_link, user_name=None):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_bootcamper_invitation_email(self, bootcamper_id, invitation_link):
+    """Send the one-time onboarding invitation link to a newly converted bootcamper."""
+    try:
+        from apps.authentication.models import CustomUser
+        from apps.authentication.services import ONBOARDING_TOKEN_MAX_AGE
+        from apps.programs.models import Enrollment
+
+        bootcamper = CustomUser.objects.get(id=bootcamper_id)
+        enrollment = Enrollment.objects.filter(bootcamper=bootcamper).select_related('bootcamp').order_by('-id').first()
+
+        send_templated_email(
+            template='bootcamper_invitation',
+            context={
+                'recipient_name': bootcamper.get_full_name(),
+                'invitation_link': invitation_link,
+                'expiry_hours': ONBOARDING_TOKEN_MAX_AGE // 3600,
+                'program_name': enrollment.bootcamp.name if enrollment else None,
+            },
+            subject='Activa tu cuenta de bootcamper — Boot-Tracker',
+            to=[bootcamper.email],
+        )
+        logger.info('Bootcamper invitation email sent to %s.', bootcamper.email)
+    except Exception as exc:
+        logger.exception('Error sending bootcamper invitation email for %s.', bootcamper_id)
+        raise self.retry(exc=exc)
+
+
+def _bootcamper_program_name(bootcamper):
+    """Name of the program this bootcamper is enrolled in, or None."""
+    from apps.programs.models import Enrollment
+
+    enrollment = (
+        Enrollment.objects
+        .filter(bootcamper=bootcamper)
+        .select_related('bootcamp')
+        .order_by('-id')
+        .first()
+    )
+    return enrollment.bootcamp.name if enrollment else None
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_verification_approved_email(self, bootcamper_id):
+    """Tell the bootcamper their onboarding data was verified (#309)."""
+    try:
+        from apps.authentication.models import CustomUser
+
+        bootcamper = CustomUser.objects.get(id=bootcamper_id)
+
+        send_templated_email(
+            template='verification_approved',
+            context={
+                'recipient_name': bootcamper.get_full_name(),
+                'program_name': _bootcamper_program_name(bootcamper),
+            },
+            subject='Tus datos fueron verificados — Boot-Tracker',
+            to=[bootcamper.email],
+        )
+        logger.info('Verification approved email sent to %s.', bootcamper.email)
+    except Exception as exc:
+        logger.exception('Error sending verification approved email for %s.', bootcamper_id)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_verification_rejected_email(self, bootcamper_id):
+    """Tell the bootcamper what to fix in their onboarding data (#309).
+
+    El correo no enlaza a ninguna pantalla a propósito: hoy el bootcamper no
+    puede autocorregir sus datos (el onboarding es un token de un solo uso ya
+    consumido, y `/auth/me/` no expone la cédula). La corrección es asistida, así
+    que el correo pide contactar al asesor.
+    """
+    try:
+        from apps.authentication.models import CustomUser
+
+        bootcamper = CustomUser.objects.get(id=bootcamper_id)
+
+        send_templated_email(
+            template='verification_rejected',
+            context={
+                'recipient_name': bootcamper.get_full_name(),
+                'program_name': _bootcamper_program_name(bootcamper),
+                'rejection_reason': bootcamper.verification_rejection_reason,
+            },
+            subject='Hay que corregir tus datos — Boot-Tracker',
+            to=[bootcamper.email],
+        )
+        logger.info('Verification rejected email sent to %s.', bootcamper.email)
+    except Exception as exc:
+        logger.exception('Error sending verification rejected email for %s.', bootcamper_id)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_staff_invitation_email(self, user_id, invitation_link):
+    """Send the one-time onboarding invitation link to a newly created staff user.
+
+    Espejo de `send_bootcamper_invitation_email` (issue #295): mismo mecanismo
+    de link firmado de 72h, pero para roles de staff (vendedor, finanzas,
+    administrador) creados desde el panel de usuarios en vez de convertidos
+    desde un lead.
+    """
+    try:
+        from apps.authentication.models import CustomUser
+        from apps.authentication.services import ONBOARDING_TOKEN_MAX_AGE
+
+        user = CustomUser.objects.get(id=user_id)
+
+        send_templated_email(
+            template='staff_invitation',
+            context={
+                'recipient_name': user.get_full_name(),
+                'invitation_link': invitation_link,
+                'expiry_hours': ONBOARDING_TOKEN_MAX_AGE // 3600,
+                'role_display': user.get_role_display(),
+            },
+            subject='Activa tu cuenta — Boot-Tracker',
+            to=[user.email],
+        )
+        logger.info('Staff invitation email sent to %s.', user.email)
+    except Exception as exc:
+        logger.exception('Error sending staff invitation email for %s.', user_id)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def send_conversion_notification(self, lead_id, bootcamper_id):
     """Notify program coordinators when a lead is converted to a bootcamper."""
     try:

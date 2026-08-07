@@ -30,20 +30,72 @@ class InteractionSerializer(serializers.ModelSerializer):
         return obj.salesperson.get_full_name()
 
 
+class BootcamperSummarySerializer(serializers.ModelSerializer):
+    """Datos de sólo lectura del bootcamper resultante de una conversión (#259)."""
+    verified_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = (
+            'id', 'first_name', 'last_name', 'email', 'phone', 'cedula',
+            'verification_status', 'verified_at', 'verified_by_name',
+            'verification_rejection_reason', 'onboarding_completed_at',
+        )
+
+    def get_verified_by_name(self, obj):
+        return obj.verified_by.get_full_name() if obj.verified_by else None
+
+
+class VerificationRejectSerializer(serializers.Serializer):
+    """Motivo con el que se rechazan los datos de un bootcamper (#309).
+
+    Espejo de `PaymentRejectSerializer`: el motivo es obligatorio porque es todo
+    lo que el bootcamper va a recibir para saber qué corregir.
+    """
+    reason = serializers.CharField(min_length=1)
+
+    def validate_reason(self, value):
+        if not value.strip():
+            raise serializers.ValidationError('El motivo del rechazo no puede estar vacío.')
+        return value
+
+
+class LeadDiscardSerializer(serializers.Serializer):
+    """Motivo con el que se saca un lead del listado (#324).
+
+    La causal es obligatoria y cerrada para que el reporte pueda agrupar por
+    ella; el detalle es libre y sólo se exige cuando la causal es "Otro".
+    """
+    reason = serializers.ChoiceField(choices=Lead.DiscardReason.choices)
+    detail = serializers.CharField(required=False, allow_blank=True, default='')
+
+
 class LeadListSerializer(serializers.ModelSerializer):
     interaction_count = serializers.IntegerField(read_only=True)
+    discard_reason_display = serializers.CharField(source='get_discard_reason_display', read_only=True)
     last_outcome = serializers.CharField(read_only=True, allow_null=True, default=None)
     last_interaction_at = serializers.DateTimeField(read_only=True, allow_null=True, default=None)
+    # Anotados sólo en el listado (ver LeadsListView._annotated_qs). El default
+    # los deja pasar cuando el serializer corre sobre un lead recién creado, que
+    # no viene de esa queryset.
+    first_interaction_at = serializers.DateTimeField(read_only=True, allow_null=True, default=None)
+    last_note = serializers.CharField(read_only=True, allow_null=True, default=None)
     days_assigned = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
+    bootcamper_verification_status = serializers.CharField(
+        source='bootcamper.verification_status', read_only=True, allow_null=True, default=None,
+    )
 
     class Meta:
         model = Lead
         fields = (
             'id', 'name', 'phone', 'email', 'source', 'status',
             'is_company', 'program_interest', 'interaction_count',
-            'last_outcome', 'last_interaction_at', 'days_assigned',
-            'owner', 'owner_name', 'created_at',
+            'last_outcome', 'last_interaction_at', 'first_interaction_at',
+            'last_note', 'days_assigned',
+            'owner', 'owner_name', 'assigned_at', 'created_at',
+            'discard_reason', 'discard_reason_display', 'discard_detail', 'discarded_at',
+            'bootcamper', 'bootcamper_verification_status',
         )
 
     def get_days_assigned(self, obj):
@@ -62,8 +114,14 @@ class LeadListSerializer(serializers.ModelSerializer):
 
 class LeadDetailSerializer(serializers.ModelSerializer):
     interaction_count = serializers.IntegerField(read_only=True)
+    discard_reason_display = serializers.CharField(source='get_discard_reason_display', read_only=True)
+    discarded_by_name = serializers.SerializerMethodField()
     days_assigned = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
+    bootcamper_verification_status = serializers.CharField(
+        source='bootcamper.verification_status', read_only=True, allow_null=True, default=None,
+    )
+    bootcamper_profile = BootcamperSummarySerializer(source='bootcamper', read_only=True)
 
     class Meta:
         model = Lead
@@ -72,6 +130,9 @@ class LeadDetailSerializer(serializers.ModelSerializer):
             'is_company', 'program_interest', 'program', 'interaction_count',
             'owner', 'owner_name', 'assigned_at', 'released_at', 'days_assigned',
             'last_contact', 'created_at', 'updated_at',
+            'discard_reason', 'discard_reason_display', 'discard_detail',
+            'discarded_at', 'discarded_by_name',
+            'bootcamper', 'bootcamper_verification_status', 'bootcamper_profile',
         )
 
     def get_days_assigned(self, obj):
@@ -86,6 +147,9 @@ class LeadDetailSerializer(serializers.ModelSerializer):
         if obj.owner:
             return obj.owner.get_full_name()
         return None
+
+    def get_discarded_by_name(self, obj):
+        return obj.discarded_by.get_full_name() if obj.discarded_by else None
 
 
 class LeadWriteSerializer(serializers.ModelSerializer):
@@ -106,6 +170,16 @@ class LeadWriteSerializer(serializers.ModelSerializer):
     def validate_phone(self, value):
         if not value or not value.strip():
             raise serializers.ValidationError('El teléfono no puede estar vacío.')
+        return value
+
+    def validate_status(self, value):
+        # Descartar exige un motivo, y por acá no viaja ninguno. Si se permitiera,
+        # el PATCH genérico sería una puerta trasera para cerrar leads sin decir
+        # por qué — justo lo que el estado nuevo viene a evitar.
+        if value == Lead.Status.DISCARDED:
+            raise serializers.ValidationError(
+                'Para descartar un lead usa la acción de descarte, que pide el motivo.'
+            )
         return value
 
     def create(self, validated_data):
@@ -139,13 +213,16 @@ class LeadAdminWriteSerializer(LeadWriteSerializer):
 
 class ConvertLeadSerializer(serializers.Serializer):
     """Validate lead-to-bootcamper conversion input."""
-    cedula     = serializers.CharField(max_length=10)
+    cedula     = serializers.CharField(max_length=13)
     program_id = serializers.UUIDField()
     # Opcional: hay programas sin cohortes creadas todavía, y exigirla bloquearía
     # la conversión. Cuando viene, el servicio comprueba que sea de ese programa
     # y que no esté finalizada.
     cohort_id  = serializers.UUIDField(required=False, allow_null=True)
-    email      = serializers.EmailField(required=False, allow_blank=True)
+    # Obligatorio: la cuenta se crea sin contraseña utilizable y la persona la
+    # activa vía un link de invitación que llega a este correo (#253). Ya no
+    # existe el placeholder bootcamper_<cedula>@placeholder.com.
+    email      = serializers.EmailField()
     phone      = serializers.CharField(required=False, allow_blank=True)
     # Sólo el porcentaje: el precio final lo calcula el backend. Si el cliente
     # pudiera mandarlo, cualquiera podría inscribir a alguien por el monto que

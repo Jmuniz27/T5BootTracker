@@ -70,22 +70,51 @@ class AdminUserSerializer(CoordinatorScopeMixin, UserDataSerializer):
     asignación de coordinador exclusivamente para el panel de administración.
     """
     coordinator_program_names = serializers.SerializerMethodField()
+    enrollments = serializers.SerializerMethodField()
 
     class Meta(UserDataSerializer.Meta):
-        fields = UserDataSerializer.Meta.fields + ('cedula',) + COORDINATOR_FIELDS + (
-            'coordinator_program_names',
+        fields = UserDataSerializer.Meta.fields + ('cedula', 'verification_status') + COORDINATOR_FIELDS + (
+            'coordinator_program_names', 'enrollments',
         )
+        read_only_fields = UserDataSerializer.Meta.read_only_fields + ('verification_status',)
 
     def get_coordinator_program_names(self, obj):
         """Nombres para pintar la tabla sin que el cliente cruce ids."""
         return [p.name for p in obj.coordinator_programs.all()]
 
+    def get_enrollments(self, obj):
+        """Programa y cohorte del bootcamper (#328).
+
+        La clienta los agrupa mentalmente por cohorte, así que la tabla de
+        usuarios tiene que decirlo. Se devuelve la lista completa —hay quien
+        cursa más de un programa— y la interfaz decide cómo mostrarla; resolver
+        acá cuál es "el" programa sería elegir por ella.
+
+        Sale de Enrollment, la misma fuente que usa la cartera de Finanzas, para
+        que las dos pantallas no digan cosas distintas del mismo bootcamper.
+        """
+        if obj.role != CustomUser.Role.BOOTCAMPER:
+            return []
+
+        return [
+            {
+                'program_id':    str(enrollment.bootcamp_id),
+                'program_name':  enrollment.bootcamp.name,
+                'cohort_id':     str(enrollment.cohort_id) if enrollment.cohort_id else None,
+                'cohort_number': enrollment.cohort.number if enrollment.cohort else None,
+                'cohort_status': enrollment.cohort.status if enrollment.cohort else None,
+            }
+            # Prefetch en UserViewSet.get_queryset: sin él esto sería un N+1 por fila.
+            for enrollment in obj.enrollments.all()
+        ]
+
 
 class CreateUserSerializer(CoordinatorScopeMixin, serializers.ModelSerializer):
-    # No `required=True`: el coordinador es una persona de contacto y no entra a
-    # la aplicación, así que no se le pide contraseña. La exigencia por rol se
-    # resuelve en validate(); `create_user` deja la contraseña inutilizable
-    # cuando no viene ninguna.
+    # No `required=True`: si el administrador la deja en blanco, el usuario
+    # recibe una invitación por correo para elegir su propia contraseña (issue
+    # #295) en vez de que se la comuniquen en texto plano. El coordinador es la
+    # única excepción real — no entra a la aplicación, así que ni siquiera se
+    # le invita; `create_user` resuelve ambos casos.
     password = serializers.CharField(
         write_only=True, required=False, allow_blank=True, style={'input_type': 'password'},
     )
@@ -96,18 +125,6 @@ class CreateUserSerializer(CoordinatorScopeMixin, serializers.ModelSerializer):
             'email', 'cedula', 'first_name', 'last_name', 'role', 'password', 'phone',
             *COORDINATOR_FIELDS,
         ]
-
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-
-        # Todos los roles que sí usan la aplicación necesitan contraseña; el
-        # coordinador es la única excepción.
-        if attrs.get('role') != CustomUser.Role.COORDINATOR and not attrs.get('password'):
-            raise serializers.ValidationError({
-                'password': 'Este campo es obligatorio.',
-            })
-
-        return attrs
 
     def validate_email(self, value):
         if CustomUser.objects.filter(email=value).exists():

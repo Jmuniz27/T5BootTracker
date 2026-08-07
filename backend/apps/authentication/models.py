@@ -41,13 +41,29 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         GENERAL = 'GENERAL', 'General'
         PROGRAM = 'PROGRAM', 'Por programa'
 
+    class VerificationStatus(models.TextChoices):
+        """Estado de verificación del perfil de un bootcamper (sólo aplica a ese rol).
+
+        INVITED: recién convertido, aún no activó su cuenta.
+        PENDING_VERIFICATION: activó la cuenta y confirmó sus datos, falta que
+        el vendedor los verifique. No bloquea nada — es informativo.
+        VERIFIED: el vendedor confirmó los datos.
+        REJECTED: el vendedor encontró algo mal (issue #309). El motivo queda en
+        `verification_rejection_reason` y se le notifica por correo. No es
+        terminal: una vez corregidos los datos se puede pasar a VERIFIED.
+        """
+        INVITED              = 'INVITED',              'Invitado'
+        PENDING_VERIFICATION = 'PENDING_VERIFICATION', 'Pendiente de verificación'
+        VERIFIED             = 'VERIFIED',              'Verificado'
+        REJECTED             = 'REJECTED',             'Rechazado'
+
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email      = models.EmailField(unique=True, verbose_name='Correo electrónico')
     first_name = models.CharField(max_length=150, verbose_name='Nombre')
     last_name  = models.CharField(max_length=150, verbose_name='Apellido')
     phone      = models.CharField(max_length=20, blank=True, null=True, verbose_name='Teléfono')
     cedula     = models.CharField(
-        max_length=10,
+        max_length=13,
         unique=True,
         null=True,
         blank=True,
@@ -85,6 +101,45 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         verbose_name='Responsable de cobro',
     )
     finance_assigned_at = models.DateTimeField(null=True, blank=True)
+    # Verificación del perfil del bootcamper (issue #254). El default VERIFIED
+    # es a propósito: la migración no debe marcar retroactivamente todo el
+    # historial de bootcampers como pendiente — sólo los convertidos a partir
+    # de aquí arrancan en INVITED (ver `convert_lead_to_bootcamper`).
+    verification_status = models.CharField(
+        max_length=25,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.VERIFIED,
+        verbose_name='Estado de verificación',
+    )
+    # `verified_by` / `verified_at` son el rastro de la revisión en los DOS
+    # desenlaces (issue #309): quién revisó y cuándo, tanto al verificar como al
+    # rechazar. Conservan el nombre porque los leen el serializador de leads, la
+    # UI y el móvil; renombrarlos costaría una migración de datos por una
+    # ganancia sólo nominal.
+    verified_by = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_bootcampers',
+        verbose_name='Revisado por',
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    # Qué hay que corregir, según el vendedor. Se limpia al verificar.
+    verification_rejection_reason = models.TextField(
+        blank=True,
+        verbose_name='Motivo del rechazo de verificación',
+    )
+    onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+    # Consentimiento de uso de datos (#329). Se sella al activar la cuenta, que
+    # es el único punto donde la persona entra por su propia mano. Se guarda la
+    # versión del texto aceptado: si cambia, hay que poder saber qué aceptó cada
+    # quien. Nulo = nunca lo aceptó (cuentas anteriores a esto).
+    data_consent_at      = models.DateTimeField(null=True, blank=True, verbose_name='Consentimiento de datos')
+    data_consent_version = models.CharField(max_length=20, blank=True, verbose_name='Versión del consentimiento')
+    # Token de invitación vigente (issue #253/#255): comparado contra el
+    # `iat` firmado en el token para invalidar el link anterior al reenviar.
+    onboarding_token_issued_at = models.DateTimeField(null=True, blank=True)
     is_active  = models.BooleanField(default=True)
     is_staff   = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

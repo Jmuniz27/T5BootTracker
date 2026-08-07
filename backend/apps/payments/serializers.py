@@ -2,8 +2,8 @@
 
 from django.urls import reverse
 from rest_framework import serializers
-from apps.authentication.validators import validate_cedula_ecuatoriana
-from .models import Payment
+from apps.authentication.validators import validate_identificacion
+from .models import BootcamperAssignmentSetting, Payment
 from .services import make_receipt_token
 
 MAX_FILE_SIZE_MB = 10
@@ -13,20 +13,38 @@ ALLOWED_MIME_TYPES = {
     "image/jpg": "image",
     "application/pdf": "pdf",
 }
+# Al arrastrar un archivo, algunos SO/navegadores declaran "application/octet-stream"
+# en vez del MIME real — sobre todo con PDFs. Ese tipo pasa el filtro del frontend
+# (que valida por extensión) y el backend lo rechazaba, así que se acepta acá
+# revalidando por extensión.
+ALLOWED_EXTENSIONS = {
+    ".jpg": "image",
+    ".jpeg": "image",
+    ".png": "image",
+    ".pdf": "pdf",
+}
 
 
 class PaymentUploadSerializer(serializers.Serializer):
     """Validates an uploaded receipt file."""
 
     receipt_file = serializers.FileField()
-    program_id = serializers.UUIDField()
+    # Opcional: el bootcamper no elige el programa al subir, se deduce de su
+    # inscripción activa (ver `services.resolve_upload_program`). Se sigue
+    # aceptando para los clientes que ya lo enviaban y para desempatar a quien
+    # curse dos programas a la vez.
+    program_id = serializers.UUIDField(required=False, allow_null=True)
 
     def validate_receipt_file(self, file):
+        import os
+
         mime_type = file.content_type
         if mime_type not in ALLOWED_MIME_TYPES:
-            raise serializers.ValidationError(
-                "Tipo de archivo no permitido. Use JPG, PNG o PDF."
-            )
+            extension = os.path.splitext(file.name or "")[1].lower()
+            if mime_type != "application/octet-stream" or extension not in ALLOWED_EXTENSIONS:
+                raise serializers.ValidationError(
+                    "Tipo de archivo no permitido. Use JPG, PNG o PDF."
+                )
         if file.size > MAX_FILE_SIZE_MB * 1024 * 1024:
             raise serializers.ValidationError(
                 f"El archivo no puede superar {MAX_FILE_SIZE_MB} MB."
@@ -160,6 +178,13 @@ class PaymentConfirmSerializer(serializers.Serializer):
     payer_phone              = serializers.CharField(max_length=20,  required=False, allow_blank=True)
     document_number         = serializers.CharField(max_length=50,  required=False, allow_blank=True)
 
+    def to_internal_value(self, data):
+        # The frontend initializes the date input to '' when there's no OCR
+        # value; DRF's DateField accepts null but not '', so normalize here.
+        if data.get("ocr_payment_date") == "":
+            data = {**data, "ocr_payment_date": None}
+        return super().to_internal_value(data)
+
     def validate_payer_identification(self, value):
         """Accept blank (best-effort field). If provided, must be a valid
         Ecuadorian cédula (10 digits) or RUC (13 digits, ends in 001)."""
@@ -169,16 +194,14 @@ class PaymentConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "La identificación debe contener solo dígitos."
             )
-        if len(value) == 10:
-            if not validate_cedula_ecuatoriana(value):
-                raise serializers.ValidationError("Cédula ecuatoriana inválida.")
-        elif len(value) == 13:
-            if not (validate_cedula_ecuatoriana(value[:10]) and value.endswith("001")):
-                raise serializers.ValidationError("RUC ecuatoriano inválido.")
-        else:
+        if len(value) not in (10, 13):
             raise serializers.ValidationError(
                 "La identificación debe tener 10 dígitos (cédula) o 13 (RUC)."
             )
+        if not validate_identificacion(value):
+            if len(value) == 10:
+                raise serializers.ValidationError("Cédula ecuatoriana inválida.")
+            raise serializers.ValidationError("RUC ecuatoriano inválido.")
         return value
 
 
@@ -187,3 +210,16 @@ class PaymentDetailSerializer(PaymentListSerializer):
 
     class Meta(PaymentListSerializer.Meta):
         fields = PaymentListSerializer.Meta.fields + ("ocr_raw_text",)
+
+
+class BootcamperAssignmentSettingSerializer(serializers.ModelSerializer):
+    """Espejo de LeadAssignmentSettingSerializer, para el pool de bootcampers."""
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BootcamperAssignmentSetting
+        fields = ('self_assign_enabled', 'updated_by_name', 'updated_at')
+        read_only_fields = ('updated_by_name', 'updated_at')
+
+    def get_updated_by_name(self, obj):
+        return obj.updated_by.get_full_name() if obj.updated_by else None

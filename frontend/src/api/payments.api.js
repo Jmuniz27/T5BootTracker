@@ -3,6 +3,9 @@ import client from './client'
 export const getMyHistory = () =>
   client.get('/payments/my-history/').then((r) => r.data)
 
+export const getMyPrograms = () =>
+  client.get('/payments/my-programs/').then((r) => r.data)
+
 export const getMyStatus = (programId) =>
   client.get('/payments/my-status/', { params: { program_id: programId } }).then((r) => r.data)
 
@@ -42,6 +45,22 @@ export const notifyCoordinator = (bootcamperId, programId) =>
 export const getMonitoring = (params = {}) =>
   client.get('/payments/monitoring/', { params }).then((r) => r.data)
 
+// Historial completo de solicitudes de un bootcamper: incluye las ya revisadas.
+// `getPaymentQueue` sólo devuelve pendientes, así que tras aprobar o rechazar la
+// solicitud desaparecía y con ella el motivo y quién la validó.
+export const getPaymentHistory = (params = {}) =>
+  client.get('/payments/history/', { params }).then((r) => r.data)
+
+// Control global de auto-asignación del pool (espejo del de leads, CR-004).
+// Lo lee Finanzas para saber si su botón está habilitado; sólo el admin lo cambia.
+export const getBootcamperAssignmentSetting = () =>
+  client.get('/payments/settings/self-assignment/').then((r) => r.data)
+
+export const updateBootcamperAssignmentSetting = (enabled) =>
+  client
+    .patch('/payments/settings/self-assignment/', { self_assign_enabled: enabled })
+    .then((r) => r.data)
+
 // ── Pool de bootcampers ───────────────────────────────────────────────────────
 // Misma mecánica que el pool de leads: al convertirse, un bootcamper queda sin
 // responsable de cobro y quien es de Finanzas se lo asigna para monitorearlo.
@@ -49,19 +68,34 @@ export const getMonitoring = (params = {}) =>
 export const getBootcamperPool = (params = {}) =>
   client.get('/payments/bootcampers/', { params }).then((r) => r.data)
 
-export const assignBootcamper = (bootcamperId) =>
-  client.patch(`/payments/bootcampers/${bootcamperId}/assign/`).then((r) => r.data)
+// `financeOwnerId` sólo lo manda el administrador, que reparte el pool: Finanzas
+// se lo asigna a sí misma y el backend ignora el cuerpo.
+export const assignBootcamper = (bootcamperId, financeOwnerId = null) =>
+  client
+    .patch(
+      `/payments/bootcampers/${bootcamperId}/assign/`,
+      financeOwnerId ? { finance_owner_id: financeOwnerId } : {},
+    )
+    .then((r) => r.data)
+
+// #326 — reparto en lote. Los que fallan vienen en `failed` con su motivo; el
+// resto sí queda asignado, así que la respuesta hay que leerla, no asumirla.
+export const bulkAssignBootcampers = (bootcamperIds, financeOwnerId = null) =>
+  client
+    .patch('/payments/bootcampers/bulk-assign/', {
+      bootcamper_ids: bootcamperIds,
+      ...(financeOwnerId ? { finance_owner_id: financeOwnerId } : {}),
+    })
+    .then((r) => r.data)
 
 export const releaseBootcamper = (bootcamperId) =>
   client.patch(`/payments/bootcampers/${bootcamperId}/release/`).then((r) => r.data)
 
 // ── Editar / eliminar pagos propios (CB-117 T6) ───────────────────────────────
-// Contrato ASUMIDO — pendiente de implementación en backend:
 //   PATCH  /payments/my-payments/<id>/  → el bootcamper corrige un pago REJECTED
 //                                          y lo reenvía (backend: REJECTED → PENDING).
 //   DELETE /payments/my-payments/<id>/  → el bootcamper elimina un pago propio en
 //                                          estado DRAFT (en revisión) o REJECTED.
-// Ambos deben validar propiedad (payment.bootcamper == request.user).
 export const updateMyPayment = (id, data) =>
   client.patch(`/payments/my-payments/${id}/`, data).then((r) => r.data)
 

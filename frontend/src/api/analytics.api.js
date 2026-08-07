@@ -9,3 +9,8 @@ export const getAnalyticsKpis = (params = {}) =>
 // Mismos params que los KPIs.
 export const getLeadManagementMetrics = (params = {}) =>
   client.get('/analytics/lead-management/', { params }).then((r) => r.data)
+
+// GET /api/analytics/lead-management/leads/ — leads de un vendedor (solo Admin).
+// Mismos params que arriba + `salesperson` (UUID, obligatorio).
+export const getSalespersonLeads = (params = {}) =>
+  client.get('/analytics/lead-management/leads/', { params }).then((r) => r.data)

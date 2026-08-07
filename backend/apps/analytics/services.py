@@ -378,3 +378,85 @@ class AnalyticsService:
     def _mean_hours(values):
         """Promedio redondeado a 1 decimal; None si no hay datos (0 sería engañoso)."""
         return round(statistics.mean(values), 1) if values else None
+
+    # ──────────────────────────────────────────────────────────────────────
+    # 6. Detalle lead por lead de un vendedor (drill-down de CR-006)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def get_salesperson_lead_detail(
+        self, *, salesperson_id, fecha_desde=None, fecha_hasta=None, segment=None, campaign=None
+    ) -> dict:
+        """Una fila por lead del vendedor, con los mismos tiempos que el agregado.
+
+        Es el drill-down de `get_lead_management_metrics`: aquel responde
+        "¿cuánto tarda en promedio?", este "¿en qué lead concreto se fue ese
+        tiempo?". Por eso ambos parten del mismo `_leads_base_qs` y calculan
+        retención y primer contacto con la misma regla — si divergieran, la
+        tabla contradiría a la tarjeta de arriba.
+
+        Incluye leads ya liberados: siguen siendo parte de la gestión de ese
+        vendedor en el período. `is_released` los distingue de los que aún tiene.
+        """
+        first_interaction_sq = (
+            Interaction.objects.filter(lead=OuterRef('pk'))
+            .order_by('created_at')
+            .values('created_at')[:1]
+        )
+        last_interaction = Interaction.objects.filter(lead=OuterRef('pk')).order_by('-created_at')
+
+        qs = (
+            self._leads_base_qs(fecha_desde, fecha_hasta, segment, campaign)
+            .filter(owner_id=salesperson_id, assigned_at__isnull=False)
+            .annotate(
+                first_interaction_at=Subquery(first_interaction_sq),
+                last_interaction_at=Subquery(last_interaction.values('created_at')[:1]),
+                last_outcome=Subquery(last_interaction.values('outcome')[:1]),
+                interaction_count=Count('interactions', distinct=True),
+            )
+            .order_by('-assigned_at')
+        )
+
+        reference = timezone.now()
+        leads = []
+        for lead in qs:
+            end = lead.released_at or reference
+            retention_hours = round((end - lead.assigned_at).total_seconds() / 3600, 1)
+
+            # Misma guarda que el agregado: una interacción anterior a la
+            # asignación no mide la reacción del vendedor, mide otra cosa.
+            hours_to_first_contact = None
+            if lead.first_interaction_at and lead.first_interaction_at >= lead.assigned_at:
+                hours_to_first_contact = round(
+                    (lead.first_interaction_at - lead.assigned_at).total_seconds() / 3600, 1
+                )
+
+            leads.append({
+                'lead_id': str(lead.id),
+                'name': lead.name,
+                'source': lead.source,
+                'status': lead.status,
+                'program_interest': lead.program_interest,
+                'created_at': lead.created_at.isoformat(),
+                'assigned_at': lead.assigned_at.isoformat(),
+                'released_at': lead.released_at.isoformat() if lead.released_at else None,
+                'is_released': lead.released_at is not None,
+                'retention_hours': retention_hours,
+                'hours_to_first_contact': hours_to_first_contact,
+                'interaction_count': lead.interaction_count,
+                'last_outcome': lead.last_outcome,
+                'last_interaction_at': (
+                    lead.last_interaction_at.isoformat() if lead.last_interaction_at else None
+                ),
+            })
+
+        return {
+            'filters_applied': {
+                'salesperson_id': str(salesperson_id),
+                'fecha_desde': fecha_desde.isoformat() if fecha_desde else None,
+                'fecha_hasta': fecha_hasta.isoformat() if fecha_hasta else None,
+                'segment': segment,
+                'campaign': campaign,
+            },
+            'leads_count': len(leads),
+            'leads': leads,
+        }

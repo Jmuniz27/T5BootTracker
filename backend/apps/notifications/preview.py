@@ -26,6 +26,27 @@ PREVIEWS = {
         'rejection_reason': 'El comprobante no muestra el monto total pagado.',
         'upload_url': 'http://localhost:5173/payments',
     },
+    'bootcamper_invitation': {
+        'recipient_name': 'Ana Torres',
+        'invitation_link': 'http://localhost:5173/onboarding/preview-token',
+        'expiry_hours': 72,
+        'program_name': 'Data Science Bootcamp',
+    },
+    'staff_invitation': {
+        'recipient_name': 'Carlos Vera',
+        'invitation_link': 'http://localhost:5173/onboarding/preview-token',
+        'expiry_hours': 72,
+        'role_display': 'Finanzas',
+    },
+    'verification_approved': {
+        'recipient_name': 'Ana Torres',
+        'program_name': 'Data Science Bootcamp',
+    },
+    'verification_rejected': {
+        'recipient_name': 'Ana Torres',
+        'program_name': 'Data Science Bootcamp',
+        'rejection_reason': 'La cédula registrada no coincide con la del documento que enviaste.',
+    },
     'conversion_notification': {
         'lead_name': 'María Gómez',
         'bootcamper_name': 'María Gómez',

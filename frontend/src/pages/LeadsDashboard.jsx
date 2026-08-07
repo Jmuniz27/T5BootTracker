@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
+import ExportMenu from '../components/ExportMenu'
+import { LEAD_REPORT_COLUMNS, SOURCE_LABELS, STATUS_LABELS } from '../lib/leadsReport'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, getAllLeads, discardLead, restoreLead, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
@@ -9,17 +11,11 @@ import DuplicateLeadModal from '../components/leads/DuplicateLeadModal'
 import MeetingFormModal from '../components/MeetingFormModal'
 import { useMeetingMutations } from '../hooks/use-meetings'
 import { toDatetimeLocal } from '../lib/meetings'
+import { isValidIdentificacion } from '../utils/cedula'
 
 const PAGE_SIZE = 10
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const SOURCE_LABELS = {
-  INSTAGRAM: 'Instagram',
-  WHATSAPP: 'WhatsApp',
-  LANDING_PAGE: 'Landing Page',
-  MANUAL: 'Manual',
-}
 
 const AVATAR_COLORS = [
   'bg-[#213A8E]',
@@ -32,13 +28,15 @@ const AVATAR_COLORS = [
   'bg-indigo-500',
 ]
 
-const STATUS_LABELS = {
-  NEW: 'Nuevo',
-  QUALIFIED: 'Calificado',
-  INTERESTED: 'Interesado',
-  NOT_INTERESTED: 'No interesado',
-  CONVERTED: 'Convertido',
-}
+// Causales de cierre. Espejo de Lead.DiscardReason en el backend, que es quien
+// valida de verdad: acá sólo se arma el formulario.
+const DISCARD_REASONS = [
+  { value: 'NO_BUDGET',   label: 'Sin presupuesto' },
+  { value: 'SCHEDULE',    label: 'Los horarios no le sirven' },
+  { value: 'NO_RESPONSE', label: 'No responde / los correos rebotan' },
+  { value: 'FREE_ONLY',   label: 'Sólo busca contenido gratis' },
+  { value: 'OTHER',       label: 'Otro' },
+]
 
 const STATUS_COLORS = {
   NEW: 'bg-gray-100 text-gray-500',
@@ -46,6 +44,7 @@ const STATUS_COLORS = {
   INTERESTED: 'bg-yellow-100 text-yellow-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
   CONVERTED: 'bg-green-100 text-green-700',
+  DISCARDED: 'bg-slate-200 text-slate-600',
 }
 
 const INTERACTION_TYPE_LABELS = {
@@ -83,6 +82,29 @@ function LeadStatusBadge({ status, lastOutcome }) {
   }
   const label = STATUS_LABELS[status] ?? OUTCOME_LABELS[lastOutcome] ?? status
   const color = STATUS_COLORS[status] ?? OUTCOME_COLORS[lastOutcome] ?? 'bg-gray-100 text-gray-500'
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
+      {label}
+    </span>
+  )
+}
+
+const VERIFICATION_LABELS = {
+  INVITED: 'Invitado',
+  PENDING_VERIFICATION: 'Pendiente de verificación',
+  VERIFIED: 'Verificado',
+}
+
+const VERIFICATION_COLORS = {
+  INVITED: 'bg-gray-100 text-gray-500',
+  PENDING_VERIFICATION: 'bg-yellow-100 text-yellow-700',
+  VERIFIED: 'bg-green-100 text-green-700',
+}
+
+function VerificationBadge({ status }) {
+  if (!status) return null
+  const label = VERIFICATION_LABELS[status] ?? status
+  const color = VERIFICATION_COLORS[status] ?? 'bg-gray-100 text-gray-500'
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
       {label}
@@ -319,15 +341,17 @@ function ViewHistoryModal({ lead, onClose }) {
                 )}
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                <button
-                  onClick={() => setEditTarget(interaction)}
-                  className="p-1.5 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
-                  title="Editar interacción"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
-                  </svg>
-                </button>
+                {lead.status !== 'CONVERTED' && (
+                  <button
+                    onClick={() => setEditTarget(interaction)}
+                    className="p-1.5 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
+                    title="Editar interacción"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
+                    </svg>
+                  </button>
+                )}
                 <p className="text-xs text-gray-500">{formatDate(interaction.created_at)}</p>
                 <p className="text-xs text-gray-500">{formatTime(interaction.created_at)}</p>
               </div>
@@ -693,7 +717,154 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
 // ─── View Lead Modal ──────────────────────────────────────────────────────────
 
-function ViewLeadModal({ lead, onClose }) {
+/**
+ * Cierre de un lead con motivo (#324).
+ *
+ * La clienta lo pidió porque quería "rayar los que ya no los llames" y saber
+ * por qué. El motivo es una causal cerrada y no texto libre para que el reporte
+ * pueda agrupar; el detalle acompaña y sólo es obligatorio con "Otro", donde la
+ * causal por sí sola no dice nada.
+ */
+function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
+  const queryClient = useQueryClient()
+  const [reason, setReason] = useState('')
+  const [detail, setDetail] = useState('')
+  const [error, setError] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: (payload) => discardLead(lead.id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
+      onSuccess(`${lead.name} salió del listado de seguimiento.`)
+      onClose()
+    },
+    onError: (err) => {
+      onError(err.response?.data?.error ?? 'No se pudo descartar el lead.')
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!reason) {
+      setError('Elige un motivo.')
+      return
+    }
+    if (reason === 'OTHER' && !detail.trim()) {
+      setError('Con el motivo "Otro" hay que escribir el detalle.')
+      return
+    }
+    setError('')
+    mutation.mutate({ reason, detail: detail.trim() })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[440px] shadow-xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} aria-label="Cerrar" className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <h2 className="text-xl font-bold text-gray-900 mb-1">Descartar lead</h2>
+        <p className="text-sm text-gray-500 mb-1">{lead.name}</p>
+        <p className="text-xs text-gray-500 mb-5">
+          Sale del listado de seguimiento. Se puede reactivar después.
+        </p>
+
+        {/* noValidate: la validación propia está en español; la nativa del
+            navegador saldría en inglés y taparía este formulario. */}
+        <form onSubmit={handleSubmit} noValidate>
+          <fieldset className="space-y-2 mb-4">
+            <legend className="text-sm font-medium text-gray-700 mb-2">Motivo</legend>
+            {DISCARD_REASONS.map((option) => (
+              <label
+                key={option.value}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium cursor-pointer transition-colors ${
+                  reason === option.value
+                    ? 'border-[#1e3164] bg-blue-50 text-[#1e3164]'
+                    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="discard-reason"
+                  value={option.value}
+                  checked={reason === option.value}
+                  onChange={() => setReason(option.value)}
+                  className="accent-[#1e3164]"
+                />
+                {option.label}
+              </label>
+            ))}
+          </fieldset>
+
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="discard-detail">
+            Detalle {reason === 'OTHER' ? <span className="text-red-500">*</span> : <span className="text-gray-500 font-normal">(opcional)</span>}
+          </label>
+          <textarea
+            id="discard-detail"
+            rows={3}
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            placeholder="Qué pasó con este lead"
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+
+          {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
+
+          <div className="flex gap-2 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="flex-1 py-2.5 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
+            >
+              {mutation.isPending ? 'Descartando…' : 'Descartar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Quién tiene el lead y desde cuándo.
+ *
+ * La clienta lo pidió como su medida de leads abandonados: quiere ver de un
+ * vistazo cuánto lleva alguien sentado sobre el mismo lead. Por eso van juntos
+ * el vendedor, la fecha y los días — la fecha sola obliga a hacer la cuenta.
+ *
+ * `days_assigned` lo calcula el backend, que además lo congela en la fecha de
+ * liberación si el lead ya se soltó (CR-006).
+ */
+export function assignmentLabel(lead) {
+  if (!lead?.owner) return 'Sin asignar'
+
+  const nombre = lead.owner_name ?? 'Vendedor'
+  const fecha = lead.assigned_at ? new Date(lead.assigned_at) : null
+
+  if (!fecha || Number.isNaN(fecha.getTime())) return nombre
+
+  const desde = fecha.toLocaleDateString('es-EC', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  })
+  const dias = lead.days_assigned
+  if (dias == null) return `${nombre} · desde el ${desde}`
+
+  return `${nombre} · desde el ${desde} (${dias} ${dias === 1 ? 'día' : 'días'})`
+}
+
+function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
+  const queryClient = useQueryClient()
   const { data: interactions = [] } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -701,10 +872,19 @@ function ViewLeadModal({ lead, onClose }) {
 
   const lastInteraction = interactions[0]
   const rating = lastInteraction?.interest_level ?? null
+  const isConverted = lead.status === 'CONVERTED'
+  const profile = lead.bootcamper_profile
+
+  const verifyMutation = useMutation({
+    mutationFn: () => verifyBootcamper(lead.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-sm shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-md shadow-xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -755,6 +935,21 @@ function ViewLeadModal({ lead, onClose }) {
             <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
             <p className="text-gray-600">{SOURCE_LABELS[lead.source] || lead.source}</p>
           </div>
+          {lead.status === 'DISCARDED' && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="font-semibold text-gray-700 mb-0.5">Motivo del descarte:</p>
+              <p className="text-gray-600" data-testid="lead-discard-reason">
+                {lead.discard_reason_display || 'Sin motivo registrado'}
+              </p>
+              {lead.discard_detail && (
+                <p className="text-gray-600 mt-1">{lead.discard_detail}</p>
+              )}
+            </div>
+          )}
+          <div>
+            <p className="font-semibold text-gray-700 mb-0.5">Asignación:</p>
+            <p className="text-gray-600" data-testid="lead-assignment">{assignmentLabel(lead)}</p>
+          </div>
           {lastInteraction?.notes && (
             <div>
               <p className="font-semibold text-gray-700 mb-0.5">Última nota:</p>
@@ -765,6 +960,34 @@ function ViewLeadModal({ lead, onClose }) {
             <div>
               <p className="font-semibold text-gray-700 mb-0.5">Interés en programa:</p>
               <p className="text-gray-600">{lead.program_interest}</p>
+            </div>
+          )}
+          {isConverted && profile && (
+            <div className="pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-semibold text-gray-700">Datos del bootcamper:</p>
+                <VerificationBadge status={profile.verification_status} />
+              </div>
+              <div className="text-gray-600 space-y-0.5">
+                <p>{profile.first_name} {profile.last_name}</p>
+                <p>{profile.email}</p>
+                {profile.cedula && <p>Cédula/RUC: {profile.cedula}</p>}
+                {profile.phone && <p>{profile.phone}</p>}
+              </div>
+              {profile.verification_status === 'VERIFIED' && profile.verified_by_name && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Verificado por {profile.verified_by_name}
+                </p>
+              )}
+              {(isOwned || isAdmin) && profile.verification_status === 'PENDING_VERIFICATION' && (
+                <button
+                  onClick={() => verifyMutation.mutate()}
+                  disabled={verifyMutation.isPending}
+                  className="mt-3 w-full py-2 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
+                >
+                  {verifyMutation.isPending ? 'Verificando...' : 'Marcar como verificado'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -904,7 +1127,7 @@ function leadFieldClass(errors, key) {
   }`
 }
 
-function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true }) {
+function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, isAdmin = false }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
@@ -997,26 +1220,32 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true })
             />
           </div>
 
-          <div>
-            <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-              <input
-                type="checkbox"
-                data-testid="create-lead-autoassign"
-                checked={form.autoAssign && canSelfAssign}
-                disabled={!canSelfAssign}
-                onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
-                className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
-              />
-              <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
-                Asignarme este lead
-              </span>
-            </label>
-            {!canSelfAssign && (
-              <p className="text-xs text-gray-500 mt-1 ml-7">
-                La asignación la realiza el Administrador.
-              </p>
-            )}
-          </div>
+          {/* CB-QA: un Administrador nunca puede ser owner de un lead (ver
+              LeadAssignView, permission_classes=[IsSalesperson] en el backend),
+              así que este checkbox ni se le muestra — antes se veía habilitado
+              y al tildarlo la asignación fallaba en silencio tras crear el lead. */}
+          {!isAdmin && (
+            <div>
+              <label className={`flex items-center gap-3 ${canSelfAssign ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                <input
+                  type="checkbox"
+                  data-testid="create-lead-autoassign"
+                  checked={form.autoAssign && canSelfAssign}
+                  disabled={!canSelfAssign}
+                  onChange={(e) => setForm((prev) => ({ ...prev, autoAssign: e.target.checked }))}
+                  className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
+                />
+                <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
+                  Asignarme este lead
+                </span>
+              </label>
+              {!canSelfAssign && (
+                <p className="text-xs text-gray-500 mt-1 ml-7">
+                  La asignación la realiza el Administrador.
+                </p>
+              )}
+            </div>
+          )}
 
 
           <div className="flex gap-3 pt-2">
@@ -1225,7 +1454,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-2 mb-6">
-            {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'CONVERTED' && value !== 'NEW').map(([value, label]) => (
+            {Object.entries(STATUS_LABELS).filter(([value]) => !['CONVERTED', 'NEW', 'DISCARDED'].includes(value)).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -1293,7 +1522,56 @@ function FilterDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 010 2H4a1 1 0 01-1-1zM6 10a1 1 0 011-1h10a1 1 0 010 2H7a1 1 0 01-1-1zM9 16a1 1 0 011-1h4a1 1 0 010 2h-4a1 1 0 01-1-1z" />
         </svg>
-        {value ? STATUS_LABELS[value] : 'Filtrar'}
+        {value ? STATUS_LABELS[value] : 'Estado'}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                value === opt.value ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Source Filter Dropdown ───────────────────────────────────────────────────
+
+function SourceFilterDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const options = [
+    { value: '', label: 'Todas las fuentes' },
+    ...Object.entries(SOURCE_LABELS).map(([v, label]) => ({ value: v, label })),
+  ]
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
+          value ? 'border-[#213A8E] text-[#213A8E] bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+        </svg>
+        {value ? SOURCE_LABELS[value] : 'Fuente'}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
@@ -1427,30 +1705,101 @@ function VendorFilterDropdown({ value, onChange }) {
   )
 }
 
+// ─── Resend Invitation Modal ────────────────────────────────────────────────
+
+function ResendInvitationModal({ lead, onClose }) {
+  const queryClient = useQueryClient()
+  const [copied, setCopied] = useState(false)
+
+  const resendMutation = useMutation({
+    mutationFn: () => resendInvitation(lead.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
+
+  const errorMsg = resendMutation.error
+    ? resendMutation.error.response?.status === 429
+      ? 'Demasiados reenvíos en poco tiempo. Intenta de nuevo más tarde.'
+      : (resendMutation.error.response?.data?.error ?? 'No pudimos reenviar la invitación. Intenta de nuevo.')
+    : null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Reenviar invitación</h2>
+
+        {!resendMutation.data && !resendMutation.isPending && (
+          <>
+            <p className="text-sm text-gray-500 mb-6">
+              Se generará un link nuevo para <span className="font-semibold text-gray-800">{lead.name}</span> y el
+              anterior dejará de funcionar.
+            </p>
+            {errorMsg && <p className="text-red-500 text-sm mb-4">{errorMsg}</p>}
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => resendMutation.mutate()}
+                className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
+              >
+                Reenviar
+              </button>
+            </div>
+          </>
+        )}
+
+        {resendMutation.isPending && <p className="text-sm text-gray-500 py-4">Reenviando...</p>}
+
+        {resendMutation.data && (
+          <>
+            <p className="text-sm text-gray-500 mb-6">Se generó un link nuevo. El anterior ya no funciona.</p>
+            <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-1.5 mb-6">
+              <span className="text-gray-500">Nuevo enlace de invitación</span>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={resendMutation.data.invitation_link}
+                  onFocus={(e) => e.target.select()}
+                  className="flex-1 min-w-0 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2 py-1.5 truncate"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(resendMutation.data.invitation_link)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                  className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
+                >
+                  {copied ? '¡Copiado!' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
+            >
+              Listo
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Row Actions Dropdown ─────────────────────────────────────────────────────
 
 // ─── Cédula Validator ─────────────────────────────────────────────────────────
 
-function validateCedulaEcuatoriana(cedula) {
-  if (!/^\d{10}$/.test(cedula)) return false
-  const digits = cedula.split('').map(Number)
-  const province = digits[0] * 10 + digits[1]
-  if (province < 1 || province > 24) return false
-  if (digits[2] >= 6) return false
-  const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2]
-  let sum = 0
-  for (let i = 0; i < 9; i++) {
-    let val = digits[i] * coefficients[i]
-    if (val >= 10) val -= 9
-    sum += val
-  }
-  const checkDigit = sum % 10 === 0 ? 0 : 10 - (sum % 10)
-  return checkDigit === digits[9]
-}
-
 function cedulaInputBorderClass(hasError, cedula) {
   if (hasError) return 'border-red-400'
-  if (cedula.length === 10 && validateCedulaEcuatoriana(cedula)) return 'border-green-400'
+  if ((cedula.length === 10 || cedula.length === 13) && isValidIdentificacion(cedula)) return 'border-green-400'
   return 'border-gray-200'
 }
 
@@ -1496,11 +1845,12 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   const [cedula, setCedula]   = useState('')
   const [programId, setProgramId] = useState('')
   const [cohortId, setCohortId]   = useState('')
-  const [discount, setDiscount]   = useState('0')
+  const [discount, setDiscount]   = useState('')
   const [email, setEmail]     = useState(lead.email || '')
   const [phone, setPhone]     = useState(lead.phone || '')
   const [errors, setErrors]   = useState({})
   const [result, setResult]   = useState(null) // conversion success data
+  const [copied, setCopied]   = useState(false)
 
   const { data: programs = [], isLoading: loadingPrograms } = useQuery({
     queryKey: ['programs'],
@@ -1552,11 +1902,15 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
   const validate = () => {
     const errs = {}
-    if (!cedula.trim()) errs.cedula = 'La cédula es requerida.'
-    else if (!validateCedulaEcuatoriana(cedula)) errs.cedula = 'Cédula ecuatoriana inválida.'
+    if (!cedula.trim()) errs.cedula = 'La cédula o RUC es requerida.'
+    else if (!isValidIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
+    if (!email.trim()) errs.email = 'El email es requerido para enviar la invitación.'
     if (!programId) errs.programId = 'Selecciona un programa.'
+    else if (!cohortId) errs.cohortId = 'Selecciona una cohorte.'
     const pct = Number(discount)
-    if (discount !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
+    if (discount.trim() === '') {
+      errs.discount = 'Ingresa el descuento (0 si no aplica).'
+    } else if (Number.isNaN(pct) || pct < 0 || pct > 100) {
       errs.discount = 'El descuento va de 0 a 100.'
     }
     return errs
@@ -1567,11 +1921,10 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     setErrors({})
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
-    const payload = { cedula, program_id: programId }
+    const payload = { cedula, program_id: programId, email }
     if (cohortId) payload.cohort_id = cohortId
     // Se manda el porcentaje y nunca el precio: la cuenta la hace el backend.
     if (Number(discount) > 0) payload.discount_percentage = discount
-    if (email) payload.email = email
     if (phone) payload.phone = phone
     convertMutation.mutate({ id: lead.id, payload })
   }
@@ -1596,12 +1949,31 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               <span className="text-gray-500">Email</span>
               <span className="font-medium text-gray-800">{result.email}</span>
             </div>
-            {result.temporary_password && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">Contraseña temporal</span>
-                <span className="font-mono font-bold text-[#213A8E] bg-blue-50 px-2 py-0.5 rounded">
-                  {result.temporary_password}
-                </span>
+            {result.invitation_link && (
+              <div className="space-y-1.5">
+                <span className="text-gray-500">Enlace de invitación enviado</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={result.invitation_link}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 min-w-0 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2 py-1.5 truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(result.invitation_link)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
+                  >
+                    {copied ? '¡Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Si el correo no llega, comparte este link por WhatsApp. Expira en 72 horas.
+                </p>
               </div>
             )}
             {result.is_returning && (
@@ -1643,20 +2015,20 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Cédula */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cédula <span className="text-red-500">*</span>
+              Cédula / RUC <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               data-testid="convert-cedula"
-              maxLength={10}
+              maxLength={13}
               value={cedula}
               onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
-              placeholder="10 dígitos"
+              placeholder="10 dígitos (cédula) o 13 (RUC)"
               className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${cedulaInputBorderClass(errors.cedula, cedula)}`}
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
-            {cedula.length === 10 && validateCedulaEcuatoriana(cedula) && (
-              <p className="text-xs text-green-600 mt-1">✓ Cédula válida</p>
+            {(cedula.length === 10 || cedula.length === 13) && isValidIdentificacion(cedula) && (
+              <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? 'Cédula válida' : 'RUC válido'}</p>
             )}
           </div>
 
@@ -1679,7 +2051,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {programId && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cohorte <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+                Cohorte <span className="text-red-500">*</span>
               </label>
               {loadingCohorts && <p className="text-sm text-gray-400">Cargando cohortes…</p>}
               {!loadingCohorts && assignableCohorts.length === 0 && (
@@ -1706,7 +2078,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Descuento */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="convert-discount">
-              Descuento <span className="text-xs text-gray-400 font-normal">(%)</span>
+              Descuento <span className="text-red-500">*</span> <span className="text-xs text-gray-400 font-normal">(%)</span>
             </label>
             <input
               id="convert-discount"
@@ -1732,13 +2104,17 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email <span className="text-red-500">*</span>
+            </label>
             <input
               type="email"
+              data-testid="convert-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${errors.email ? 'border-red-400' : 'border-gray-200'}`}
             />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           {/* Phone */}
@@ -1782,8 +2158,15 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit }) {
+function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit, onResendInvitation, onDiscard, onRestore }) {
   const isConverted = lead.status === 'CONVERTED'
+  const isDiscarded = lead.status === 'DISCARDED'
+  // Editable si no está convertido y es propio, disponible (sin dueño) o soy admin.
+  const canEdit = !isConverted && (isAdmin || !lead.owner || isOwned)
+  // El botón de reenvío sólo tiene sentido mientras el bootcamper no activó su
+  // cuenta — una vez PENDING_VERIFICATION o VERIFIED el link ya no sirve para
+  // nada (backend lo rechazaría con ALREADY_ACTIVATED).
+  const canResendInvitation = isConverted && lead.bootcamper_verification_status === 'INVITED'
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -1805,11 +2188,11 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
   const handleToggle = () => {
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect()
-      const upward = window.innerHeight - rect.bottom < 220
+      const upward = window.innerHeight - rect.bottom < 260
       setOpenUpward(upward)
       setPos({
         top: upward ? rect.top - 4 : rect.bottom + 4,
-        left: rect.right - 160,
+        left: rect.right - 176,
       })
     }
     setOpen((v) => !v)
@@ -1831,7 +2214,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
       {open && (
         <div
           ref={menuRef}
-          className={`fixed w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 ${openUpward ? '-translate-y-full' : ''}`}
+          className={`fixed w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 ${openUpward ? '-translate-y-full' : ''}`}
           style={{ top: pos.top, left: pos.left }}
         >
           <button
@@ -1854,7 +2237,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Registrar interacción
             </button>
           )}
-          {isOwned && !isConverted && (
+          {canEdit && (
             <button
               onClick={() => { onEdit(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -1870,12 +2253,36 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Cambiar estado
             </button>
           )}
+          {(isOwned || isAdmin) && !isConverted && !isDiscarded && (
+            <button
+              onClick={() => { onDiscard(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Descartar lead
+            </button>
+          )}
+          {(isOwned || isAdmin) && isDiscarded && (
+            <button
+              onClick={() => { onRestore(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-[#1e3164] font-medium hover:bg-blue-50"
+            >
+              Reactivar lead
+            </button>
+          )}
           {isOwned && lead.status === 'QUALIFIED' && (
             <button
               onClick={() => { onConvert(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
             >
               Convertir lead
+            </button>
+          )}
+          {(isOwned || isAdmin) && canResendInvitation && (
+            <button
+              onClick={() => { onResendInvitation(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Reenviar invitación
             </button>
           )}
           {!isAdmin && !isConverted && (isOwned ? (
@@ -1957,6 +2364,7 @@ export default function LeadsDashboard() {
   const isAdmin = currentUser?.role === 'ADMINISTRATOR'
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('')
   const [companyFilter, setCompanyFilter] = useState(false)
   const [sortKey, setSortKey]         = useState('default')
   const [page, setPage]               = useState(1)
@@ -1964,9 +2372,11 @@ export default function LeadsDashboard() {
   const [historyLead, setHistoryLead]     = useState(null)
   const [logLead, setLogLead]             = useState(null)
   const [statusLead, setStatusLead]       = useState(null)
+  const [discardTarget, setDiscardTarget] = useState(null)
   const [releaseTarget, setReleaseTarget] = useState(null)
   const [reassignTarget, setReassignTarget] = useState(null)
   const [convertTarget, setConvertTarget] = useState(null)
+  const [resendTarget, setResendTarget]   = useState(null)
   const [editLead, setEditLead]           = useState(null)
   const [showCreate, setShowCreate]       = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState(null) // { duplicate, payload }
@@ -1984,12 +2394,17 @@ export default function LeadsDashboard() {
   }
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey, vendorFilter])
+  useEffect(() => { setPage(1) }, [search, statusFilter, sourceFilter, companyFilter, sortKey, vendorFilter])
 
-  const queryParams = { page, page_size: PAGE_SIZE }
-  if (search) queryParams.search = search
-  if (statusFilter) queryParams.status = statusFilter
-  if (isAdmin && vendorFilter) queryParams.vendedor = vendorFilter
+  // Filtros de servidor, sin paginación: la grilla les suma la página y el
+  // reporte los reusa tal cual para recorrerlas todas.
+  const filterParams = {}
+  if (search) filterParams.search = search
+  if (statusFilter) filterParams.status = statusFilter
+  if (sourceFilter) filterParams.source = sourceFilter
+  if (isAdmin && vendorFilter) filterParams.vendedor = vendorFilter
+
+  const queryParams = { ...filterParams, page, page_size: PAGE_SIZE }
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['leads', queryParams],
@@ -2053,6 +2468,65 @@ export default function LeadsDashboard() {
     tabLeads.filter((l) => !companyFilter || l.is_company),
     sortKey,
   )
+
+  const restoreMutation = useMutation({
+    mutationFn: restoreLead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
+      showToast('Lead reactivado: vuelve al estado que tenía.')
+    },
+    onError: (err) => {
+      showToast(err.response?.data?.error ?? 'No se pudo reactivar el lead.', 'error')
+    },
+  })
+  // ─── Reporte de leads (CB-58) ───────────────────────────────────────────────
+  // Se exporta la partición que se está viendo, con los mismos filtros que la
+  // pantalla. La clienta pidió justamente lo contrario de exportarlo entero:
+  // quiere sacar sólo a los interesados para escribirles.
+  const TAB_BUCKET = {
+    mine:       'my_leads',
+    available:  'available_leads',
+    converted:  'converted_leads',
+    all:        'all_leads',
+    assigned:   'assigned_leads',
+    unassigned: 'unassigned_leads',
+  }
+
+  const TAB_REPORT_LABEL = {
+    mine:       'Mis leads',
+    available:  'Disponibles',
+    converted:  'Convertidos',
+    all:        'Todos',
+    assigned:   'Asignados',
+    unassigned: 'Sin asignar',
+  }
+
+  const reportSubtitle = [
+    TAB_REPORT_LABEL[activeTab],
+    statusFilter && `Estado: ${STATUS_LABELS[statusFilter] ?? statusFilter}`,
+    sourceFilter && `Fuente: ${SOURCE_LABELS[sourceFilter] ?? sourceFilter}`,
+    search && `Búsqueda: "${search}"`,
+    companyFilter && 'Sólo empresas',
+  ].filter(Boolean).join(' · ')
+
+  const fetchReportRows = async () => {
+    const { rows, truncated } = await getAllLeads(TAB_BUCKET[activeTab], filterParams)
+
+    if (truncated) {
+      // Nunca truncar en silencio: un reporte incompleto que se ve completo es
+      // peor que no tenerlo.
+      showToast('El reporte es muy grande y se exportó sólo una parte. Filtra para acotarlo.', 'error')
+    }
+
+    // Mismos filtros de cliente que la grilla, para que el archivo diga lo
+    // mismo que la pantalla.
+    const visibles = activeTab === 'mine'
+      ? rows.filter((l) => l.status !== 'CONVERTED')
+      : rows
+
+    return sortLeads(visibles.filter((l) => !companyFilter || l.is_company), sortKey)
+  }
 
   const assignMutation = useMutation({
     mutationFn: assignLead,
@@ -2140,6 +2614,15 @@ export default function LeadsDashboard() {
         <h1 className="text-2xl font-bold text-gray-900">
           Dashboard de Leads
         </h1>
+        <div className="flex items-center gap-2">
+        <ExportMenu
+          columns={LEAD_REPORT_COLUMNS}
+          fetchRows={fetchReportRows}
+          baseName="reporte-leads"
+          title="Reporte de leads"
+          subtitle={reportSubtitle}
+          onError={(msg) => showToast(msg, 'error')}
+        />
         <button
           data-testid="new-lead-button"
           onClick={() => setShowCreate(true)}
@@ -2150,6 +2633,7 @@ export default function LeadsDashboard() {
           </svg>
           Nuevo lead
         </button>
+        </div>
       </div>
 
       {/* Stat Cards */}
@@ -2205,10 +2689,19 @@ export default function LeadsDashboard() {
           </button>
           <SortDropdown value={sortKey} onChange={setSortKey} />
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
+          <SourceFilterDropdown value={sourceFilter} onChange={setSourceFilter} />
           {isAdmin && <VendorFilterDropdown value={vendorFilter} onChange={setVendorFilter} />}
         </div>
 
-        {/* Tabs */}
+        {/* Tabs
+            CB-QA: se evaluó ocultar "Disponibles" para el Admin porque el
+            backend (LeadListCreateView.get) manda todos los leads dentro de
+            my_leads y deja available_leads vacío para ese rol. Se revierte:
+            CB-223/CB-225 agregaron el flujo "Asignar a" sobre leads sin dueño
+            para el Admin, y sus tests asumen que ambas pestañas siguen
+            existiendo — separar la vista real de Admin (all/assigned/
+            unassigned_leads, ya expuestos por el backend) queda pendiente de
+            hacer en el frontend, pero no acá para no romper CB-225. */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
           {isAdmin ? (
             <>
@@ -2221,7 +2714,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Todos ({statsPagination.all_leads_count ?? allLeads.length})
+                Todos ({pagination.all_leads_count ?? allLeads.length})
               </button>
               <button
                 data-testid="tab-assigned"
@@ -2232,7 +2725,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Asignados ({statsPagination.assigned_leads_count ?? assignedLeads.length})
+                Asignados ({pagination.assigned_leads_count ?? assignedLeads.length})
               </button>
               <button
                 data-testid="tab-unassigned"
@@ -2243,7 +2736,18 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Sin asignar ({statsPagination.unassigned_leads_count ?? unassignedLeads.length})
+                Sin asignar ({pagination.unassigned_leads_count ?? unassignedLeads.length})
+              </button>
+              <button
+                data-testid="tab-converted-admin"
+                onClick={() => { setActiveTab('converted'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'converted'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           ) : (
@@ -2257,7 +2761,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Mis leads ({activeMyLeads.length})
+                Mis leads ({pagination.my_leads_count ?? activeMyLeads.length})
               </button>
               <button
                 data-testid="tab-available"
@@ -2268,7 +2772,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Disponibles ({availableLeads.length})
+                Disponibles ({pagination.available_leads_count ?? availableLeads.length})
               </button>
               <button
                 data-testid="tab-converted"
@@ -2279,7 +2783,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Convertidos ({convertedLeads.length})
+                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           )}
@@ -2385,10 +2889,13 @@ export default function LeadsDashboard() {
                     onViewHistory={() => setHistoryLead(lead)}
                     onLogInteraction={() => setLogLead(lead)}
                     onChangeStatus={() => setStatusLead(lead)}
+                    onDiscard={() => setDiscardTarget(lead)}
+                    onRestore={() => restoreMutation.mutate(lead.id)}
                     onRelease={() => setReleaseTarget(lead)}
                     onAssign={() => assignMutation.mutate(lead.id)}
                     onConvert={() => setConvertTarget(lead)}
                     onEdit={() => setEditLead(lead)}
+                    onResendInvitation={() => setResendTarget(lead)}
                   />
                 </td>
               </tr>
@@ -2406,7 +2913,14 @@ export default function LeadsDashboard() {
       </div>
 
       {/* Modals */}
-      {viewLead && <ViewLeadModal lead={viewLead} onClose={() => setViewLead(null)} />}
+      {viewLead && (
+        <ViewLeadModal
+          lead={viewLead}
+          isOwned={viewLead._isOwned}
+          isAdmin={isAdmin}
+          onClose={() => setViewLead(null)}
+        />
+      )}
 
       {historyLead && (
         <ViewHistoryModal lead={historyLead} onClose={() => setHistoryLead(null)} />
@@ -2425,6 +2939,22 @@ export default function LeadsDashboard() {
           lead={convertTarget}
           onClose={() => setConvertTarget(null)}
           onSuccess={() => { flashLead(convertTarget.id); showToast(`${convertTarget.name} convertido correctamente.`) }}
+        />
+      )}
+
+      {resendTarget && (
+        <ResendInvitationModal
+          lead={resendTarget}
+          onClose={() => setResendTarget(null)}
+        />
+      )}
+
+      {discardTarget && (
+        <DiscardLeadModal
+          lead={discardTarget}
+          onClose={() => setDiscardTarget(null)}
+          onSuccess={(msg) => showToast(msg)}
+          onError={(msg) => showToast(msg, 'error')}
         />
       )}
 
@@ -2468,12 +2998,14 @@ export default function LeadsDashboard() {
           onSubmit={(data, autoAssign) => { autoAssignRef.current = autoAssign; createMutation.mutate(data) }}
           isLoading={createMutation.isPending}
           canSelfAssign={selfAssignEnabled}
+          isAdmin={isAdmin}
         />
       )}
 
       {duplicateWarning && (
         <DuplicateLeadModal
           duplicate={duplicateWarning.duplicate}
+          payload={duplicateWarning.payload}
           isLoading={createMutation.isPending}
           onClose={() => setDuplicateWarning(null)}
           onConfirm={() =>

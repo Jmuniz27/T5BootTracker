@@ -1,6 +1,5 @@
 """Business logic for leads app."""
 import logging
-import secrets
 from decimal import Decimal
 
 from django.db import transaction, IntegrityError
@@ -10,10 +9,11 @@ from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import status
 
 from apps.authentication.models import CustomUser
-from apps.authentication.validators import validate_cedula_ecuatoriana
+from apps.authentication.validators import validate_identificacion
+from apps.authentication.services import make_onboarding_token, build_invitation_link
 from apps.programs.models import Program, Enrollment
 from apps.programs.services import apply_discount, resolve_assignable_cohort
-from apps.notifications.tasks import send_conversion_notification
+from apps.notifications.tasks import send_conversion_notification, send_bootcamper_invitation_email
 from .models import Interaction, Lead, LeadAssignmentSetting
 
 logger = logging.getLogger(__name__)
@@ -66,8 +66,8 @@ def convert_lead_to_bootcamper(lead, validated_data):
             'code': 'LEAD_NOT_QUALIFIED',
         })
 
-    if not validate_cedula_ecuatoriana(validated_data['cedula']):
-        raise ValidationError({'error': 'La cédula ingresada no es válida.', 'code': 'INVALID_CEDULA'})
+    if not validate_identificacion(validated_data['cedula']):
+        raise ValidationError({'error': 'La identificación ingresada no es válida.', 'code': 'INVALID_CEDULA'})
 
     try:
         program = Program.objects.get(pk=validated_data['program_id'])
@@ -78,43 +78,48 @@ def convert_lead_to_bootcamper(lead, validated_data):
     # Antes de crear nada: si la cohorte no sirve, la conversión no debe empezar.
     cohort = resolve_assignable_cohort(program, validated_data.get('cohort_id'))
 
-    email = validated_data.get('email') or lead.email
+    email = validated_data['email']
     phone = validated_data.get('phone') or lead.phone
 
-    temporary_password = None
+    invitation_link = None
     is_returning = False
     bootcamper = None
 
-    if email:
-        try:
-            existing = CustomUser.objects.get(email=email)
-            if existing.role != CustomUser.Role.BOOTCAMPER:
-                # 4. LANZAR CONFLICTERROR (409)
-                raise ConflictError({'error': 'El email ya está asociado a otro rol.', 'code': 'EMAIL_CONFLICT'})
-            bootcamper = existing
-            is_returning = True
-        except CustomUser.DoesNotExist:
-            pass
+    try:
+        existing = CustomUser.objects.get(email=email)
+        if existing.role != CustomUser.Role.BOOTCAMPER:
+            # 4. LANZAR CONFLICTERROR (409)
+            raise ConflictError({'error': 'El email ya está asociado a otro rol.', 'code': 'EMAIL_CONFLICT'})
+        bootcamper = existing
+        is_returning = True
+    except CustomUser.DoesNotExist:
+        pass
 
     if bootcamper is None:
-        temporary_password = secrets.token_urlsafe(12)
         try:
             parts = lead.name.split() if lead.name else []
             first_name = parts[0] if parts else 'Bootcamper'
             last_name = ' '.join(parts[1:])
 
+            # password=None deja la cuenta con contraseña no utilizable
+            # (CustomUserManager.create_user -> set_password(None)); la
+            # persona la define ella misma al activar la invitación.
             bootcamper = CustomUser.objects.create_user(
-                email=email or f'bootcamper_{validated_data["cedula"]}@placeholder.com',
-                password=temporary_password,
+                email=email,
+                password=None,
                 first_name=first_name,
                 last_name=last_name,
                 role=CustomUser.Role.BOOTCAMPER,
                 cedula=validated_data['cedula'],
                 phone=phone,
+                verification_status=CustomUser.VerificationStatus.INVITED,
             )
         except IntegrityError:
             # 5. LANZAR CONFLICTERROR (409)
             raise ConflictError({'error': 'Esta cédula ya está registrada en el sistema.', 'code': 'CEDULA_ALREADY_EXISTS'})
+
+        token = make_onboarding_token(bootcamper)
+        invitation_link = build_invitation_link(token)
 
     discount = validated_data.get('discount_percentage') or Decimal('0.00')
     agreed_price = apply_discount(program.total_cost, discount)
@@ -142,6 +147,11 @@ def convert_lead_to_bootcamper(lead, validated_data):
 
     try:
         send_conversion_notification.delay(str(lead.id), str(bootcamper.id))
+        # Complementa la notificación a coordinadores — esta es la única que
+        # efectivamente llega al bootcamper. Sólo aplica a cuentas nuevas: un
+        # recurrente no recibe invitación porque no se le tocó la contraseña.
+        if invitation_link:
+            send_bootcamper_invitation_email.delay(str(bootcamper.id), invitation_link)
     except Exception:
         logger.warning(
             'Could not enqueue conversion notification for lead %s — Celery/Redis may be unavailable.',
@@ -151,7 +161,7 @@ def convert_lead_to_bootcamper(lead, validated_data):
     return {
         'bootcamper_id': str(bootcamper.id),
         'email': bootcamper.email,
-        'temporary_password': temporary_password,
+        'invitation_link': invitation_link,
         'is_returning': is_returning,
         'lead_status': lead.status,
         # Se devuelven para que el vendedor confirme en pantalla lo que quedó
@@ -161,6 +171,39 @@ def convert_lead_to_bootcamper(lead, validated_data):
         'cohort_id': str(cohort.id) if cohort else None,
         'cohort_number': cohort.number if cohort else None,
     }
+
+
+def resend_invitation(lead):
+    """Issue a new onboarding token for `lead.bootcamper` and re-send the email (#255).
+
+    Generating a new token via `make_onboarding_token` already invalidates
+    the previous link (TOKEN_SUPERSEDED, see `read_onboarding_token`) — no
+    separate revocation step is needed.
+    """
+    bootcamper = lead.bootcamper
+    if bootcamper is None:
+        raise ValidationError({
+            'error': 'Este lead todavía no fue convertido a bootcamper.',
+            'code': 'NOT_CONVERTED',
+        })
+    if bootcamper.verification_status != CustomUser.VerificationStatus.INVITED:
+        raise ValidationError({
+            'error': 'Esta cuenta ya fue activada; no se puede reenviar la invitación.',
+            'code': 'ALREADY_ACTIVATED',
+        })
+
+    token = make_onboarding_token(bootcamper)
+    invitation_link = build_invitation_link(token)
+
+    try:
+        send_bootcamper_invitation_email.delay(str(bootcamper.id), invitation_link)
+    except Exception:
+        logger.warning(
+            'Could not enqueue invitation resend for bootcamper %s — Celery/Redis may be unavailable.',
+            bootcamper.id,
+        )
+
+    return {'invitation_link': invitation_link}
 
 
 def get_self_assignment_enabled():
@@ -230,4 +273,126 @@ def reassign_lead_by_admin(lead_id, admin_user, new_owner=None):
         notes=notes,
     )
 
+    return lead
+
+
+# ─── Cierre de leads (#324) ───────────────────────────────────────────────────
+
+def discard_lead(lead_id, user, reason, detail=''):
+    """Sacar un lead del listado de seguimiento, dejando por qué.
+
+    La clienta lo pidió para poder "rayar los que ya no los llames" y saber la
+    razón de cada salida. El motivo es obligatorio y estructurado: si viviera en
+    las notas de una interacción sería indistinguible de cualquier otro
+    comentario, que fue justo su objeción.
+
+    Raises:
+        ValidationError: motivo ausente o inválido, detalle faltante cuando el
+            motivo es OTHER, o lead ya convertido / ya descartado.
+        NotFound: el lead no existe.
+    """
+    if not Lead.objects.filter(pk=lead_id).exists():
+        raise NotFound({'error': 'Lead no encontrado.', 'code': 'LEAD_NOT_FOUND'})
+
+    valid = {choice.value for choice in Lead.DiscardReason}
+    if reason not in valid:
+        raise ValidationError({
+            'error': 'El motivo del descarte es obligatorio y debe ser uno de los válidos.',
+            'code': 'DISCARD_REASON_REQUIRED',
+        })
+
+    detail = (detail or '').strip()
+    if reason == Lead.DiscardReason.OTHER and not detail:
+        # "Otro" sin explicación no aporta nada al reporte: es el único caso en
+        # que la causal por sí sola no dice nada.
+        raise ValidationError({
+            'error': 'Con el motivo "Otro" hay que escribir el detalle.',
+            'code': 'DISCARD_DETAIL_REQUIRED',
+        })
+
+    with transaction.atomic():
+        lead = Lead.objects.select_for_update().get(pk=lead_id)
+
+        if lead.status == Lead.Status.DISCARDED:
+            raise ValidationError({
+                'error': 'Este lead ya está descartado.',
+                'code': 'LEAD_ALREADY_DISCARDED',
+            })
+        if lead.status == Lead.Status.CONVERTED:
+            # Ya es bootcamper: sacarlo del listado comercial no tendría sentido
+            # y dejaría su inscripción colgando de un lead cerrado.
+            raise ValidationError({
+                'error': 'Un lead ya convertido no se puede descartar.',
+                'code': 'LEAD_ALREADY_CONVERTED',
+            })
+
+        lead.status_before_discard = lead.status
+        lead.status = Lead.Status.DISCARDED
+        lead.discard_reason = reason
+        lead.discard_detail = detail
+        lead.discarded_at = now()
+        lead.discarded_by = user
+        lead.version += 1
+        lead.save(update_fields=[
+            'status', 'status_before_discard', 'discard_reason', 'discard_detail',
+            'discarded_at', 'discarded_by', 'version', 'updated_at',
+        ])
+
+        Interaction.objects.create(
+            lead=lead,
+            salesperson=user,
+            interaction_type=Interaction.InteractionType.SYSTEM,
+            outcome=Interaction.Outcome.DISCARDED,
+            notes=(
+                f'Lead descartado por {user.get_full_name()}. '
+                f'Motivo: {lead.get_discard_reason_display()}.'
+                + (f' Detalle: {detail}' if detail else '')
+            ),
+        )
+
+    logger.info('Lead %s descartado por %s (%s)', lead_id, user.id, reason)
+    return lead
+
+
+def restore_lead(lead_id, user):
+    """Deshacer un descarte, devolviendo el lead al estado que tenía.
+
+    Un descarte por error no debería ser definitivo. Se vuelve al estado previo
+    guardado y no a uno fijo, para no inventarle al lead una etapa comercial que
+    nunca tuvo.
+    """
+    if not Lead.objects.filter(pk=lead_id).exists():
+        raise NotFound({'error': 'Lead no encontrado.', 'code': 'LEAD_NOT_FOUND'})
+
+    with transaction.atomic():
+        lead = Lead.objects.select_for_update().get(pk=lead_id)
+
+        if lead.status != Lead.Status.DISCARDED:
+            raise ValidationError({
+                'error': 'Este lead no está descartado.',
+                'code': 'LEAD_NOT_DISCARDED',
+            })
+
+        previous = lead.status_before_discard or Lead.Status.NEW
+        lead.status = previous
+        lead.status_before_discard = ''
+        lead.discard_reason = ''
+        lead.discard_detail = ''
+        lead.discarded_at = None
+        lead.discarded_by = None
+        lead.version += 1
+        lead.save(update_fields=[
+            'status', 'status_before_discard', 'discard_reason', 'discard_detail',
+            'discarded_at', 'discarded_by', 'version', 'updated_at',
+        ])
+
+        Interaction.objects.create(
+            lead=lead,
+            salesperson=user,
+            interaction_type=Interaction.InteractionType.SYSTEM,
+            outcome=Interaction.Outcome.RESTORED,
+            notes=f'Descarte deshecho por {user.get_full_name()}. Vuelve a {lead.get_status_display()}.',
+        )
+
+    logger.info('Lead %s reactivado por %s', lead_id, user.id)
     return lead

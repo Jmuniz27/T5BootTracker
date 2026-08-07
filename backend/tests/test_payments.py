@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.payments.models import Payment
 
 UPLOAD_URL = "/api/payments/upload/"
+MY_PROGRAMS_URL = "/api/payments/my-programs/"
 MY_STATUS_URL = "/api/payments/my-status/"
 MY_HISTORY_URL = "/api/payments/my-history/"
 QUEUE_URL = "/api/payments/queue/"
@@ -18,6 +19,7 @@ APPROVE_URL = "/api/payments/{id}/approve/"
 REJECT_URL = "/api/payments/{id}/reject/"
 OCR_STATUS_URL = "/api/payments/my-payments/{id}/ocr-status/"
 CONFIRM_URL = "/api/payments/my-payments/{id}/confirm/"
+MY_PAYMENT_URL = "/api/payments/my-payments/{id}/"
 NOTIFY_COORD_URL = "/api/payments/notify-coordinator/{bootcamper_id}/"
 
 
@@ -113,6 +115,252 @@ class TestPaymentUpload:
             format="multipart",
         )
         assert resp.status_code == 403
+
+    def test_payment_upload_pdf_as_octet_stream_accepted(self, db, converted_bootcamper, program):
+        """Some OS/browsers declare PDFs as application/octet-stream on drag-drop.
+
+        The frontend allows it by extension; the backend must too, or the same
+        upload that passed client-side validation gets rejected server-side.
+        """
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.pdf", b"%PDF-1.4 fake", content_type="application/octet-stream"
+        )
+        with patch("apps.payments.tasks.process_payment_ocr.delay"):
+            resp = client.post(
+                UPLOAD_URL,
+                {
+                    "receipt_file": fake_file,
+                    "program_id": str(program.id),
+                },
+                format="multipart",
+            )
+        assert resp.status_code == 201
+        payment = Payment.objects.get(bootcamper=converted_bootcamper, program=program)
+        assert payment.receipt_file_type == "pdf"
+
+    def test_payment_upload_octet_stream_bad_extension_rejected(self, db, converted_bootcamper, program):
+        """application/octet-stream is only tolerated for allowed extensions."""
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "virus.exe", b"MZ", content_type="application/octet-stream"
+        )
+        resp = client.post(
+            UPLOAD_URL,
+            {
+                "receipt_file": fake_file,
+                "program_id": str(program.id),
+            },
+            format="multipart",
+        )
+        assert resp.status_code == 400
+
+
+class TestPaymentUploadInfrastructureFailures:
+    """Un fallo de infraestructura no puede salir como la página HTML de Django.
+
+    En producción gunicorn corre como appuser y el volumen de media estaba en
+    poder de root, así que escribir el comprobante levantaba PermissionError: el
+    bootcamper veía el HTML del error 500 renderizado dentro del modal.
+    """
+
+    def test_storage_failure_answers_json_not_html(self, db, converted_bootcamper, program):
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch(
+            "apps.payments.models.Payment.objects.create",
+            side_effect=PermissionError("Permission denied: /app/media/receipts"),
+        ):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+
+        assert resp.status_code == 503
+        assert resp["Content-Type"].startswith("application/json")
+        assert resp.json()["code"] == "RECEIPT_STORAGE_ERROR"
+
+    def test_broker_down_still_keeps_the_receipt(self, db, converted_bootcamper, program):
+        """Redis caído no puede invalidar la subida: el pago ya se guardó.
+
+        Devolver error haría que el bootcamper vuelva a subir el mismo archivo y
+        duplique comprobantes, cuando Finanzas ya puede revisarlo a mano.
+        """
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch(
+            "apps.payments.tasks.process_payment_ocr.delay",
+            side_effect=OSError("Error 111 connecting to redis:6379"),
+        ):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+
+        assert resp.status_code == 201
+        assert resp.json()["ocr_queued"] is False
+        assert Payment.objects.filter(
+            bootcamper=converted_bootcamper, program=program
+        ).exists()
+
+    def test_successful_upload_reports_the_ocr_as_queued(self, db, converted_bootcamper, program):
+        client = make_client(converted_bootcamper)
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch("apps.payments.tasks.process_payment_ocr.delay"):
+            resp = client.post(
+                UPLOAD_URL,
+                {"receipt_file": fake_file, "program_id": str(program.id)},
+                format="multipart",
+            )
+
+        assert resp.status_code == 201
+        assert resp.json()["ocr_queued"] is True
+
+
+class TestPaymentMyPrograms:
+    def test_bootcamper_with_enrollment_sees_program(self, db, converted_bootcamper, active_enrollment, program):
+        client = make_client(converted_bootcamper)
+        resp = client.get(MY_PROGRAMS_URL)
+        assert resp.status_code == 200
+        ids = [p["id"] for p in resp.json()]
+        assert str(program.id) in ids
+
+    def test_bootcamper_without_enrollment_sees_empty_list(self, db, converted_bootcamper):
+        client = make_client(converted_bootcamper)
+        resp = client.get(MY_PROGRAMS_URL)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_other_role_forbidden(self, db, salesperson_user):
+        client = make_client(salesperson_user)
+        resp = client.get(MY_PROGRAMS_URL)
+        assert resp.status_code == 403
+
+
+class TestPaymentUploadResolvesProgram:
+    """Sin `program_id`, el programa se deduce de la inscripción activa.
+
+    El bootcamper no elige programa al subir: ya está inscrito en uno. Antes el
+    campo era obligatorio y quien no tuviera pagos previos no podía subir el
+    primero, porque el cliente no tenía de dónde sacar el id.
+    """
+
+    def _upload(self, client, **extra):
+        fake_file = SimpleUploadedFile(
+            "receipt.jpg", b"fake-image-data", content_type="image/jpeg"
+        )
+        with patch("apps.payments.tasks.process_payment_ocr.delay"):
+            return client.post(
+                UPLOAD_URL, {"receipt_file": fake_file, **extra}, format="multipart"
+            )
+
+    def _enroll(self, bootcamper, program, status=None):
+        from apps.programs.models import Enrollment
+
+        return Enrollment.objects.create(
+            bootcamper=bootcamper,
+            bootcamp=program,
+            start_date=program.start_date,
+            agreed_price=program.total_cost,
+            **({"status": status} if status else {}),
+        )
+
+    def test_infers_program_from_the_single_active_enrollment(
+        self, db, converted_bootcamper, program
+    ):
+        self._enroll(converted_bootcamper, program)
+
+        resp = self._upload(make_client(converted_bootcamper))
+
+        assert resp.status_code == 201
+        assert Payment.objects.get(id=resp.json()["id"]).program_id == program.id
+
+    def test_first_upload_works_without_previous_payments(
+        self, db, converted_bootcamper, program
+    ):
+        """El caso que estaba roto: primera subida, sin historial del cual deducir."""
+        self._enroll(converted_bootcamper, program)
+        assert not Payment.objects.filter(bootcamper=converted_bootcamper).exists()
+
+        assert self._upload(make_client(converted_bootcamper)).status_code == 201
+
+    def test_rejects_when_there_is_no_active_enrollment(
+        self, db, converted_bootcamper, program
+    ):
+        from apps.programs.models import Enrollment
+
+        self._enroll(converted_bootcamper, program, status=Enrollment.Status.DROPPED)
+
+        resp = self._upload(make_client(converted_bootcamper))
+
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NO_ACTIVE_ENROLLMENT"
+        assert not Payment.objects.exists()
+
+    def test_rejects_when_two_active_enrollments_are_ambiguous(
+        self, db, converted_bootcamper, program
+    ):
+        from datetime import date, timedelta
+
+        from apps.programs.models import Program
+
+        other = Program.objects.create(
+            name="Data Science Junio 2026",
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=60),
+            total_cost=Decimal("900.00"),
+        )
+        self._enroll(converted_bootcamper, program)
+        self._enroll(converted_bootcamper, other)
+
+        resp = self._upload(make_client(converted_bootcamper))
+
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "AMBIGUOUS_ENROLLMENT"
+        assert not Payment.objects.exists()
+
+    def test_explicit_program_id_still_wins_over_the_inference(
+        self, db, converted_bootcamper, program
+    ):
+        """Dos programas activos siguen pudiendo subir si el cliente desempata."""
+        from datetime import date, timedelta
+
+        from apps.programs.models import Program
+
+        other = Program.objects.create(
+            name="Data Analytics Julio 2026",
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=60),
+            total_cost=Decimal("800.00"),
+        )
+        self._enroll(converted_bootcamper, program)
+        self._enroll(converted_bootcamper, other)
+
+        resp = self._upload(make_client(converted_bootcamper), program_id=str(other.id))
+
+        assert resp.status_code == 201
+        assert Payment.objects.get(id=resp.json()["id"]).program_id == other.id
+
+    def test_unknown_program_id_still_returns_404(
+        self, db, converted_bootcamper, program
+    ):
+        self._enroll(converted_bootcamper, program)
+
+        resp = self._upload(
+            make_client(converted_bootcamper),
+            program_id="00000000-0000-0000-0000-000000000000",
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "PROGRAM_NOT_FOUND"
 
 
 class TestReceiptFile:
@@ -545,6 +793,126 @@ class TestPaymentConfirm:
         assert resp.status_code == 403
 
 
+class TestMyPaymentResubmit:
+    def test_resubmit_rejected_transitions_to_pending(
+        self, db, converted_bootcamper, rejected_payment
+    ):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {"ocr_amount": "200.00"},
+            format="json",
+        )
+        assert resp.status_code == 200
+        rejected_payment.refresh_from_db()
+        assert rejected_payment.status == Payment.Status.PENDING
+        assert rejected_payment.ocr_amount == Decimal("200.00")
+
+    def test_resubmit_clears_rejection_reason_and_review(
+        self, db, converted_bootcamper, rejected_payment
+    ):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 200
+        rejected_payment.refresh_from_db()
+        assert rejected_payment.rejection_reason == ""
+        assert rejected_payment.validated_by is None
+        assert rejected_payment.validated_at is None
+
+    def test_resubmit_empty_payment_date_is_normalized_to_null(
+        self, db, converted_bootcamper, rejected_payment
+    ):
+        """The frontend sends '' for an empty date input; DateField accepts
+        null but not '' — this must not blow up with a 400."""
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {"ocr_payment_date": ""},
+            format="json",
+        )
+        assert resp.status_code == 200
+        rejected_payment.refresh_from_db()
+        assert rejected_payment.ocr_payment_date is None
+
+    def test_resubmit_non_rejected_payment_fails(
+        self, db, converted_bootcamper, pending_payment
+    ):
+        client = make_client(converted_bootcamper)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=pending_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_REJECTED"
+
+    def test_resubmit_other_bootcampers_payment_forbidden(
+        self, db, bootcamper_user, rejected_payment
+    ):
+        """A different bootcamper must get 404, not 403 (no information leakage)."""
+        client = make_client(bootcamper_user)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 404
+
+    def test_resubmit_salesperson_forbidden(self, db, salesperson_user, rejected_payment):
+        client = make_client(salesperson_user)
+        resp = client.patch(
+            MY_PAYMENT_URL.format(id=rejected_payment.id),
+            {},
+            format="json",
+        )
+        assert resp.status_code == 403
+
+
+class TestMyPaymentDelete:
+    def test_delete_draft_payment_succeeds(self, db, converted_bootcamper, draft_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.delete(MY_PAYMENT_URL.format(id=draft_payment.id))
+        assert resp.status_code == 204
+        assert not Payment.objects.filter(pk=draft_payment.id).exists()
+
+    def test_delete_rejected_payment_succeeds(self, db, converted_bootcamper, rejected_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.delete(MY_PAYMENT_URL.format(id=rejected_payment.id))
+        assert resp.status_code == 204
+        assert not Payment.objects.filter(pk=rejected_payment.id).exists()
+
+    def test_delete_pending_payment_fails(self, db, converted_bootcamper, pending_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.delete(MY_PAYMENT_URL.format(id=pending_payment.id))
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_DELETABLE"
+        assert Payment.objects.filter(pk=pending_payment.id).exists()
+
+    def test_delete_approved_payment_fails(self, db, converted_bootcamper, approved_payment):
+        client = make_client(converted_bootcamper)
+        resp = client.delete(MY_PAYMENT_URL.format(id=approved_payment.id))
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_DELETABLE"
+        assert Payment.objects.filter(pk=approved_payment.id).exists()
+
+    def test_delete_other_bootcampers_payment_forbidden(
+        self, db, bootcamper_user, rejected_payment
+    ):
+        client = make_client(bootcamper_user)
+        resp = client.delete(MY_PAYMENT_URL.format(id=rejected_payment.id))
+        assert resp.status_code == 404
+        assert Payment.objects.filter(pk=rejected_payment.id).exists()
+
+    def test_delete_salesperson_forbidden(self, db, salesperson_user, draft_payment):
+        client = make_client(salesperson_user)
+        resp = client.delete(MY_PAYMENT_URL.format(id=draft_payment.id))
+        assert resp.status_code == 403
+
+
 class TestPaymentQueueExcludesDraft:
     def test_queue_does_not_include_draft_payments(
         self, db, finance_user, draft_payment, pending_payment
@@ -596,9 +964,11 @@ class TestPaymentDetailIncludesRawText:
 
 
 class TestNotifyCoordinator:
-    def test_notify_coordinator_dispatches_task(
+    def test_notify_coordinator_dispatches_task_when_critical(
         self, db, finance_user, converted_bootcamper, program
     ):
+        # Sin Enrollment ni pagos aprobados, el déficit es el costo completo del
+        # programa: siempre supera el 10%, así que este bootcamper es crítico.
         client = make_client(finance_user)
         with patch(
             "apps.notifications.tasks.send_late_payment_alert.delay"
@@ -612,3 +982,37 @@ class TestNotifyCoordinator:
         mock_delay.assert_called_once_with(
             str(converted_bootcamper.id), str(program.id)
         )
+
+    def test_notify_coordinator_rejects_non_critical_payment(
+        self, db, finance_user, converted_bootcamper, program
+    ):
+        from apps.programs.models import Enrollment
+
+        # Pagó el costo completo: deficit == 0, muy por debajo del umbral del 10%.
+        Enrollment.objects.create(
+            bootcamper=converted_bootcamper,
+            bootcamp=program,
+            start_date=program.start_date,
+            agreed_price=Decimal("1200.00"),
+        )
+        Payment.objects.create(
+            bootcamper=converted_bootcamper,
+            program=program,
+            receipt_file="receipts/paid.jpg",
+            receipt_file_type="image",
+            status=Payment.Status.APPROVED,
+            confirmed_amount=Decimal("1200.00"),
+        )
+
+        client = make_client(finance_user)
+        with patch(
+            "apps.notifications.tasks.send_late_payment_alert.delay"
+        ) as mock_delay:
+            resp = client.post(
+                NOTIFY_COORD_URL.format(bootcamper_id=converted_bootcamper.id),
+                {"program_id": str(program.id)},
+                format="json",
+            )
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "NOT_CRITICAL"
+        mock_delay.assert_not_called()

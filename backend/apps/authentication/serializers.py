@@ -3,6 +3,7 @@ from django.contrib.auth import authenticate
 from rest_framework import serializers
 
 from .models import CustomUser
+from .validators import validate_identificacion
 
 
 class LoginSerializer(serializers.Serializer):
@@ -98,3 +99,32 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
                 {'code': 'PASSWORD_MISMATCH', 'error': 'Las contraseñas no coinciden.'}
             )
         return attrs
+
+
+class OnboardingActivateSerializer(serializers.Serializer):
+    """Serializer for bootcamper account activation (#253).
+
+    The bootcamper sets their password and confirms/corrects the profile
+    data that ``convert_lead_to_bootcamper`` filled in with a naive guess
+    (first_name/last_name split from the lead's full name).
+    """
+    password         = serializers.CharField(min_length=8, write_only=True)
+    password_confirm = serializers.CharField(write_only=True)
+    first_name       = serializers.CharField(max_length=150, required=False)
+    last_name        = serializers.CharField(max_length=150, required=False)
+    phone            = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    cedula           = serializers.CharField(max_length=13, required=False)
+    # Obligatorio y sin default (#329): omitirlo no puede equivaler a aceptarlo.
+    data_consent     = serializers.BooleanField()
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError(
+                {'code': 'PASSWORD_MISMATCH', 'error': 'Las contraseñas no coinciden.'}
+            )
+        return attrs
+
+    def validate_cedula(self, value):
+        if not validate_identificacion(value):
+            raise serializers.ValidationError('La identificación ingresada no es válida.')
+        return value
