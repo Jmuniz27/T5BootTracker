@@ -12,6 +12,18 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all().order_by('-created_at')
     permission_classes = [IsAdmin]
 
+    def get_queryset(self):
+        # #328: la tabla muestra programa y cohorte del bootcamper. Sin este
+        # prefetch cada fila dispara sus propias consultas.
+        return (
+            super().get_queryset()
+            .prefetch_related(
+                'coordinator_programs',
+                'enrollments__bootcamp',
+                'enrollments__cohort',
+            )
+        )
+
     def get_serializer_class(self):
         if self.action == 'create':
             return CreateUserSerializer
