@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getMyHistory, getMyStatus, getMyPrograms, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
 import { useModalA11y } from '../hooks/use-modal-a11y'
@@ -473,34 +473,43 @@ function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReaso
     }
   }, [])
 
-  // `pos` es una foto del momento del clic. Cualquier cosa que la invalide
-  // tiene que cerrar el menú, o queda flotando sobre filas que no le
-  // corresponden. En captura: ni el scroll del `overflow-x-auto` de la tabla ni
-  // el del <main> del layout burbujean hasta window.
+  // Recalcula la posición a partir del botón. Al ser `fixed`, el menú no la
+  // hereda del layout: hay que fijarla a mano y volver a fijarla cada vez que
+  // el botón se mueve.
+  const reposicionar = useCallback(() => {
+    if (!btnRef.current) return
+    const rect = btnRef.current.getBoundingClientRect()
+    const upward = window.innerHeight - rect.bottom < 200
+    // Sin acotar, `rect.right - MENU_WIDTH` se sale de la pantalla: el botón
+    // vive dentro de una tabla que scrollea en horizontal.
+    const maxLeft = window.innerWidth - MENU_WIDTH - VIEWPORT_MARGIN
+    setOpenUpward(upward)
+    setPos({
+      top: upward ? rect.top - 4 : rect.bottom + 4,
+      left: Math.min(Math.max(VIEWPORT_MARGIN, rect.right - MENU_WIDTH), maxLeft),
+    })
+  }, [])
+
+  // Se reposiciona, no se cierra. Cerrar parecía más simple, pero deja el menú
+  // a merced de cualquier scroll programático: `scrollIntoView` —el que hace
+  // Playwright antes de pulsar, y el del propio navegador al enfocar— llega
+  // justo después de abrirlo y lo cierra en el acto. Reposicionar además evita
+  // cambiarle el comportamiento a quien ya usa esto en escritorio.
+  //
+  // En captura: ni el scroll del `overflow-x-auto` de la tabla ni el del <main>
+  // del layout burbujean hasta window.
   useEffect(() => {
     if (!open) return
-    const close = () => setOpen(false)
-    window.addEventListener('scroll', close, true)
-    window.addEventListener('resize', close)
+    window.addEventListener('scroll', reposicionar, true)
+    window.addEventListener('resize', reposicionar)
     return () => {
-      window.removeEventListener('scroll', close, true)
-      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', reposicionar, true)
+      window.removeEventListener('resize', reposicionar)
     }
-  }, [open])
+  }, [open, reposicionar])
 
   const handleToggle = () => {
-    if (!open && btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect()
-      const upward = window.innerHeight - rect.bottom < 200
-      setOpenUpward(upward)
-      // Sin acotar, `rect.right - MENU_WIDTH` se sale de la pantalla: el botón
-      // vive dentro de una tabla que scrollea en horizontal.
-      const maxLeft = window.innerWidth - MENU_WIDTH - VIEWPORT_MARGIN
-      setPos({
-        top: upward ? rect.top - 4 : rect.bottom + 4,
-        left: Math.min(Math.max(VIEWPORT_MARGIN, rect.right - MENU_WIDTH), maxLeft),
-      })
-    }
+    if (!open) reposicionar()
     setOpen((v) => !v)
   }
 

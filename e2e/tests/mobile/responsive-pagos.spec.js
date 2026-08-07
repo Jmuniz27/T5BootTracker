@@ -73,16 +73,32 @@ test.describe('Responsive · el bootcamper opera desde el teléfono', () => {
           .click()
       })
 
-      await entonces('el menú cae completo dentro del viewport', async () => {
-        // Se posiciona `fixed` a partir del botón. Sin acotar, `rect.right -
-        // 176` puede caer fuera de la pantalla.
-        const menu = page.getByRole('button', { name: /Revisar|Editar|Ver información|Ver motivo/ }).first()
-        await expect(menu).toBeVisible()
-
+      const dentroDelViewport = async (menu) => {
         const caja = await menu.boundingBox()
         const ancho = page.viewportSize().width
         expect(caja.x).toBeGreaterThanOrEqual(0)
         expect(caja.x + caja.width).toBeLessThanOrEqual(ancho)
+      }
+
+      const menu = page.getByRole('button', { name: /Revisar|Editar|Ver información|Ver motivo/ }).first()
+
+      await entonces('el menú cae completo dentro del viewport', async () => {
+        // Se posiciona `fixed` a partir del botón. Sin acotar, `rect.right -
+        // 176` puede caer fuera de la pantalla.
+        await expect(menu).toBeVisible()
+        await dentroDelViewport(menu)
+      })
+
+      await y('sigue en su sitio si la pantalla se desplaza', async () => {
+        // La posición es una foto del momento de abrirlo: si no se recalcula,
+        // el menú se despega y queda flotando sobre otra tarjeta. Y si en vez
+        // de recalcular se cerrara, cualquier `scrollIntoView` —el que hace el
+        // propio navegador al enfocar— lo haría desaparecer apenas se abre.
+        await page.mouse.wheel(0, 200)
+        await page.waitForTimeout(200)
+
+        await expect(menu).toBeVisible()
+        await dentroDelViewport(menu)
       })
     },
   )
