@@ -22,14 +22,38 @@ const confirmSchema = z.object({
     .refine((v) => !v || isValidIdentificacion(v), 'Cédula o RUC ecuatoriano inválido'),
 });
 
+// El texto del consentimiento y su versión viven en el backend
+// (authentication/services.py); acá se replica sólo lo que se muestra.
+const DATA_CONSENT_TEXT =
+  'Acepto que mis datos personales sean utilizados para los fines internos de seguimiento de Coding Bootcamps ESPOL.';
+
 const passwordSchema = z
   .object({
     password: z.string().min(8, 'Mínimo 8 caracteres'),
     password_confirm: z.string(),
+    // #329: sin marcar no se activa. El backend lo exige igual — una casilla
+    // que sólo vive en el cliente no es constancia de nada.
+    data_consent: z.boolean(),
   })
-  .refine((d) => d.password === d.password_confirm, {
-    message: 'Las contraseñas no coinciden',
-    path: ['password_confirm'],
+  // superRefine y no dos .refine encadenados: así se juntan todos los problemas
+  // en una pasada. Con una validación de forma que falle (por ejemplo el
+  // consentimiento sin marcar), un .refine posterior ni siquiera corre y el
+  // error de contraseñas quedaría escondido hasta arreglar el otro.
+  .superRefine((d, ctx) => {
+    if (d.password !== d.password_confirm) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Las contraseñas no coinciden',
+        path: ['password_confirm'],
+      });
+    }
+    if (!d.data_consent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Hay que aceptar el uso de datos para continuar',
+        path: ['data_consent'],
+      });
+    }
   });
 
 // Todos los códigos vienen con status 400 (ver authentication/services.py::read_onboarding_token) —
@@ -84,7 +108,10 @@ export default function OnboardingPage() {
   });
 
   const confirmForm = useForm({ resolver: zodResolver(confirmSchema), values: info });
-  const passwordForm = useForm({ resolver: zodResolver(passwordSchema) });
+  const passwordForm = useForm({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { data_consent: false },
+  });
 
   const activateMutation = useMutation({
     mutationFn: (passwordData) =>
@@ -198,6 +225,22 @@ export default function OnboardingPage() {
             placeholder="••••••••"
             error={passwordForm.formState.errors.password_confirm?.message}
           />
+        </div>
+
+        <div>
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              {...passwordForm.register('data_consent')}
+              className="mt-0.5 rounded border-white/30 bg-transparent text-[#213A8E] focus:ring-white/40"
+            />
+            <span className="text-sm text-white/70 leading-snug">{DATA_CONSENT_TEXT}</span>
+          </label>
+          {passwordForm.formState.errors.data_consent && (
+            <p className="text-red-400 text-sm mt-1.5">
+              {passwordForm.formState.errors.data_consent.message}
+            </p>
+          )}
         </div>
 
         {errorMsg && <p className="text-red-400 text-sm text-center">{errorMsg}</p>}

@@ -3,6 +3,8 @@ import logging
 from datetime import date
 from decimal import Decimal
 from django.core import signing
+from django.utils.timezone import now
+from django.db import DatabaseError
 from django.db.models import Count, Q, Sum
 
 logger = logging.getLogger(__name__)
@@ -85,6 +87,59 @@ def resolve_upload_program(bootcamper, program_id=None):
         )
 
     return active[0].bootcamp
+
+
+class ReceiptStorageError(Exception):
+    """El archivo del comprobante no se pudo escribir en el storage."""
+
+    message = 'No se pudo guardar el comprobante. Intenta de nuevo en unos minutos.'
+    code = 'RECEIPT_STORAGE_ERROR'
+
+
+def create_payment_with_receipt(bootcamper, program, file, file_type):
+    """Create the Payment, writing the receipt to storage.
+
+    El fallo de escritura (permisos del volumen de media, disco lleno) salía sin
+    capturar, así que Django respondía su página de error en HTML y el bootcamper
+    veía el traceback dentro del modal en vez de un mensaje.
+
+    Raises:
+        ReceiptStorageError: el archivo no se pudo escribir.
+    """
+    from django.core.exceptions import SuspiciousOperation
+
+    from .models import Payment
+
+    try:
+        return Payment.objects.create(
+            bootcamper=bootcamper,
+            program=program,
+            receipt_file=file,
+            receipt_file_type=file_type,
+            status=Payment.Status.DRAFT,
+        )
+    except (OSError, SuspiciousOperation) as exc:
+        logger.exception('Error guardando el comprobante del bootcamper %s.', bootcamper.id)
+        raise ReceiptStorageError from exc
+
+
+def queue_receipt_ocr(payment_id) -> bool:
+    """Encola el OCR del comprobante. Devuelve False si el broker no respondió.
+
+    `.delay()` publica en Redis dentro del request, así que si el broker está
+    caído levanta y tumbaba la subida entera con un 500. El comprobante ya está
+    guardado y Finanzas puede revisarlo a mano, así que se reporta el fallo y se
+    deja continuar: devolver error haría que el bootcamper vuelva a subir el
+    mismo archivo y duplique comprobantes.
+    """
+    from .tasks import process_payment_ocr
+
+    try:
+        process_payment_ocr.delay(str(payment_id))
+        return True
+    except Exception:
+        logger.exception('No se pudo encolar el OCR del pago %s.', payment_id)
+        return False
 
 
 class PaymentProgressService:
@@ -461,3 +516,74 @@ def set_bootcamper_self_assignment_enabled(enabled, user):
         user.email,
     )
     return setting
+
+
+# ─── Reparto en lote del pool de cobro (#326) ─────────────────────────────────
+
+# Tope por tanda. En la práctica el pool es de decenas, no de miles: el límite
+# está para que un cliente no mande una lista arbitraria, no para acotar un uso
+# real. Si alguna vez estorba, se sube.
+MAX_BULK_ASSIGN = 200
+
+
+def assign_bootcampers_in_bulk(bootcamper_ids, owner):
+    """Asignar varios bootcampers del pool a una persona de Finanzas.
+
+    La clienta pidió el lote porque en su día a día casi toda la cartera va a la
+    misma persona y sólo las empresas van a otra: repartir de a uno son N clics
+    para el mismo gesto.
+
+    Cada bootcamper se asigna en su propio bloque atómico. Si uno falla —lo tomó
+    alguien mientras tanto, o dejó de existir— el resto sí queda asignado y se
+    informa cuáles no. Envolver la tanda entera en una sola transacción haría
+    que un solo conflicto tirara abajo un reparto de cincuenta.
+
+    Returns:
+        (assigned, failed): lista de CustomUser asignados y lista de
+        ``{'bootcamper_id', 'code', 'error'}`` para los que no se pudo.
+    """
+    from django.db import transaction
+    from apps.authentication.models import CustomUser
+
+    assigned, failed = [], []
+
+    for bootcamper_id in bootcamper_ids:
+        try:
+            with transaction.atomic():
+                try:
+                    bootcamper = CustomUser.objects.select_for_update().get(
+                        pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER,
+                    )
+                except CustomUser.DoesNotExist:
+                    failed.append({
+                        'bootcamper_id': str(bootcamper_id),
+                        'code': 'BOOTCAMPER_NOT_FOUND',
+                        'error': 'Bootcamper no encontrado.',
+                    })
+                    continue
+
+                if bootcamper.finance_owner_id is not None:
+                    failed.append({
+                        'bootcamper_id': str(bootcamper_id),
+                        'code': 'BOOTCAMPER_ALREADY_ASSIGNED',
+                        'error': f'{bootcamper.get_full_name()} ya lo está monitoreando otra persona.',
+                    })
+                    continue
+
+                bootcamper.finance_owner       = owner
+                bootcamper.finance_assigned_at = now()
+                bootcamper.save(update_fields=['finance_owner', 'finance_assigned_at', 'updated_at'])
+                assigned.append(bootcamper)
+        except DatabaseError:
+            logger.exception('Fallo al asignar el bootcamper %s en lote', bootcamper_id)
+            failed.append({
+                'bootcamper_id': str(bootcamper_id),
+                'code': 'ASSIGN_FAILED',
+                'error': 'No se pudo asignar.',
+            })
+
+    logger.info(
+        'Reparto en lote a %s: %s asignados, %s con problema',
+        owner.id, len(assigned), len(failed),
+    )
+    return assigned, failed

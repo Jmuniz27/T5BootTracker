@@ -500,3 +500,102 @@ describe('UsersPage', () => {
     });
   });
 });
+
+describe('UsersPage — programa y cohorte del bootcamper (#328)', () => {
+  const CON_COHORTE = {
+    id: 'bc-1',
+    full_name: 'Ana Torres',
+    email: 'ana@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345678',
+    is_active: true,
+    enrollments: [{
+      program_id: 'prog-1', program_name: 'Python Full Stack',
+      cohort_id: 'coh-1', cohort_number: 3, cohort_status: 'IN_PROGRESS',
+    }],
+  };
+
+  const OTRO_PROGRAMA = {
+    id: 'bc-2',
+    full_name: 'Luis Vera',
+    email: 'luis@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345679',
+    is_active: true,
+    enrollments: [{
+      program_id: 'prog-2', program_name: 'Data Science',
+      cohort_id: 'coh-9', cohort_number: 1, cohort_status: 'FINISHED',
+    }],
+  };
+
+  const SIN_INSCRIPCION = {
+    id: 'bc-3',
+    full_name: 'Pedro Sin',
+    email: 'pedro@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345670',
+    is_active: true,
+    enrollments: [],
+  };
+
+  async function irABootcampers(user) {
+    await user.click(await screen.findByRole('button', { name: /bootcampers/i }));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getUsers.mockResolvedValue({ results: [CON_COHORTE, OTRO_PROGRAMA, SIN_INSCRIPCION] });
+    getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
+  });
+
+  it('la fila dice programa y cohorte', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    expect(screen.getByText(/Python Full Stack/)).toBeInTheDocument();
+    expect(screen.getByText(/Cohorte 3/)).toBeInTheDocument();
+  });
+
+  it('un bootcamper sin inscripción lo dice en vez de dejar el hueco', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    expect(screen.getByText('Sin inscripción')).toBeInTheDocument();
+  });
+
+  it('filtra por programa', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    await user.click(screen.getByRole('button', { name: /filtrar por programa/i }));
+    await user.click(screen.getByRole('option', { name: 'Data Science' }));
+
+    expect(screen.getByText('Luis Vera')).toBeInTheDocument();
+    expect(screen.queryByText('Ana Torres')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pedro Sin')).not.toBeInTheDocument();
+  });
+
+  it('la cohorte sólo aparece con un programa elegido', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    expect(screen.queryByRole('button', { name: /filtrar por cohorte/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /filtrar por programa/i }));
+    await user.click(screen.getByRole('option', { name: 'Python Full Stack' }));
+
+    expect(screen.getByRole('button', { name: /filtrar por cohorte/i })).toBeInTheDocument();
+  });
+
+  it('los filtros de inscripción no aparecen en Administrativos', async () => {
+    // Un vendedor no cursa nada: ahí no significan nada.
+    renderPage();
+    await screen.findByRole('button', { name: /bootcampers/i });
+
+    expect(screen.queryByRole('button', { name: /filtrar por programa/i })).not.toBeInTheDocument();
+  });
+});

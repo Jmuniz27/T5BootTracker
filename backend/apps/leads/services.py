@@ -274,3 +274,125 @@ def reassign_lead_by_admin(lead_id, admin_user, new_owner=None):
     )
 
     return lead
+
+
+# ─── Cierre de leads (#324) ───────────────────────────────────────────────────
+
+def discard_lead(lead_id, user, reason, detail=''):
+    """Sacar un lead del listado de seguimiento, dejando por qué.
+
+    La clienta lo pidió para poder "rayar los que ya no los llames" y saber la
+    razón de cada salida. El motivo es obligatorio y estructurado: si viviera en
+    las notas de una interacción sería indistinguible de cualquier otro
+    comentario, que fue justo su objeción.
+
+    Raises:
+        ValidationError: motivo ausente o inválido, detalle faltante cuando el
+            motivo es OTHER, o lead ya convertido / ya descartado.
+        NotFound: el lead no existe.
+    """
+    if not Lead.objects.filter(pk=lead_id).exists():
+        raise NotFound({'error': 'Lead no encontrado.', 'code': 'LEAD_NOT_FOUND'})
+
+    valid = {choice.value for choice in Lead.DiscardReason}
+    if reason not in valid:
+        raise ValidationError({
+            'error': 'El motivo del descarte es obligatorio y debe ser uno de los válidos.',
+            'code': 'DISCARD_REASON_REQUIRED',
+        })
+
+    detail = (detail or '').strip()
+    if reason == Lead.DiscardReason.OTHER and not detail:
+        # "Otro" sin explicación no aporta nada al reporte: es el único caso en
+        # que la causal por sí sola no dice nada.
+        raise ValidationError({
+            'error': 'Con el motivo "Otro" hay que escribir el detalle.',
+            'code': 'DISCARD_DETAIL_REQUIRED',
+        })
+
+    with transaction.atomic():
+        lead = Lead.objects.select_for_update().get(pk=lead_id)
+
+        if lead.status == Lead.Status.DISCARDED:
+            raise ValidationError({
+                'error': 'Este lead ya está descartado.',
+                'code': 'LEAD_ALREADY_DISCARDED',
+            })
+        if lead.status == Lead.Status.CONVERTED:
+            # Ya es bootcamper: sacarlo del listado comercial no tendría sentido
+            # y dejaría su inscripción colgando de un lead cerrado.
+            raise ValidationError({
+                'error': 'Un lead ya convertido no se puede descartar.',
+                'code': 'LEAD_ALREADY_CONVERTED',
+            })
+
+        lead.status_before_discard = lead.status
+        lead.status = Lead.Status.DISCARDED
+        lead.discard_reason = reason
+        lead.discard_detail = detail
+        lead.discarded_at = now()
+        lead.discarded_by = user
+        lead.version += 1
+        lead.save(update_fields=[
+            'status', 'status_before_discard', 'discard_reason', 'discard_detail',
+            'discarded_at', 'discarded_by', 'version', 'updated_at',
+        ])
+
+        Interaction.objects.create(
+            lead=lead,
+            salesperson=user,
+            interaction_type=Interaction.InteractionType.SYSTEM,
+            outcome=Interaction.Outcome.DISCARDED,
+            notes=(
+                f'Lead descartado por {user.get_full_name()}. '
+                f'Motivo: {lead.get_discard_reason_display()}.'
+                + (f' Detalle: {detail}' if detail else '')
+            ),
+        )
+
+    logger.info('Lead %s descartado por %s (%s)', lead_id, user.id, reason)
+    return lead
+
+
+def restore_lead(lead_id, user):
+    """Deshacer un descarte, devolviendo el lead al estado que tenía.
+
+    Un descarte por error no debería ser definitivo. Se vuelve al estado previo
+    guardado y no a uno fijo, para no inventarle al lead una etapa comercial que
+    nunca tuvo.
+    """
+    if not Lead.objects.filter(pk=lead_id).exists():
+        raise NotFound({'error': 'Lead no encontrado.', 'code': 'LEAD_NOT_FOUND'})
+
+    with transaction.atomic():
+        lead = Lead.objects.select_for_update().get(pk=lead_id)
+
+        if lead.status != Lead.Status.DISCARDED:
+            raise ValidationError({
+                'error': 'Este lead no está descartado.',
+                'code': 'LEAD_NOT_DISCARDED',
+            })
+
+        previous = lead.status_before_discard or Lead.Status.NEW
+        lead.status = previous
+        lead.status_before_discard = ''
+        lead.discard_reason = ''
+        lead.discard_detail = ''
+        lead.discarded_at = None
+        lead.discarded_by = None
+        lead.version += 1
+        lead.save(update_fields=[
+            'status', 'status_before_discard', 'discard_reason', 'discard_detail',
+            'discarded_at', 'discarded_by', 'version', 'updated_at',
+        ])
+
+        Interaction.objects.create(
+            lead=lead,
+            salesperson=user,
+            interaction_type=Interaction.InteractionType.SYSTEM,
+            outcome=Interaction.Outcome.RESTORED,
+            notes=f'Descarte deshecho por {user.get_full_name()}. Vuelve a {lead.get_status_display()}.',
+        )
+
+    logger.info('Lead %s reactivado por %s', lead_id, user.id)
+    return lead
