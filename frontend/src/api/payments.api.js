@@ -78,6 +78,16 @@ export const assignBootcamper = (bootcamperId, financeOwnerId = null) =>
     )
     .then((r) => r.data)
 
+// #326 — reparto en lote. Los que fallan vienen en `failed` con su motivo; el
+// resto sí queda asignado, así que la respuesta hay que leerla, no asumirla.
+export const bulkAssignBootcampers = (bootcamperIds, financeOwnerId = null) =>
+  client
+    .patch('/payments/bootcampers/bulk-assign/', {
+      bootcamper_ids: bootcamperIds,
+      ...(financeOwnerId ? { finance_owner_id: financeOwnerId } : {}),
+    })
+    .then((r) => r.data)
+
 export const releaseBootcamper = (bootcamperId) =>
   client.patch(`/payments/bootcampers/${bootcamperId}/release/`).then((r) => r.data)
 

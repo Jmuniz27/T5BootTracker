@@ -2,7 +2,7 @@
 from django.urls import path
 from .views import (
     BootcamperPoolView,
-    BootcamperAssignView,
+    BootcamperAssignView, BootcamperBulkAssignView,
     BootcamperReleaseView,
     PaymentUploadView,
     PaymentMyProgramsView,
@@ -32,6 +32,7 @@ urlpatterns = [
     path('my-payments/<uuid:pk>/confirm/',            PaymentConfirmView.as_view(),      name='payment-confirm'),
     path('my-payments/<uuid:pk>/',                    MyPaymentDetailView.as_view(),     name='payment-my-detail'),
     path('bootcampers/',                              BootcamperPoolView.as_view(),      name='bootcamper-pool'),
+    path('bootcampers/bulk-assign/',  BootcamperBulkAssignView.as_view(), name='bootcamper-bulk-assign'),
     path('bootcampers/<uuid:bootcamper_id>/assign/',  BootcamperAssignView.as_view(),    name='bootcamper-assign'),
     path('bootcampers/<uuid:bootcamper_id>/release/', BootcamperReleaseView.as_view(),   name='bootcamper-release'),
     path('settings/self-assignment/',                  BootcamperAssignmentSettingView.as_view(), name='bootcamper-assignment-setting'),

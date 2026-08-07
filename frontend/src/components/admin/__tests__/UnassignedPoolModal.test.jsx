@@ -3,11 +3,12 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import UnassignedPoolModal from '../UnassignedPoolModal';
-import { getBootcamperPool, assignBootcamper } from '../../../api/payments.api';
+import { getBootcamperPool, assignBootcamper, bulkAssignBootcampers } from '../../../api/payments.api';
 
 vi.mock('../../../api/payments.api', () => ({
   getBootcamperPool: vi.fn(),
   assignBootcamper: vi.fn(),
+  bulkAssignBootcampers: vi.fn(),
 }));
 
 const FINANZAS = [
@@ -48,6 +49,7 @@ describe('UnassignedPoolModal', () => {
       my_bootcampers: [], available_bootcampers: [EN_POOL], pagination: {},
     });
     assignBootcamper.mockResolvedValue([]);
+    bulkAssignBootcampers.mockResolvedValue({ assigned: [], failed: [] });
   });
 
   it('lista a quienes están en el pool', async () => {
@@ -140,5 +142,113 @@ describe('UnassignedPoolModal', () => {
     await user.click(within(dialog).getByRole('button', { name: /cerrar/i }));
 
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('UnassignedPoolModal — reparto en lote (#326)', () => {
+  const OTRO = {
+    ...EN_POOL,
+    bootcamper_id: 'bc-2',
+    bootcamper_name: 'Luis Vera',
+    email: 'luis@test.com',
+    program_id: 'prog-2',
+    program_name: 'Data Science',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getBootcamperPool.mockResolvedValue({
+      my_bootcampers: [], available_bootcampers: [EN_POOL, OTRO], pagination: {},
+    });
+    bulkAssignBootcampers.mockResolvedValue({
+      assigned: [{ bootcamper_id: 'bc-1' }, { bootcamper_id: 'bc-2' }], failed: [],
+    });
+  });
+
+  it('la barra de lote sólo aparece con algo seleccionado', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('Ana Torres');
+
+    expect(screen.queryByRole('button', { name: /asignar seleccionados/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: /seleccionar a ana torres/i }));
+
+    expect(screen.getByRole('button', { name: /asignar seleccionados/i })).toBeInTheDocument();
+    expect(screen.getByText('1 seleccionado')).toBeInTheDocument();
+  });
+
+  it('seleccionar todos marca a los dos', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('Ana Torres');
+
+    await user.click(screen.getByRole('checkbox', { name: /seleccionar todos/i }));
+
+    expect(screen.getByText('2 seleccionados')).toBeInTheDocument();
+  });
+
+  it('manda la tanda con el destino elegido', async () => {
+    const user = userEvent.setup();
+    const onDone = vi.fn();
+    renderModal({ onDone });
+    await screen.findByText('Ana Torres');
+
+    await user.click(screen.getByRole('checkbox', { name: /seleccionar todos/i }));
+    await user.click(screen.getByRole('button', { name: /responsable de cobro de la selección/i }));
+    await user.click(screen.getByText('Finanzas Uno'));
+    await user.click(screen.getByRole('button', { name: /asignar seleccionados/i }));
+
+    expect(bulkAssignBootcampers.mock.calls[0][0]).toEqual(['bc-1', 'bc-2']);
+    expect(bulkAssignBootcampers.mock.calls[0][1]).toBe('fin-1');
+  });
+
+  it('sin destino no deja mandar la tanda', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('Ana Torres');
+
+    await user.click(screen.getByRole('checkbox', { name: /seleccionar a ana torres/i }));
+
+    expect(screen.getByRole('button', { name: /asignar seleccionados/i })).toBeDisabled();
+    expect(bulkAssignBootcampers).not.toHaveBeenCalled();
+  });
+
+  it('avisa cuando la tanda falla a medias', async () => {
+    // No dar por asignado lo que no se asignó: si no, quedan bootcampers sin
+    // responsable y nadie se entera.
+    const user = userEvent.setup();
+    const onError = vi.fn();
+    bulkAssignBootcampers.mockResolvedValue({
+      assigned: [{ bootcamper_id: 'bc-1' }],
+      failed: [{ bootcamper_id: 'bc-2', code: 'BOOTCAMPER_ALREADY_ASSIGNED', error: 'Luis Vera ya lo está monitoreando otra persona.' }],
+    });
+    renderModal({ onError });
+    await screen.findByText('Ana Torres');
+
+    await user.click(screen.getByRole('checkbox', { name: /seleccionar todos/i }));
+    await user.click(screen.getByRole('button', { name: /responsable de cobro de la selección/i }));
+    await user.click(screen.getByText('Finanzas Uno'));
+    await user.click(screen.getByRole('button', { name: /asignar seleccionados/i }));
+
+    await vi.waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(onError.mock.calls[0][0]).toMatch(/1 asignado/);
+    expect(onError.mock.calls[0][0]).toMatch(/ya lo está monitoreando/);
+  });
+
+  it('una persona con dos programas cuenta una sola vez', async () => {
+    // El responsable de cobro es de la persona, no de su inscripción.
+    const user = userEvent.setup();
+    getBootcamperPool.mockResolvedValue({
+      my_bootcampers: [],
+      available_bootcampers: [EN_POOL, { ...EN_POOL, program_id: 'prog-9', program_name: 'Otro' }],
+      pagination: {},
+    });
+    renderModal();
+    await screen.findAllByText('Ana Torres');
+
+    await user.click(screen.getByRole('checkbox', { name: /seleccionar todos/i }));
+
+    expect(screen.getByText('1 seleccionado')).toBeInTheDocument();
   });
 });
