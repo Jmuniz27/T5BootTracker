@@ -142,3 +142,39 @@ def reject_bootcamper(bootcamper, rejected_by, reason):
     send_verification_rejected_email.delay(str(bootcamper.id))
 
     return bootcamper
+
+
+# ─── Consentimiento de uso de datos (#329) ────────────────────────────────────
+
+# Versión del texto aceptado. Si el texto cambia, se sube esta constante: lo
+# que quedó sellado en cada cuenta sigue diciendo qué aceptó esa persona.
+DATA_CONSENT_VERSION = '2026-08'
+
+DATA_CONSENT_TEXT = (
+    'Acepto que mis datos personales sean utilizados para los fines internos de '
+    'seguimiento de Coding Bootcamps ESPOL.'
+)
+
+
+def record_data_consent(user, accepted):
+    """Sellar el consentimiento al activar la cuenta.
+
+    La clienta definió dónde y para qué: "cuando él crea su cuenta, decir que al
+    crear su cuenta acepta que su información será utilizada para los fines
+    internos de seguimiento de Coding Bootcamps".
+
+    Se exige también acá y no sólo en el formulario: una casilla que vive en el
+    cliente no es constancia de nada.
+
+    Raises:
+        ValidationError: si no se aceptó.
+    """
+    if not accepted:
+        raise ValidationError({
+            'code': 'DATA_CONSENT_REQUIRED',
+            'error': 'Hay que aceptar el uso de datos para activar la cuenta.',
+        })
+
+    user.data_consent_at = now()
+    user.data_consent_version = DATA_CONSENT_VERSION
+    return user
