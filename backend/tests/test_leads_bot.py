@@ -2,10 +2,15 @@
 from datetime import timedelta
 
 import pytest
+from django.test import override_settings
 from django.utils.timezone import now
+from rest_framework.test import APIRequestFactory
 
+from apps.leads.bot_permissions import BOT_TOKEN_HEADER, IsJelouBot
 from apps.leads.models import Lead
 from apps.leads.services import find_lead_by_phone, normalize_phone
+
+BOT_TOKEN = 'un-secreto-de-prueba-suficientemente-largo'
 
 
 class TestNormalizePhone:
@@ -101,3 +106,38 @@ class TestFindLeadByPhone:
         lead.soft_delete()
 
         assert find_lead_by_phone('593991000010') is None
+
+
+class TestIsJelouBot:
+    """The bot authenticates with a shared secret, and fails closed without one."""
+
+    def _request(self, token=None):
+        headers = {BOT_TOKEN_HEADER: token} if token is not None else {}
+        return APIRequestFactory().get('/api/leads/bot/lookup/', headers=headers)
+
+    @override_settings(JELOU_BOT_TOKEN=BOT_TOKEN)
+    def test_grants_access_with_the_right_token(self):
+        assert IsJelouBot().has_permission(self._request(BOT_TOKEN), None) is True
+
+    @override_settings(JELOU_BOT_TOKEN=BOT_TOKEN)
+    def test_denies_without_the_header(self):
+        assert IsJelouBot().has_permission(self._request(), None) is False
+
+    @override_settings(JELOU_BOT_TOKEN=BOT_TOKEN)
+    def test_denies_with_a_wrong_token(self):
+        assert IsJelouBot().has_permission(self._request('otro-secreto'), None) is False
+
+    @override_settings(JELOU_BOT_TOKEN=BOT_TOKEN)
+    def test_denies_with_an_empty_header(self):
+        assert IsJelouBot().has_permission(self._request(''), None) is False
+
+    @override_settings(JELOU_BOT_TOKEN=BOT_TOKEN)
+    def test_denies_a_token_that_is_only_a_prefix(self):
+        """Guards against a comparison that stops at the first shared bytes."""
+        assert IsJelouBot().has_permission(self._request(BOT_TOKEN[:-1]), None) is False
+
+    @override_settings(JELOU_BOT_TOKEN='')
+    def test_denies_everything_when_the_secret_is_unset(self):
+        """Fail-closed: a deployment missing the variable must not open the door."""
+        assert IsJelouBot().has_permission(self._request(BOT_TOKEN), None) is False
+        assert IsJelouBot().has_permission(self._request(), None) is False
