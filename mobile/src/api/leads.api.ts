@@ -90,6 +90,7 @@ export async function createLead(payload: LeadInput) {
 export interface Program {
   id: string;
   name: string;
+  total_cost?: string;
 }
 
 export async function getPrograms(): Promise<Program[]> {
@@ -143,5 +144,22 @@ export interface ResendInvitationResponse {
 
 export async function resendInvitation(leadId: string): Promise<ResendInvitationResponse> {
   const { data } = await api.post(`/leads/${leadId}/resend-invitation/`);
+  return data;
+}
+
+// ─── Descartar / reactivar lead ───────────────────────────────────────────────
+
+export interface DiscardPayload {
+  reason: string; // NO_BUDGET | SCHEDULE | NO_RESPONSE | FREE_ONLY | OTHER
+  detail?: string;
+}
+
+export async function discardLead(leadId: string, payload: DiscardPayload) {
+  const { data } = await api.patch(`/leads/${leadId}/discard/`, payload);
+  return data;
+}
+
+export async function restoreLead(leadId: string) {
+  const { data } = await api.patch(`/leads/${leadId}/restore/`);
   return data;
 }
