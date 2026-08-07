@@ -131,6 +131,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         verbose_name='Motivo del rechazo de verificación',
     )
     onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+    # Consentimiento de uso de datos (#329). Se sella al activar la cuenta, que
+    # es el único punto donde la persona entra por su propia mano. Se guarda la
+    # versión del texto aceptado: si cambia, hay que poder saber qué aceptó cada
+    # quien. Nulo = nunca lo aceptó (cuentas anteriores a esto).
+    data_consent_at      = models.DateTimeField(null=True, blank=True, verbose_name='Consentimiento de datos')
+    data_consent_version = models.CharField(max_length=20, blank=True, verbose_name='Versión del consentimiento')
     # Token de invitación vigente (issue #253/#255): comparado contra el
     # `iat` firmado en el token para invalidar el link anterior al reenviar.
     onboarding_token_issued_at = models.DateTimeField(null=True, blank=True)
