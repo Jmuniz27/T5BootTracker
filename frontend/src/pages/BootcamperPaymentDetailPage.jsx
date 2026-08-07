@@ -165,8 +165,11 @@ export default function BootcamperPaymentDetailPage() {
   })
 
   const notifyMutation = useMutation({
-    mutationFn: () => notifyCoordinator(bootcamperId, programId),
+    mutationFn: () => notifyCoordinator(bootcamperId, programId, { source: 'critical_deficit' }),
     onSuccess: () => setToast({ message: 'Coordinador notificado.' }),
+    // Sin esto un fallo dejaba el boton como si nada hubiera pasado, y no habia
+    // forma de distinguirlo de no haber hecho clic.
+    onError: () => setToast({ message: 'No se pudo notificar al coordinador.', type: 'error' }),
   })
 
   // CB-114: el spinner centrado dejaba la pantalla practicamente en blanco.
@@ -403,6 +406,7 @@ export default function BootcamperPaymentDetailPage() {
             setSelectedPayment(null)
             setToast({ message: msg })
           }}
+          onNotice={(msg, type) => setToast({ message: msg, type })}
         />
       )}
 
