@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assignmentLabel } from '../LeadsDashboard';
+import { assignmentLabel } from '../leadDisplay';
 
 const ASIGNADO = {
   owner: 'u-1',
