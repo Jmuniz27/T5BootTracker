@@ -12,6 +12,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
 import { colors } from '../../src/theme/colors';
+import { useAuth } from '../../src/context/AuthContext';
 import { fetchLeads } from '../../src/api/leads.api';
 import {
   getMeetings,
@@ -52,6 +53,8 @@ function prettyDate(key: string): string {
 
 export default function AgendaScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isSalesperson = user?.role === 'SALESPERSON';
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [leads, setLeads] = useState<LeadOption[]>([]);
   const [selected, setSelected] = useState<string>(todayKey());
@@ -77,6 +80,10 @@ export default function AgendaScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!isSalesperson) {
+        setLoading(false);
+        return;
+      }
       let active = true;
       load().finally(() => {
         if (active) setLoading(false);
@@ -84,7 +91,7 @@ export default function AgendaScreen() {
       return () => {
         active = false;
       };
-    }, [load]),
+    }, [load, isSalesperson]),
   );
 
   const records: Dated[] = meetings.map((m) => ({ ...m, date: m.start_time }));
@@ -136,6 +143,26 @@ export default function AgendaScreen() {
     } finally {
       setDeleting(false);
     }
+  }
+
+  // La agenda es una herramienta del vendedor; Finanzas gestiona cobro, no
+  // seguimiento comercial con visitas agendadas. Mismo criterio que
+  // SalespersonRoute en web.
+  if (!isSalesperson) {
+    return (
+      <SafeAreaView style={st.screen}>
+        <View style={st.restrictedCard}>
+          <Ionicons name="lock-closed-outline" size={40} color={colors.navy} />
+          <Text style={st.restrictedTitle}>Acceso restringido</Text>
+          <Text style={st.restrictedMsg}>
+            La agenda de seguimientos es del equipo de ventas.
+          </Text>
+          <TouchableOpacity style={st.restrictedBtn} onPress={() => router.back()} activeOpacity={0.85}>
+            <Text style={st.restrictedBtnText}>Volver</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -215,6 +242,23 @@ export default function AgendaScreen() {
 
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f8f9fb' },
+  restrictedCard: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 28,
+    gap: 12,
+  },
+  restrictedTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary, textAlign: 'center' },
+  restrictedMsg: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
+  restrictedBtn: {
+    marginTop: 8,
+    backgroundColor: colors.navy,
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  restrictedBtnText: { color: colors.white, fontWeight: '700', fontSize: 14 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
