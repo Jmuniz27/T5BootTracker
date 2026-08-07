@@ -964,6 +964,13 @@ export default function PaymentsPage() {
           onClose={() => setShowUpload(false)}
           onSuccess={(data) => {
             setShowUpload(false)
+            // `ocr_queued: false` = el comprobante se guardó pero el escaneo no
+            // arrancó. Prometer que lo estamos leyendo dejaría al bootcamper
+            // esperando un resultado que no va a llegar.
+            if (data.ocr_queued === false) {
+              showToast('Comprobante recibido. La lectura automática no está disponible ahora; Finanzas lo revisará a mano.')
+              return
+            }
             showToast('Comprobante subido. Estamos escaneando el texto…')
             if (data.status === 'DRAFT') setReviewPayment(data)
           }}
