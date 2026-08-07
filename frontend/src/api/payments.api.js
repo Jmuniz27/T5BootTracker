@@ -35,11 +35,18 @@ export const rejectPayment = (id, data) =>
 export const getPrograms = () =>
   client.get('/programs/').then((r) => r.data)
 
-export const notifyCoordinator = (bootcamperId, programId) =>
+// `source` dice desde qué pantalla se pidió el aviso, para que el correo al
+// coordinador diga de qué se trata en vez de ser siempre el mismo texto.
+export const notifyCoordinator = (bootcamperId, programId, { source, paymentId } = {}) =>
   client
-    .post(`/payments/notify-coordinator/${bootcamperId}/`, null, {
-      params: { program_id: programId },
-    })
+    .post(
+      `/payments/notify-coordinator/${bootcamperId}/`,
+      {
+        ...(source ? { source } : {}),
+        ...(paymentId ? { payment_id: paymentId } : {}),
+      },
+      { params: { program_id: programId } },
+    )
     .then((r) => r.data)
 
 export const getMonitoring = (params = {}) =>

@@ -2,11 +2,19 @@
 {% block content %}
 Alerta de pago crítico.
 
-Bootcamper: {{ bootcamper_name }}
-Email: {{ bootcamper_email }}
-Programa: {{ program_name }}
+{{ alert_text }}
 
-Por favor, contacta al bootcamper para regularizar su situación de pagos.
+BOOTCAMPER
+{% for label, value in rows %}{{ label }}: {{ value }}
+{% endfor %}
+SITUACIÓN DE PAGOS
+{% for label, value in payment_rows %}{{ label }}: {{ value }}
+{% endfor %}{% if receipt_rows %}
+COMPROBANTE EN REVISIÓN
+{% for label, value in receipt_rows %}{{ label }}: {{ value }}
+{% endfor %}{% endif %}
+QUÉ HACER
+{{ action_text }}
 
-Ver panel de pagos: {{ dashboard_url }}
+Este correo incluye toda la información necesaria; no necesitas ingresar a ningún sistema.
 {% endblock %}
