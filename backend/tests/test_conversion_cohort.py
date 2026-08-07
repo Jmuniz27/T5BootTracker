@@ -205,3 +205,89 @@ class TestConversionWithCohort:
 
         enrollment = Enrollment.objects.get(bootcamp=program)
         assert enrollment.cohort_id is None
+
+
+class TestReconversionToAnotherCohort:
+    """CB-346: alguien que ya cursó un programa puede volver a inscribirse en él
+    en otra cohorte (ej. lo dejó y vuelve más adelante). Antes, la unicidad de
+    Enrollment era por (bootcamper, programa) sin importar la cohorte, así que
+    esto quedaba bloqueado con un 409 ALREADY_ENROLLED sin salida.
+    """
+
+    def _second_lead(self, owner):
+        return Lead.objects.create(
+            name='Bootcamper Recurrente',
+            phone='0991112223',
+            status=Lead.Status.QUALIFIED,
+            owner=owner,
+        )
+
+    def test_reenrolling_in_the_same_program_on_another_cohort_is_allowed(
+        self, db, salesperson_user, program, assigned_lead
+    ):
+        first_cohort = make_cohort(program, number=1, status=Cohort.Status.IN_PROGRESS)
+        client = make_client(salesperson_user)
+
+        first = client.post(
+            convert_url(qualify(assigned_lead)),
+            payload(program, cohort_id=str(first_cohort.id), email='recurrente@test.com'),
+            format='json',
+        )
+        assert first.status_code in (200, 201)
+
+        second_cohort = make_cohort(program, number=2, status=Cohort.Status.UPCOMING)
+        second_lead = self._second_lead(salesperson_user)
+
+        second = client.post(
+            convert_url(second_lead),
+            payload(program, cohort_id=str(second_cohort.id), email='recurrente@test.com'),
+            format='json',
+        )
+        assert second.status_code in (200, 201)
+        assert second.json()['is_returning'] is True
+
+        enrollments = Enrollment.objects.filter(bootcamp=program).order_by('cohort__number')
+        assert list(enrollments.values_list('cohort_id', flat=True)) == [first_cohort.id, second_cohort.id]
+
+    def test_reenrolling_in_the_same_program_and_cohort_is_still_rejected(
+        self, db, salesperson_user, program, assigned_lead
+    ):
+        """La cohorte exacta ya cursada sí sigue bloqueada — no es un duplicado válido."""
+        cohort = make_cohort(program, status=Cohort.Status.IN_PROGRESS)
+        client = make_client(salesperson_user)
+
+        client.post(
+            convert_url(qualify(assigned_lead)),
+            payload(program, cohort_id=str(cohort.id), email='misma.cohorte@test.com'),
+            format='json',
+        )
+
+        second_lead = self._second_lead(salesperson_user)
+        resp = client.post(
+            convert_url(second_lead),
+            payload(program, cohort_id=str(cohort.id), email='misma.cohorte@test.com'),
+            format='json',
+        )
+        assert resp.status_code == 409
+        assert resp.json()['code'] == 'ALREADY_ENROLLED'
+
+    def test_reenrolling_in_the_same_program_without_cohort_twice_is_still_rejected(
+        self, db, salesperson_user, program, assigned_lead
+    ):
+        """Sin cohorte en ambos casos, la constraint parcial sigue bloqueando el duplicado."""
+        client = make_client(salesperson_user)
+
+        client.post(
+            convert_url(qualify(assigned_lead)),
+            payload(program, email='sin.cohorte.dos.veces@test.com'),
+            format='json',
+        )
+
+        second_lead = self._second_lead(salesperson_user)
+        resp = client.post(
+            convert_url(second_lead),
+            payload(program, email='sin.cohorte.dos.veces@test.com'),
+            format='json',
+        )
+        assert resp.status_code == 409
+        assert resp.json()['code'] == 'ALREADY_ENROLLED'
