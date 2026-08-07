@@ -200,10 +200,14 @@ class TestLeadListReportFields:
 
         row = self._row(salesperson_user, assigned_lead)
         assert row['assigned_at'][:10] == str(timezone.localtime(assigned_lead.assigned_at).date())
+        # #323: la tarjeta muestra la fecha y los días juntos, así que el
+        # listado tiene que traer los dos.
+        assert row['days_assigned'] == 7
 
     def test_un_lead_sin_dueno_no_trae_fecha_de_asignacion(self, db, salesperson_user, sample_lead):
         row = self._row(salesperson_user, sample_lead)
         assert row['assigned_at'] is None
+        assert row['days_assigned'] is None
 
 
 class TestLeadCreate:
