@@ -24,6 +24,18 @@ class Lead(models.Model):
         INTERESTED        = 'INTERESTED',        'Interesado'
         NOT_INTERESTED    = 'NOT_INTERESTED',    'No interesado'
         CONVERTED         = 'CONVERTED',         'Convertido'
+        # Estado terminal paralelo a CONVERTED: la persona sale del listado de
+        # seguimiento. NOT_INTERESTED mezclaba a quien nunca mostró interés con
+        # quien se cayó al final, y no guardaba por qué.
+        DISCARDED         = 'DISCARDED',         'Descartado'
+
+    class DiscardReason(models.TextChoices):
+        """Causales de salida. Son las que nombró la clienta en la demo."""
+        NO_BUDGET   = 'NO_BUDGET',   'Sin presupuesto'
+        SCHEDULE    = 'SCHEDULE',    'Los horarios no le sirven'
+        NO_RESPONSE = 'NO_RESPONSE', 'No responde / los correos rebotan'
+        FREE_ONLY   = 'FREE_ONLY',   'Sólo busca contenido gratis'
+        OTHER       = 'OTHER',       'Otro'
 
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name             = models.CharField(max_length=200, verbose_name='Nombre')
@@ -76,6 +88,27 @@ class Lead(models.Model):
     # reasignar. Con assigned_at permite calcular el tiempo de retención.
     released_at      = models.DateTimeField(null=True, blank=True, verbose_name='Liberado')
     last_contact     = models.DateTimeField(null=True, blank=True, verbose_name='Último contacto')
+    # Cierre del lead (#324). El motivo es estructurado y no una nota suelta:
+    # la clienta necesita agrupar por causa, no leer comentario por comentario.
+    discard_reason   = models.CharField(
+        max_length=20,
+        choices=DiscardReason.choices,
+        blank=True,
+        verbose_name='Motivo del descarte',
+    )
+    discard_detail   = models.TextField(blank=True, verbose_name='Detalle del descarte')
+    discarded_at     = models.DateTimeField(null=True, blank=True, verbose_name='Descartado')
+    discarded_by     = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='discarded_leads',
+        verbose_name='Descartado por',
+    )
+    # Para poder deshacer sin adivinar: un descarte por error debe devolver el
+    # lead al estado exacto en que estaba.
+    status_before_discard = models.CharField(max_length=30, blank=True)
     version          = models.PositiveIntegerField(default=0)
     deleted_at       = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name='Eliminado')
     created_at       = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -113,6 +146,10 @@ class Interaction(models.Model):
         AWAIT_REPLY       = 'AWAIT_REPLY',       'Esperar respuesta'
         SPEAK_COORDINATOR = 'SPEAK_COORDINATOR', 'Hablar con coordinador'
         REASSIGNED        = 'REASSIGNED',        'Reasignado por administrador'
+        # Eventos de cierre (#324); como REASSIGNED, sólo los usa el rastro de
+        # sistema, no el formulario del vendedor.
+        DISCARDED         = 'DISCARDED',         'Descartado'
+        RESTORED          = 'RESTORED',          'Reactivado'
 
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     lead             = models.ForeignKey(
