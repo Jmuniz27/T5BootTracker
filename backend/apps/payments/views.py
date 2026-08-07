@@ -666,34 +666,15 @@ class NotifyCoordinatorView(APIView):
         from apps.notifications.tasks import send_late_payment_alert
         from apps.authentication.models import CustomUser
         from apps.programs.models import Program
-        from .serializers import NotifyCoordinatorSerializer
 
         program_id = request.data.get('program_id') or request.query_params.get('program_id')
         if not program_id:
             return Response({'error': 'program_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        context_serializer = NotifyCoordinatorSerializer(data=request.data)
-        context_serializer.is_valid(raise_exception=True)
-        source = context_serializer.validated_data.get('source')
-        payment_id = context_serializer.validated_data.get('payment_id')
-
         try:
             CustomUser.objects.get(pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER)
         except CustomUser.DoesNotExist:
             return Response({'error': 'Bootcamper no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
-
-        # El comprobante tiene que ser de este bootcamper y este programa: si no,
-        # el correo al coordinador expondría datos de un pago ajeno.
-        if payment_id and not Payment.objects.filter(
-            pk=payment_id, bootcamper_id=bootcamper_id, program_id=program_id
-        ).exists():
-            return Response(
-                {
-                    'error': 'El comprobante no corresponde a este bootcamper.',
-                    'code': 'INVALID_PAYMENT',
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         # El gate del 10% debe validarse en el servidor: el frontend sólo lo usaba
         # para mostrar u ocultar el botón, así que una llamada directa a la API
@@ -712,12 +693,7 @@ class NotifyCoordinatorView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        send_late_payment_alert.delay(
-            str(bootcamper_id),
-            str(program_id),
-            source=source,
-            payment_id=str(payment_id) if payment_id else None,
-        )
+        send_late_payment_alert.delay(str(bootcamper_id), str(program_id))
         return Response({'detail': 'Alerta enviada.'}, status=status.HTTP_200_OK)
 
 
