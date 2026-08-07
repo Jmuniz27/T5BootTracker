@@ -60,8 +60,19 @@ class VerificationRejectSerializer(serializers.Serializer):
         return value
 
 
+class LeadDiscardSerializer(serializers.Serializer):
+    """Motivo con el que se saca un lead del listado (#324).
+
+    La causal es obligatoria y cerrada para que el reporte pueda agrupar por
+    ella; el detalle es libre y sólo se exige cuando la causal es "Otro".
+    """
+    reason = serializers.ChoiceField(choices=Lead.DiscardReason.choices)
+    detail = serializers.CharField(required=False, allow_blank=True, default='')
+
+
 class LeadListSerializer(serializers.ModelSerializer):
     interaction_count = serializers.IntegerField(read_only=True)
+    discard_reason_display = serializers.CharField(source='get_discard_reason_display', read_only=True)
     last_outcome = serializers.CharField(read_only=True, allow_null=True, default=None)
     last_interaction_at = serializers.DateTimeField(read_only=True, allow_null=True, default=None)
     days_assigned = serializers.SerializerMethodField()
@@ -77,6 +88,7 @@ class LeadListSerializer(serializers.ModelSerializer):
             'is_company', 'program_interest', 'interaction_count',
             'last_outcome', 'last_interaction_at', 'days_assigned',
             'owner', 'owner_name', 'created_at',
+            'discard_reason', 'discard_reason_display', 'discard_detail', 'discarded_at',
             'bootcamper', 'bootcamper_verification_status',
         )
 
@@ -96,6 +108,8 @@ class LeadListSerializer(serializers.ModelSerializer):
 
 class LeadDetailSerializer(serializers.ModelSerializer):
     interaction_count = serializers.IntegerField(read_only=True)
+    discard_reason_display = serializers.CharField(source='get_discard_reason_display', read_only=True)
+    discarded_by_name = serializers.SerializerMethodField()
     days_assigned = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
     bootcamper_verification_status = serializers.CharField(
@@ -110,6 +124,8 @@ class LeadDetailSerializer(serializers.ModelSerializer):
             'is_company', 'program_interest', 'program', 'interaction_count',
             'owner', 'owner_name', 'assigned_at', 'released_at', 'days_assigned',
             'last_contact', 'created_at', 'updated_at',
+            'discard_reason', 'discard_reason_display', 'discard_detail',
+            'discarded_at', 'discarded_by_name',
             'bootcamper', 'bootcamper_verification_status', 'bootcamper_profile',
         )
 
@@ -125,6 +141,9 @@ class LeadDetailSerializer(serializers.ModelSerializer):
         if obj.owner:
             return obj.owner.get_full_name()
         return None
+
+    def get_discarded_by_name(self, obj):
+        return obj.discarded_by.get_full_name() if obj.discarded_by else None
 
 
 class LeadWriteSerializer(serializers.ModelSerializer):
@@ -145,6 +164,16 @@ class LeadWriteSerializer(serializers.ModelSerializer):
     def validate_phone(self, value):
         if not value or not value.strip():
             raise serializers.ValidationError('El teléfono no puede estar vacío.')
+        return value
+
+    def validate_status(self, value):
+        # Descartar exige un motivo, y por acá no viaja ninguno. Si se permitiera,
+        # el PATCH genérico sería una puerta trasera para cerrar leads sin decir
+        # por qué — justo lo que el estado nuevo viene a evitar.
+        if value == Lead.Status.DISCARDED:
+            raise serializers.ValidationError(
+                'Para descartar un lead usa la acción de descarte, que pide el motivo.'
+            )
         return value
 
     def create(self, validated_data):

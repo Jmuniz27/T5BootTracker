@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, discardLead, restoreLead, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
@@ -39,7 +39,18 @@ const STATUS_LABELS = {
   INTERESTED: 'Interesado',
   NOT_INTERESTED: 'No interesado',
   CONVERTED: 'Convertido',
+  DISCARDED: 'Descartado',
 }
+
+// Causales de cierre. Espejo de Lead.DiscardReason en el backend, que es quien
+// valida de verdad: acá sólo se arma el formulario.
+const DISCARD_REASONS = [
+  { value: 'NO_BUDGET',   label: 'Sin presupuesto' },
+  { value: 'SCHEDULE',    label: 'Los horarios no le sirven' },
+  { value: 'NO_RESPONSE', label: 'No responde / los correos rebotan' },
+  { value: 'FREE_ONLY',   label: 'Sólo busca contenido gratis' },
+  { value: 'OTHER',       label: 'Otro' },
+]
 
 const STATUS_COLORS = {
   NEW: 'bg-gray-100 text-gray-500',
@@ -47,6 +58,7 @@ const STATUS_COLORS = {
   INTERESTED: 'bg-yellow-100 text-yellow-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
   CONVERTED: 'bg-green-100 text-green-700',
+  DISCARDED: 'bg-slate-200 text-slate-600',
 }
 
 const INTERACTION_TYPE_LABELS = {
@@ -719,6 +731,126 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
 // ─── View Lead Modal ──────────────────────────────────────────────────────────
 
+
+/**
+ * Cierre de un lead con motivo (#324).
+ *
+ * La clienta lo pidió porque quería "rayar los que ya no los llames" y saber
+ * por qué. El motivo es una causal cerrada y no texto libre para que el reporte
+ * pueda agrupar; el detalle acompaña y sólo es obligatorio con "Otro", donde la
+ * causal por sí sola no dice nada.
+ */
+function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
+  const queryClient = useQueryClient()
+  const [reason, setReason] = useState('')
+  const [detail, setDetail] = useState('')
+  const [error, setError] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: (payload) => discardLead(lead.id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
+      onSuccess(`${lead.name} salió del listado de seguimiento.`)
+      onClose()
+    },
+    onError: (err) => {
+      onError(err.response?.data?.error ?? 'No se pudo descartar el lead.')
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!reason) {
+      setError('Elige un motivo.')
+      return
+    }
+    if (reason === 'OTHER' && !detail.trim()) {
+      setError('Con el motivo "Otro" hay que escribir el detalle.')
+      return
+    }
+    setError('')
+    mutation.mutate({ reason, detail: detail.trim() })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[440px] shadow-xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} aria-label="Cerrar" className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <h2 className="text-xl font-bold text-gray-900 mb-1">Descartar lead</h2>
+        <p className="text-sm text-gray-500 mb-1">{lead.name}</p>
+        <p className="text-xs text-gray-500 mb-5">
+          Sale del listado de seguimiento. Se puede reactivar después.
+        </p>
+
+        {/* noValidate: la validación propia está en español; la nativa del
+            navegador saldría en inglés y taparía este formulario. */}
+        <form onSubmit={handleSubmit} noValidate>
+          <fieldset className="space-y-2 mb-4">
+            <legend className="text-sm font-medium text-gray-700 mb-2">Motivo</legend>
+            {DISCARD_REASONS.map((option) => (
+              <label
+                key={option.value}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium cursor-pointer transition-colors ${
+                  reason === option.value
+                    ? 'border-[#1e3164] bg-blue-50 text-[#1e3164]'
+                    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="discard-reason"
+                  value={option.value}
+                  checked={reason === option.value}
+                  onChange={() => setReason(option.value)}
+                  className="accent-[#1e3164]"
+                />
+                {option.label}
+              </label>
+            ))}
+          </fieldset>
+
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="discard-detail">
+            Detalle {reason === 'OTHER' ? <span className="text-red-500">*</span> : <span className="text-gray-500 font-normal">(opcional)</span>}
+          </label>
+          <textarea
+            id="discard-detail"
+            rows={3}
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            placeholder="Qué pasó con este lead"
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+
+          {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
+
+          <div className="flex gap-2 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="flex-1 py-2.5 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
+            >
+              {mutation.isPending ? 'Descartando…' : 'Descartar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
   const queryClient = useQueryClient()
   const { data: interactions = [] } = useQuery({
@@ -791,6 +923,17 @@ function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
             <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
             <p className="text-gray-600">{SOURCE_LABELS[lead.source] || lead.source}</p>
           </div>
+          {lead.status === 'DISCARDED' && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="font-semibold text-gray-700 mb-0.5">Motivo del descarte:</p>
+              <p className="text-gray-600" data-testid="lead-discard-reason">
+                {lead.discard_reason_display || 'Sin motivo registrado'}
+              </p>
+              {lead.discard_detail && (
+                <p className="text-gray-600 mt-1">{lead.discard_detail}</p>
+              )}
+            </div>
+          )}
           {lastInteraction?.notes && (
             <div>
               <p className="font-semibold text-gray-700 mb-0.5">Última nota:</p>
@@ -1295,7 +1438,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-2 mb-6">
-            {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'CONVERTED' && value !== 'NEW').map(([value, label]) => (
+            {Object.entries(STATUS_LABELS).filter(([value]) => !['CONVERTED', 'NEW', 'DISCARDED'].includes(value)).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -1999,8 +2142,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
-function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit, onResendInvitation }) {
+function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit, onResendInvitation, onDiscard, onRestore }) {
   const isConverted = lead.status === 'CONVERTED'
+  const isDiscarded = lead.status === 'DISCARDED'
   // Editable si no está convertido y es propio, disponible (sin dueño) o soy admin.
   const canEdit = !isConverted && (isAdmin || !lead.owner || isOwned)
   // El botón de reenvío sólo tiene sentido mientras el bootcamper no activó su
@@ -2091,6 +2235,22 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
               Cambiar estado
+            </button>
+          )}
+          {(isOwned || isAdmin) && !isConverted && !isDiscarded && (
+            <button
+              onClick={() => { onDiscard(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Descartar lead
+            </button>
+          )}
+          {(isOwned || isAdmin) && isDiscarded && (
+            <button
+              onClick={() => { onRestore(); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-[#1e3164] font-medium hover:bg-blue-50"
+            >
+              Reactivar lead
             </button>
           )}
           {isOwned && lead.status === 'QUALIFIED' && (
@@ -2196,6 +2356,7 @@ export default function LeadsDashboard() {
   const [historyLead, setHistoryLead]     = useState(null)
   const [logLead, setLogLead]             = useState(null)
   const [statusLead, setStatusLead]       = useState(null)
+  const [discardTarget, setDiscardTarget] = useState(null)
   const [releaseTarget, setReleaseTarget] = useState(null)
   const [reassignTarget, setReassignTarget] = useState(null)
   const [convertTarget, setConvertTarget] = useState(null)
@@ -2287,6 +2448,18 @@ export default function LeadsDashboard() {
     tabLeads.filter((l) => !companyFilter || l.is_company),
     sortKey,
   )
+
+  const restoreMutation = useMutation({
+    mutationFn: restoreLead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
+      showToast('Lead reactivado: vuelve al estado que tenía.')
+    },
+    onError: (err) => {
+      showToast(err.response?.data?.error ?? 'No se pudo reactivar el lead.', 'error')
+    },
+  })
 
   const assignMutation = useMutation({
     mutationFn: assignLead,
@@ -2639,6 +2812,8 @@ export default function LeadsDashboard() {
                     onViewHistory={() => setHistoryLead(lead)}
                     onLogInteraction={() => setLogLead(lead)}
                     onChangeStatus={() => setStatusLead(lead)}
+                    onDiscard={() => setDiscardTarget(lead)}
+                    onRestore={() => restoreMutation.mutate(lead.id)}
                     onRelease={() => setReleaseTarget(lead)}
                     onAssign={() => assignMutation.mutate(lead.id)}
                     onConvert={() => setConvertTarget(lead)}
@@ -2694,6 +2869,15 @@ export default function LeadsDashboard() {
         <ResendInvitationModal
           lead={resendTarget}
           onClose={() => setResendTarget(null)}
+        />
+      )}
+
+      {discardTarget && (
+        <DiscardLeadModal
+          lead={discardTarget}
+          onClose={() => setDiscardTarget(null)}
+          onSuccess={(msg) => showToast(msg)}
+          onError={(msg) => showToast(msg, 'error')}
         />
       )}
 
