@@ -17,7 +17,10 @@ function ConfidenceBadge({ value }) {
   return <span className={`text-xs font-medium ${confidenceColor(pct)}`}>{pct}%</span>
 }
 
-export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess }) {
+// `onNotice` avisa sin cerrar el modal: aprobar y rechazar terminan la revision,
+// pero notificar al coordinador no, y usar `onSuccess` para ambos hacia que
+// avisarle al coordinador cerrara la pantalla del comprobante que se revisaba.
+export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess, onNotice }) {
   const [tab, setTab] = useState('details')
   const [approveData, setApproveData] = useState({ confirmed_amount: '', confirmed_bank_name: '', confirmed_transaction_id: '' })
   const [rejectReason, setRejectReason] = useState('')
@@ -58,9 +61,16 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
     onSuccess: () => { invalidate(); onSuccess('Pago rechazado.') },
   })
 
+  const notify = onNotice || onSuccess
+
   const notifyMutation = useMutation({
-    mutationFn: () => notifyCoordinator(bootcamperId, payment?.program),
-    onSuccess: () => onSuccess('Coordinador notificado.'),
+    mutationFn: () =>
+      notifyCoordinator(bootcamperId, payment?.program, {
+        source: 'receipt_review',
+        paymentId,
+      }),
+    onSuccess: () => notify('Coordinador notificado.'),
+    onError: () => notify('No se pudo notificar al coordinador.', 'error'),
   })
 
   const handleCopy = () => {

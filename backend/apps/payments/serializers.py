@@ -3,6 +3,7 @@
 from django.urls import reverse
 from rest_framework import serializers
 from apps.authentication.validators import validate_identificacion
+from apps.notifications.services import ALERT_SOURCES
 from .models import BootcamperAssignmentSetting, Payment
 from .services import make_receipt_token
 
@@ -120,6 +121,20 @@ class PaymentApproveSerializer(serializers.Serializer):
     confirmed_transaction_id = serializers.CharField(
         max_length=100, required=False, allow_blank=True
     )
+
+
+class NotifyCoordinatorSerializer(serializers.Serializer):
+    """Validate the context of a manual alert to the coordinator.
+
+    `source` dice desde qué pantalla se pidió el aviso, para que el correo diga
+    de qué se trata. Se valida contra la lista en vez de ignorar lo desconocido:
+    un valor mal escrito mandaría el correo genérico sin que nadie se entere.
+    """
+
+    source = serializers.ChoiceField(
+        choices=ALERT_SOURCES, required=False, allow_null=True
+    )
+    payment_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class PaymentRejectSerializer(serializers.Serializer):

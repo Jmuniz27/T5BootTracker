@@ -183,6 +183,129 @@ class TestCoordinatorEmails:
         assert msg.cc == ['coord.cc@espol.edu.ec']
 
 
+class TestCoordinatorAlertIsSelfContained:
+    """El coordinador no tiene cuenta funcional: el correo tiene que bastarse solo.
+
+    Los correos lo mandaban a `/payments`, una pantalla que no puede abrir.
+    """
+
+    def _bodies(self):
+        msg = mail.outbox[0]
+        return msg.alternatives[0][0], msg.body
+
+    def test_alert_does_not_link_to_the_app(
+        self, db, coordinator_config, converted_bootcamper
+    ):
+        send_late_payment_alert(converted_bootcamper.id, coordinator_config.id)
+
+        for body in self._bodies():
+            assert settings.FRONTEND_URL not in body
+            assert 'Ver panel de pagos' not in body
+
+    def test_conversion_notification_does_not_link_to_the_app(
+        self, db, coordinator_config, sample_lead, converted_bootcamper
+    ):
+        sample_lead.program = coordinator_config
+        sample_lead.save()
+
+        send_conversion_notification(sample_lead.id, converted_bootcamper.id)
+
+        for body in self._bodies():
+            assert settings.FRONTEND_URL not in body
+            assert 'Ver panel de pagos' not in body
+
+    def test_alert_carries_the_data_needed_to_act(
+        self, db, coordinator_config, converted_bootcamper
+    ):
+        send_late_payment_alert(converted_bootcamper.id, coordinator_config.id)
+
+        for body in self._bodies():
+            assert converted_bootcamper.get_full_name() in body
+            assert converted_bootcamper.email in body
+            assert coordinator_config.name in body
+            assert 'Adeudado' in body
+            assert 'Esperado a la fecha' in body
+
+
+class TestCoordinatorAlertDistinguishesItsSource:
+    """Los dos botones mandaban el mismo correo y no se podía saber cuál era cuál."""
+
+    def test_the_two_sources_produce_different_subjects(
+        self, db, coordinator_config, converted_bootcamper
+    ):
+        send_late_payment_alert(
+            converted_bootcamper.id, coordinator_config.id, source='critical_deficit'
+        )
+        send_late_payment_alert(
+            converted_bootcamper.id, coordinator_config.id, source='receipt_review'
+        )
+
+        deficit_subject, review_subject = (m.subject for m in mail.outbox)
+        assert deficit_subject != review_subject
+        assert 'atrasado' in deficit_subject.lower()
+        assert 'comprobante' in review_subject.lower()
+
+    def test_critical_deficit_names_the_amount_owed(
+        self, db, coordinator_config, converted_bootcamper
+    ):
+        send_late_payment_alert(
+            converted_bootcamper.id, coordinator_config.id, source='critical_deficit'
+        )
+
+        msg = mail.outbox[0]
+        assert 'adeuda' in msg.subject.lower()
+        for body in (msg.alternatives[0][0], msg.body):
+            assert '10%' in body
+
+    def test_receipt_review_describes_the_receipt(
+        self, db, coordinator_config, converted_bootcamper, program
+    ):
+        from apps.payments.models import Payment
+
+        payment = Payment.objects.create(
+            bootcamper=converted_bootcamper,
+            program=coordinator_config,
+            receipt_file='receipts/2026/08/test.jpg',
+            receipt_file_type='image',
+            ocr_amount=Decimal('420.00'),
+            ocr_bank_name='Banco Pichincha',
+        )
+
+        send_late_payment_alert(
+            converted_bootcamper.id,
+            coordinator_config.id,
+            source='receipt_review',
+            payment_id=str(payment.id),
+        )
+
+        for body in (mail.outbox[0].alternatives[0][0], mail.outbox[0].body):
+            assert '420.00' in body
+            assert 'Banco Pichincha' in body
+
+    def test_without_source_the_previous_subject_is_kept(
+        self, db, coordinator_config, converted_bootcamper
+    ):
+        """Las tareas ya encoladas al desplegar corren con la firma vieja."""
+        send_late_payment_alert(converted_bootcamper.id, coordinator_config.id)
+
+        assert mail.outbox[0].subject.startswith('Alerta de pago:')
+
+    def test_a_deleted_payment_does_not_block_the_alert(
+        self, db, coordinator_config, converted_bootcamper
+    ):
+        """El pago pudo borrarse entre el click y el worker."""
+        import uuid
+
+        send_late_payment_alert(
+            converted_bootcamper.id,
+            coordinator_config.id,
+            source='receipt_review',
+            payment_id=str(uuid.uuid4()),
+        )
+
+        assert len(mail.outbox) == 1
+
+
 @pytest.fixture
 def make_coordinator(db):
     """Factory de cuentas con rol COORDINATOR y un alcance dado."""
@@ -329,12 +452,15 @@ class TestCoordinatorAccountRecipients:
         assert mail.outbox == []
 
 
-@pytest.mark.parametrize('template_name', list(PREVIEWS.keys()))
-def test_all_email_templates_render_without_error(template_name):
+@pytest.mark.parametrize('preview_name', list(PREVIEWS.keys()))
+def test_all_email_templates_render_without_error(preview_name):
     """Smoke test: catches typos in {% block %} / {% include %} across all
-    5 email templates using the same fake contexts the /dev/emails/ preview
+    email templates using the same fake contexts the /dev/emails/ preview
     uses."""
-    context = PREVIEWS[template_name]
+    context = dict(PREVIEWS[preview_name])
+    # Varias previews comparten archivo con contextos distintos, igual que en
+    # `preview_email`.
+    template_name = context.pop('_template', preview_name)
     html = render_to_string(f'emails/{template_name}.html', context)
     text = render_to_string(f'emails/{template_name}.txt', context)
     assert 'BOOT-TRACKER' in html

@@ -95,21 +95,29 @@ class PaymentUploadView(APIView):
             201: PaymentListSerializer,
             400: OpenApiResponse(description='Archivo inválido, muy grande, o sin inscripción activa de la cual deducir el programa'),
             404: OpenApiResponse(description='Programa no encontrado'),
+            503: OpenApiResponse(description='El comprobante no se pudo guardar en el storage'),
         },
         summary='Subir comprobante de pago',
         description=(
             'El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR '
             'asíncrono. `program_id` es opcional: sin él, el programa se deduce de la '
-            'inscripción activa del bootcamper.'
+            'inscripción activa del bootcamper. La respuesta incluye `ocr_queued`: en '
+            'false el comprobante se guardó pero el OCR no se pudo encolar y lo revisa '
+            'Finanzas a mano.'
         ),
         tags=['Pagos — Bootcamper'],
     )
     def post(self, request):
         import os
         from apps.programs.models import Program
-        from .tasks import process_payment_ocr
         from .serializers import ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
-        from .services import UploadProgramError, resolve_upload_program
+        from .services import (
+            ReceiptStorageError,
+            UploadProgramError,
+            create_payment_with_receipt,
+            queue_receipt_ocr,
+            resolve_upload_program,
+        )
 
         serializer = PaymentUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -135,17 +143,20 @@ class PaymentUploadView(APIView):
             extension = os.path.splitext(file.name or '')[1].lower()
             file_type = ALLOWED_EXTENSIONS.get(extension, 'image')
 
-        payment = Payment.objects.create(
-            bootcamper=request.user,
-            program=program,
-            receipt_file=file,
-            receipt_file_type=file_type,
-            status=Payment.Status.DRAFT,
-        )
+        try:
+            payment = create_payment_with_receipt(request.user, program, file, file_type)
+        except ReceiptStorageError as exc:
+            return Response(
+                {'error': exc.message, 'code': exc.code},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
-        process_payment_ocr.delay(str(payment.id))
+        # El pago ya existe aunque el OCR no se haya podido encolar: se avisa para
+        # que el bootcamper sepa que su comprobante entró y no lo vuelva a subir.
+        data = PaymentListSerializer(payment).data
+        data['ocr_queued'] = queue_receipt_ocr(payment.id)
 
-        return Response(PaymentListSerializer(payment).data, status=status.HTTP_201_CREATED)
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class PaymentMyProgramsView(APIView):
