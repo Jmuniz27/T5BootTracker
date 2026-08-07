@@ -81,12 +81,20 @@ class TestFindLeadByPhone:
         assert find_lead_by_phone('593991000008') == exact
 
     def test_falls_back_to_the_most_recent_when_none_matches_exactly(self):
-        older = Lead.objects.create(name='Viejo', phone='0991000009')
-        newer = Lead.objects.create(name='Nuevo', phone='+593991000009')
+        """Sin coincidencia entera manda la fecha, y sólo la fecha.
+
+        La consulta lleva el prefijo de marcación internacional (00593…), así que
+        no coincide entera con ninguno de los dos. El más **viejo** es además el
+        que más se le parece —sus dígitos son un sufijo de los de la consulta—,
+        de modo que un desempate que se pase de listo lo elegiría a él. Sólo el
+        fallback por fecha devuelve el más reciente.
+        """
+        older = Lead.objects.create(name='Viejo', phone='+593991000009')
+        newer = Lead.objects.create(name='Nuevo', phone='0991000009')
         Lead.objects.filter(pk=older.pk).update(created_at=now() - timedelta(days=1))
         Lead.objects.filter(pk=newer.pk).update(created_at=now())
 
-        assert find_lead_by_phone('991000009') == newer
+        assert find_lead_by_phone('00593991000009') == newer
 
     def test_ignores_soft_deleted_leads(self):
         lead = Lead.objects.create(name='Borrado', phone='0991000010')
