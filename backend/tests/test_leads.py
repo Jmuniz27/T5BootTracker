@@ -123,6 +123,33 @@ class TestLeadList:
         assert row['interaction_count'] == 1
 
 
+class TestLeadListAssignmentDate:
+    """El listado expone desde cuándo está asignado el lead (#323).
+
+    La clienta lo usa como medida de leads abandonados: "lo que a mí más me
+    interesa es saber si estamos dejando a la gente".
+    """
+
+    def _row(self, user, lead):
+        data = make_client(user).get(LEADS_URL).json()
+        todas = data['my_leads'] + data['available_leads']
+        return next(row for row in todas if row['id'] == str(lead.id))
+
+    def test_el_listado_trae_la_fecha_de_asignacion(self, db, salesperson_user, assigned_lead):
+        # Vivía sólo en LeadDetailSerializer; la tarjeta se arma desde el listado.
+        assigned_lead.assigned_at = timezone.now() - timedelta(days=12)
+        assigned_lead.save(update_fields=['assigned_at'])
+
+        row = self._row(salesperson_user, assigned_lead)
+        assert row['assigned_at'][:10] == str(timezone.localtime(assigned_lead.assigned_at).date())
+        assert row['days_assigned'] == 12
+
+    def test_un_lead_sin_asignar_no_trae_fecha(self, db, salesperson_user, sample_lead):
+        row = self._row(salesperson_user, sample_lead)
+        assert row['assigned_at'] is None
+        assert row['days_assigned'] is None
+
+
 class TestLeadCreate:
     def test_lead_create_manual_with_is_company(self, db, salesperson_user):
         client = make_client(salesperson_user)

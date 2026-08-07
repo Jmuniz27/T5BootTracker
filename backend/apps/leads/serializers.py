@@ -76,7 +76,7 @@ class LeadListSerializer(serializers.ModelSerializer):
             'id', 'name', 'phone', 'email', 'source', 'status',
             'is_company', 'program_interest', 'interaction_count',
             'last_outcome', 'last_interaction_at', 'days_assigned',
-            'owner', 'owner_name', 'created_at',
+            'owner', 'owner_name', 'assigned_at', 'created_at',
             'bootcamper', 'bootcamper_verification_status',
         )
 

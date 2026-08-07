@@ -719,6 +719,33 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
 // ─── View Lead Modal ──────────────────────────────────────────────────────────
 
+/**
+ * Quién tiene el lead y desde cuándo.
+ *
+ * La clienta lo pidió como su medida de leads abandonados: quiere ver de un
+ * vistazo cuánto lleva alguien sentado sobre el mismo lead. Por eso van juntos
+ * el vendedor, la fecha y los días — la fecha sola obliga a hacer la cuenta.
+ *
+ * `days_assigned` lo calcula el backend, que además lo congela en la fecha de
+ * liberación si el lead ya se soltó (CR-006).
+ */
+export function assignmentLabel(lead) {
+  if (!lead?.owner) return 'Sin asignar'
+
+  const nombre = lead.owner_name ?? 'Vendedor'
+  const fecha = lead.assigned_at ? new Date(lead.assigned_at) : null
+
+  if (!fecha || Number.isNaN(fecha.getTime())) return nombre
+
+  const desde = fecha.toLocaleDateString('es-EC', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  })
+  const dias = lead.days_assigned
+  if (dias == null) return `${nombre} · desde el ${desde}`
+
+  return `${nombre} · desde el ${desde} (${dias} ${dias === 1 ? 'día' : 'días'})`
+}
+
 function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
   const queryClient = useQueryClient()
   const { data: interactions = [] } = useQuery({
@@ -790,6 +817,10 @@ function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
           <div>
             <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
             <p className="text-gray-600">{SOURCE_LABELS[lead.source] || lead.source}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700 mb-0.5">Asignación:</p>
+            <p className="text-gray-600" data-testid="lead-assignment">{assignmentLabel(lead)}</p>
           </div>
           {lastInteraction?.notes && (
             <div>
