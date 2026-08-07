@@ -26,7 +26,9 @@ import StatCard from '../components/StatCard'
 const COLORS = {
   assigned: '#1D3176',
   converted: '#10b981',
-  status: '#6366f1',
+  // Azul de marca, el mismo de la línea "Asignados": ambas series cuentan los
+  // leads del vendedor, así que compartir color las une visualmente.
+  status: '#2563eb',
 }
 
 const axisProps = {
@@ -94,11 +96,13 @@ export default function AdminSalespersonActivityPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
+      {/* Vuelve a la pestaña de la que se salió, no al default: se llega aquí
+          desde "Vendedor" y aterrizar en "Vista General" obliga a re-navegar. */}
       <button
-        onClick={() => navigate('/analytics')}
+        onClick={() => navigate('/analytics?tab=vendedor')}
         className="text-sm text-gray-500 hover:text-[#1D3176] transition-colors mb-4"
       >
-        ← Analítica
+        ← Analítica · Vendedor
       </button>
 
       <header className="mb-6">

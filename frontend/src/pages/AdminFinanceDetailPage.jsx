@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getFinanceBootcampers } from '../api/finance.api'
+import { releaseBootcamper } from '../api/payments.api'
 import StatCard from '../components/StatCard'
 import CustomSelect from '../components/CustomSelect'
+import Toast from '../components/Toast'
 
 /**
  * Los bootcampers de una persona de Finanzas, vistos por el administrador.
  *
- * Pantalla de sólo lectura por diseño: no hay aprobar, rechazar, reasignar ni
- * editar, y las tarjetas no navegan a ninguna pantalla que permita actuar. El
- * administrador consulta la cartera ajena, no la gestiona.
+ * No se aprueba ni rechaza pagos acá, ni se edita al bootcamper: eso es de quien
+ * cobra. Lo único que el administrador sí hace es repartir la cartera, así que
+ * puede desasignar — el complemento de asignar desde el pool.
  */
 
 function fmtMoney(value) {
@@ -19,7 +21,7 @@ function fmtMoney(value) {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function BootcamperCard({ bc }) {
+function BootcamperCard({ bc, financeName, isConfirming, isPending, onAskRelease, onCancelRelease, onRelease }) {
   const expected = parseFloat(bc.expected_amount) || 0
   const paid = parseFloat(bc.total_paid) || 0
   const paidPct = expected > 0 ? Math.min((paid / expected) * 100, 100) : 0
@@ -70,6 +72,39 @@ function BootcamperCard({ bc }) {
           </span>
         )}
       </div>
+
+      {/* Confirmación en dos pasos: devolver al pool le saca la cartera a alguien
+          que ya venía cobrando, y un clic accidental no debería alcanzar. */}
+      {isConfirming ? (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs text-amber-900">
+            Vuelve al pool y deja de estar a cargo de {financeName ?? 'esta persona'}.
+          </p>
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => onRelease(bc)}
+              disabled={isPending}
+              className="flex-1 py-2 rounded-lg bg-[#213A8E] text-white text-xs font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
+            >
+              {isPending ? 'Desasignando…' : 'Sí, desasignar'}
+            </button>
+            <button
+              onClick={onCancelRelease}
+              disabled={isPending}
+              className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-white transition-colors disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => onAskRelease(bc)}
+          className="mt-4 w-full py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors"
+        >
+          Desasignar
+        </button>
+      )}
     </div>
   )
 }
@@ -91,11 +126,41 @@ export default function AdminFinanceDetailPage() {
   // Slicer por estado de COHORTE, con el estilo de píldoras del resto de la app.
   const [tab, setTab] = useState('en_curso')
   const [programId, setProgramId] = useState('')
+  // Bootcamper con la confirmación de desasignar abierta.
+  const [confirmingId, setConfirmingId] = useState(null)
+  const [toast, setToast] = useState(null)
+  const queryClient = useQueryClient()
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['finance-bootcampers', financeId],
     queryFn: () => getFinanceBootcampers(financeId),
     enabled: Boolean(financeId),
+  })
+
+  const releaseMutation = useMutation({
+    mutationFn: (bootcamperId) => releaseBootcamper(bootcamperId),
+    onSuccess: (_data, bootcamperId) => {
+      setConfirmingId(null)
+      // La cartera de esta persona y el pool cambian a la vez: el bootcamper
+      // sale de una y entra al otro.
+      queryClient.invalidateQueries({ queryKey: ['finance-bootcampers', financeId] })
+      queryClient.invalidateQueries({ queryKey: ['bootcamper-pool'] })
+      // El resumen por persona de Finanzas también cambia de conteo.
+      queryClient.invalidateQueries({ queryKey: ['finance-portfolio'] })
+      const nombre = (data?.bootcampers ?? []).find((bc) => bc.bootcamper_id === bootcamperId)?.bootcamper_name
+      setToast({
+        type: 'success',
+        message: nombre
+          ? `${nombre} volvió al pool sin responsable.`
+          : 'Bootcamper devuelto al pool.',
+      })
+    },
+    onError: (err) => {
+      setToast({
+        type: 'error',
+        message: err?.response?.data?.error ?? 'No pudimos desasignar al bootcamper.',
+      })
+    },
   })
 
   const bootcampers = data?.bootcampers ?? []
@@ -150,7 +215,7 @@ export default function AdminFinanceDetailPage() {
           {data?.finance_name ?? 'Cargando…'}
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Bootcampers que monitorea. Esta vista es sólo de consulta.
+          Bootcampers que monitorea. Puedes desasignar para devolverlos al pool.
         </p>
       </header>
 
@@ -236,10 +301,23 @@ export default function AdminFinanceDetailPage() {
       {!isLoading && visibles.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibles.map((bc) => (
-            <BootcamperCard key={bc.bootcamper_id} bc={bc} />
+            <BootcamperCard
+              key={`${bc.bootcamper_id}-${bc.program_id}`}
+              bc={bc}
+              financeName={data?.finance_name}
+              isConfirming={confirmingId === bc.bootcamper_id}
+              isPending={
+                releaseMutation.isPending && releaseMutation.variables === bc.bootcamper_id
+              }
+              onAskRelease={(target) => setConfirmingId(target.bootcamper_id)}
+              onCancelRelease={() => setConfirmingId(null)}
+              onRelease={(target) => releaseMutation.mutate(target.bootcamper_id)}
+            />
           ))}
         </div>
       )}
+
+      {toast && <Toast {...toast} onClose={() => setToast(null)} />}
     </div>
   )
 }

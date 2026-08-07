@@ -412,15 +412,17 @@ function ViewHistoryModal({ lead, onClose }) {
                 )}
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                <button
-                  onClick={() => setEditTarget(interaction)}
-                  className="p-1.5 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
-                  title="Editar interacción"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
-                  </svg>
-                </button>
+                {lead.status !== 'CONVERTED' && (
+                  <button
+                    onClick={() => setEditTarget(interaction)}
+                    className="p-1.5 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
+                    title="Editar interacción"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
+                    </svg>
+                  </button>
+                )}
                 <p className="text-xs text-gray-500">{formatDate(interaction.created_at)}</p>
                 <p className="text-xs text-gray-500">{formatTime(interaction.created_at)}</p>
               </div>
@@ -1469,7 +1471,56 @@ function FilterDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 010 2H4a1 1 0 01-1-1zM6 10a1 1 0 011-1h10a1 1 0 010 2H7a1 1 0 01-1-1zM9 16a1 1 0 011-1h4a1 1 0 010 2h-4a1 1 0 01-1-1z" />
         </svg>
-        {value ? STATUS_LABELS[value] : 'Filtrar'}
+        {value ? STATUS_LABELS[value] : 'Estado'}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                value === opt.value ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Source Filter Dropdown ───────────────────────────────────────────────────
+
+function SourceFilterDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const options = [
+    { value: '', label: 'Todas las fuentes' },
+    ...Object.entries(SOURCE_LABELS).map(([v, label]) => ({ value: v, label })),
+  ]
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
+          value ? 'border-[#213A8E] text-[#213A8E] bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+        </svg>
+        {value ? SOURCE_LABELS[value] : 'Fuente'}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
@@ -1743,7 +1794,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
   const [cedula, setCedula]   = useState('')
   const [programId, setProgramId] = useState('')
   const [cohortId, setCohortId]   = useState('')
-  const [discount, setDiscount]   = useState('0')
+  const [discount, setDiscount]   = useState('')
   const [email, setEmail]     = useState(lead.email || '')
   const [phone, setPhone]     = useState(lead.phone || '')
   const [errors, setErrors]   = useState({})
@@ -1804,8 +1855,11 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
     else if (!isValidIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
     if (!email.trim()) errs.email = 'El email es requerido para enviar la invitación.'
     if (!programId) errs.programId = 'Selecciona un programa.'
+    else if (!cohortId) errs.cohortId = 'Selecciona una cohorte.'
     const pct = Number(discount)
-    if (discount !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
+    if (discount.trim() === '') {
+      errs.discount = 'Ingresa el descuento (0 si no aplica).'
+    } else if (Number.isNaN(pct) || pct < 0 || pct > 100) {
       errs.discount = 'El descuento va de 0 a 100.'
     }
     return errs
@@ -1946,7 +2000,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {programId && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cohorte <span className="text-xs text-gray-400 font-normal">(opcional)</span>
+                Cohorte <span className="text-red-500">*</span>
               </label>
               {loadingCohorts && <p className="text-sm text-gray-400">Cargando cohortes…</p>}
               {!loadingCohorts && assignableCohorts.length === 0 && (
@@ -1973,7 +2027,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Descuento */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="convert-discount">
-              Descuento <span className="text-xs text-gray-400 font-normal">(%)</span>
+              Descuento <span className="text-red-500">*</span> <span className="text-xs text-gray-400 font-normal">(%)</span>
             </label>
             <input
               id="convert-discount"
@@ -2055,6 +2109,8 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
 function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit, onResendInvitation }) {
   const isConverted = lead.status === 'CONVERTED'
+  // Editable si no está convertido y es propio, disponible (sin dueño) o soy admin.
+  const canEdit = !isConverted && (isAdmin || !lead.owner || isOwned)
   // El botón de reenvío sólo tiene sentido mientras el bootcamper no activó su
   // cuenta — una vez PENDING_VERIFICATION o VERIFIED el link ya no sirve para
   // nada (backend lo rechazaría con ALREADY_ACTIVATED).
@@ -2129,7 +2185,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Registrar interacción
             </button>
           )}
-          {isOwned && !isConverted && (
+          {canEdit && (
             <button
               onClick={() => { onEdit(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -2240,6 +2296,7 @@ export default function LeadsDashboard() {
   const isAdmin = currentUser?.role === 'ADMINISTRATOR'
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('')
   const [companyFilter, setCompanyFilter] = useState(false)
   const [sortKey, setSortKey]         = useState('default')
   const [page, setPage]               = useState(1)
@@ -2268,11 +2325,12 @@ export default function LeadsDashboard() {
   }
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, companyFilter, sortKey, vendorFilter])
+  useEffect(() => { setPage(1) }, [search, statusFilter, sourceFilter, companyFilter, sortKey, vendorFilter])
 
   const queryParams = { page, page_size: PAGE_SIZE }
   if (search) queryParams.search = search
   if (statusFilter) queryParams.status = statusFilter
+  if (sourceFilter) queryParams.source = sourceFilter
   if (isAdmin && vendorFilter) queryParams.vendedor = vendorFilter
 
   const { data, isLoading, isError } = useQuery({
@@ -2489,6 +2547,7 @@ export default function LeadsDashboard() {
           </button>
           <SortDropdown value={sortKey} onChange={setSortKey} />
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
+          <SourceFilterDropdown value={sourceFilter} onChange={setSourceFilter} />
           {isAdmin && <VendorFilterDropdown value={vendorFilter} onChange={setVendorFilter} />}
         </div>
 
@@ -2513,7 +2572,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Todos ({statsPagination.all_leads_count ?? allLeads.length})
+                Todos ({pagination.all_leads_count ?? allLeads.length})
               </button>
               <button
                 data-testid="tab-assigned"
@@ -2524,7 +2583,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Asignados ({statsPagination.assigned_leads_count ?? assignedLeads.length})
+                Asignados ({pagination.assigned_leads_count ?? assignedLeads.length})
               </button>
               <button
                 data-testid="tab-unassigned"
@@ -2535,7 +2594,18 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Sin asignar ({statsPagination.unassigned_leads_count ?? unassignedLeads.length})
+                Sin asignar ({pagination.unassigned_leads_count ?? unassignedLeads.length})
+              </button>
+              <button
+                data-testid="tab-converted-admin"
+                onClick={() => { setActiveTab('converted'); setPage(1) }}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  activeTab === 'converted'
+                    ? 'bg-[#213A8E] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           ) : (
@@ -2549,7 +2619,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Mis leads ({activeMyLeads.length})
+                Mis leads ({pagination.my_leads_count ?? activeMyLeads.length})
               </button>
               <button
                 data-testid="tab-available"
@@ -2560,7 +2630,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Disponibles ({availableLeads.length})
+                Disponibles ({pagination.available_leads_count ?? availableLeads.length})
               </button>
               <button
                 data-testid="tab-converted"
@@ -2571,7 +2641,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Convertidos ({convertedLeads.length})
+                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           )}

@@ -86,23 +86,33 @@ export default function UnassignedPoolModal({ financePeople = [], onClose, onDon
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      {/* El redondeo y el scroll estaban en el mismo elemento: la barra se metía
+          dentro de la caja y cuadraba el borde, y el contenido llegaba al ras.
+          Ahora el marco recorta con overflow-hidden y sólo el cuerpo desplaza. */}
       <div
-        className="bg-white rounded-2xl p-5 sm:p-6 w-full max-w-[560px] max-h-[85vh] overflow-y-auto shadow-xl"
+        className="bg-white rounded-2xl w-full max-w-[560px] max-h-[85vh] shadow-xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Bootcampers sin responsable de cobro"
       >
-        <div className="flex items-start justify-between gap-3 mb-1">
-          <h2 className="text-lg font-semibold text-gray-900">Bootcampers sin responsable</h2>
-          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+        {/* Encabezado fijo: cuando también entraba en el área desplazable, el
+            título se iba al bajar y se perdía de qué era la lista. */}
+        <div className="shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-gray-100">
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <h2 className="text-lg font-semibold text-gray-900">Bootcampers sin responsable</h2>
+            <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-sm text-gray-500">
+            Elige a quién de Finanzas le corresponde el cobro de cada uno.
+          </p>
         </div>
-        <p className="text-sm text-gray-500 mb-5">
-          Elige a quién de Finanzas le corresponde el cobro de cada uno.
-        </p>
+
+        {/* pb generoso: sin él la última tarjeta queda cortada contra el borde. */}
+        <div className="overflow-y-auto px-5 sm:px-6 pt-5 pb-6 sm:pb-8">
 
         {isError && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -143,6 +153,7 @@ export default function UnassignedPoolModal({ financePeople = [], onClose, onDon
             ))}
           </ul>
         )}
+        </div>
       </div>
     </div>
   )

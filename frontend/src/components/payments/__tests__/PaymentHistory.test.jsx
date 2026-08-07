@@ -45,11 +45,19 @@ describe('PaymentHistory', () => {
     expect(screen.getByText('Pendiente')).toBeInTheDocument();
   });
 
-  it('muestra el motivo del rechazo', () => {
-    // Es el dato que se perdía al salir de la cola de pendientes.
-    render(<PaymentHistory items={[RECHAZADO]} onViewDetail={vi.fn()} />);
+  it('no imprime el motivo del rechazo en la tarjeta', async () => {
+    // El motivo se lee al abrir "Ver", igual que en el historial del bootcamper:
+    // en la fila compite por espacio y se corta.
+    const user = userEvent.setup();
+    const onViewDetail = vi.fn();
+    render(<PaymentHistory items={[RECHAZADO]} onViewDetail={onViewDetail} />);
 
-    expect(screen.getByText(/el comprobante no es legible/i)).toBeInTheDocument();
+    expect(screen.queryByText(/el comprobante no es legible/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/motivo del rechazo/i)).not.toBeInTheDocument();
+
+    // Pero sigue habiendo cómo llegar a él.
+    await user.click(screen.getByRole('button', { name: 'Ver' }));
+    expect(onViewDetail).toHaveBeenCalledWith(RECHAZADO);
   });
 
   it('no muestra motivo en las aprobadas', () => {
