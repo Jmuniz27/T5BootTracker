@@ -121,6 +121,7 @@ class TestOnboardingActivate:
         resp = client.post(ACTIVATE_URL.format(token=token), {
             'password': 'nueva-clave-123',
             'password_confirm': 'nueva-clave-123',
+            'data_consent': True,
         }, format='json')
         assert resp.status_code == 200
 
@@ -137,6 +138,7 @@ class TestOnboardingActivate:
         first = client.post(ACTIVATE_URL.format(token=token), {
             'password': 'primera-clave-1',
             'password_confirm': 'primera-clave-1',
+            'data_consent': True,
         }, format='json')
         assert first.status_code == 200
 
@@ -144,6 +146,7 @@ class TestOnboardingActivate:
         second = client.post(ACTIVATE_URL.format(token=token), {
             'password': 'segunda-clave-2',
             'password_confirm': 'segunda-clave-2',
+            'data_consent': True,
         }, format='json')
         assert second.status_code == 400
         assert second.json()['code'] == 'ALREADY_ACTIVATED'
@@ -159,6 +162,7 @@ class TestOnboardingActivate:
         resp = client.post(ACTIVATE_URL.format(token=token), {
             'password': 'una-clave-123',
             'password_confirm': 'otra-clave-456',
+            'data_consent': True,
         }, format='json')
         assert resp.status_code == 400
 
@@ -168,6 +172,7 @@ class TestOnboardingActivate:
         resp = client.post(ACTIVATE_URL.format(token='garbage-token'), {
             'password': 'cualquier-clave1',
             'password_confirm': 'cualquier-clave1',
+            'data_consent': True,
         }, format='json')
         assert resp.status_code == 400
         assert resp.json()['code'] == 'TOKEN_INVALID'
@@ -182,6 +187,7 @@ class TestOnboardingActivate:
         resp = client.post(ACTIVATE_URL.format(token=old_token), {
             'password': 'clave-vieja-123',
             'password_confirm': 'clave-vieja-123',
+            'data_consent': True,
         }, format='json')
         assert resp.status_code == 400
         assert resp.json()['code'] == 'TOKEN_SUPERSEDED'
