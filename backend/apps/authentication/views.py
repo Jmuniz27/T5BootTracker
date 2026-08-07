@@ -24,7 +24,7 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     OnboardingActivateSerializer,
 )
-from .services import read_onboarding_token
+from .services import read_onboarding_token, record_data_consent
 
 logger = logging.getLogger(__name__)
 
@@ -357,6 +357,8 @@ class OnboardingActivateView(APIView):
             if user.role == CustomUser.Role.BOOTCAMPER
             else CustomUser.VerificationStatus.VERIFIED
         )
+        # Antes de activar: sin consentimiento no se crea la cuenta.
+        record_data_consent(user, data.get('data_consent'))
         user.onboarding_completed_at = now()
         user.save()
 
