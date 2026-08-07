@@ -6,5 +6,8 @@ Bootcamper: {{ bootcamper_name }}
 Email: {{ bootcamper_email }}
 Programa: {{ program_name }}
 
-Ver panel de pagos: {{ dashboard_url }}
+Ya puedes contar con esta persona en tu programa. Si necesitas más detalles sobre
+su inscripción o sus pagos, escríbele a Finanzas.
+
+Este correo incluye toda la información necesaria; no necesitas ingresar a ningún sistema.
 {% endblock %}

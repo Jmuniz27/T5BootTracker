@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import ExportMenu from '../components/ExportMenu'
 import { LEAD_REPORT_COLUMNS, SOURCE_LABELS, STATUS_LABELS } from '../lib/leadsReport'
+import { assignmentLabel, DISCARD_REASONS } from '../lib/leadDisplay'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getLeads, getAllLeads, discardLead, restoreLead, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
@@ -26,16 +27,6 @@ const AVATAR_COLORS = [
   'bg-cyan-600',
   'bg-pink-500',
   'bg-indigo-500',
-]
-
-// Causales de cierre. Espejo de Lead.DiscardReason en el backend, que es quien
-// valida de verdad: acá sólo se arma el formulario.
-const DISCARD_REASONS = [
-  { value: 'NO_BUDGET',   label: 'Sin presupuesto' },
-  { value: 'SCHEDULE',    label: 'Los horarios no le sirven' },
-  { value: 'NO_RESPONSE', label: 'No responde / los correos rebotan' },
-  { value: 'FREE_ONLY',   label: 'Sólo busca contenido gratis' },
-  { value: 'OTHER',       label: 'Otro' },
 ]
 
 const STATUS_COLORS = {
@@ -834,33 +825,6 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
       </div>
     </div>
   )
-}
-
-/**
- * Quién tiene el lead y desde cuándo.
- *
- * La clienta lo pidió como su medida de leads abandonados: quiere ver de un
- * vistazo cuánto lleva alguien sentado sobre el mismo lead. Por eso van juntos
- * el vendedor, la fecha y los días — la fecha sola obliga a hacer la cuenta.
- *
- * `days_assigned` lo calcula el backend, que además lo congela en la fecha de
- * liberación si el lead ya se soltó (CR-006).
- */
-export function assignmentLabel(lead) {
-  if (!lead?.owner) return 'Sin asignar'
-
-  const nombre = lead.owner_name ?? 'Vendedor'
-  const fecha = lead.assigned_at ? new Date(lead.assigned_at) : null
-
-  if (!fecha || Number.isNaN(fecha.getTime())) return nombre
-
-  const desde = fecha.toLocaleDateString('es-EC', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  })
-  const dias = lead.days_assigned
-  if (dias == null) return `${nombre} · desde el ${desde}`
-
-  return `${nombre} · desde el ${desde} (${dias} ${dias === 1 ? 'día' : 'días'})`
 }
 
 function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
