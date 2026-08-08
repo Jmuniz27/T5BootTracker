@@ -87,6 +87,20 @@ def convert_lead_to_bootcamper(lead, validated_data):
     email = validated_data['email']
     phone = validated_data.get('phone') or lead.phone
 
+    # CB-345: si el email del lead en sí (no el que se tecleó acá) es de un
+    # miembro del staff, el lead queda visible con ese nombre en Convertidos
+    # aunque el bootcamper resultante use otro correo — LeadWriteSerializer ya
+    # bloquea la creación de leads nuevos con email de staff, pero esto cierra
+    # el caso de datos previos a ese fix o de un lead cuyo email se editó
+    # después de crearlo.
+    if lead.email and CustomUser.objects.filter(email=lead.email).exclude(
+        role=CustomUser.Role.BOOTCAMPER,
+    ).exists():
+        raise ConflictError({
+            'error': 'El email de este lead pertenece a un miembro del equipo; no se puede convertir.',
+            'code': 'LEAD_EMAIL_CONFLICT',
+        })
+
     invitation_link = None
     is_returning = False
     bootcamper = None
