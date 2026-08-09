@@ -76,9 +76,15 @@ const PAGO_BORRADOR = {
   rejection_reason: null,
 };
 
-/** Abre el menú de acciones de la fila que corresponde a un pago. */
+/** La tabla del historial, que sólo se muestra desde `sm`. */
+const tablaHistorial = () => screen.findByRole('table');
+
+/** Abre el menú de acciones de la fila que corresponde a un pago.
+ *  Se ancla en la tabla: bajo `sm` los mismos pagos se repiten como tarjetas y
+ *  una búsqueda global encontraría dos coincidencias. */
 async function abrirAcciones(user, programName = PROGRAMA.name) {
-  const fila = (await screen.findByText(programName)).closest('tr');
+  const tabla = await tablaHistorial();
+  const fila = (await within(tabla).findByText(programName)).closest('tr');
   await user.click(within(fila).getByRole('button', { name: /^Acciones del pago/ }));
   return fila;
 }
@@ -110,10 +116,11 @@ describe('PaymentsPage', () => {
       getMyHistory.mockResolvedValue([PAGO_APROBADO, PAGO_PENDIENTE, PAGO_RECHAZADO, PAGO_BORRADOR]);
       renderPage();
 
-      expect(await screen.findByText('Aprobado')).toBeInTheDocument();
-      expect(screen.getByText('Pendiente')).toBeInTheDocument();
-      expect(screen.getByText('Rechazado')).toBeInTheDocument();
-      expect(screen.getByText('En revisión')).toBeInTheDocument();
+      const tabla = within(await tablaHistorial());
+      expect(await tabla.findByText('Aprobado')).toBeInTheDocument();
+      expect(tabla.getByText('Pendiente')).toBeInTheDocument();
+      expect(tabla.getByText('Rechazado')).toBeInTheDocument();
+      expect(tabla.getByText('En revisión')).toBeInTheDocument();
     });
 
     it('acumula en "total pagado" sólo los pagos aprobados', async () => {
@@ -212,19 +219,19 @@ describe('PaymentsPage', () => {
       getMyHistory.mockResolvedValue([PAGO_APROBADO, PAGO_RECHAZADO]);
       renderPage();
 
-      await screen.findByText('Aprobado');
-      const tabla = screen.getByRole('table');
+      const tabla = await tablaHistorial();
       for (const encabezado of ['Programa', 'Fecha', 'Monto', 'Estado', 'Acciones']) {
         expect(within(tabla).getByRole('columnheader', { name: encabezado })).toBeInTheDocument();
       }
-      expect(screen.getAllByTestId('payment-row')).toHaveLength(2);
+      expect(await within(tabla).findAllByTestId('payment-row')).toHaveLength(2);
     });
 
     it('pone el estado en su columna, no junto a las acciones', async () => {
       getMyHistory.mockResolvedValue([PAGO_APROBADO]);
       renderPage();
 
-      const fila = (await screen.findByText(PROGRAMA.name)).closest('tr');
+      const tabla = await tablaHistorial();
+      const fila = (await within(tabla).findByText(PROGRAMA.name)).closest('tr');
       const celdas = within(fila).getAllByRole('cell');
       // Programa · Fecha · Monto · Estado · Acciones
       expect(celdas).toHaveLength(5);
@@ -236,6 +243,114 @@ describe('PaymentsPage', () => {
       renderPage();
 
       expect(await screen.findByText('No tienes pagos registrados aún.')).toBeInTheDocument();
+      // Izado fuera de la tabla y de la lista de tarjetas: se pinta una vez.
+      expect(screen.getAllByText('No tienes pagos registrados aún.')).toHaveLength(1);
+    });
+  });
+
+  // jsdom no tiene motor de layout: las media queries nunca coinciden y no hay
+  // anchos que medir. Estas pruebas afirman sobre las clases que *son* el
+  // comportamiento — las que deciden qué se ve en cada tamaño— y sobre la
+  // estructura. Lo que se puede medir de verdad vive en la suite móvil de
+  // Playwright (e2e/tests/mobile/).
+  describe('presentación responsiva', () => {
+    it('la tabla y la lista de tarjetas se excluyen por breakpoint', async () => {
+      getMyHistory.mockResolvedValue([PAGO_APROBADO]);
+      renderPage();
+
+      await screen.findAllByTestId('payment-card');
+      // Sin estas dos clases se verían las dos presentaciones a la vez.
+      expect(screen.getByTestId('payments-card-list')).toHaveClass('sm:hidden');
+      expect(screen.getByTestId('payments-table-wrapper')).toHaveClass('hidden', 'sm:block');
+    });
+
+    it('hay una tarjeta por pago', async () => {
+      getMyHistory.mockResolvedValue([PAGO_APROBADO, PAGO_RECHAZADO]);
+      renderPage();
+
+      expect(await screen.findAllByTestId('payment-card')).toHaveLength(2);
+    });
+
+    it('la tarjeta ofrece el mismo menú de acciones que la fila', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([PAGO_RECHAZADO]);
+      renderPage();
+
+      // Si la fila y la tarjeta derivan, este es el test que se entera.
+      const [tarjeta] = await screen.findAllByTestId('payment-card');
+      await user.click(within(tarjeta).getByRole('button', { name: /^Acciones del pago/ }));
+
+      expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ver motivo' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Eliminar' })).toBeInTheDocument();
+    });
+
+    it('la tarjeta tampoco imprime el motivo del rechazo (HST-023)', async () => {
+      getMyHistory.mockResolvedValue([PAGO_RECHAZADO]);
+      renderPage();
+
+      const [tarjeta] = await screen.findAllByTestId('payment-card');
+      expect(
+        within(tarjeta).queryByText('El monto no coincide con el comprobante.'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('la página no impone una altura mínima propia dentro del layout', async () => {
+      getMyHistory.mockResolvedValue([]);
+      const { container } = renderPage();
+
+      await screen.findByText('No tienes pagos registrados aún.');
+      // Ya vive dentro del `h-screen` de AppLayout: repetirlo agregaba una
+      // pantalla muerta de scroll que sólo se nota en móvil.
+      expect(container.firstChild).not.toHaveClass('min-h-screen');
+    });
+
+    it('la ayuda de arrastrar el archivo sólo se muestra en escritorio', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([]);
+      renderPage();
+
+      await user.click(await screen.findByTestId('upload-button'));
+
+      // En una pantalla táctil no hay nada que arrastrar.
+      expect(screen.getByText(/arrastra el archivo/)).toHaveClass('hidden', 'sm:inline');
+    });
+
+    it('la ventana de subida acota su alto y sólo desplaza el cuerpo', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([]);
+      renderPage();
+
+      await user.click(await screen.findByTestId('upload-button'));
+      const panel = screen.getByRole('dialog', { name: 'Subir comprobante' });
+
+      // Sin acotar el alto, el panel crece más que la ventana y se recorta por
+      // los dos extremos; y como useModalA11y bloquea el scroll del body, lo
+      // que se sale queda inalcanzable.
+      expect(panel).toHaveClass('max-h-full', 'flex', 'flex-col', 'overflow-hidden');
+
+      // El botón de enviar vive FUERA de la región que se desplaza: en una
+      // ventana baja tiene que seguir a la vista sin scrollear. Es la mitad del
+      // arreglo que una clase en el panel no puede garantizar.
+      expect(screen.getByTestId('upload-submit').closest('.overflow-y-auto')).toBeNull();
+
+      // Y la dropzone sí vive dentro de ella.
+      const zona = screen.getByText('PNG, JPG o PDF (máx. 10 MB)').closest('div');
+      expect(zona.closest('.overflow-y-auto')).not.toBeNull();
+    });
+
+    it('el panel de subida conserva la clase por la que lo encuentran las pruebas', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([]);
+      renderPage();
+
+      await user.click(await screen.findByTestId('upload-button'));
+
+      // Varias pruebas de este archivo seleccionan el panel con
+      // .closest('div.bg-white'). Si un refactor mueve el fondo a un envoltorio
+      // interno fallan todas con un mensaje que no explica nada; esta falla
+      // diciendo qué pasó.
+      expect(screen.getByRole('dialog', { name: 'Subir comprobante' })).toHaveClass('bg-white');
     });
   });
 
