@@ -121,12 +121,64 @@ test.describe('Responsive · el bootcamper opera desde el teléfono', () => {
         await expect(page.getByRole('heading', { name: /Subir comprobante/ })).toBeVisible()
       })
 
-      // A diferencia de los otros tres, este escenario ya pasaba antes de
-      // CB-342: la ventana de subida era la única parte del flujo que estaba
-      // bien en móvil. Queda como red, no como prueba de un arreglo.
+      // Con el alto del Pixel 7 (915px) la ventana entra de sobra. Este
+      // escenario cubre el teléfono por defecto; el de abajo cubre la pantalla
+      // baja, que es donde el modal se rompía.
       await entonces('la ventana y su botón entran en la pantalla', async () => {
         expect(await desborde(page)).toBeLessThanOrEqual(SIN_DESBORDE)
-        await expect(page.getByTestId('upload-submit')).toBeInViewport()
+        // `ratio: 1`: por defecto basta un píxel visible, y un botón cortado a
+        // la mitad es precisamente el fallo que se quiere detectar.
+        await expect(page.getByTestId('upload-submit')).toBeInViewport({ ratio: 1 })
+      })
+    },
+  )
+
+  test(
+    titulo({
+      hst: 'CB-342',
+      dado: 'un bootcamper en una pantalla baja',
+      cuando: 'abre la ventana para subir un comprobante',
+      entonces: 'la ventana entra completa y el botón de subir sigue a la vista',
+    }),
+    async ({ page }) => {
+      // 412x360: se conserva el ancho del Pixel 7 para que el alto sea la única
+      // variable respecto del escenario anterior. El contenido del modal pide
+      // ~420px a este ancho (cabecera + ayuda en tres líneas + dropzone +
+      // botón, más el p-4 del overlay), así que con 360 el desborde es real y
+      // no queda al filo del cálculo — con los 520px del escenario de login
+      // entraría y la prueba pasaría contra código roto.
+      //
+      // Es el caso que reportó el usuario (513x366) y el de cualquier Android
+      // con el teclado abierto, que es justo cuando se usa esta ventana.
+      await dado('que el bootcamper abre sus pagos en una ventana baja', async () => {
+        await page.setViewportSize({ width: 412, height: 360 })
+        await page.goto('/payments')
+        await expect(page.getByTestId('upload-button')).toBeVisible()
+      })
+
+      await cuando('abre la ventana de subida', async () => {
+        await page.getByTestId('upload-button').click()
+      })
+
+      await entonces('el título no queda recortado por arriba', async () => {
+        await expect(page.getByRole('heading', { name: /Subir comprobante/ })).toBeInViewport({
+          ratio: 1,
+        })
+      })
+
+      await y('el botón de subir sigue a la vista sin desplazar nada', async () => {
+        // Vive fuera de la región que scrollea: si volviera adentro, en esta
+        // pantalla habría que desplazarse para llegar a él, y el scroll del
+        // body está bloqueado mientras el modal está abierto.
+        await expect(page.getByTestId('upload-submit')).toBeInViewport({ ratio: 1 })
+      })
+
+      await y('el panel entero cabe en la pantalla', async () => {
+        const caja = await page.getByRole('dialog', { name: 'Subir comprobante' }).boundingBox()
+
+        expect(caja.y).toBeGreaterThanOrEqual(0)
+        expect(caja.y + caja.height).toBeLessThanOrEqual(page.viewportSize().height)
+        expect(await desborde(page)).toBeLessThanOrEqual(SIN_DESBORDE)
       })
     },
   )
