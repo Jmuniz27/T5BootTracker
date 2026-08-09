@@ -33,4 +33,9 @@ describe('ResetPasswordPage', () => {
 
     expect(passwordInput).toHaveAttribute('type', 'text');
   });
+
+  it('el título baja un escalón en móvil', () => {
+    renderPage(['/reset-password?token=abc']);
+    expect(screen.getByRole('heading')).toHaveClass('text-2xl', 'sm:text-3xl');
+  });
 });
