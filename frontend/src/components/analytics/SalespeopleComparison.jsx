@@ -11,6 +11,8 @@ import {
   Legend,
 } from 'recharts'
 import { getSalespeopleActivity } from '../../api/salespeople.api'
+import CustomSelect from '../CustomSelect'
+import { rangeStartDate } from '../../lib/dateRange'
 import Skeleton from '../ui/Skeleton'
 
 /**
@@ -34,6 +36,20 @@ const BAR_COLORS = {
   converted: '#213A8E',
 }
 
+/**
+ * Períodos del comparativo (#337).
+ *
+ * El backend acota por **fecha de asignación** del lead: lo que le corresponde a
+ * un vendedor de un lead empieza cuando se lo asignan. "El último año" fue el
+ * ejemplo que dio la clienta, así que va primero entre los acotados.
+ */
+const RANGE_OPTIONS = [
+  { value: '',    label: 'Todo el histórico' },
+  { value: '365', label: 'Último año' },
+  { value: '180', label: 'Últimos 6 meses' },
+  { value: '90',  label: 'Últimos 3 meses' },
+]
+
 /** Nombre corto para el eje: los completos se pisan entre sí. */
 function shortName(fullName) {
   if (!fullName) return '—'
@@ -51,10 +67,15 @@ function EmptyState({ children }) {
 
 export default function SalespeopleComparison() {
   const [selected, setSelected] = useState(() => new Set())
+  const [rangeDays, setRangeDays] = useState('')
+
+  const fechaDesde = rangeStartDate(rangeDays)
 
   const { data: salespeople = [], isLoading, isError } = useQuery({
-    queryKey: ['salespeople-activity'],
-    queryFn: getSalespeopleActivity,
+    // El rango entra en la queryKey: sin él, cambiar de período mostraría los
+    // números del anterior desde la caché.
+    queryKey: ['salespeople-activity', fechaDesde],
+    queryFn: () => getSalespeopleActivity(fechaDesde ? { fecha_desde: fechaDesde } : {}),
   })
 
   const toggle = (id) => {
@@ -93,9 +114,20 @@ export default function SalespeopleComparison() {
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <p className="text-sm font-medium text-gray-700 mb-3">
-          Elige a quiénes comparar
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <p className="text-sm font-medium text-gray-700">
+            Elige a quiénes comparar
+          </p>
+          <div className="min-w-[200px]">
+            <CustomSelect
+              value={rangeDays}
+              onChange={setRangeDays}
+              options={RANGE_OPTIONS}
+              placeholder="Todo el histórico"
+              ariaLabel="Período a comparar"
+            />
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           {salespeople.map((person) => {
             const id = person.salesperson_id ?? person.id
@@ -129,9 +161,14 @@ export default function SalespeopleComparison() {
       {comparados.length > 0 && (
         <>
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">
               Leads manejados y convertidos
             </h3>
+            <p data-testid="comparison-period" className="text-xs text-gray-400 mb-4">
+              {rangeDays
+                ? `${RANGE_OPTIONS.find((o) => o.value === rangeDays)?.label} · por fecha de asignación`
+                : 'Todo el histórico'}
+            </p>
             {/* Alto fijo y ancho responsivo: recharts necesita un alto concreto
                 para dibujar, pero el ancho sí se adapta al contenedor. */}
             <div className="h-72" data-testid="comparison-chart">
