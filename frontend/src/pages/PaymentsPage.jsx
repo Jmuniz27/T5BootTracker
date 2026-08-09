@@ -95,6 +95,18 @@ function UploadModal({ onClose, onSuccess }) {
     mutation.mutate(fd)
   }
 
+  // Tres zonas: cabecera y pie fijos, cuerpo scrollable. Sin acotar la altura,
+  // en una ventana baja el panel se desborda por arriba y por abajo a la vez
+  // —lo centra el `items-center` del overlay— y como `useModalA11y` bloquea el
+  // scroll del body, el botón de subir queda inalcanzable: no hay forma de
+  // enviar el comprobante. El pie va fuera del contenedor scrollable para que
+  // la acción principal nunca se pierda de vista.
+  //
+  // `max-h-full` y no una unidad de viewport: el overlay es `fixed inset-0
+  // p-4`, así que el 100% se resuelve contra su content box —el viewport menos
+  // las 2rem del padding— y el margen queda atado al `p-4` en vez de repetido
+  // en un `calc`. De paso evita que `100vh`, que en móvil ignora la barra de
+  // URL, quede más alto que lo realmente visible.
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
       <div
@@ -103,10 +115,10 @@ function UploadModal({ onClose, onSuccess }) {
         role="dialog"
         aria-modal="true"
         aria-label="Subir comprobante"
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md focus:outline-none animate-zoom-in"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-full flex flex-col overflow-hidden focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
+        <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
           <h2 className="text-lg font-semibold text-gray-900">Subir comprobante</h2>
           <button
             onClick={onClose}
@@ -119,81 +131,87 @@ function UploadModal({ onClose, onSuccess }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-5 pb-5 sm:px-6 sm:pb-6 space-y-4">
-          <p className="text-sm text-gray-500 -mt-1">
-            Sube tu comprobante de transferencia. Revisarás el monto y la fecha en el siguiente paso,
-            una vez escaneado el documento.
-          </p>
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-4 sm:px-6 space-y-4">
+            <p className="text-sm text-gray-500 -mt-1">
+              Sube tu comprobante de transferencia. Revisarás el monto y la fecha en el siguiente paso,
+              una vez escaneado el documento.
+            </p>
 
-          {/* File upload — drag & drop */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Comprobante de transferencia</label>
-            <div
-              onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDragOver(false)
-                const f = e.dataTransfer.files[0]
-                if (f) validateAndSetFile(f)
-              }}
-              className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-8 sm:py-6 transition-colors cursor-pointer ${dropZoneClass(dragOver, file)}`}
-              onClick={() => fileRef.current?.click()}
-            >
-              {file ? (
-                <>
-                  <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-sm font-medium text-green-700 truncate max-w-full px-2">{file.name}</p>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setFile(null) }}
-                    className="text-xs text-gray-500 hover:text-red-500 transition-colors"
-                  >
-                    Quitar
-                  </button>
-                </>
-              ) : (
-                <>
-                  <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium text-[#213A8E]">Haz clic para subir</span>
-                    <span className="hidden sm:inline"> o arrastra el archivo</span>
-                  </p>
-                  <p className="text-xs text-gray-500">PNG, JPG o PDF (máx. 10 MB)</p>
-                </>
-              )}
-              <input
-                ref={fileRef}
-                data-testid="upload-file-input"
-                type="file"
-                accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
-                className="hidden"
-                onChange={(e) => e.target.files[0] && validateAndSetFile(e.target.files[0])}
-              />
+            {/* File upload — drag & drop */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Comprobante de transferencia</label>
+              <div
+                onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragOver(false)
+                  const f = e.dataTransfer.files[0]
+                  if (f) validateAndSetFile(f)
+                }}
+                className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-8 sm:py-6 transition-colors cursor-pointer ${dropZoneClass(dragOver, file)}`}
+                onClick={() => fileRef.current?.click()}
+              >
+                {file ? (
+                  <>
+                    <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm font-medium text-green-700 truncate max-w-full px-2">{file.name}</p>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setFile(null) }}
+                      className="text-xs text-gray-500 hover:text-red-500 transition-colors"
+                    >
+                      Quitar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium text-[#213A8E]">Haz clic para subir</span>
+                      <span className="hidden sm:inline"> o arrastra el archivo</span>
+                    </p>
+                    <p className="text-xs text-gray-500">PNG, JPG o PDF (máx. 10 MB)</p>
+                  </>
+                )}
+                <input
+                  ref={fileRef}
+                  data-testid="upload-file-input"
+                  type="file"
+                  accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
+                  className="hidden"
+                  onChange={(e) => e.target.files[0] && validateAndSetFile(e.target.files[0])}
+                />
+              </div>
+              {errors.file && <p className="text-red-500 text-xs mt-1">{errors.file}</p>}
             </div>
-            {errors.file && <p className="text-red-500 text-xs mt-1">{errors.file}</p>}
           </div>
 
-          {mutation.isError && (
-            <p className="text-red-500 text-sm">
-              {flattenUploadError(mutation.error)}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            data-testid="upload-submit"
-            disabled={mutation.isPending}
-            className="w-full bg-[#213A8E] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#1a2f72] disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
-          >
-            {mutation.isPending && <Spinner />}
-            {mutation.isPending ? 'Subiendo...' : 'Subir comprobante'}
-          </button>
+          {/* El error de la mutación va en el pie, no en el cuerpo: ahí queda
+              siempre pegado al botón que lo produjo, en vez de al final de una
+              región que puede estar desplazada. */}
+          <div className="shrink-0 px-5 pb-5 pt-1 sm:px-6 sm:pb-6 space-y-2">
+            {mutation.isError && (
+              <p className="text-red-500 text-sm">
+                {flattenUploadError(mutation.error)}
+              </p>
+            )}
+            <button
+              type="submit"
+              data-testid="upload-submit"
+              disabled={mutation.isPending}
+              className="w-full bg-[#213A8E] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#1a2f72] disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
+            >
+              {mutation.isPending && <Spinner />}
+              {mutation.isPending ? 'Subiendo...' : 'Subir comprobante'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -322,7 +340,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
         role="dialog"
         aria-modal="true"
         aria-label={modalTitle}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[calc(100vh-2rem)] sm:max-h-[90vh] overflow-y-auto overscroll-contain focus:outline-none animate-zoom-in"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-full overflow-y-auto overscroll-contain focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 px-4 pt-5 pb-4 sm:px-6 sm:pt-6 border-b border-gray-100">
@@ -671,7 +689,7 @@ function RejectionReasonModal({ payment, onClose }) {
         role="dialog"
         aria-modal="true"
         aria-label="Motivo del rechazo"
-        className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 sm:p-6 focus:outline-none animate-zoom-in"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-full overflow-y-auto overscroll-contain p-5 sm:p-6 focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-gray-900">Motivo del rechazo</h2>
@@ -708,7 +726,7 @@ function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
         role="dialog"
         aria-modal="true"
         aria-label="Eliminar pago"
-        className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 sm:p-6 focus:outline-none animate-zoom-in"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-full overflow-y-auto overscroll-contain p-5 sm:p-6 focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-gray-900">Eliminar pago</h2>
