@@ -31,7 +31,9 @@ const PasswordInput = forwardRef(function PasswordInput(
           type="button"
           onClick={() => setShowPassword((v) => !v)}
           aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
+          // `right-2 p-2` en vez de `right-4`: el área táctil pasa de 20x20 a
+          // 36x36 sin mover el ícono (right-2 + p-2 lo deja donde right-4).
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-white/40 hover:text-white/70 transition-colors"
         >
           {showPassword ? EyeOffIcon : EyeIcon}
         </button>

@@ -12,6 +12,7 @@ sirve como evidencia de aceptación.
 | HST-007 · Auto-asignación | `tests/hst-007-auto-asignacion.spec.js` |
 | HST-013 · Conversión con validación de cédula | `tests/hst-013-conversion.spec.js` |
 | HST-016 / HST-021 · Comprobante: subida, OCR y aprobación | `tests/hst-016-021-pagos.spec.js` |
+| CB-342 · Responsive en teléfono (pagos + AuthLayout) | `tests/mobile/responsive-pagos.spec.js` |
 
 ## Cómo correrla
 
@@ -51,6 +52,27 @@ token por rol y arma el `storageState` con la forma exacta que persiste el
 store de Zustand. Así, si el login se rompe falla el escenario HST-001 —que sí
 pasa por la interfaz— y no los otros cuatro por arrastre. Los tokens se
 regeneran en cada corrida y `.auth/` nunca se versiona.
+
+**`tests/mobile/` corre aparte y no muta nada.** El proyecto
+`mobile-chromium` (Pixel 7) existe para lo que sólo se puede comprobar en un
+navegador de verdad: desborde horizontal, qué se ve en cada breakpoint y dónde
+cae un menú posicionado por JS. En jsdom nada de eso es medible —no hay motor
+de layout, `display: none` no se computa y `getBoundingClientRect` devuelve
+ceros—, así que del lado de vitest sólo se afirma sobre clases.
+
+Sus escenarios **sólo navegan y abren ventanas**: no crean, no convierten y no
+aprueban. Eso es lo que les permite convivir con la suite serial, que comparte
+los datos del seed. Si alguna vez hace falta mutar estado para probar algo en
+móvil, va en un archivo bajo el proyecto `chromium` y no acá; si no, se
+reintroduce por la puerta de atrás la interferencia que `workers: 1` evita.
+
+El proyecto `chromium` lleva `testIgnore: /mobile\//` para no correr estos
+escenarios dos veces con el dispositivo equivocado.
+
+**Ojo con el throttle al iterar.** `/api/auth/login/` está limitado a 5/min
+(`AUTH_THROTTLE_RATE`) y cada corrida del setup hace cuatro logins. Dos
+corridas seguidas agotan la cuota y el setup falla con 429, que se lee como si
+las credenciales estuvieran mal. Esperar un minuto entre corridas.
 
 **Selección por `data-testid`.** Los componentes no exponen roles ARIA
 (`CustomSelect` es un `<button>` + `<ul>`, sin `role="combobox"`), hay dos
