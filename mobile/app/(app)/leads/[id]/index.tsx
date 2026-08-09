@@ -554,13 +554,13 @@ export default function LeadDetailScreen() {
               {resendLink}
             </Text>
             <View style={s.resultActions}>
-              <TouchableOpacity style={s.actionGhost} onPress={copyResendLink} activeOpacity={0.8}>
-                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={18} color={colors.navy} />
-                <Text style={s.actionGhostText}>{copied ? 'Copiado' : 'Copiar'}</Text>
+              <TouchableOpacity style={[s.actionGhost, s.sheetBtn]} onPress={copyResendLink} activeOpacity={0.8}>
+                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={20} color={colors.navy} />
+                <Text style={[s.actionGhostText, s.sheetBtnText]}>{copied ? 'Copiado' : 'Copiar'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.actionPrimary} onPress={shareResendLink} activeOpacity={0.85}>
-                <Ionicons name="share-social-outline" size={18} color={colors.white} />
-                <Text style={s.actionPrimaryText}>Compartir</Text>
+              <TouchableOpacity style={[s.actionPrimary, s.sheetBtn]} onPress={shareResendLink} activeOpacity={0.85}>
+                <Ionicons name="share-social-outline" size={20} color={colors.white} />
+                <Text style={[s.actionPrimaryText, s.sheetBtnText]}>Compartir</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -683,6 +683,9 @@ const s = StyleSheet.create({
   sheetTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, textAlign: 'center', marginBottom: 16 },
   resultLink: { fontSize: 12, color: colors.textMuted, marginBottom: 16 },
   resultActions: { flexDirection: 'row', gap: 10 },
+  // Botones del sheet de reenvío: full-width y un poco más altos.
+  sheetBtn: { flex: 1, paddingVertical: 16 },
+  sheetBtnText: { fontSize: 16 },
   statusOption: {
     flexDirection: 'row',
     alignItems: 'center',
