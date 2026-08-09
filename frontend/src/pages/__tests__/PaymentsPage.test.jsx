@@ -315,6 +315,43 @@ describe('PaymentsPage', () => {
       // En una pantalla táctil no hay nada que arrastrar.
       expect(screen.getByText(/arrastra el archivo/)).toHaveClass('hidden', 'sm:inline');
     });
+
+    it('la ventana de subida acota su alto y sólo desplaza el cuerpo', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([]);
+      renderPage();
+
+      await user.click(await screen.findByTestId('upload-button'));
+      const panel = screen.getByRole('dialog', { name: 'Subir comprobante' });
+
+      // Sin acotar el alto, el panel crece más que la ventana y se recorta por
+      // los dos extremos; y como useModalA11y bloquea el scroll del body, lo
+      // que se sale queda inalcanzable.
+      expect(panel).toHaveClass('max-h-full', 'flex', 'flex-col', 'overflow-hidden');
+
+      // El botón de enviar vive FUERA de la región que se desplaza: en una
+      // ventana baja tiene que seguir a la vista sin scrollear. Es la mitad del
+      // arreglo que una clase en el panel no puede garantizar.
+      expect(screen.getByTestId('upload-submit').closest('.overflow-y-auto')).toBeNull();
+
+      // Y la dropzone sí vive dentro de ella.
+      const zona = screen.getByText('PNG, JPG o PDF (máx. 10 MB)').closest('div');
+      expect(zona.closest('.overflow-y-auto')).not.toBeNull();
+    });
+
+    it('el panel de subida conserva la clase por la que lo encuentran las pruebas', async () => {
+      const user = userEvent.setup();
+      getMyHistory.mockResolvedValue([]);
+      renderPage();
+
+      await user.click(await screen.findByTestId('upload-button'));
+
+      // Varias pruebas de este archivo seleccionan el panel con
+      // .closest('div.bg-white'). Si un refactor mueve el fondo a un envoltorio
+      // interno fallan todas con un mensaje que no explica nada; esta falla
+      // diciendo qué pasó.
+      expect(screen.getByRole('dialog', { name: 'Subir comprobante' })).toHaveClass('bg-white');
+    });
   });
 
   describe('tarjeta de adeudado', () => {
