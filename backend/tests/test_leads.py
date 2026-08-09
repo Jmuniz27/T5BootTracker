@@ -97,6 +97,26 @@ class TestLeadList:
         row = next(lead for lead in data['converted_leads'] if lead['id'] == str(converted.id))
         assert row['owner_name'] == 'Zahid Diaz'
 
+    def test_converted_lead_row_includes_bootcamper_profile(self, db, salesperson_user):
+        # El dashboard web arma "Ver lead" con el row del listado (no pide el
+        # detalle); sin bootcamper_profile no puede mostrar el estado de la
+        # cuenta (Invitado/Pendiente/Verificado) ni el botón de verificar.
+        bootcamper = CustomUser.objects.create_user(
+            email='boot.profile@test.com', password='testpass123',
+            first_name='Boot', last_name='Camper', role=CustomUser.Role.BOOTCAMPER,
+            verification_status=CustomUser.VerificationStatus.INVITED,
+        )
+        converted = Lead.objects.create(
+            name='Con Perfil', phone='0993335555',
+            status=Lead.Status.CONVERTED, owner=salesperson_user, bootcamper=bootcamper,
+        )
+
+        data = make_client(salesperson_user).get(LEADS_URL).json()
+
+        row = next(lead for lead in data['converted_leads'] if lead['id'] == str(converted.id))
+        assert row['bootcamper_profile'] is not None
+        assert row['bootcamper_profile']['verification_status'] == 'INVITED'
+
     def test_converted_leads_excludes_active_leads(self, db, salesperson_user, assigned_lead):
         client = make_client(salesperson_user)
         data = client.get(LEADS_URL).json()
