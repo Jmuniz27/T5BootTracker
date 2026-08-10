@@ -242,7 +242,7 @@ export default function LogInteractionScreen() {
           {/* Duración + Notas en el mismo card */}
           <SectionCard>
             <View style={s.durationSection}>
-              <SectionTitle optional>Duración</SectionTitle>
+              <SectionTitle optional>Duración de interacción</SectionTitle>
               <View style={s.durationRow}>
                 <TextInput
                   style={s.durationInput}

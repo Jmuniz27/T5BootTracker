@@ -492,7 +492,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Duración <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -659,7 +659,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Duración <span className="text-xs text-gray-500 font-normal">(opcional)</span>
+                Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span>
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -2236,13 +2236,23 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Reactivar lead
             </button>
           )}
-          {isOwned && lead.status === 'QUALIFIED' && (
-            <button
-              onClick={() => { onConvert(); setOpen(false) }}
-              className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
-            >
-              Convertir lead
-            </button>
+          {isOwned && !isConverted && !isDiscarded && (
+            <div>
+              {/* Se muestra siempre, pero sólo se habilita en QUALIFIED: así el
+                  vendedor sabe que la conversión existe y qué falta para usarla. */}
+              <button
+                onClick={() => { onConvert(); setOpen(false) }}
+                disabled={lead.status !== 'QUALIFIED'}
+                className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+              >
+                Convertir lead
+              </button>
+              {lead.status !== 'QUALIFIED' && (
+                <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
+                  Primero cambia el estado a “Calificado”.
+                </p>
+              )}
+            </div>
           )}
           {(isOwned || isAdmin) && canResendInvitation && (
             <button

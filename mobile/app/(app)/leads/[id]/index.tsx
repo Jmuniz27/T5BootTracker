@@ -375,25 +375,26 @@ export default function LeadDetailScreen() {
                 <Text style={s.actionGhostText}>Cambiar estado</Text>
               </TouchableOpacity>
 
-              {isQualified && (
-                <TouchableOpacity
-                  style={s.actionGhost}
-                  onPress={() => router.push({
-                    pathname: '/(app)/leads/[id]/convert',
-                    params: {
-                      id: lead.id,
-                      name: lead.name,
-                      program: lead.program_interest ?? '',
-                      email: lead.email ?? '',
-                      phone: lead.phone ?? '',
-                    },
-                  })}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="ribbon-outline" size={18} color={colors.navy} />
-                  <Text style={s.actionGhostText}>Convertir a bootcamper</Text>
-                </TouchableOpacity>
-              )}
+              {/* Se muestra siempre, pero sólo se habilita en Calificado (el
+                  motivo se explica en el hint de más abajo). */}
+              <TouchableOpacity
+                style={[s.actionGhost, !isQualified && s.actionDisabled]}
+                disabled={!isQualified}
+                onPress={() => router.push({
+                  pathname: '/(app)/leads/[id]/convert',
+                  params: {
+                    id: lead.id,
+                    name: lead.name,
+                    program: lead.program_interest ?? '',
+                    email: lead.email ?? '',
+                    phone: lead.phone ?? '',
+                  },
+                })}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="ribbon-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>Convertir a bootcamper</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity style={s.actionGhost} onPress={openDiscard} disabled={busy} activeOpacity={0.8}>
                 <Ionicons name="close-circle-outline" size={18} color={colors.navy} />
