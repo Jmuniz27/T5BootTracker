@@ -23,15 +23,16 @@ export default function StatCard({
     )
   }
   return (
-    <div className={`rounded-2xl border p-5 flex-1 min-w-0 transition-shadow duration-200 hover:shadow-md ${containerClass}`}>
-      <div className="flex items-center justify-between mb-2">
-        <p className={`text-sm font-medium ${labelClass}`}>{label}</p>
-        {icon && (
-          <span className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${iconClass}`}>
-            {icon}
-          </span>
-        )}
-      </div>
+    // El icono va posicionado absoluto (no en un div que envuelva al label): así
+    // el label sigue siendo hijo directo de la tarjeta, que es lo que buscan los
+    // tests al hacer getByText(label).closest('div').
+    <div className={`relative rounded-2xl border p-5 flex-1 min-w-0 transition-shadow duration-200 hover:shadow-md ${containerClass}`}>
+      {icon && (
+        <span className={`absolute top-4 right-4 w-9 h-9 rounded-xl flex items-center justify-center ${iconClass}`}>
+          {icon}
+        </span>
+      )}
+      <p className={`text-sm font-medium mb-2 ${icon ? 'pr-11' : ''} ${labelClass}`}>{label}</p>
       <p className={`text-3xl sm:text-4xl font-bold leading-none ${valueClass}`}>{value}</p>
     </div>
   )
