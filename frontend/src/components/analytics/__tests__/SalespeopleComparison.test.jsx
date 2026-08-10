@@ -170,3 +170,69 @@ describe('SalespeopleComparison — período (#337)', () => {
     expect(screen.getByTestId('comparison-period')).toHaveTextContent('Todo el histórico');
   });
 });
+
+describe('SalespeopleComparison — seleccionar todos', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSalespeopleActivity.mockResolvedValue(VENDEDORES);
+  });
+
+  it('marca a todos de una', async () => {
+    const user = userEvent.setup();
+    renderComparison();
+
+    await user.click(await screen.findByRole('checkbox', { name: /seleccionar todos/i }));
+
+    expect(screen.getByRole('checkbox', { name: 'Ana Torres' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Luis Vera' })).toBeChecked();
+    // Encabezado + los dos vendedores.
+    expect(screen.getAllByRole('row')).toHaveLength(3);
+  });
+
+  it('con todos marcados, la acción pasa a quitarlos', async () => {
+    const user = userEvent.setup();
+    renderComparison();
+
+    await user.click(await screen.findByRole('checkbox', { name: /seleccionar todos/i }));
+    await user.click(screen.getByRole('checkbox', { name: /quitar todos/i }));
+
+    expect(screen.getByRole('checkbox', { name: 'Ana Torres' })).not.toBeChecked();
+    expect(await screen.findByText(/marca dos o más vendedores/i)).toBeInTheDocument();
+  });
+
+  it('con selección parcial queda en estado intermedio, no vacía', async () => {
+    // Sin esto, marcar a uno dejaría la casilla de "todos" en blanco y parecería
+    // que no hay nadie seleccionado.
+    const user = userEvent.setup();
+    renderComparison();
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Ana Torres' }));
+
+    const todos = screen.getByRole('checkbox', { name: /seleccionar todos/i });
+    expect(todos).not.toBeChecked();
+    expect(todos.indeterminate).toBe(true);
+  });
+
+  it('desde una selección parcial, marcar todos completa en vez de invertir', async () => {
+    const user = userEvent.setup();
+    renderComparison();
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Ana Torres' }));
+    await user.click(screen.getByRole('checkbox', { name: /seleccionar todos/i }));
+
+    expect(screen.getByRole('checkbox', { name: 'Ana Torres' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Luis Vera' })).toBeChecked();
+  });
+
+  it('al marcar a todos manualmente, la casilla se marca sola', async () => {
+    const user = userEvent.setup();
+    renderComparison();
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Ana Torres' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Luis Vera' }));
+
+    const todos = screen.getByRole('checkbox', { name: /quitar todos/i });
+    expect(todos).toBeChecked();
+    expect(todos.indeterminate).toBe(false);
+  });
+});
