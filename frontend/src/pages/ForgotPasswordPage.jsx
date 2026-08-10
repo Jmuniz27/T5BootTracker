@@ -29,15 +29,15 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthLayout backTo="/login" backLabel="Volver al inicio de sesión">
-      <h1 className="text-3xl font-bold text-white mb-2">
+      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
         ¿Olvidaste tu <span className="text-[#5B9BD5]">contraseña</span>?
       </h1>
-      <p className="text-white/50 text-sm mb-10">
+      <p className="text-white/50 text-sm mb-6 sm:mb-10">
         Ingresa tu correo para restablecer la contraseña
       </p>
 
       <form onSubmit={handleSubmit((d) => mutate(d))} noValidate>
-        <div className="mb-10">
+        <div className="mb-6 sm:mb-10">
           <label className="block text-sm font-medium text-white/70 mb-2">Email</label>
           <AuthInput
             {...register('email')}

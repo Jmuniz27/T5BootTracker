@@ -35,6 +35,18 @@ export interface Lead {
   discard_reason_display?: string | null;
   discard_detail?: string | null;
   discarded_at?: string | null;
+  bootcamper_profile?: BootcamperProfile | null;
+}
+
+export interface BootcamperProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  cedula: string | null;
+  verification_status: 'INVITED' | 'PENDING_VERIFICATION' | 'VERIFIED' | null;
+  verified_at: string | null;
+  verified_by_name: string | null;
 }
 
 export interface LeadsResponse {

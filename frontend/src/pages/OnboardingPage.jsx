@@ -124,7 +124,7 @@ export default function OnboardingPage() {
   if (isLoading) {
     return (
       <AuthLayout>
-        <p className="text-white/50 text-sm text-center py-8">Verificando tu enlace...</p>
+        <p className="text-white/50 text-sm text-center py-6 sm:py-8">Verificando tu enlace...</p>
       </AuthLayout>
     );
   }
@@ -133,8 +133,13 @@ export default function OnboardingPage() {
     const { title, message, showLogin } = onboardingErrorInfo(infoError);
     return (
       <AuthLayout backTo={showLogin ? '/login' : undefined} backLabel="Ir al inicio de sesión">
-        <h1 className="text-3xl font-bold text-white mb-2">{title}</h1>
-        <p className="text-white/50 text-sm py-4">{message}</p>
+        {/* Centrado como el resto de las pantallas "solo-mensaje" que comparten
+            AuthLayout (ResetPasswordPage sin token, OnboardingSuccessPage). Sin
+            formulario que ancle la lectura, el texto alineado a la izquierda queda
+            pegado al borde mientras el logo va centrado: el desbalance se nota en
+            cuanto la pantalla es angosta. */}
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 text-center">{title}</h1>
+        <p className="text-white/50 text-sm text-center py-4">{message}</p>
         {showLogin && (
           <AuthButton onClick={() => navigate('/login')} className="mt-4">
             Ir al inicio de sesión
@@ -147,10 +152,10 @@ export default function OnboardingPage() {
   if (step === 'confirm') {
     return (
       <AuthLayout>
-        <h1 className="text-3xl font-bold text-white mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
           Confirma tus <span className="text-[#5B9BD5]">datos</span>
         </h1>
-        <p className="text-white/50 text-sm mb-10">
+        <p className="text-white/50 text-sm mb-6 sm:mb-10">
           Revisa que tus datos estén correctos antes de crear tu contraseña.
         </p>
 
@@ -160,7 +165,7 @@ export default function OnboardingPage() {
             setStep('password');
           })}
           noValidate
-          className="space-y-5"
+          className="space-y-4 sm:space-y-5"
         >
           <div>
             <label className="block text-sm font-medium text-white/70 mb-2">Nombre</label>
@@ -200,12 +205,12 @@ export default function OnboardingPage() {
 
   return (
     <AuthLayout>
-      <h1 className="text-3xl font-bold text-white mb-2">
+      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
         Crea tu <span className="text-[#5B9BD5]">contraseña</span>
       </h1>
-      <p className="text-white/50 text-sm mb-10">Con esto termina la activación de tu cuenta.</p>
+      <p className="text-white/50 text-sm mb-6 sm:mb-10">Con esto termina la activación de tu cuenta.</p>
 
-      <form onSubmit={passwordForm.handleSubmit((d) => activateMutation.mutate(d))} noValidate className="space-y-5">
+      <form onSubmit={passwordForm.handleSubmit((d) => activateMutation.mutate(d))} noValidate className="space-y-4 sm:space-y-5">
         <div>
           <label className="block text-sm font-medium text-white/70 mb-2">Contraseña</label>
           <PasswordInput
@@ -228,11 +233,14 @@ export default function OnboardingPage() {
         </div>
 
         <div>
-          <label className="flex items-start gap-2.5 cursor-pointer">
+          <label className="flex items-start gap-3 cursor-pointer">
+            {/* h-4 w-4 shrink-0: en móvil la frase del consentimiento ocupa tres
+                líneas y el checkbox, como hijo flex sin ancho intrínseco, se
+                aplastaba hasta quedar una elipse. */}
             <input
               type="checkbox"
               {...passwordForm.register('data_consent')}
-              className="mt-0.5 rounded border-white/30 bg-transparent text-[#213A8E] focus:ring-white/40"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/30 bg-transparent text-[#213A8E] focus:ring-white/40"
             />
             <span className="text-sm text-white/70 leading-snug">{DATA_CONSENT_TEXT}</span>
           </label>

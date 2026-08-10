@@ -94,6 +94,10 @@ class LeadListSerializer(serializers.ModelSerializer):
     bootcamper_verification_status = serializers.CharField(
         source='bootcamper.verification_status', read_only=True, allow_null=True, default=None,
     )
+    # El dashboard web arma "Ver lead" con el objeto del listado (no pide el
+    # detalle), así que necesita el perfil acá para mostrar el estado de la
+    # cuenta (Invitado/Pendiente/Verificado) y habilitar "Marcar como verificado".
+    bootcamper_profile = BootcamperSummarySerializer(source='bootcamper', read_only=True)
 
     class Meta:
         model = Lead
@@ -104,7 +108,7 @@ class LeadListSerializer(serializers.ModelSerializer):
             'last_note', 'days_assigned',
             'owner', 'owner_name', 'assigned_at', 'created_at',
             'discard_reason', 'discard_reason_display', 'discard_detail', 'discarded_at',
-            'bootcamper', 'bootcamper_verification_status',
+            'bootcamper', 'bootcamper_verification_status', 'bootcamper_profile',
         )
 
     def get_days_assigned(self, obj):

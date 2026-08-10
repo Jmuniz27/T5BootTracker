@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { loginUser } from '../api/auth.api'
 import { useAuthStore } from '../store/auth.store'
 import AuthLayout from '../components/AuthLayout'
@@ -25,6 +25,10 @@ function loginErrorMessage(error) {
 export default function LoginPage() {
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
+  // `forceLogout` recarga la página entera, así que el motivo no puede viajar en
+  // el state del router: llega como query param (ver api/client.js).
+  const [params] = useSearchParams()
+  const sesionExpirada = params.get('expired') === '1'
 
   const {
     register,
@@ -44,10 +48,23 @@ export default function LoginPage() {
 
   return (
     <AuthLayout>
-      <h2 className="text-3xl font-bold text-white mb-2">
+      <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
         Inicia sesión para <span className="text-[#5B9BD5]">continuar</span>
       </h2>
-      <p className="text-white/50 text-sm mb-10">¡Retoma donde lo dejaste!</p>
+      {/* El aviso ocupa el lugar del subtítulo en vez de apilarse sobre él: en un
+          teléfono bajo, sumarlo empujaba el botón de ingresar fuera de la
+          pantalla. Y decir "retoma donde lo dejaste" justo debajo de "tu sesión
+          expiró" sobra. */}
+      {sesionExpirada ? (
+        <div
+          role="status"
+          className="mb-6 sm:mb-10 rounded-2xl border border-amber-300/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-100"
+        >
+          Tu sesión expiró por inactividad.
+        </div>
+      ) : (
+        <p className="text-white/50 text-sm mb-6 sm:mb-10">¡Retoma donde lo dejaste!</p>
+      )}
 
       <form onSubmit={handleSubmit((d) => mutate(d))} noValidate className="space-y-5">
         {/* Email */}

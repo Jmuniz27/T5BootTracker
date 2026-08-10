@@ -147,6 +147,14 @@ export async function resendInvitation(leadId: string): Promise<ResendInvitation
   return data;
 }
 
+// El vendedor dueño (o admin) confirma que los datos que el bootcamper completó
+// en el onboarding son correctos. Solo válido si está en PENDING_VERIFICATION.
+// Devuelve el lead actualizado (LeadDetailSerializer).
+export async function verifyBootcamper(leadId: string) {
+  const { data } = await api.patch(`/leads/${leadId}/verify-bootcamper/`);
+  return data;
+}
+
 // ─── Descartar / reactivar lead ───────────────────────────────────────────────
 
 export interface DiscardPayload {

@@ -29,7 +29,10 @@ function flushQueue(error, token = null) {
 export function forceLogout() {
   useAuthStore.getState().logout()
   if (window.location.pathname !== '/login') {
-    window.location.assign('/login')
+    // `assign` recarga el documento, así que el state del router no sobrevive:
+    // el motivo viaja en la URL para que el login pueda explicar qué pasó en vez
+    // de aparecer sin aviso.
+    window.location.assign('/login?expired=1')
   }
 }
 
