@@ -31,6 +31,18 @@ describe('toCalendarEvents', () => {
     const events = toCalendarEvents(meetings, { 'lead-2': 'Luis Pérez' })
     expect(events[1].title).toBe('Luis Pérez')
   })
+
+  it('con showOwner agrega el responsable al título (agenda global admin)', () => {
+    const conDueno = [{ ...meetings[0], assigned_to_name: 'Zahid Díaz' }]
+    const events = toCalendarEvents(conDueno, {}, { showOwner: true })
+    expect(events[0].title).toBe('Reunión Ana · Zahid Díaz')
+  })
+
+  it('sin showOwner no agrega el responsable', () => {
+    const conDueno = [{ ...meetings[0], assigned_to_name: 'Zahid Díaz' }]
+    const events = toCalendarEvents(conDueno)
+    expect(events[0].title).toBe('Reunión Ana')
+  })
 })
 
 describe('flattenLeads', () => {
@@ -46,6 +58,19 @@ describe('flattenLeads', () => {
   })
   it('acepta un array plano', () => {
     expect(flattenLeads([{ id: 'a', name: 'Ana' }])).toEqual([{ id: 'a', name: 'Ana' }])
+  })
+
+  it('combina las claves del admin y deduplica por id', () => {
+    const data = {
+      all_leads: [{ id: 'a', name: 'Ana' }, { id: 'b', name: 'Beto' }],
+      assigned_leads: [{ id: 'a', name: 'Ana' }],
+      unassigned_leads: [{ id: 'c', name: 'Caro' }],
+    }
+    expect(flattenLeads(data)).toEqual([
+      { id: 'a', name: 'Ana' },
+      { id: 'b', name: 'Beto' },
+      { id: 'c', name: 'Caro' },
+    ])
   })
 })
 

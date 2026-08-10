@@ -372,6 +372,9 @@ export default function FinancePaymentsPage() {
                 label="Liberar"
                 pendingLabel="Liberando…"
                 variant="secondary"
+                // Con la auto-asignación apagada el pool lo maneja el Admin: si
+                // liberás no podrías retomarlo, así que tampoco se libera.
+                disabled={!puedeAutoasignarse}
                 isPending={releaseMutation.isPending && releaseMutation.variables === bc.bootcamper_id}
                 onClick={() => releaseMutation.mutate(bc.bootcamper_id)}
               />

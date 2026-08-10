@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { colors } from '../theme/colors';
-import type { MeetingFormValues } from '../lib/meeting-form';
+import { validateMeetingForm, type MeetingFormValues, type MeetingFormErrors } from '../lib/meeting-form';
 
 interface LeadOption {
   id: string;
@@ -52,6 +52,7 @@ export default function MeetingFormModal({
   onClose,
 }: Props) {
   const [form, setForm] = useState<MeetingFormValues>(initial);
+  const [errors, setErrors] = useState<MeetingFormErrors>({});
   const [leadPickerOpen, setLeadPickerOpen] = useState(false);
   const [pickerTarget, setPickerTarget] = useState<'start' | 'end' | null>(null);
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
@@ -65,6 +66,7 @@ export default function MeetingFormModal({
   useEffect(() => {
     if (visible) {
       setForm(initial);
+      setErrors({});
       backdropOpacity.setValue(0);
       sheetY.setValue(600);
       Animated.parallel([
@@ -74,8 +76,22 @@ export default function MeetingFormModal({
     }
   }, [visible, initial, backdropOpacity, sheetY]);
 
-  const set = <K extends keyof MeetingFormValues>(k: K, v: MeetingFormValues[K]) =>
+  const set = <K extends keyof MeetingFormValues>(k: K, v: MeetingFormValues[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
+    setErrors((prev) => ({ ...prev, title: undefined, lead: undefined, end: undefined }));
+  };
+
+  // Al presionar Guardar: si algo falta, se muestra el error en vez de que el
+  // botón quede deshabilitado en silencio.
+  function handleSave() {
+    const errs = validateMeetingForm(form);
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+    setErrors({});
+    onSave(form);
+  }
 
   function openPicker(target: 'start' | 'end') {
     setDraft(form[target]);
@@ -119,9 +135,6 @@ export default function MeetingFormModal({
     }
   }
 
-  const invalid =
-    !form.title.trim() || !form.lead || form.end.getTime() <= form.start.getTime();
-
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.root}>
@@ -132,24 +145,25 @@ export default function MeetingFormModal({
               <Text style={s.cancel}>Cancelar</Text>
             </TouchableOpacity>
             <Text style={s.title}>{editingId ? 'Editar reunión' : 'Nueva reunión'}</Text>
-            <TouchableOpacity onPress={() => onSave(form)} disabled={invalid || saving} hitSlop={8}>
+            <TouchableOpacity onPress={handleSave} disabled={saving} hitSlop={8}>
               {saving ? (
                 <ActivityIndicator size="small" color={colors.navy} />
               ) : (
-                <Text style={[s.save, invalid && s.saveDisabled]}>Guardar</Text>
+                <Text style={s.save}>Guardar</Text>
               )}
             </TouchableOpacity>
           </View>
 
           <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
-            <Text style={s.label}>Título</Text>
+            <Text style={s.label}>Título <Text style={s.required}>*</Text></Text>
             <TextInput
-              style={s.input}
+              style={[s.input, errors.title && s.inputError]}
               value={form.title}
               onChangeText={(v) => set('title', v)}
               placeholder="Reunión con…"
               placeholderTextColor={colors.textMuted}
             />
+            {errors.title && <Text style={s.errorText}>{errors.title}</Text>}
 
             <Text style={s.label}>Descripción</Text>
             <TextInput
@@ -161,26 +175,36 @@ export default function MeetingFormModal({
               multiline
             />
 
-            <Text style={s.label}>Inicio</Text>
+            <Text style={s.label}>Inicio <Text style={s.required}>*</Text></Text>
             <TouchableOpacity style={s.pickerBtn} onPress={() => openPicker('start')} activeOpacity={0.7}>
               <Ionicons name="time-outline" size={16} color={colors.navy} />
               <Text style={s.pickerText}>{fmt(form.start)}</Text>
             </TouchableOpacity>
 
-            <Text style={s.label}>Fin</Text>
-            <TouchableOpacity style={s.pickerBtn} onPress={() => openPicker('end')} activeOpacity={0.7}>
+            <Text style={s.label}>Fin <Text style={s.required}>*</Text></Text>
+            <TouchableOpacity
+              style={[s.pickerBtn, errors.end && s.inputError]}
+              onPress={() => openPicker('end')}
+              activeOpacity={0.7}
+            >
               <Ionicons name="time-outline" size={16} color={colors.navy} />
               <Text style={s.pickerText}>{fmt(form.end)}</Text>
             </TouchableOpacity>
+            {errors.end && <Text style={s.errorText}>{errors.end}</Text>}
 
-            <Text style={s.label}>Lead</Text>
-            <TouchableOpacity style={s.pickerBtn} onPress={() => setLeadPickerOpen(true)} activeOpacity={0.7}>
+            <Text style={s.label}>Lead <Text style={s.required}>*</Text></Text>
+            <TouchableOpacity
+              style={[s.pickerBtn, errors.lead && s.inputError]}
+              onPress={() => setLeadPickerOpen(true)}
+              activeOpacity={0.7}
+            >
               <Ionicons name="person-outline" size={16} color={colors.navy} />
               <Text style={[s.pickerText, !form.lead && { color: colors.textMuted }]}>
                 {form.leadName || 'Selecciona un lead'}
               </Text>
               <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
             </TouchableOpacity>
+            {errors.lead && <Text style={s.errorText}>{errors.lead}</Text>}
 
             <TouchableOpacity
               style={s.notifyRow}
@@ -304,9 +328,11 @@ const s = StyleSheet.create({
   cancel: { fontSize: 15, color: colors.textMuted },
   title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
   save: { fontSize: 15, fontWeight: '700', color: colors.navy },
-  saveDisabled: { color: colors.border },
   body: { padding: 16, gap: 6, paddingBottom: 40 },
   label: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginTop: 10 },
+  required: { color: colors.error },
+  inputError: { borderColor: '#fecaca' },
+  errorText: { fontSize: 12, color: '#dc2626', marginTop: 4 },
   input: {
     backgroundColor: colors.white,
     borderRadius: 12,

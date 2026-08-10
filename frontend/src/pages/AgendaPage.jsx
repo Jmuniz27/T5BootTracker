@@ -6,9 +6,21 @@ import { es } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import './agenda.css'
 import { getLeads } from '../api/leads.api'
+import { useAuthStore } from '../store/auth.store'
 import { useMeetings, useMeetingMutations } from '../hooks/use-meetings'
 import MeetingFormModal from '../components/MeetingFormModal'
 import { normalizeMeetings, toCalendarEvents, flattenLeads, toDatetimeLocal } from '../lib/meetings'
+
+// Colores por responsable para la agenda global del admin: cada vendedor con su
+// color, así se distinguen las reuniones de un vistazo.
+const OWNER_PALETTE = ['#213A8E', '#7c3aed', '#0d9488', '#e11d48', '#d97706', '#0891b2', '#db2777', '#4f46e5']
+function ownerColor(id) {
+  if (!id) return '#213A8E'
+  const key = String(id)
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = key.charCodeAt(i) + ((h << 5) - h)
+  return OWNER_PALETTE[Math.abs(h) % OWNER_PALETTE.length]
+}
 
 const localizer = dateFnsLocalizer({
   format,
@@ -36,6 +48,8 @@ const messages = {
 const EMPTY_FORM = { title: '', description: '', start: '', end: '', lead: '', notify_lead: true }
 
 export default function AgendaPage() {
+  const user = useAuthStore((s) => s.user)
+  const isAdmin = user?.role === 'ADMINISTRATOR'
   const { data, isLoading, isError, error } = useMeetings()
   const { data: leadsData } = useQuery({ queryKey: ['leads', 'for-meetings'], queryFn: () => getLeads() })
   const { create, update, remove } = useMeetingMutations()
@@ -50,8 +64,8 @@ export default function AgendaPage() {
     [leads],
   )
   const events = useMemo(
-    () => toCalendarEvents(normalizeMeetings(data), leadNameById),
-    [data, leadNameById],
+    () => toCalendarEvents(normalizeMeetings(data), leadNameById, { showOwner: isAdmin }),
+    [data, leadNameById, isAdmin],
   )
 
   function openCreate(start) {
@@ -98,8 +112,12 @@ export default function AgendaPage() {
     <div className="p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Agenda</h1>
-          <p className="text-sm text-gray-500">Reuniones agendadas con leads (sincronizadas a Google Calendar).</p>
+          <h1 className="text-2xl font-bold text-gray-900">{isAdmin ? 'Agenda global' : 'Agenda'}</h1>
+          <p className="text-sm text-gray-500">
+            {isAdmin
+              ? 'Todas las reuniones del equipo comercial, con su responsable.'
+              : 'Reuniones agendadas con leads (sincronizadas a Google Calendar).'}
+          </p>
         </div>
         <button
           onClick={() => openCreate()}
@@ -132,9 +150,11 @@ export default function AgendaPage() {
           popup
           onSelectSlot={(slot) => openCreate(slot.start)}
           onSelectEvent={(ev) => openEdit(ev.resource)}
-          eventPropGetter={() => ({
-            style: { backgroundColor: '#213A8E', borderColor: '#213A8E', fontSize: 12 },
-          })}
+          eventPropGetter={(ev) => {
+            // En la agenda global cada responsable tiene su color.
+            const color = isAdmin ? ownerColor(ev.resource?.assigned_to) : '#213A8E'
+            return { style: { backgroundColor: color, borderColor: color, fontSize: 12 } }
+          }}
         />
       </div>
 

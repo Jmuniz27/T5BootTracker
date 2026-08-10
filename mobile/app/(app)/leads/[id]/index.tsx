@@ -23,6 +23,7 @@ import {
   resendInvitation,
   discardLead,
   restoreLead,
+  getSelfAssignmentEnabled,
 } from '../../../../src/api/leads.api';
 import type { Lead, LeadStatus } from '../../../../src/types/leads';
 import { copyInvitationLink, shareInvitationLink } from '../../../../src/lib/invitation';
@@ -99,12 +100,16 @@ export default function LeadDetailScreen() {
   const [discardReason, setDiscardReason] = useState('');
   const [discardDetail, setDiscardDetail] = useState('');
   const [discardError, setDiscardError] = useState<string | null>(null);
+  const [selfAssignEnabled, setSelfAssignEnabled] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       getLead(params.id)
         .then((fresh) => { if (active && fresh?.id) setLead((prev) => ({ ...prev, ...fresh })); })
+        .catch(() => {});
+      getSelfAssignmentEnabled()
+        .then((enabled) => { if (active) setSelfAssignEnabled(enabled); })
         .catch(() => {});
       return () => { active = false; };
     }, [params.id]),
@@ -370,32 +375,40 @@ export default function LeadDetailScreen() {
                 <Text style={s.actionGhostText}>Cambiar estado</Text>
               </TouchableOpacity>
 
-              {isQualified && (
-                <TouchableOpacity
-                  style={s.actionGhost}
-                  onPress={() => router.push({
-                    pathname: '/(app)/leads/[id]/convert',
-                    params: {
-                      id: lead.id,
-                      name: lead.name,
-                      program: lead.program_interest ?? '',
-                      email: lead.email ?? '',
-                      phone: lead.phone ?? '',
-                    },
-                  })}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="ribbon-outline" size={18} color={colors.navy} />
-                  <Text style={s.actionGhostText}>Convertir a bootcamper</Text>
-                </TouchableOpacity>
-              )}
+              {/* Se muestra siempre, pero sólo se habilita en Calificado (el
+                  motivo se explica en el hint de más abajo). */}
+              <TouchableOpacity
+                style={[s.actionGhost, !isQualified && s.actionDisabled]}
+                disabled={!isQualified}
+                onPress={() => router.push({
+                  pathname: '/(app)/leads/[id]/convert',
+                  params: {
+                    id: lead.id,
+                    name: lead.name,
+                    program: lead.program_interest ?? '',
+                    email: lead.email ?? '',
+                    phone: lead.phone ?? '',
+                  },
+                })}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="ribbon-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>Convertir a bootcamper</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity style={s.actionGhost} onPress={openDiscard} disabled={busy} activeOpacity={0.8}>
                 <Ionicons name="close-circle-outline" size={18} color={colors.navy} />
                 <Text style={s.actionGhostText}>Descartar lead</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={s.actionDanger} onPress={release} disabled={busy} activeOpacity={0.8}>
+              {/* Con la auto-asignación apagada el pool lo maneja el Admin: si
+                  soltás el lead no podrías retomarlo, así que tampoco se libera. */}
+              <TouchableOpacity
+                style={[s.actionDanger, !selfAssignEnabled && s.actionDisabled]}
+                onPress={release}
+                disabled={busy || !selfAssignEnabled}
+                activeOpacity={0.8}
+              >
                 {busy ? (
                   <ActivityIndicator size="small" color={colors.error} />
                 ) : (
@@ -403,6 +416,9 @@ export default function LeadDetailScreen() {
                 )}
               </TouchableOpacity>
 
+              {!selfAssignEnabled && (
+                <Text style={s.hint}>La asignación la realiza el Administrador.</Text>
+              )}
               {!isQualified && (
                 <Text style={s.hint}>Para convertir el lead, primero pásalo a “Calificado”.</Text>
               )}
@@ -414,7 +430,12 @@ export default function LeadDetailScreen() {
                 <Text style={s.actionGhostText}>Ver historial</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={s.actionPrimary} onPress={assign} disabled={busy} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[s.actionPrimary, !selfAssignEnabled && s.actionDisabled]}
+                onPress={assign}
+                disabled={busy || !selfAssignEnabled}
+                activeOpacity={0.85}
+              >
                 {busy ? (
                   <ActivityIndicator size="small" color={colors.white} />
                 ) : (
@@ -424,6 +445,9 @@ export default function LeadDetailScreen() {
                   </>
                 )}
               </TouchableOpacity>
+              {!selfAssignEnabled && (
+                <Text style={s.hint}>La asignación la realiza el Administrador.</Text>
+              )}
             </>
           )}
         </View>
@@ -609,6 +633,7 @@ const s = StyleSheet.create({
     paddingVertical: 14,
   },
   actionGhostText: { color: colors.navy, fontWeight: '700', fontSize: 15 },
+  actionDisabled: { opacity: 0.4 },
   verifBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   verifBadgeText: { fontSize: 11, fontWeight: '700' },
   actionDanger: {

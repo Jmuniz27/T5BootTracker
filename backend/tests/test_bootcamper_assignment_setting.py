@@ -126,10 +126,11 @@ class TestGateOnAssign:
         converted_bootcamper.refresh_from_db()
         assert converted_bootcamper.finance_owner_id == finance_user.id
 
-    def test_releasing_still_works_when_disabled(
+    def test_finance_cannot_release_when_disabled(
         self, db, admin_user, finance_user, converted_bootcamper
     ):
-        """El control es sobre tomar del pool, no sobre devolver."""
+        """Con el toggle apagado el pool lo maneja el Admin: Finanzas no puede
+        liberar (si lo hiciera, no podría retomar al bootcamper)."""
         converted_bootcamper.finance_owner = finance_user
         converted_bootcamper.save(update_fields=['finance_owner'])
         disable(admin_user)
@@ -138,7 +139,26 @@ class TestGateOnAssign:
             f'/api/payments/bootcampers/{converted_bootcamper.id}/release/'
         )
 
+        assert resp.status_code == 403
+        assert resp.json()['code'] == 'SELF_ASSIGNMENT_DISABLED'
+        converted_bootcamper.refresh_from_db()
+        assert converted_bootcamper.finance_owner_id == finance_user.id
+
+    def test_admin_still_releases_when_disabled(
+        self, db, admin_user, finance_user, converted_bootcamper
+    ):
+        """El admin libera siempre, para corregir un reparto."""
+        converted_bootcamper.finance_owner = finance_user
+        converted_bootcamper.save(update_fields=['finance_owner'])
+        disable(admin_user)
+
+        resp = make_client(admin_user).patch(
+            f'/api/payments/bootcampers/{converted_bootcamper.id}/release/'
+        )
+
         assert resp.status_code == 200
+        converted_bootcamper.refresh_from_db()
+        assert converted_bootcamper.finance_owner_id is None
 
     def test_already_assigned_is_untouched_when_disabled(
         self, db, admin_user, finance_user, converted_bootcamper
