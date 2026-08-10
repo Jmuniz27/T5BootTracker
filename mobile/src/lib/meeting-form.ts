@@ -43,6 +43,24 @@ export function meetingToForm(m: Meeting, leadName = ''): MeetingFormValues {
   };
 }
 
+export interface MeetingFormErrors {
+  title?: string;
+  lead?: string;
+  end?: string;
+}
+
+/** Valida el form y devuelve un error por campo (vacío si está todo OK). */
+export function validateMeetingForm(v: MeetingFormValues): MeetingFormErrors {
+  const errors: MeetingFormErrors = {};
+  if (!v.title.trim()) errors.title = 'El título es obligatorio.';
+  if (!v.lead) errors.lead = 'Selecciona un lead.';
+  // La fecha de fin no puede ser anterior (ni igual) a la de inicio.
+  if (v.end.getTime() <= v.start.getTime()) {
+    errors.end = 'La fecha de fin debe ser posterior a la de inicio.';
+  }
+  return errors;
+}
+
 /** Convierte el form al payload de la API. `null` si falta algo obligatorio. */
 export function formToPayload(v: MeetingFormValues): MeetingInput | null {
   if (!v.title.trim() || !v.lead) return null;

@@ -171,3 +171,15 @@ export async function restoreLead(leadId: string) {
   const { data } = await api.patch(`/leads/${leadId}/restore/`);
   return data;
 }
+
+// Con la auto-asignación apagada, el pool lo maneja el Administrador: el vendedor
+// no puede ni asignarse ni liberar. El default (true) evita bloquear la UI si la
+// consulta falla.
+export async function getSelfAssignmentEnabled(): Promise<boolean> {
+  try {
+    const { data } = await api.get('/leads/settings/self-assignment/');
+    return data?.self_assign_enabled ?? true;
+  } catch {
+    return true;
+  }
+}

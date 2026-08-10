@@ -23,3 +23,21 @@
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Autofill en los campos de auth (login / recuperar contraseña / onboarding).
+ * Chrome/Safari pisan el fondo del input con blanco/amarillo al autocompletar,
+ * y como el texto y los íconos (ojo de la contraseña, sobre, candado) son
+ * blancos, quedaban invisibles. El truco de la `transition` gigante difiere
+ * ese repintado del fondo indefinidamente, así el input conserva su fondo real
+ * translúcido; el `-webkit-text-fill-color` mantiene el texto blanco visible.
+ * `!important` y el selector específico ganan al override de reduced-motion.
+ */
+input.auth-input-field:-webkit-autofill,
+input.auth-input-field:-webkit-autofill:hover,
+input.auth-input-field:-webkit-autofill:focus,
+input.auth-input-field:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff;
+  transition: background-color 9999s ease-in-out 0s !important;
+}

@@ -49,6 +49,7 @@ jest.mock('../../../../../src/api/leads.api', () => ({
   restoreLead: jest.fn(),
   getLead: (...args: any[]) => mockGetLead(...args),
   resendInvitation: (...args: any[]) => mockResendInvitation(...args),
+  getSelfAssignmentEnabled: () => Promise.resolve(true),
 }));
 
 jest.mock('../../../../../src/hooks/use-quick-call', () => ({
