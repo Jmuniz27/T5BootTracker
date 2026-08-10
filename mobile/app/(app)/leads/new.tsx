@@ -15,7 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../src/theme/colors';
-import { createLead, getPrograms, type Program } from '../../../src/api/leads.api';
+import { createLead, getPrograms, assignLead, getSelfAssignmentEnabled, type Program } from '../../../src/api/leads.api';
 import ProgramSelect from '../../../src/components/ProgramSelect';
 
 const SOURCES = [
@@ -34,11 +34,14 @@ export default function NewLeadScreen() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [programId, setProgramId] = useState<string | null>(null);
   const [isCompany, setIsCompany] = useState(false);
+  const [autoAssign, setAutoAssign] = useState(true);
+  const [selfAssignEnabled, setSelfAssignEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getPrograms().then(setPrograms).catch(() => {});
+    getSelfAssignmentEnabled().then(setSelfAssignEnabled).catch(() => {});
   }, []);
 
   const canSubmit = name.trim() !== '' && phone.trim() !== '' && !loading;
@@ -67,6 +70,14 @@ export default function NewLeadScreen() {
           ],
         );
         return;
+      }
+      // Igual que web: se crea el lead y, si se pidió, se auto-asigna aparte.
+      if (autoAssign && selfAssignEnabled && res?.id) {
+        try {
+          await assignLead(res.id);
+        } catch {
+          // Si falla la asignación (p. ej. lo tomó otro), el lead ya quedó creado.
+        }
       }
       router.back();
     } catch (err: any) {
@@ -167,6 +178,22 @@ export default function NewLeadScreen() {
               <Ionicons name="business-outline" size={16} color={colors.textMuted} />
               <Text style={s.companyText}>Es una empresa</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={s.companyRow}
+              onPress={() => selfAssignEnabled && setAutoAssign((v) => !v)}
+              disabled={!selfAssignEnabled}
+              activeOpacity={0.7}
+            >
+              <View style={[s.checkbox, autoAssign && selfAssignEnabled && s.checkboxOn, !selfAssignEnabled && s.checkboxDisabled]}>
+                {autoAssign && selfAssignEnabled && <Ionicons name="checkmark" size={14} color={colors.white} />}
+              </View>
+              <Ionicons name="person-add-outline" size={16} color={colors.textMuted} />
+              <Text style={[s.companyText, !selfAssignEnabled && s.companyTextDisabled]}>Asignarme este lead</Text>
+            </TouchableOpacity>
+            {!selfAssignEnabled && (
+              <Text style={s.assignHint}>La asignación la realiza el Administrador.</Text>
+            )}
           </View>
 
           {error && (
@@ -254,7 +281,10 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxOn: { backgroundColor: colors.navy, borderColor: colors.navy },
+  checkboxDisabled: { opacity: 0.5 },
   companyText: { fontSize: 14, color: colors.textPrimary },
+  companyTextDisabled: { color: colors.textMuted },
+  assignHint: { fontSize: 12, color: colors.textMuted, marginTop: 4, marginLeft: 30 },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
