@@ -1,0 +1,47 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading…",
+    "retry": "Try again.",
+    "language": "Language"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "agenda": "Schedule",
+    "payments": "Payments",
+    "analytics": "Analytics",
+    "programs": "Programs",
+    "users": "Users",
+    "logout": "Log out"
+  },
+  "login": {
+    "headingA": "Sign in to ",
+    "headingB": "continue",
+    "expired": "Your session expired due to inactivity.",
+    "subtitle": "Pick up where you left off!",
+    "email": "Email",
+    "password": "Password",
+    "forgot": "Forgot your password?",
+    "submit": "Sign in",
+    "submitting": "Signing in...",
+    "invalidEmail": "Enter a valid email",
+    "passwordRequired": "Password is required",
+    "badCredentials": "Incorrect credentials",
+    "connError": "Connection error. Please try again."
+  },
+  "forgot": {
+    "back": "Back to sign in",
+    "headingA": "Forgot your ",
+    "headingB": "password",
+    "headingSuffix": "?",
+    "subtitle": "Enter your email to reset your password",
+    "email": "Email",
+    "sendError": "Error sending the email. Please try again.",
+    "submit": "Reset password",
+    "submitting": "Sending...",
+    "invalidEmail": "Enter a valid email"
+  }
+}

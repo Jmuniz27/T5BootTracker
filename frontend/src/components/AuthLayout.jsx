@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import logo from '../assets/logo.png';
+import LanguageSwitcher from './LanguageSwitcher';
 
 export default function AuthLayout({ children, backTo, backLabel = 'Volver' }) {
   return (
@@ -21,6 +22,11 @@ export default function AuthLayout({ children, backTo, backLabel = 'Volver' }) {
           background: 'radial-gradient(ellipse at 30% 50%, rgba(59,99,214,0.35) 0%, transparent 65%)',
         }}
       />
+
+      {/* Selector de idioma: arriba a la derecha, disponible antes de entrar. */}
+      <div className="absolute top-6 right-5 sm:right-8 z-20">
+        <LanguageSwitcher variant="dark" />
+      </div>
 
       {/* Logo: en el flujo hasta `lg`, flotando arriba a la izquierda desde ahí.
           Absoluto en pantallas chicas se superponía al formulario, porque nada

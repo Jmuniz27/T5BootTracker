@@ -1,0 +1,47 @@
+{
+  "common": {
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "loading": "Cargando…",
+    "retry": "Intenta de nuevo.",
+    "language": "Idioma"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "agenda": "Agenda",
+    "payments": "Payment",
+    "analytics": "Analítica",
+    "programs": "Programas",
+    "users": "Usuarios",
+    "logout": "Log out"
+  },
+  "login": {
+    "headingA": "Inicia sesión para ",
+    "headingB": "continuar",
+    "expired": "Tu sesión expiró por inactividad.",
+    "subtitle": "¡Retoma donde lo dejaste!",
+    "email": "Email",
+    "password": "Contraseña",
+    "forgot": "¿Olvidaste tu contraseña?",
+    "submit": "Ingresar",
+    "submitting": "Ingresando...",
+    "invalidEmail": "Ingresa un email válido",
+    "passwordRequired": "La contraseña es requerida",
+    "badCredentials": "Credenciales incorrectas",
+    "connError": "Error de conexión. Intenta de nuevo."
+  },
+  "forgot": {
+    "back": "Volver al inicio de sesión",
+    "headingA": "¿Olvidaste tu ",
+    "headingB": "contraseña",
+    "headingSuffix": "?",
+    "subtitle": "Ingresa tu correo para restablecer la contraseña",
+    "email": "Email",
+    "sendError": "Error al enviar el correo. Intenta de nuevo.",
+    "submit": "Restablecer contraseña",
+    "submitting": "Enviando...",
+    "invalidEmail": "Ingresa un email válido"
+  }
+}
