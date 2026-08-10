@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ResponsiveContainer,
@@ -87,6 +87,26 @@ export default function SalespeopleComparison() {
     })
   }
 
+  const todosLosIds = salespeople.map((p) => p.salesperson_id ?? p.id)
+  const todosMarcados = todosLosIds.length > 0 && todosLosIds.every((id) => selected.has(id))
+  const algunoMarcado = todosLosIds.some((id) => selected.has(id))
+
+  // Marcar y desmarcar de una: con el equipo entero en pantalla, ir uno por uno
+  // para ver el panorama general es el caso más frecuente, no el excepcional.
+  const alternarTodos = () => {
+    setSelected(todosMarcados ? new Set() : new Set(todosLosIds))
+  }
+
+  // El estado intermedio no se puede declarar en el JSX: es una propiedad del
+  // nodo, no un atributo. Sin él, con selección parcial la casilla se vería
+  // vacía y sugeriría que no hay nadie marcado.
+  const todosRef = useRef(null)
+  useEffect(() => {
+    if (todosRef.current) {
+      todosRef.current.indeterminate = algunoMarcado && !todosMarcados
+    }
+  }, [algunoMarcado, todosMarcados])
+
   const comparados = salespeople.filter((p) => selected.has(p.salesperson_id ?? p.id))
 
   const chartData = comparados.map((p) => ({
@@ -115,9 +135,21 @@ export default function SalespeopleComparison() {
     <div className="space-y-5">
       <div className="rounded-2xl border border-gray-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <p className="text-sm font-medium text-gray-700">
-            Elige a quiénes comparar
-          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <p className="text-sm font-medium text-gray-700">
+              Elige a quiénes comparar
+            </p>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-500 cursor-pointer hover:text-gray-700 transition-colors">
+              <input
+                ref={todosRef}
+                type="checkbox"
+                checked={todosMarcados}
+                onChange={alternarTodos}
+                className="rounded border-gray-300 text-[#213A8E] focus:ring-[#213A8E]"
+              />
+              {todosMarcados ? 'Quitar todos' : 'Seleccionar todos'}
+            </label>
+          </div>
           <div className="min-w-[200px]">
             <CustomSelect
               value={rangeDays}
