@@ -33,45 +33,7 @@ function fmt(v) {
 
 // ─── Bootcamper Card ──────────────────────────────────────────────────────────
 
-// Tarjeta del pool: un bootcamper sin responsable de cobro. No se muestra
-// progreso ni montos (todavía no lo monitorea nadie); se destaca que está
-// esperando y la acción de asignárselo.
-function PoolBootcamperCard({ bc, onClick, action }) {
-  return (
-    <div className="bg-white border border-dashed border-gray-300 rounded-2xl hover:border-[#213A8E]/50 hover:shadow-md transition-all group">
-      <button onClick={onClick} className="p-5 text-left w-full">
-        <div className="flex items-center gap-3 min-w-0 mb-3">
-          <img
-            src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(bc.bootcamper_name ?? 'bootcamper')}`}
-            alt={bc.bootcamper_name}
-            className="w-11 h-11 rounded-full bg-gray-100 flex-shrink-0 object-cover"
-          />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 group-hover:text-[#213A8E] transition-colors truncate">
-              {bc.bootcamper_name}
-            </p>
-            <p className="text-xs text-gray-500 truncate">{bc.email}</p>
-          </div>
-        </div>
-        <p className="text-xs text-gray-500 mb-3 truncate">
-          {bc.program_name}
-          {bc.cohort_number != null && <span className="text-gray-400"> · Cohorte {bc.cohort_number}</span>}
-        </p>
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          Sin responsable · esperando en el pool
-        </span>
-      </button>
-      {action && <div className="px-5 pb-4">{action}</div>}
-    </div>
-  )
-}
-
-function BootcamperCard({ bc, onClick, action, variant = 'default' }) {
-  if (variant === 'pool') {
-    return <PoolBootcamperCard bc={bc} onClick={onClick} action={action} />
-  }
-
+function BootcamperCard({ bc, onClick, action }) {
   const cfg       = STATUS[bc.payment_status] || STATUS.ON_TRACK
   const totalCost = parseFloat(bc.total_cost) || 1
   const totalPaid = parseFloat(bc.total_paid) || 0
@@ -440,7 +402,6 @@ export default function FinancePaymentsPage() {
 
           <Section
             title="Disponibles"
-            variant="pool"
             subtitle={
               puedeAutoasignarse
                 ? 'Bootcampers sin responsable de cobro'
@@ -472,7 +433,7 @@ export default function FinancePaymentsPage() {
 
 // ─── Secciones ────────────────────────────────────────────────────────────────
 
-function Section({ title, subtitle, count, empty, cards, onCardClick, renderAction, variant = 'default' }) {
+function Section({ title, subtitle, count, empty, cards, onCardClick, renderAction }) {
   return (
     <section className="mb-8">
       <div className="flex items-baseline gap-2 mb-3">
@@ -493,7 +454,6 @@ function Section({ title, subtitle, count, empty, cards, onCardClick, renderActi
             <BootcamperCard
               key={`${bc.bootcamper_id}-${bc.program_id}`}
               bc={bc}
-              variant={variant}
               onClick={() => onCardClick(bc)}
               action={renderAction(bc)}
             />
