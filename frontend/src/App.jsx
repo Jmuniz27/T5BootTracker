@@ -65,8 +65,8 @@ export default function App() {
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardRoute />} />
-          <Route path="/schedule" element={<RoleRoute allow={['SALESPERSON', 'FINANCE']}><AgendaPage /></RoleRoute>} />
-          <Route path="/agenda" element={<RoleRoute allow={['SALESPERSON', 'FINANCE']}><AgendaPage /></RoleRoute>} />
+          <Route path="/schedule" element={<RoleRoute allow={['SALESPERSON', 'FINANCE', 'ADMINISTRATOR']}><AgendaPage /></RoleRoute>} />
+          <Route path="/agenda" element={<RoleRoute allow={['SALESPERSON', 'FINANCE', 'ADMINISTRATOR']}><AgendaPage /></RoleRoute>} />
           <Route path="/payments" element={<PaymentsRoute />} />
           <Route
             path="/payments/:bootcamperId/:programId"

@@ -80,8 +80,9 @@ export default function Sidebar({ onClose }) {
     ? NAV_ITEMS.filter((item) => item.to === '/payments')
     : NAV_ITEMS.filter((item) => {
         if (item.adminOnly && !isAdmin) return false
-        // Agenda es del equipo comercial: vendedor y finanzas.
-        if (item.commercialOnly && !isSalesperson && !isFinance) return false
+        // Agenda: equipo comercial (vendedor y finanzas) ve la suya; el admin
+        // ve la global (todas las reuniones del equipo).
+        if (item.commercialOnly && !isSalesperson && !isFinance && !isAdmin) return false
         // El cobro es de Finanzas: el vendedor no tiene nada que hacer en pagos.
         if (item.to === '/payments' && isSalesperson) return false
         return true
