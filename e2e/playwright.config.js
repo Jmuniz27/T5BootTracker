@@ -45,7 +45,23 @@ export default defineConfig({
       name: 'chromium',
       // Sólo los .spec.js: `tests/support/` contiene helpers, no escenarios.
       testMatch: /.*\.spec\.js/,
+      // `mobile/` corre en su propio proyecto, con otro dispositivo.
+      testIgnore: /mobile\//,
       use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup'],
+    },
+    {
+      // Comprobaciones de responsive que necesitan un navegador de verdad:
+      // desborde horizontal, qué se ve en cada breakpoint y dónde cae un menú
+      // posicionado por JS. Nada de eso se puede medir en jsdom.
+      //
+      // Los escenarios de `mobile/` no mutan estado —sólo navegan y abren
+      // ventanas—, así que conviven con la suite serial sin pisarla. Mantenerlo
+      // así: la suite corre con `workers: 1` y sin reintentos justamente
+      // porque los demás escenarios sí comparten los datos de `seed_dev`.
+      name: 'mobile-chromium',
+      testMatch: /mobile\/.*\.spec\.js/,
+      use: { ...devices['Pixel 7'] },
       dependencies: ['setup'],
     },
   ],

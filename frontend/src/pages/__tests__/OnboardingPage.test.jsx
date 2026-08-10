@@ -144,6 +144,15 @@ describe('OnboardingPage — consentimiento de uso de datos (#329)', () => {
     expect(screen.getByRole('checkbox', { name: /acepto/i })).not.toBeChecked();
   });
 
+  it('la casilla no se deforma cuando el texto ocupa varias líneas', async () => {
+    const user = userEvent.setup();
+    await llegarAlPaso2(user);
+
+    // La frase del consentimiento envuelve en tres líneas en un teléfono, y un
+    // checkbox flex sin ancho intrínseco se aplastaba hasta quedar una elipse.
+    expect(screen.getByRole('checkbox', { name: /acepto/i })).toHaveClass('h-4', 'w-4', 'shrink-0');
+  });
+
   it('sin aceptar no se activa la cuenta', async () => {
     const user = userEvent.setup();
     const [passwordInput, confirmInput] = await llegarAlPaso2(user);
@@ -176,5 +185,36 @@ describe('OnboardingPage — consentimiento de uso de datos (#329)', () => {
     await llegarAlPaso2(user);
 
     expect(screen.getByText(/fines internos de seguimiento de Coding Bootcamps ESPOL/i)).toBeInTheDocument();
+  });
+});
+
+// jsdom no resuelve media queries ni calcula posiciones: lo que se puede afirmar
+// acá son las clases que deciden la presentación. La medición real vive en
+// e2e/tests/mobile/responsive-auth.spec.js.
+describe('OnboardingPage — presentación responsiva (#352)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('el enlace expirado se centra, como el resto de las pantallas sin formulario', async () => {
+    getOnboardingInfo.mockRejectedValue({
+      response: { status: 400, data: { error: 'El enlace expiró.', code: 'TOKEN_EXPIRED' } },
+    });
+    renderPage();
+
+    // Sin formulario que ancle la lectura, el texto alineado a la izquierda queda
+    // pegado al borde mientras el logo va centrado.
+    expect(await screen.findByRole('heading', { name: /el enlace expiró/i })).toHaveClass('text-center');
+    expect(screen.getByText(/pide a tu vendedor/i)).toHaveClass('text-center');
+  });
+
+  it('el título del enlace expirado baja un escalón en móvil', async () => {
+    getOnboardingInfo.mockRejectedValue({
+      response: { status: 400, data: { error: 'El enlace expiró.', code: 'TOKEN_EXPIRED' } },
+    });
+    renderPage();
+
+    const titulo = await screen.findByRole('heading', { name: /el enlace expiró/i });
+    expect(titulo).toHaveClass('text-2xl', 'sm:text-3xl');
   });
 });

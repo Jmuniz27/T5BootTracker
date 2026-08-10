@@ -38,4 +38,14 @@ describe('Toast — anuncio a lectores de pantalla (CB-75)', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  it('se acota al ancho de la pantalla en móvil', () => {
+    // Sin cota, un mensaje largo se dibuja como una barra de ~700px anclada a
+    // la derecha: en un teléfono queda casi toda fuera de pantalla. `sm:w-auto`
+    // devuelve la geometría original en escritorio.
+    render(<Toast message="Comprobante recibido. La lectura automática no está disponible ahora; Finanzas lo revisará a mano." onClose={() => {}} />)
+    const toast = screen.getByRole('status')
+    expect(toast.className).toMatch(/w-\[min\(/)
+    expect(toast).toHaveClass('sm:w-auto')
+  })
 })

@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect } from 'vitest';
 import LoginPage from '../LoginPage';
@@ -36,5 +36,28 @@ describe('LoginPage', () => {
       expect(screen.getByText(/Ingresa un email válido/i)).toBeInTheDocument();
       expect(screen.getByText(/La contraseña es requerida/i)).toBeInTheDocument();
     });
+  });
+});
+
+describe('LoginPage — sesión expirada (#352)', () => {
+  const setup = (entrada) => render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[entrada]}>
+        <LoginPage />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+
+  it('explica por qué se cerró la sesión cuando viene de una expiración', () => {
+    setup('/login?expired=1');
+
+    // Sin este aviso el usuario aterriza en el login sin ninguna explicación.
+    expect(screen.getByRole('status')).toHaveTextContent(/tu sesión expiró/i);
+  });
+
+  it('no muestra el aviso en un ingreso normal', () => {
+    setup('/login');
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react'
+import { useModalA11y } from '../hooks/use-modal-a11y'
 
 const EMPTY = { title: '', description: '', start: '', end: '', lead: '', notify_lead: true }
 
 /**
  * Modal reutilizable para crear/editar una reunión (meetings API).
  * Lo usan tanto la Agenda como "Registrar interacción".
+ *
+ * La compuerta `open` vive en este componente y el diálogo en otro aparte:
+ * `useModalA11y` bloquea el scroll del body y atrapa el foco desde que se
+ * monta, y los hooks no admiten un retorno temprano, así que el diálogo sólo
+ * puede existir mientras está abierto.
  */
-export default function MeetingFormModal({
-  open,
+export default function MeetingFormModal({ open, ...props }) {
+  if (!open) return null
+  return <MeetingFormDialog {...props} />
+}
+
+function MeetingFormDialog({
   editingId = null,
   initial,
   leads = [],
@@ -17,11 +27,14 @@ export default function MeetingFormModal({
   onDelete,
   onClose,
 }) {
-  const [form, setForm] = useState(EMPTY)
+  const dialogRef = useModalA11y(onClose)
+  const [form, setForm] = useState(initial ?? EMPTY)
 
+  // Se mantiene la resincronización con `initial`: la Agenda puede cambiar la
+  // reunión que se está editando sin cerrar el modal.
   useEffect(() => {
-    if (open) setForm(initial ?? EMPTY)
-  }, [open, initial])
+    setForm(initial ?? EMPTY)
+  }, [initial])
 
   const set = (k) => (e) =>
     setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
@@ -38,18 +51,21 @@ export default function MeetingFormModal({
     })
   }
 
-  if (!open) return null
+  const title = editingId ? 'Editar reunión' : 'Nueva reunión'
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <form
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        className="w-full max-w-md max-h-full overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-xl focus:outline-none"
       >
-        <h2 className="mb-4 text-lg font-bold text-gray-900">
-          {editingId ? 'Editar reunión' : 'Nueva reunión'}
-        </h2>
+        <h2 className="mb-4 text-lg font-bold text-gray-900">{title}</h2>
 
         <label className="mb-3 block">
           <span className="mb-1 block text-sm font-medium text-gray-700">Título</span>
