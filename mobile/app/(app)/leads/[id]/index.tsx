@@ -23,9 +23,7 @@ import {
   resendInvitation,
   discardLead,
   restoreLead,
-  verifyBootcamper,
 } from '../../../../src/api/leads.api';
-import { useAuth } from '../../../../src/context/AuthContext';
 import type { Lead, LeadStatus } from '../../../../src/types/leads';
 import { copyInvitationLink, shareInvitationLink } from '../../../../src/lib/invitation';
 
@@ -33,7 +31,7 @@ import { copyInvitationLink, shareInvitationLink } from '../../../../src/lib/inv
 const VERIFICATION_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   INVITED:              { label: 'Invitado',                 bg: '#f1f5f9', color: '#64748b' },
   PENDING_VERIFICATION: { label: 'Pendiente de verificación', bg: '#fef9c3', color: '#a16207' },
-  VERIFIED:             { label: 'Verificado',               bg: '#dcfce7', color: '#15803d' },
+  VERIFIED:             { label: 'Cuenta activa',            bg: '#dcfce7', color: '#15803d' },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
@@ -78,7 +76,6 @@ export default function LeadDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string; lead?: string; owned?: string }>();
   const { startCall } = useQuickCall();
-  const { user } = useAuth();
 
   function parseInitial(): Partial<Lead> & { id: string } {
     try {
@@ -102,7 +99,6 @@ export default function LeadDetailScreen() {
   const [discardReason, setDiscardReason] = useState('');
   const [discardDetail, setDiscardDetail] = useState('');
   const [discardError, setDiscardError] = useState<string | null>(null);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -120,13 +116,9 @@ export default function LeadDetailScreen() {
   const isConverted = status === 'CONVERTED';
   const isDiscarded = status === 'DISCARDED';
 
-  // Verificación del bootcamper. Solo el dueño del lead (o admin) puede
-  // verificar, y solo cuando la cuenta está PENDING_VERIFICATION.
+  // Estado de la cuenta del bootcamper (Invitado / Cuenta activa). Solo informativo.
   const verifStatus = lead.bootcamper_verification_status ?? null;
   const verifCfg = verifStatus ? VERIFICATION_CONFIG[verifStatus] : null;
-  const isOwner = !!lead.owner && lead.owner === user?.id;
-  const isAdmin = user?.role === 'ADMINISTRATOR';
-  const canVerify = isConverted && verifStatus === 'PENDING_VERIFICATION' && (isOwner || isAdmin);
 
   function go(path: '/(app)/leads/[id]/log-interaction' | '/(app)/leads/[id]/history' | '/(app)/leads/[id]/convert') {
     router.push({ pathname: path, params: { id: lead.id, name: lead.name, status: lead.status ?? '' } });
@@ -201,20 +193,6 @@ export default function LeadDetailScreen() {
       await restoreLead(lead.id);
       router.back();
     } catch {
-      setBusy(false);
-    }
-  }
-
-  async function verify() {
-    setBusy(true);
-    setVerifyError(null);
-    try {
-      const updated = await verifyBootcamper(lead.id);
-      // El endpoint devuelve el lead actualizado: refresca el badge en pantalla.
-      setLead((prev) => ({ ...prev, ...updated }));
-    } catch (err: any) {
-      setVerifyError(err?.response?.data?.error ?? 'No se pudo verificar. Intenta de nuevo.');
-    } finally {
       setBusy(false);
     }
   }
@@ -326,9 +304,6 @@ export default function LeadDetailScreen() {
               </View>
             </View>
           ) : null}
-          {isConverted && verifStatus === 'VERIFIED' && lead.bootcamper_profile?.verified_by_name ? (
-            <Text style={s.verifiedByText}>Verificado por {lead.bootcamper_profile.verified_by_name}</Text>
-          ) : null}
           {isDiscarded ? (
             <>
               <InfoRow icon="close-circle-outline" label="Motivo" value={lead.discard_reason_display} />
@@ -344,19 +319,6 @@ export default function LeadDetailScreen() {
                 <Ionicons name="time-outline" size={18} color={colors.white} />
                 <Text style={s.actionPrimaryText}>Ver historial</Text>
               </TouchableOpacity>
-              {canVerify && (
-                <TouchableOpacity style={s.actionVerify} onPress={verify} disabled={busy} activeOpacity={0.85}>
-                  {busy ? (
-                    <ActivityIndicator size="small" color={colors.white} />
-                  ) : (
-                    <>
-                      <Ionicons name="shield-checkmark-outline" size={18} color={colors.white} />
-                      <Text style={s.actionPrimaryText}>Marcar como verificado</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-              {verifyError && <Text style={s.hint}>{verifyError}</Text>}
               {canResendInvitation && (
                 <TouchableOpacity style={s.actionGhost} onPress={resend} disabled={resendBusy} activeOpacity={0.8}>
                   {resendBusy ? (
@@ -647,18 +609,8 @@ const s = StyleSheet.create({
     paddingVertical: 14,
   },
   actionGhostText: { color: colors.navy, fontWeight: '700', fontSize: 15 },
-  actionVerify: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#15803d',
-    borderRadius: 12,
-    paddingVertical: 14,
-  },
   verifBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   verifBadgeText: { fontSize: 11, fontWeight: '700' },
-  verifiedByText: { fontSize: 12, color: colors.textMuted, marginTop: 2, marginLeft: 24 },
   actionDanger: {
     alignItems: 'center',
     justifyContent: 'center',

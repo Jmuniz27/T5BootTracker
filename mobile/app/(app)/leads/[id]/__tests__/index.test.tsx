@@ -40,7 +40,6 @@ jest.mock('expo-router', () => ({
 
 const mockGetLead = jest.fn();
 const mockResendInvitation = jest.fn();
-const mockVerifyBootcamper = jest.fn();
 
 jest.mock('../../../../../src/api/leads.api', () => ({
   assignLead: jest.fn(),
@@ -50,16 +49,10 @@ jest.mock('../../../../../src/api/leads.api', () => ({
   restoreLead: jest.fn(),
   getLead: (...args: any[]) => mockGetLead(...args),
   resendInvitation: (...args: any[]) => mockResendInvitation(...args),
-  verifyBootcamper: (...args: any[]) => mockVerifyBootcamper(...args),
 }));
 
 jest.mock('../../../../../src/hooks/use-quick-call', () => ({
   useQuickCall: () => ({ startCall: jest.fn() }),
-}));
-
-// El detalle usa useAuth para saber si soy el dueño (verificar) — mock del dueño.
-jest.mock('../../../../../src/context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'owner-1', role: 'SALESPERSON' } }),
 }));
 
 const mockCopy = jest.fn();
@@ -155,15 +148,15 @@ describe('LeadDetailScreen — reenvío de invitación', () => {
   });
 });
 
-describe('LeadDetailScreen — verificación del bootcamper', () => {
+describe('LeadDetailScreen — estado de la cuenta del bootcamper', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFocusEffectRan = false;
     mockGetLead.mockResolvedValue(CONVERTED_LEAD);
   });
 
-  it('el dueño ve "Marcar como verificado" cuando está PENDING_VERIFICATION', async () => {
-    mockGetLead.mockResolvedValue({ ...CONVERTED_LEAD, bootcamper_verification_status: 'PENDING_VERIFICATION' });
+  it('muestra el badge "Cuenta activa" cuando la cuenta ya está activada', async () => {
+    mockGetLead.mockResolvedValue({ ...CONVERTED_LEAD, bootcamper_verification_status: 'VERIFIED' });
 
     let root: any;
     await act(async () => {
@@ -172,45 +165,8 @@ describe('LeadDetailScreen — verificación del bootcamper', () => {
       await Promise.resolve();
     });
 
-    expect(findAllByText(root, 'Marcar como verificado').length).toBeGreaterThan(0);
-  });
-
-  it('al verificar, llama al endpoint y el badge pasa a Verificado', async () => {
-    mockGetLead.mockResolvedValue({ ...CONVERTED_LEAD, bootcamper_verification_status: 'PENDING_VERIFICATION' });
-    mockVerifyBootcamper.mockResolvedValue({
-      ...CONVERTED_LEAD,
-      bootcamper_verification_status: 'VERIFIED',
-      bootcamper_profile: { verified_by_name: 'Vendedor Uno' },
-    });
-
-    let root: any;
-    await act(async () => {
-      root = renderer.create(<LeadDetailScreen />);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    await pressText(root, 'Marcar como verificado');
-
-    expect(mockVerifyBootcamper).toHaveBeenCalledWith('lead-1');
-    expect(findAllByText(root, 'Verificado').length).toBeGreaterThan(0);
-    expect(findAllByText(root, 'Marcar como verificado').length).toBe(0);
-  });
-
-  it('un no-dueño no ve "Marcar como verificado"', async () => {
-    mockGetLead.mockResolvedValue({
-      ...CONVERTED_LEAD,
-      owner: 'otro-vendedor',
-      bootcamper_verification_status: 'PENDING_VERIFICATION',
-    });
-
-    let root: any;
-    await act(async () => {
-      root = renderer.create(<LeadDetailScreen />);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
+    expect(findAllByText(root, 'Cuenta activa').length).toBeGreaterThan(0);
+    // Ya no existe verificación manual.
     expect(findAllByText(root, 'Marcar como verificado').length).toBe(0);
   });
 });

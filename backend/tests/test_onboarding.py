@@ -128,7 +128,8 @@ class TestOnboardingActivate:
         bootcamper.refresh_from_db()
         assert bootcamper.has_usable_password() is True
         assert bootcamper.check_password('nueva-clave-123') is True
-        assert bootcamper.verification_status == CustomUser.VerificationStatus.PENDING_VERIFICATION
+        # Activar confirma la cuenta directo: se eliminó el paso manual.
+        assert bootcamper.verification_status == CustomUser.VerificationStatus.VERIFIED
         assert bootcamper.onboarding_completed_at is not None
 
     def test_second_activation_attempt_is_rejected(self, db, salesperson_user, program):

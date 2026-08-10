@@ -3,7 +3,7 @@ import ExportMenu from '../components/ExportMenu'
 import { LEAD_REPORT_COLUMNS, SOURCE_LABELS, STATUS_LABELS } from '../lib/leadsReport'
 import { assignmentLabel, DISCARD_REASONS } from '../lib/leadDisplay'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, getAllLeads, discardLead, restoreLead, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, getAllLeads, discardLead, restoreLead, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
@@ -83,7 +83,7 @@ function LeadStatusBadge({ status, lastOutcome }) {
 const VERIFICATION_LABELS = {
   INVITED: 'Invitado',
   PENDING_VERIFICATION: 'Pendiente de verificación',
-  VERIFIED: 'Verificado',
+  VERIFIED: 'Cuenta activa',
 }
 
 const VERIFICATION_COLORS = {
@@ -850,8 +850,7 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
   )
 }
 
-function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
-  const queryClient = useQueryClient()
+function ViewLeadModal({ lead, onClose }) {
   const { data: interactions = [] } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -861,13 +860,6 @@ function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
   const rating = lastInteraction?.interest_level ?? null
   const isConverted = lead.status === 'CONVERTED'
   const profile = lead.bootcamper_profile
-
-  const verifyMutation = useMutation({
-    mutationFn: () => verifyBootcamper(lead.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-    },
-  })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -961,20 +953,6 @@ function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
                 {profile.cedula && <p>Cédula/RUC: {profile.cedula}</p>}
                 {profile.phone && <p>{profile.phone}</p>}
               </div>
-              {profile.verification_status === 'VERIFIED' && profile.verified_by_name && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Verificado por {profile.verified_by_name}
-                </p>
-              )}
-              {(isOwned || isAdmin) && profile.verification_status === 'PENDING_VERIFICATION' && (
-                <button
-                  onClick={() => verifyMutation.mutate()}
-                  disabled={verifyMutation.isPending}
-                  className="mt-3 w-full py-2 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
-                >
-                  {verifyMutation.isPending ? 'Verificando...' : 'Marcar como verificado'}
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -2903,8 +2881,6 @@ export default function LeadsDashboard() {
       {viewLead && (
         <ViewLeadModal
           lead={viewLead}
-          isOwned={viewLead._isOwned}
-          isAdmin={isAdmin}
           onClose={() => setViewLead(null)}
         />
       )}
