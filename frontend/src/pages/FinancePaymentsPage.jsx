@@ -246,27 +246,46 @@ export default function FinancePaymentsPage() {
       {/* Summary stats */}
       {!isLoading && mine.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <StatCard label="Bootcampers" value={stats.total} />
+          <StatCard
+            label="Bootcampers"
+            value={stats.total}
+            iconClass="bg-[#213A8E]/10 text-[#213A8E]"
+            icon={(
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            )}
+          />
           <StatCard
             label="Críticos"
             value={stats.critical}
             containerClass="bg-red-50 border-red-100"
             valueClass="text-red-600"
-            labelClass="text-red-400"
+            labelClass="text-red-500"
+            iconClass="bg-red-100 text-red-600"
+            icon={(
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            )}
           />
           <StatCard
             label="En riesgo"
             value={stats.atRisk}
             containerClass="bg-amber-50 border-amber-100"
             valueClass="text-amber-600"
-            labelClass="text-amber-400"
+            labelClass="text-amber-600"
+            iconClass="bg-amber-100 text-amber-600"
+            icon={(
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+            )}
           />
           <StatCard
             label="Al día"
             value={stats.onTrack}
             containerClass="bg-emerald-50 border-emerald-100"
             valueClass="text-emerald-600"
-            labelClass="text-emerald-400"
+            labelClass="text-emerald-600"
+            iconClass="bg-emerald-100 text-emerald-600"
+            icon={(
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            )}
           />
         </div>
       )}
