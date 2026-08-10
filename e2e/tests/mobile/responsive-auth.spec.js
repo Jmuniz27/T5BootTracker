@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { titulo, dado, y, cuando, entonces } from '../support/gwt.js'
-import { desborde, SIN_DESBORDE } from '../support/viewport.js'
+import { STORAGE_STATE } from '../support/users.js'
+import { desborde, SIN_DESBORDE, fondoDelLienzo, SIN_FONDO } from '../support/viewport.js'
 
 /**
  * Las pantallas públicas de autenticación en un teléfono.
@@ -123,6 +124,66 @@ test.describe('Responsive · las pantallas de autenticación en el teléfono', (
       await y('el aviso no empuja el botón de ingresar fuera de la pantalla', async () => {
         await expect(page.getByTestId('login-submit')).toBeInViewport({ ratio: 1 })
         expect(await desborde(page)).toBeLessThanOrEqual(SIN_DESBORDE)
+      })
+    },
+  )
+
+  test(
+    titulo({
+      hst: 'CB-352',
+      dado: 'una pantalla pública en un teléfono',
+      cuando: 'el scroll rebota más allá del contenido',
+      entonces: 'el fondo sigue siendo el degradado y no aparece blanco',
+    }),
+    async ({ page }) => {
+      // Este runner es Chromium con emulación táctil: no reproduce el rebote de
+      // iOS. Lo que se mide es su causa —de qué color es el lienzo—, que es lo
+      // que decide qué se ve durante el gesto.
+      await dado('que se abre el inicio de sesión en un teléfono', async () => {
+        await page.setViewportSize(TELEFONO_BAJO)
+        await page.goto('/login')
+        await expect(page.getByTestId('login-submit')).toBeVisible()
+      })
+
+      await entonces('el degradado vive en el raíz, que es lo que se propaga al lienzo', async () => {
+        const fondo = await fondoDelLienzo(page)
+        expect(fondo.imagen).toContain('linear-gradient')
+      })
+
+      await y('el lienzo nunca queda en blanco ni transparente', async () => {
+        const fondo = await fondoDelLienzo(page)
+        expect(SIN_FONDO).not.toContain(fondo.color)
+      })
+    },
+  )
+})
+
+test.describe('Responsive · el rebote del scroll en el área autenticada', () => {
+  test.use({ storageState: STORAGE_STATE.bootcamper })
+
+  test(
+    titulo({
+      hst: 'CB-352',
+      dado: 'un bootcamper en su panel de pagos',
+      cuando: 'el scroll rebota más allá del contenido',
+      entonces: 'el fondo sigue siendo el gris del shell y no aparece blanco',
+    }),
+    async ({ page }) => {
+      await dado('que el bootcamper abre sus pagos en un teléfono', async () => {
+        await page.goto('/payments')
+        await expect(page.getByTestId('upload-button')).toBeVisible()
+      })
+
+      await entonces('el lienzo lleva el mismo gris que el shell', async () => {
+        // gray-50, el `bg-gray-50` de AppLayout. Si divergen, el rebote muestra
+        // un escalón de color en el borde.
+        const fondo = await fondoDelLienzo(page)
+        expect(fondo.color).toBe('rgb(249, 250, 251)')
+      })
+
+      await y('el lienzo nunca queda en blanco ni transparente', async () => {
+        const fondo = await fondoDelLienzo(page)
+        expect(SIN_FONDO).not.toContain(fondo.color)
       })
     },
   )

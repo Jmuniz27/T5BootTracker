@@ -98,6 +98,9 @@ class AdminUserSerializer(CoordinatorScopeMixin, UserDataSerializer):
 
         return [
             {
+                # CB-347: id de la inscripción — lo necesita el cliente para
+                # poder pedir el cambio de cohorte de esta fila en concreto.
+                'enrollment_id': str(enrollment.id),
                 'program_id':    str(enrollment.bootcamp_id),
                 'program_name':  enrollment.bootcamp.name,
                 'cohort_id':     str(enrollment.cohort_id) if enrollment.cohort_id else None,
@@ -139,6 +142,15 @@ class CreateUserSerializer(CoordinatorScopeMixin, serializers.ModelSerializer):
                 raise serializers.ValidationError("Esta cédula ya está registrada.")
         return value
 
+
+class EnrollmentCohortUpdateSerializer(serializers.Serializer):
+    """Body del PATCH que asigna o cambia la cohorte de una inscripción (CB-347).
+
+    `cohort_id` es explícitamente nulleable (a diferencia de
+    `ConvertLeadSerializer.cohort_id`, que sólo lo omite): hay que poder
+    vaciar una cohorte asignada por error, no sólo asignar una nueva.
+    """
+    cohort_id = serializers.UUIDField(allow_null=True)
 
 
 

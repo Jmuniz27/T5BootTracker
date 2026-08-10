@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet
+from .views import EnrollmentCohortView, UserViewSet
 from .finance_views import FinanceBootcampersView, FinancePortfolioView
 from .salespeople_views import SalespeopleActivityView, SalespersonActivityDetailView
 
@@ -21,6 +21,11 @@ urlpatterns = [
         'finance/<uuid:pk>/bootcampers/',
         FinanceBootcampersView.as_view(),
         name='finance-bootcampers',
+    ),
+    path(
+        '<uuid:pk>/enrollments/<uuid:enrollment_id>/',
+        EnrollmentCohortView.as_view(),
+        name='enrollment-cohort',
     ),
     path('', include(router.urls)),
 ]

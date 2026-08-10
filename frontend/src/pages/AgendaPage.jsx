@@ -68,6 +68,19 @@ export default function AgendaPage() {
     [data, leadNameById, isAdmin],
   )
 
+  // Leyenda de la agenda global: cada responsable con su color, para saber de
+  // quién es cada reunión sin depender de que el título entre en la celda del mes.
+  const owners = useMemo(() => {
+    if (!isAdmin) return []
+    const map = new Map()
+    for (const m of normalizeMeetings(data)) {
+      if (m.assigned_to && !map.has(m.assigned_to)) {
+        map.set(m.assigned_to, m.assigned_to_name || 'Sin responsable')
+      }
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name, color: ownerColor(id) }))
+  }, [data, isAdmin])
+
   function openCreate(start) {
     const s = start ?? new Date()
     const e = new Date(s.getTime() + 30 * 60000)
@@ -136,6 +149,19 @@ export default function AgendaPage() {
         </div>
       )}
 
+      {/* Leyenda por responsable (solo agenda global del admin) */}
+      {isAdmin && owners.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="text-xs font-medium text-gray-500">Responsable:</span>
+          {owners.map((o) => (
+            <span key={o.id} className="flex items-center gap-1.5 text-xs text-gray-700">
+              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: o.color }} />
+              {o.name}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="rounded-xl border border-gray-200 bg-white p-3" style={{ height: 640 }}>
         <Calendar
           localizer={localizer}
@@ -144,7 +170,9 @@ export default function AgendaPage() {
           messages={messages}
           startAccessor="start"
           endAccessor="end"
-          views={['month']}
+          // La vista "Lista" muestra el título completo (con el responsable en la
+          // agenda global), que en las celdas del mes puede quedar cortado.
+          views={['month', 'agenda']}
           defaultView="month"
           selectable
           popup

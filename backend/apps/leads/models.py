@@ -150,6 +150,9 @@ class Interaction(models.Model):
         # sistema, no el formulario del vendedor.
         DISCARDED         = 'DISCARDED',         'Descartado'
         RESTORED          = 'RESTORED',          'Reactivado'
+        # CB-347: cambio de cohorte de un bootcamper desde Usuarios. Igual que
+        # REASSIGNED, sólo lo usa el rastro de sistema.
+        COHORT_CHANGED    = 'COHORT_CHANGED',    'Cohorte modificada'
 
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     lead             = models.ForeignKey(
