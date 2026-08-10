@@ -3,6 +3,34 @@
 @tailwind utilities;
 
 /**
+ * El fondo del lienzo.
+ *
+ * El navegador pinta el area que queda al descubierto cuando el scroll rebota
+ * —arrastrar mas alla del principio o del final, tipico del telefono— con el
+ * fondo del elemento raiz, no con el del contenedor que uno ve. El preflight de
+ * Tailwind no fija ninguno, asi que sin estas reglas el rebote descubre el
+ * blanco por defecto del navegador aunque la pantalla sea azul oscura.
+ */
+html {
+  /* gray-50: el fondo del shell autenticado (AppLayout). */
+  background-color: #f9fafb;
+}
+
+/*
+ * Las pantallas publicas pintan un degradado oscuro. Puesto en el raiz, el
+ * navegador lo propaga al lienzo y extiende sus colores de borde sobre el area
+ * del rebote: arriba sigue el azul claro, abajo el oscuro. Vive aca y no en
+ * AuthLayout justamente porque un div anidado no alcanza al lienzo.
+ */
+html:has(.auth-canvas) {
+  /* Color y degradado por separado, no el atajo `background`: el atajo repone
+     `background-color` a transparente y dejaria el raiz sin color solido debajo
+     del degradado. */
+  background-color: #091336;
+  background-image: linear-gradient(135deg, #1a2f6e 0%, #0d1b4b 60%, #091336 100%);
+}
+
+/**
  * CB-114 — Respeto de `prefers-reduced-motion`.
  *
  * Se aplica de forma global en vez de utilidad por utilidad: cubre tambien las
