@@ -193,7 +193,7 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
             {/* Duración + Notas */}
             <View style={m.card}>
               <View style={{ gap: 10 }}>
-                <Text style={m.sectionTitle}>Duración <Text style={m.optional}>(opcional)</Text></Text>
+                <Text style={m.sectionTitle}>Duración de interacción <Text style={m.optional}>(opcional)</Text></Text>
                 <View style={m.durationRow}>
                   <TextInput
                     style={m.durationInput}
