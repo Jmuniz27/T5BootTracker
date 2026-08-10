@@ -29,12 +29,14 @@ const AVATAR_COLORS = [
   'bg-indigo-500',
 ]
 
+// Alineado con los colores de estado de mobile (STATUS_CONFIG en la app):
+// Nuevo=amarillo, Calificado=azul, Interesado=verde, Convertido=morado.
 const STATUS_COLORS = {
-  NEW: 'bg-gray-100 text-gray-500',
+  NEW: 'bg-yellow-100 text-yellow-700',
   QUALIFIED: 'bg-blue-100 text-blue-700',
-  INTERESTED: 'bg-yellow-100 text-yellow-700',
+  INTERESTED: 'bg-green-100 text-green-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
-  CONVERTED: 'bg-green-100 text-green-700',
+  CONVERTED: 'bg-purple-100 text-purple-700',
   DISCARDED: 'bg-slate-200 text-slate-600',
 }
 
