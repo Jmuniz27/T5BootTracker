@@ -207,6 +207,12 @@ class TestConvertLead:
         assert Enrollment.objects.filter(bootcamper=existing, bootcamp=program).exists()
 
     def test_convert_lead_email_conflict_non_bootcamper(self, db, salesperson_user, program):
+        """El email que se teclea al convertir es de otro rol.
+
+        El lead en sí tiene un email distinto y limpio (LeadWriteSerializer
+        ya bloquea crear uno con email de staff — CB-345); el conflicto acá
+        es el que se escribe en el formulario de conversión, no el del lead.
+        """
         CustomUser.objects.create_user(
             email='admin.conflict@test.com', password='testpass123',
             first_name='Admin', last_name='Conflict',
@@ -214,7 +220,7 @@ class TestConvertLead:
         )
         lead = Lead.objects.create(
             name='Test Conflict', phone='0995555555',
-            email='admin.conflict@test.com',
+            email='lead.limpio@test.com',
             status=Lead.Status.QUALIFIED,
             owner=salesperson_user,
         )
@@ -225,6 +231,28 @@ class TestConvertLead:
         }, format='json')
         assert resp.status_code == 409
         assert resp.json()['code'] == 'EMAIL_CONFLICT'
+
+    def test_convert_lead_lead_email_conflict_non_bootcamper(self, db, salesperson_user, program):
+        """CB-345: si el email DEL LEAD mismo es de staff, se corta antes,
+        con su propio código — cubre datos previos al fix de creación."""
+        CustomUser.objects.create_user(
+            email='admin.conflict2@test.com', password='testpass123',
+            first_name='Admin', last_name='Conflict',
+            role=CustomUser.Role.ADMINISTRATOR,
+        )
+        lead = Lead.objects.create(
+            name='Test Conflict', phone='0995555556',
+            email='admin.conflict2@test.com',
+            status=Lead.Status.QUALIFIED,
+            owner=salesperson_user,
+        )
+        client = make_client(salesperson_user)
+        resp = client.post(CONVERT_URL.format(id=lead.id), {
+            'cedula': '1713175071', 'program_id': str(program.id),
+            'email': 'admin.conflict2@test.com',
+        }, format='json')
+        assert resp.status_code == 409
+        assert resp.json()['code'] == 'LEAD_EMAIL_CONFLICT'
 
     def test_convert_lead_sends_celery_task(self, db, salesperson_user, program):
         lead = Lead.objects.create(

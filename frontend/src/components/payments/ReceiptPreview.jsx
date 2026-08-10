@@ -18,14 +18,25 @@ export default function ReceiptPreview({ url, type }) {
   }
   if (type === 'pdf') {
     return (
-      <object data={url} type="application/pdf" className="w-full h-full rounded-lg">
-        <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm gap-2 p-4 text-center">
-          No se puede previsualizar el PDF aquí.
+      <>
+        <object data={url} type="application/pdf" className="hidden sm:block w-full h-full rounded-lg">
+          <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm gap-2 p-4 text-center">
+            No se puede previsualizar el PDF aquí.
+            <a href={url} target="_blank" rel="noopener noreferrer" className="text-[#213A8E] font-medium hover:underline">
+              Abrir comprobante en pestaña nueva
+            </a>
+          </div>
+        </object>
+        {/* Los navegadores móviles no muestran PDFs embebidos y tampoco caen al
+            contenido alternativo del <object>: dejan un rectángulo gris vacío,
+            sin forma de llegar al documento. */}
+        <div className="sm:hidden flex flex-col items-center justify-center h-full gap-2 p-4 text-center text-sm text-gray-500">
+          Vista previa no disponible en el móvil.
           <a href={url} target="_blank" rel="noopener noreferrer" className="text-[#213A8E] font-medium hover:underline">
-            Abrir comprobante en pestaña nueva
+            Abrir el PDF
           </a>
         </div>
-      </object>
+      </>
     )
   }
   return (

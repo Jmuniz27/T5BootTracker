@@ -94,6 +94,10 @@ class LeadListSerializer(serializers.ModelSerializer):
     bootcamper_verification_status = serializers.CharField(
         source='bootcamper.verification_status', read_only=True, allow_null=True, default=None,
     )
+    # El dashboard web arma "Ver lead" con el objeto del listado (no pide el
+    # detalle), así que necesita el perfil acá para mostrar el estado de la
+    # cuenta (Invitado/Pendiente/Verificado) y habilitar "Marcar como verificado".
+    bootcamper_profile = BootcamperSummarySerializer(source='bootcamper', read_only=True)
 
     class Meta:
         model = Lead
@@ -104,7 +108,7 @@ class LeadListSerializer(serializers.ModelSerializer):
             'last_note', 'days_assigned',
             'owner', 'owner_name', 'assigned_at', 'created_at',
             'discard_reason', 'discard_reason_display', 'discard_detail', 'discarded_at',
-            'bootcamper', 'bootcamper_verification_status',
+            'bootcamper', 'bootcamper_verification_status', 'bootcamper_profile',
         )
 
     def get_days_assigned(self, obj):
@@ -179,6 +183,24 @@ class LeadWriteSerializer(serializers.ModelSerializer):
     def validate_phone(self, value):
         if not value or not value.strip():
             raise serializers.ValidationError('El teléfono no puede estar vacío.')
+        return value
+
+    def validate_email(self, value):
+        # CB-345: sin esto, nada impedía crear un lead con el correo de un
+        # miembro del staff — el lead quedaba visible con su nombre en la
+        # lista de convertidos aunque la conversión en sí la rechace después
+        # (services.convert_lead_to_bootcamper, EMAIL_CONFLICT). Se corta acá,
+        # antes de que el lead llegue a existir. Un email de un BOOTCAMPER
+        # existente sigue permitido: es el flujo normal de alguien recurrente.
+        if not value:
+            return value
+        conflicting = CustomUser.objects.filter(email=value).exclude(
+            role=CustomUser.Role.BOOTCAMPER,
+        ).exists()
+        if conflicting:
+            raise serializers.ValidationError(
+                'Este correo pertenece a un miembro del equipo, no puede usarse para un lead.'
+            )
         return value
 
     def validate_status(self, value):

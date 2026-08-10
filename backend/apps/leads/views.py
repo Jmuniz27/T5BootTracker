@@ -58,7 +58,9 @@ class LeadListCreateView(APIView):
         # el orden. El reporte de leads las necesita a las dos: la clienta mide
         # el abandono por la distancia entre ambas.
         earliest = latest.order_by('created_at')
-        return Lead.objects.select_related('bootcamper').annotate(
+        # bootcamper__verified_by: lo lee BootcamperSummarySerializer.verified_by_name
+        # (ahora expuesto en el listado); sin él, un N+1 por cada convertido.
+        return Lead.objects.select_related('bootcamper', 'bootcamper__verified_by').annotate(
             interaction_count=Count('interactions', filter=real),
             last_outcome=Subquery(latest.values('outcome')[:1]),
             last_interaction_at=Subquery(latest.values('created_at')[:1]),

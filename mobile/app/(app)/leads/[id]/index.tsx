@@ -27,6 +27,13 @@ import {
 import type { Lead, LeadStatus } from '../../../../src/types/leads';
 import { copyInvitationLink, shareInvitationLink } from '../../../../src/lib/invitation';
 
+// Estado de la cuenta del bootcamper tras convertir (espejo del badge web).
+const VERIFICATION_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+  INVITED:              { label: 'Invitado',                 bg: '#f1f5f9', color: '#64748b' },
+  PENDING_VERIFICATION: { label: 'Pendiente de verificación', bg: '#fef9c3', color: '#a16207' },
+  VERIFIED:             { label: 'Cuenta activa',            bg: '#dcfce7', color: '#15803d' },
+};
+
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   NEW:            { label: 'Nuevo',         bg: '#fefce8', color: '#a16207' },
   QUALIFIED:      { label: 'Calificado',    bg: '#dbeafe', color: '#1d4ed8' },
@@ -108,6 +115,10 @@ export default function LeadDetailScreen() {
   const isQualified = status === 'QUALIFIED';
   const isConverted = status === 'CONVERTED';
   const isDiscarded = status === 'DISCARDED';
+
+  // Estado de la cuenta del bootcamper (Invitado / Cuenta activa). Solo informativo.
+  const verifStatus = lead.bootcamper_verification_status ?? null;
+  const verifCfg = verifStatus ? VERIFICATION_CONFIG[verifStatus] : null;
 
   function go(path: '/(app)/leads/[id]/log-interaction' | '/(app)/leads/[id]/history' | '/(app)/leads/[id]/convert') {
     router.push({ pathname: path, params: { id: lead.id, name: lead.name, status: lead.status ?? '' } });
@@ -281,6 +292,17 @@ export default function LeadDetailScreen() {
           />
           {isConverted ? (
             <InfoRow icon="ribbon-outline" label="Convertido por" value={lead.owner_name} />
+          ) : null}
+          {isConverted && verifCfg ? (
+            <View style={s.infoRow}>
+              <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
+              <Text style={s.infoLabel}>Cuenta</Text>
+              <View style={{ flex: 1, alignItems: 'flex-start' }}>
+                <View style={[s.verifBadge, { backgroundColor: verifCfg.bg }]}>
+                  <Text style={[s.verifBadgeText, { color: verifCfg.color }]}>{verifCfg.label}</Text>
+                </View>
+              </View>
+            </View>
           ) : null}
           {isDiscarded ? (
             <>
@@ -494,13 +516,13 @@ export default function LeadDetailScreen() {
               {resendLink}
             </Text>
             <View style={s.resultActions}>
-              <TouchableOpacity style={s.actionGhost} onPress={copyResendLink} activeOpacity={0.8}>
-                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={18} color={colors.navy} />
-                <Text style={s.actionGhostText}>{copied ? 'Copiado' : 'Copiar'}</Text>
+              <TouchableOpacity style={[s.actionGhost, s.sheetBtn]} onPress={copyResendLink} activeOpacity={0.8}>
+                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={20} color={colors.navy} />
+                <Text style={[s.actionGhostText, s.sheetBtnText]}>{copied ? 'Copiado' : 'Copiar'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.actionPrimary} onPress={shareResendLink} activeOpacity={0.85}>
-                <Ionicons name="share-social-outline" size={18} color={colors.white} />
-                <Text style={s.actionPrimaryText}>Compartir</Text>
+              <TouchableOpacity style={[s.actionPrimary, s.sheetBtn]} onPress={shareResendLink} activeOpacity={0.85}>
+                <Ionicons name="share-social-outline" size={20} color={colors.white} />
+                <Text style={[s.actionPrimaryText, s.sheetBtnText]}>Compartir</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -587,6 +609,8 @@ const s = StyleSheet.create({
     paddingVertical: 14,
   },
   actionGhostText: { color: colors.navy, fontWeight: '700', fontSize: 15 },
+  verifBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  verifBadgeText: { fontSize: 11, fontWeight: '700' },
   actionDanger: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -611,6 +635,9 @@ const s = StyleSheet.create({
   sheetTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, textAlign: 'center', marginBottom: 16 },
   resultLink: { fontSize: 12, color: colors.textMuted, marginBottom: 16 },
   resultActions: { flexDirection: 'row', gap: 10 },
+  // Botones del sheet de reenvío: full-width y un poco más altos.
+  sheetBtn: { flex: 1, paddingVertical: 16 },
+  sheetBtnText: { fontSize: 16 },
   statusOption: {
     flexDirection: 'row',
     alignItems: 'center',
