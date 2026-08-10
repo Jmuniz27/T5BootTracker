@@ -24,9 +24,12 @@ export default function CheckEmailPage() {
 
   return (
     <AuthLayout backTo="/login" backLabel="Volver al inicio de sesión">
-      <h1 className="text-3xl font-bold text-white mb-2">Revisa tu correo</h1>
-      <p className="text-white/50 text-sm mb-10">
-        Si <span className="font-semibold text-white">{displayEmail}</span> tiene una cuenta
+      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Revisa tu correo</h1>
+      <p className="text-white/50 text-sm mb-6 sm:mb-10">
+        {/* `maskEmail` sólo acorta la parte local: el dominio viaja entero y no
+            tiene espacios donde cortar, así que en pantallas angostas hay que
+            permitir el corte dentro de la palabra o desborda la tarjeta. */}
+        Si <span className="font-semibold text-white break-words">{displayEmail}</span> tiene una cuenta
         registrada, te enviamos un enlace de recuperación. Abre el correo y haz clic en el
         enlace para elegir una nueva contraseña. El enlace expira en 60 minutos.
       </p>
