@@ -162,6 +162,9 @@ export default function ConvertLeadScreen() {
                     <Text style={s.actionPrimaryText}>Compartir</Text>
                   </TouchableOpacity>
                 </View>
+                <Text style={s.expiryNote}>
+                  Expira en 72 horas. Si el correo no llega, comparte este enlace por WhatsApp.
+                </Text>
               </>
             ) : (
               <Text style={s.returningNotice}>
@@ -360,6 +363,7 @@ const s = StyleSheet.create({
   resultEmail: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginTop: 4 },
   resultLink: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   resultActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  expiryNote: { fontSize: 12, color: colors.textMuted, marginTop: 12, lineHeight: 17 },
   returningNotice: { fontSize: 13, color: '#b45309', marginTop: 8 },
   actionPrimary: {
     flex: 1,
