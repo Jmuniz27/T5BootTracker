@@ -10,6 +10,7 @@ import UsersTable from '../components/users/UsersTable'
 import CreateUserModal from '../components/users/CreateUserModal'
 import EditUserModal from '../components/users/EditUserModal'
 import ConfirmToggleModal from '../components/users/ConfirmToggleModal'
+import ChangeCohortModal from '../components/users/ChangeCohortModal'
 import SelfAssignmentToggle from '../components/leads/SelfAssignmentToggle'
 import { ROLE_OPTIONS } from '../components/users/roles'
 import { errorMessage } from '../components/users/apiErrors'
@@ -52,6 +53,7 @@ export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [toggleTarget, setToggleTarget] = useState(null)
+  const [cohortTarget, setCohortTarget] = useState(null) // { bootcamper, enrollment }
   const [toast, setToast] = useState(null)
 
   const showToast = (message, type = 'success') => setToast({ message, type })
@@ -255,6 +257,7 @@ export default function UsersPage() {
           currentUserId={currentUserId}
           onEdit={setEditTarget}
           onToggle={setToggleTarget}
+          onChangeCohort={(bootcamper, enrollment) => setCohortTarget({ bootcamper, enrollment })}
         />
       </div>
 
@@ -281,6 +284,16 @@ export default function UsersPage() {
           isPending={toggleMutation.isPending}
           onConfirm={() => toggleMutation.mutate(toggleTarget)}
           onClose={() => setToggleTarget(null)}
+        />
+      )}
+
+      {cohortTarget && (
+        <ChangeCohortModal
+          bootcamper={cohortTarget.bootcamper}
+          enrollment={cohortTarget.enrollment}
+          onClose={() => setCohortTarget(null)}
+          onSuccess={(msg) => showToast(msg)}
+          onError={(msg) => showToast(msg, 'error')}
         />
       )}
 

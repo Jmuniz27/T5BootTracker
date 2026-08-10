@@ -42,3 +42,17 @@ class IsFinance(BasePermission):
     """
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role == CustomUser.Role.FINANCE
+
+
+class IsStaffNotCoordinator(BasePermission):
+    """Cualquier rol de staff con acceso operativo, salvo Coordinador.
+
+    Pensado para acciones que cualquiera del equipo interno puede necesitar
+    hacer sobre un bootcamper (ej. corregir su cohorte, CB-347) pero que no le
+    corresponden al coordinador — es un contacto informativo del programa, sin
+    login propio en la mayoría de los casos (`CustomUser.Role.COORDINATOR`).
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role in (
+            CustomUser.Role.ADMINISTRATOR, CustomUser.Role.SALESPERSON, CustomUser.Role.FINANCE,
+        )
