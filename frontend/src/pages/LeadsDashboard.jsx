@@ -2253,12 +2253,22 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
             </button>
           )}
           {!isAdmin && !isConverted && !isDiscarded && (isOwned ? (
-            <button
-              onClick={() => { onRelease(); setOpen(false) }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              Desasignar lead
-            </button>
+            <div>
+              <button
+                onClick={() => { onRelease(); setOpen(false) }}
+                disabled={!selfAssignEnabled}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-500 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+              >
+                Desasignar lead
+              </button>
+              {/* Con la auto-asignación apagada el pool lo maneja el Admin: si
+                  soltás el lead no podrías retomarlo, así que tampoco se libera. */}
+              {!selfAssignEnabled && (
+                <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
+                  La asignación la realiza el Administrador.
+                </p>
+              )}
+            </div>
           ) : (
             <div>
               <button

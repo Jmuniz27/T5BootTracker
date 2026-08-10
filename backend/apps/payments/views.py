@@ -1051,6 +1051,17 @@ class BootcamperReleaseView(APIView):
             CustomUser, pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER,
         )
         is_admin = request.user.role == CustomUser.Role.ADMINISTRATOR
+        # Si la auto-asignación está apagada, el pool lo maneja el Administrador:
+        # Finanzas no puede liberar (antes podía soltar uno que después no podría
+        # retomar). El admin sí libera siempre, para corregir un reparto.
+        if not is_admin and not get_bootcamper_self_assignment_enabled():
+            return Response(
+                {
+                    'error': 'La asignación de bootcampers la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not is_admin and bootcamper.finance_owner_id != request.user.id:
             return Response(
                 {

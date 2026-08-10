@@ -78,3 +78,25 @@ class TestSelfAssignGatedByToggle:
         assert resp.json()['code'] == 'SELF_ASSIGNMENT_DISABLED'
         sample_lead.refresh_from_db()
         assert sample_lead.owner is None
+
+    def test_salesperson_can_release_when_enabled(self, db, salesperson_user, sample_lead):
+        sample_lead.owner = salesperson_user
+        sample_lead.save(update_fields=['owner'])
+        client = make_client(salesperson_user)
+        resp = client.patch(f'{LEADS_URL}{sample_lead.id}/release/')
+        assert resp.status_code == 200
+        sample_lead.refresh_from_db()
+        assert sample_lead.owner is None
+
+    def test_salesperson_cannot_release_when_disabled(self, db, salesperson_user, sample_lead):
+        # Con el toggle apagado el pool lo maneja el Admin: si liberara, no podría
+        # retomar el lead. Antes esto se colaba (sólo se bloqueaba asignarse).
+        sample_lead.owner = salesperson_user
+        sample_lead.save(update_fields=['owner'])
+        LeadAssignmentSetting.objects.create(pk=1, self_assign_enabled=False)
+        client = make_client(salesperson_user)
+        resp = client.patch(f'{LEADS_URL}{sample_lead.id}/release/')
+        assert resp.status_code == 403
+        assert resp.json()['code'] == 'SELF_ASSIGNMENT_DISABLED'
+        sample_lead.refresh_from_db()
+        assert sample_lead.owner == salesperson_user
