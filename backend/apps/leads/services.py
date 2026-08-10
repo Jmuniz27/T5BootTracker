@@ -156,7 +156,15 @@ def convert_lead_to_bootcamper(lead, validated_data):
             agreed_price=agreed_price,
         )
     except IntegrityError:
-        raise ConflictError({'error': 'El bootcamper ya está inscrito en este programa.', 'code': 'ALREADY_ENROLLED'})
+        # CB-346: la unicidad es por cohorte, no por programa — este 409 ahora
+        # sólo dispara si ya existe esa combinación exacta (misma cohorte, o
+        # sin cohorte en ambos casos).
+        detail = (
+            'El bootcamper ya está inscrito en esa cohorte de este programa.'
+            if cohort else
+            'El bootcamper ya está inscrito en este programa sin cohorte asignada.'
+        )
+        raise ConflictError({'error': detail, 'code': 'ALREADY_ENROLLED'})
 
     lead.status = Lead.Status.CONVERTED
     lead.program = program
