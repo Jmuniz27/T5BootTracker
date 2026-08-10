@@ -45,4 +45,16 @@ describe('CheckEmailPage', () => {
       )
     );
   });
+
+  it('el título baja un escalón en móvil', () => {
+    renderPage();
+    expect(screen.getByRole('heading')).toHaveClass('text-2xl', 'sm:text-3xl');
+  });
+
+  it('el correo puede cortarse dentro de la palabra', () => {
+    // `maskEmail` sólo acorta la parte local: un dominio largo no trae espacios
+    // donde cortar y desborda la tarjeta en pantallas angostas.
+    renderPage();
+    expect(screen.getByText('tu correo')).toHaveClass('break-words');
+  });
 });

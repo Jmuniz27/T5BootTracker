@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { titulo, dado, y, cuando, entonces } from '../support/gwt.js'
 import { STORAGE_STATE } from '../support/users.js'
+import { desborde, SIN_DESBORDE } from '../support/viewport.js'
 
 /**
  * Comprobaciones de responsive que sólo tienen sentido en un navegador real.
@@ -14,14 +15,6 @@ import { STORAGE_STATE } from '../support/users.js'
  * `seed_dev`. Si alguna vez hace falta crear o aprobar algo, va en otro
  * archivo y bajo el proyecto `chromium`.
  */
-
-/** Cuánto se sale el documento del ancho de la ventana. 0 = no se sale. */
-const desborde = (page) =>
-  page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
-
-// Un píxel de tolerancia: los redondeos subpíxel de Chromium al escalar dan
-// diferencias de <1px que no son un desborde real.
-const SIN_DESBORDE = 1
 
 test.describe('Responsive · el bootcamper opera desde el teléfono', () => {
   test.use({ storageState: STORAGE_STATE.bootcamper })

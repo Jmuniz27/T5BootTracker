@@ -124,7 +124,7 @@ export default function OnboardingPage() {
   if (isLoading) {
     return (
       <AuthLayout>
-        <p className="text-white/50 text-sm text-center py-8">Verificando tu enlace...</p>
+        <p className="text-white/50 text-sm text-center py-6 sm:py-8">Verificando tu enlace...</p>
       </AuthLayout>
     );
   }
@@ -133,8 +133,13 @@ export default function OnboardingPage() {
     const { title, message, showLogin } = onboardingErrorInfo(infoError);
     return (
       <AuthLayout backTo={showLogin ? '/login' : undefined} backLabel="Ir al inicio de sesión">
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">{title}</h1>
-        <p className="text-white/50 text-sm py-4">{message}</p>
+        {/* Centrado como el resto de las pantallas "solo-mensaje" que comparten
+            AuthLayout (ResetPasswordPage sin token, OnboardingSuccessPage). Sin
+            formulario que ancle la lectura, el texto alineado a la izquierda queda
+            pegado al borde mientras el logo va centrado: el desbalance se nota en
+            cuanto la pantalla es angosta. */}
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 text-center">{title}</h1>
+        <p className="text-white/50 text-sm text-center py-4">{message}</p>
         {showLogin && (
           <AuthButton onClick={() => navigate('/login')} className="mt-4">
             Ir al inicio de sesión
