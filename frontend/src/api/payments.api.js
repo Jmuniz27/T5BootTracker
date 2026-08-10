@@ -103,8 +103,38 @@ export const releaseBootcamper = (bootcamperId) =>
 //                                          y lo reenvía (backend: REJECTED → PENDING).
 //   DELETE /payments/my-payments/<id>/  → el bootcamper elimina un pago propio en
 //                                          estado DRAFT (en revisión) o REJECTED.
+// `data` puede ser FormData (para adjuntar un comprobante nuevo) o un objeto
+// plano (solo corrige campos). Axios pone el Content-Type correcto en cada caso.
 export const updateMyPayment = (id, data) =>
   client.patch(`/payments/my-payments/${id}/`, data).then((r) => r.data)
 
 export const deleteMyPayment = (id) =>
   client.delete(`/payments/my-payments/${id}/`).then((r) => r.data)
+
+// ── Finanzas edita un pago pendiente (fecha, cuenta/banco y demás datos) ───────
+export const editPayment = (id, data) =>
+  client.patch(`/payments/${id}/edit/`, data).then((r) => r.data)
+
+// ── Plan de pagos (lo sube Finanzas por bootcamper; el bootcamper solo lo ve) ──
+export const getFinancePaymentPlan = (bootcamperId) =>
+  client.get(`/payments/bootcampers/${bootcamperId}/payment-plan/`).then((r) => r.data)
+
+export const uploadFinancePaymentPlan = (bootcamperId, formData) =>
+  client
+    .put(`/payments/bootcampers/${bootcamperId}/payment-plan/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data)
+
+export const deleteFinancePaymentPlan = (bootcamperId) =>
+  client.delete(`/payments/bootcampers/${bootcamperId}/payment-plan/`).then((r) => r.data)
+
+export const getMyPaymentPlan = () =>
+  client.get('/payments/my-payment-plan/').then((r) => r.data)
+
+// El archivo del plan exige auth (JWT), así que no se puede abrir por <a href>:
+// se baja como blob con el cliente y se genera un object URL para verlo.
+export const getPaymentPlanFileUrl = (planId) =>
+  client
+    .get(`/payments/payment-plans/${planId}/file/`, { responseType: 'blob' })
+    .then((r) => URL.createObjectURL(r.data))

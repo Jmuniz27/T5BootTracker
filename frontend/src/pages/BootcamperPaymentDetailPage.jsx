@@ -6,6 +6,7 @@ import PaymentDetailModal from '../components/PaymentDetailModal'
 import Toast from '../components/Toast'
 import Skeleton from '../components/ui/Skeleton'
 import PaymentHistory from '../components/payments/PaymentHistory'
+import PaymentPlanPanel from '../components/payments/PaymentPlanPanel'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -107,7 +108,7 @@ function ProgressBar({ value, barClass, label, sublabel }) {
 function PaymentRow({ payment, onViewDetail }) {
   const date = payment.ocr_payment_date || payment.submitted_at?.slice(0, 10)
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
+    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 bg-white border border-gray-200 rounded-xl hover:shadow-sm transition-shadow">
       <div>
         <p className="text-sm font-medium text-gray-900">
           {payment.ocr_amount ? fmt(payment.ocr_amount) : 'Sin monto'}
@@ -355,6 +356,9 @@ export default function BootcamperPaymentDetailPage() {
               </p>
             </div>
           )}
+
+          {/* Plan de pagos (lo gestiona Finanzas) */}
+          <PaymentPlanPanel mode="finance" bootcamperId={bootcamperId} />
         </div>
 
         {/* ── Pagos pendientes ── */}
