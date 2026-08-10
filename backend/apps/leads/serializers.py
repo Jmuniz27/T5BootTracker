@@ -185,6 +185,24 @@ class LeadWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('El teléfono no puede estar vacío.')
         return value
 
+    def validate_email(self, value):
+        # CB-345: sin esto, nada impedía crear un lead con el correo de un
+        # miembro del staff — el lead quedaba visible con su nombre en la
+        # lista de convertidos aunque la conversión en sí la rechace después
+        # (services.convert_lead_to_bootcamper, EMAIL_CONFLICT). Se corta acá,
+        # antes de que el lead llegue a existir. Un email de un BOOTCAMPER
+        # existente sigue permitido: es el flujo normal de alguien recurrente.
+        if not value:
+            return value
+        conflicting = CustomUser.objects.filter(email=value).exclude(
+            role=CustomUser.Role.BOOTCAMPER,
+        ).exists()
+        if conflicting:
+            raise serializers.ValidationError(
+                'Este correo pertenece a un miembro del equipo, no puede usarse para un lead.'
+            )
+        return value
+
     def validate_status(self, value):
         # Descartar exige un motivo, y por acá no viaja ninguno. Si se permitiera,
         # el PATCH genérico sería una puerta trasera para cerrar leads sin decir
