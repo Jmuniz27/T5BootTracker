@@ -43,4 +43,10 @@ class IsJelouBot(BasePermission):
 
         # compare_digest y no ==: la comparación de un secreto no debe cortarse
         # en el primer byte distinto.
-        return secrets.compare_digest(provided, expected)
+        #
+        # Se comparan bytes y no str: sobre str, compare_digest exige que ambos
+        # lados sean ASCII y lanza TypeError si no. Django decodifica las
+        # cabeceras como latin-1 (PEP 3333), así que un byte alto en X-Bot-Token
+        # llegaba como str no ASCII, la excepción escapaba de aquí y la ruta
+        # respondía 500 sin credencial en vez del 403 que promete el fail-closed.
+        return secrets.compare_digest(provided.encode('utf-8'), expected.encode('utf-8'))

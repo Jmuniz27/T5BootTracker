@@ -141,3 +141,15 @@ class TestIsJelouBot:
         """Fail-closed: a deployment missing the variable must not open the door."""
         assert IsJelouBot().has_permission(self._request(BOT_TOKEN), None) is False
         assert IsJelouBot().has_permission(self._request(), None) is False
+
+    @override_settings(JELOU_BOT_TOKEN=BOT_TOKEN)
+    def test_denies_a_non_ascii_token_without_raising(self):
+        """Un byte no ASCII en la cabecera tiene que denegar, no reventar.
+
+        `compare_digest` sobre `str` exige que ambos lados sean ASCII y lanza
+        `TypeError` si no lo son. Django decodifica las cabeceras como latin-1
+        (PEP 3333), así que un byte alto llega como `str` no ASCII: la excepción
+        escapaba del permiso y las tres rutas respondían 500 sin credencial, en
+        vez del 403 que el fail-closed promete.
+        """
+        assert IsJelouBot().has_permission(self._request('ñ' + BOT_TOKEN[1:]), None) is False
