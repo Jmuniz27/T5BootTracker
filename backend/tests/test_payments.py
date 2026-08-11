@@ -879,18 +879,21 @@ class TestMyPaymentDelete:
         assert resp.status_code == 204
         assert not Payment.objects.filter(pk=draft_payment.id).exists()
 
-    def test_delete_rejected_payment_succeeds(self, db, converted_bootcamper, rejected_payment):
+    def test_delete_rejected_payment_soft_deletes(self, db, converted_bootcamper, rejected_payment):
+        # Rechazado: Finanzas ya lo vio, así que soft-delete (queda como constancia).
         client = make_client(converted_bootcamper)
         resp = client.delete(MY_PAYMENT_URL.format(id=rejected_payment.id))
         assert resp.status_code == 204
-        assert not Payment.objects.filter(pk=rejected_payment.id).exists()
+        rejected_payment.refresh_from_db()
+        assert rejected_payment.deleted_at is not None
+        assert rejected_payment.deleted_by == converted_bootcamper
 
-    def test_delete_pending_payment_fails(self, db, converted_bootcamper, pending_payment):
+    def test_delete_pending_payment_hard_deletes(self, db, converted_bootcamper, pending_payment):
+        # Pendiente: Finanzas no lo aprobó/rechazó, se borra sin dejar rastro.
         client = make_client(converted_bootcamper)
         resp = client.delete(MY_PAYMENT_URL.format(id=pending_payment.id))
-        assert resp.status_code == 400
-        assert resp.json()["code"] == "NOT_DELETABLE"
-        assert Payment.objects.filter(pk=pending_payment.id).exists()
+        assert resp.status_code == 204
+        assert not Payment.objects.filter(pk=pending_payment.id).exists()
 
     def test_delete_approved_payment_fails(self, db, converted_bootcamper, approved_payment):
         client = make_client(converted_bootcamper)

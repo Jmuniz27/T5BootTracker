@@ -41,13 +41,18 @@ function HistoryRow({ item, onViewDetail }) {
   const amount = item.confirmed_amount ?? item.ocr_amount
 
   return (
-    <li className="bg-white border border-gray-200 rounded-xl p-4">
+    <li className={`bg-white border rounded-xl p-4 ${item.is_deleted ? 'border-gray-200 opacity-80' : 'border-gray-200'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${style.badge}`}>
               {style.label}
             </span>
+            {item.is_deleted && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600">
+                Eliminado por el bootcamper
+              </span>
+            )}
             <span className="text-sm font-semibold text-gray-900">{fmtMoney(amount)}</span>
             {item.confirmed_amount == null && item.ocr_amount != null && (
               <span className="text-xs text-gray-400">(según el comprobante)</span>
@@ -57,6 +62,11 @@ function HistoryRow({ item, onViewDetail }) {
           {item.validated_by_name && (
             <p className="text-xs text-gray-500 mt-0.5">
               Revisado por {item.validated_by_name} · {fmtDate(item.validated_at)}
+            </p>
+          )}
+          {item.is_deleted && item.deleted_by_name && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              Eliminado por {item.deleted_by_name}
             </p>
           )}
         </div>

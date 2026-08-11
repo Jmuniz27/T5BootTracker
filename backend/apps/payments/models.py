@@ -69,6 +69,17 @@ class Payment(models.Model):
     validated_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Soft-delete: cuando el bootcamper elimina un pago que Finanzas ya vio
+    # (pendiente/rechazado), no se borra; queda como "Eliminado por el bootcamper"
+    # en el historial de Finanzas. Un DRAFT que nadie revisó sí se borra de verdad.
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deleted_payments",
+    )
 
     class Meta:
         verbose_name = "Pago"
@@ -77,6 +88,44 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.bootcamper.get_full_name()} — {self.program.name} ({self.get_status_display()})"
+
+    @property
+    def is_deleted(self):
+        return self.deleted_at is not None
+
+
+class PaymentPlan(models.Model):
+    """Plan de pagos que Finanzas sube para un bootcamper (PDF o Excel).
+
+    Uno por bootcamper: subir de nuevo reemplaza el anterior. Lo gestiona
+    Finanzas/Admin; el bootcamper sólo puede verlo.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    bootcamper = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payment_plan",
+    )
+    file = models.FileField(upload_to="payment_plans/%Y/%m/")
+    file_type = models.CharField(max_length=10)  # 'pdf' | 'excel'
+    original_name = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_payment_plans",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Plan de pagos"
+        verbose_name_plural = "Planes de pago"
+
+    def __str__(self):
+        return f"Plan de pagos — {self.bootcamper.get_full_name()}"
 
 
 class BootcamperAssignmentSetting(models.Model):
