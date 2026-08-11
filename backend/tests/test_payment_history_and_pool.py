@@ -91,8 +91,11 @@ class TestHistoryContent:
         assert resp.status_code == 400
         assert resp.json()['code'] == 'BOOTCAMPER_ID_REQUIRED'
 
-    def test_includes_approved_and_rejected(self, db, admin_user, converted_bootcamper, program):
-        """Es el punto del historial: la cola sólo mostraba pendientes."""
+    def test_includes_approved_and_rejected_but_not_pending(
+        self, db, admin_user, converted_bootcamper, program
+    ):
+        """El historial son las solicitudes YA revisadas; los pendientes viven
+        sólo en la cola, no acá."""
         pay(converted_bootcamper, program, Payment.Status.APPROVED, Decimal('200.00'))
         pay(converted_bootcamper, program, Payment.Status.REJECTED,
             rejection_reason='El comprobante no es legible.')
@@ -102,7 +105,7 @@ class TestHistoryContent:
             HISTORY_URL, {'bootcamper_id': str(converted_bootcamper.id)},
         ).json()
 
-        assert {row['status'] for row in rows} == {'APPROVED', 'REJECTED', 'PENDING'}
+        assert {row['status'] for row in rows} == {'APPROVED', 'REJECTED'}
 
     def test_shows_the_rejection_reason(self, db, admin_user, converted_bootcamper, program):
         """Sin esto, tras revisar se perdía el motivo del rechazo."""

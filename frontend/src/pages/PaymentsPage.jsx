@@ -6,6 +6,7 @@ import Skeleton from '../components/ui/Skeleton'
 import Spinner from '../components/ui/Spinner'
 import Toast from '../components/Toast'
 import ReceiptPreview from '../components/payments/ReceiptPreview'
+import PaymentPlanPanel from '../components/payments/PaymentPlanPanel'
 import { flattenUploadError } from '../lib/payments'
 
 const STATUS_LABELS = {
@@ -237,6 +238,8 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   })
   const qc = useQueryClient()
   const [timedOut, setTimedOut] = useState(false)
+  // Al editar un rechazado, el bootcamper puede adjuntar un comprobante nuevo.
+  const [newReceipt, setNewReceipt] = useState(null)
 
   // OCR runs async (Celery). Poll ocr-status until the backend writes the
   // confidence map (set only after the task finishes), then stop.
@@ -273,7 +276,17 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   }, [ocrData])
 
   const mutation = useMutation({
-    mutationFn: (data) => (isEdit ? updateMyPayment(payment.id, data) : confirmPayment(payment.id, data)),
+    mutationFn: (data) => {
+      if (!isEdit) return confirmPayment(payment.id, data)
+      // Con comprobante nuevo va como multipart; si no, como JSON de solo campos.
+      if (newReceipt) {
+        const fd = new FormData()
+        Object.entries(data).forEach(([k, v]) => fd.append(k, v ?? ''))
+        fd.append('receipt_file', newReceipt)
+        return updateMyPayment(payment.id, fd)
+      }
+      return updateMyPayment(payment.id, data)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-payments'] })
       onSuccess()
@@ -366,6 +379,23 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
             <div className="bg-gray-50 border border-gray-200 rounded-xl h-48 sm:h-64 lg:h-[26rem] overflow-hidden">
               <ReceiptPreview url={payment.receipt_file} type={payment.receipt_file_type} />
             </div>
+            {isEdit && (
+              <div className="mt-3">
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-[#213A8E] border border-[#213A8E]/40 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  {newReceipt ? 'Cambiar comprobante' : 'Reemplazar comprobante (foto/PDF)'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    className="hidden"
+                    onChange={(e) => setNewReceipt(e.target.files?.[0] || null)}
+                  />
+                </label>
+                {newReceipt && (
+                  <p className="text-xs text-gray-500 mt-1 truncate">Nuevo: {newReceipt.name}</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Datos extraídos */}
@@ -542,7 +572,8 @@ function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReaso
   if (payment.status === 'APPROVED' || payment.status === 'PENDING') {
     actions.push({ label: 'Ver información', run: onView })
   }
-  if (payment.status === 'DRAFT' || payment.status === 'REJECTED') {
+  // Se puede eliminar lo que aún no quedó aprobado: borrador, pendiente o rechazado.
+  if (['DRAFT', 'PENDING', 'REJECTED'].includes(payment.status)) {
     actions.push({ label: 'Eliminar', run: onDelete, danger: true })
   }
 
@@ -911,6 +942,11 @@ export default function PaymentsPage() {
           loading={isLoading || debtLoading}
           className="col-span-2 sm:col-span-1"
         />
+      </div>
+
+      {/* Plan de pagos (lo sube Finanzas; el bootcamper solo lo consulta) */}
+      <div className="mb-6">
+        <PaymentPlanPanel mode="bootcamper" />
       </div>
 
       {/* Payment History */}
