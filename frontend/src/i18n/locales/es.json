@@ -13,6 +13,39 @@
     "welcome": "Bienvenido, ",
     "logout": "Cerrar sesión"
   },
+  "leads": {
+    "status": {
+      "NEW": "Nuevo",
+      "QUALIFIED": "Calificado",
+      "INTERESTED": "Interesado",
+      "NOT_INTERESTED": "No interesado",
+      "CONVERTED": "Convertido",
+      "DISCARDED": "Descartado"
+    },
+    "statusFilterLabel": "Estado",
+    "allStatuses": "Todos los estados",
+    "changeStatus": "Cambiar estado",
+    "interactionType": {
+      "CALL": "Llamada",
+      "WHATSAPP": "WhatsApp",
+      "EMAIL": "Email",
+      "VISIT": "Visita",
+      "NOTE": "Nota"
+    },
+    "outcome": {
+      "CALL_AGAIN": "Llamar de nuevo",
+      "SEND_INFO": "Enviar información",
+      "SCHEDULE_VISIT": "Agendar visita",
+      "AWAIT_REPLY": "Esperar respuesta",
+      "SPEAK_COORDINATOR": "Hablar coordinador"
+    },
+    "verification": {
+      "INVITED": "Invitado",
+      "PENDING_VERIFICATION": "Pendiente de verificación",
+      "VERIFIED": "Cuenta activa"
+    },
+    "converted": "Convertido"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "agenda": "Agenda",

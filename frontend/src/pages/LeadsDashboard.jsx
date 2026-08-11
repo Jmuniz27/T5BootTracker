@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import ExportMenu from '../components/ExportMenu'
 import { LEAD_REPORT_COLUMNS, SOURCE_LABELS, STATUS_LABELS } from '../lib/leadsReport'
 import { assignmentLabel, DISCARD_REASONS } from '../lib/leadDisplay'
@@ -40,21 +41,11 @@ const STATUS_COLORS = {
   DISCARDED: 'bg-slate-200 text-slate-600',
 }
 
-const INTERACTION_TYPE_LABELS = {
-  CALL: 'Llamada',
-  WHATSAPP: 'WhatsApp',
-  EMAIL: 'Email',
-  VISIT: 'Visita',
-  NOTE: 'Nota',
-}
-
-const OUTCOME_LABELS = {
-  CALL_AGAIN: 'Llamar de nuevo',
-  SEND_INFO: 'Enviar información',
-  SCHEDULE_VISIT: 'Agendar visita',
-  AWAIT_REPLY: 'Esperar respuesta',
-  SPEAK_COORDINATOR: 'Hablar coordinador',
-}
+// Estados y resultados conocidos: las etiquetas visibles se traducen por i18n
+// (leads.status / leads.outcome / leads.interactionType). Los valores del
+// reporte/exportación siguen en lib/leadsReport.js (paso aparte).
+const LEAD_STATUSES = ['NEW', 'QUALIFIED', 'INTERESTED', 'NOT_INTERESTED', 'CONVERTED', 'DISCARDED']
+const LEAD_OUTCOMES = ['CALL_AGAIN', 'SEND_INFO', 'SCHEDULE_VISIT', 'AWAIT_REPLY', 'SPEAK_COORDINATOR']
 
 const OUTCOME_COLORS = {
   CALL_AGAIN: 'bg-blue-50 text-blue-600',
@@ -64,28 +55,30 @@ const OUTCOME_COLORS = {
   SPEAK_COORDINATOR: 'bg-blue-50 text-blue-600',
 }
 
+// Devuelve la etiqueta traducida del estado, con fallback al resultado y al valor crudo.
+function leadStatusLabel(t, status, lastOutcome) {
+  if (LEAD_STATUSES.includes(status)) return t(`leads.status.${status}`)
+  if (LEAD_OUTCOMES.includes(lastOutcome)) return t(`leads.outcome.${lastOutcome}`)
+  return status
+}
+
 // Badge usa status como fuente de verdad; lastOutcome solo como fallback visual si status no tiene label
 function LeadStatusBadge({ status, lastOutcome }) {
+  const { t } = useTranslation()
   if (status === 'CONVERTED') {
     return (
       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-        Convertido
+        {t('leads.status.CONVERTED')}
       </span>
     )
   }
-  const label = STATUS_LABELS[status] ?? OUTCOME_LABELS[lastOutcome] ?? status
+  const label = leadStatusLabel(t, status, lastOutcome)
   const color = STATUS_COLORS[status] ?? OUTCOME_COLORS[lastOutcome] ?? 'bg-gray-100 text-gray-500'
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
       {label}
     </span>
   )
-}
-
-const VERIFICATION_LABELS = {
-  INVITED: 'Invitado',
-  PENDING_VERIFICATION: 'Pendiente de verificación',
-  VERIFIED: 'Cuenta activa',
 }
 
 const VERIFICATION_COLORS = {
@@ -95,8 +88,9 @@ const VERIFICATION_COLORS = {
 }
 
 function VerificationBadge({ status }) {
+  const { t } = useTranslation()
   if (!status) return null
-  const label = VERIFICATION_LABELS[status] ?? status
+  const label = VERIFICATION_COLORS[status] ? t(`leads.verification.${status}`) : status
   const color = VERIFICATION_COLORS[status] ?? 'bg-gray-100 text-gray-500'
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
@@ -250,6 +244,7 @@ function SkeletonRow() {
 // ─── View History Modal ───────────────────────────────────────────────────────
 
 function ViewHistoryModal({ lead, onClose }) {
+  const { t } = useTranslation()
   const [editTarget, setEditTarget] = useState(null)
   const { data: interactions = [], isLoading } = useQuery({
     queryKey: ['interactions', lead.id],
@@ -297,7 +292,7 @@ function ViewHistoryModal({ lead, onClose }) {
                 {/* Tipo + estrellas + duración */}
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="text-sm font-medium text-gray-900">
-                    {INTERACTION_TYPE_LABELS[interaction.interaction_type]}
+                    {t(`leads.interactionType.${interaction.interaction_type}`)}
                   </span>
                   {interaction.interest_level != null && interaction.interest_level > 0 && (
                     <span className="inline-flex items-center gap-0.5 text-xs text-amber-500 font-semibold">
@@ -320,7 +315,7 @@ function ViewHistoryModal({ lead, onClose }) {
                 {/* Badges: outcome (gris) + estado resultante + próxima acción (azul) */}
                 <div className="flex items-center gap-1.5 flex-wrap mb-1">
                   <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">
-                    {OUTCOME_LABELS[interaction.outcome]}
+                    {t(`leads.outcome.${interaction.outcome}`)}
                   </span>
                   {/* En qué quedó el lead tras esta interacción (#325). Se pinta
                       con los mismos colores del estado en la grilla, para que
@@ -332,7 +327,7 @@ function ViewHistoryModal({ lead, onClose }) {
                         STATUS_COLORS[interaction.lead_status] ?? 'bg-gray-100 text-gray-600'
                       }`}
                     >
-                      → {interaction.lead_status_display ?? STATUS_LABELS[interaction.lead_status]}
+                      → {LEAD_STATUSES.includes(interaction.lead_status) ? t(`leads.status.${interaction.lead_status}`) : (interaction.lead_status_display ?? interaction.lead_status)}
                     </span>
                   ) : (
                     // Las interacciones anteriores a este campo no se pudieron
@@ -1389,6 +1384,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
 // ─── Update Status Modal ──────────────────────────────────────────────────────
 
 function UpdateStatusModal({ lead, onClose, onSuccess }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [status, setStatus] = useState(lead.status)
 
@@ -1416,12 +1412,12 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Cambiar estado</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">{t('leads.changeStatus')}</h2>
         <p className="text-sm text-gray-500 mb-6">{lead.name}</p>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-2 mb-6">
-            {Object.entries(STATUS_LABELS).filter(([value]) => !['CONVERTED', 'NEW', 'DISCARDED'].includes(value)).map(([value, label]) => (
+            {LEAD_STATUSES.filter((value) => !['CONVERTED', 'NEW', 'DISCARDED'].includes(value)).map((value) => (
               <button
                 key={value}
                 type="button"
@@ -1432,7 +1428,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
                     : 'border-gray-200 text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                {label}
+                {t(`leads.status.${value}`)}
                 {status === value && (
                   <svg className="w-4 h-4 text-[#1e3164]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -1464,6 +1460,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
 // ─── Filter Dropdown ──────────────────────────────────────────────────────────
 
 function FilterDropdown({ value, onChange }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -1474,8 +1471,8 @@ function FilterDropdown({ value, onChange }) {
   }, [])
 
   const options = [
-    { value: '', label: 'Todos los estados' },
-    ...Object.entries(STATUS_LABELS).map(([v, label]) => ({ value: v, label })),
+    { value: '', label: t('leads.allStatuses') },
+    ...LEAD_STATUSES.map((v) => ({ value: v, label: t(`leads.status.${v}`) })),
   ]
 
   return (
@@ -1489,7 +1486,7 @@ function FilterDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 010 2H4a1 1 0 01-1-1zM6 10a1 1 0 011-1h10a1 1 0 010 2H7a1 1 0 01-1-1zM9 16a1 1 0 011-1h4a1 1 0 010 2h-4a1 1 0 01-1-1z" />
         </svg>
-        {value ? STATUS_LABELS[value] : 'Estado'}
+        {value ? t(`leads.status.${value}`) : t('leads.statusFilterLabel')}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">

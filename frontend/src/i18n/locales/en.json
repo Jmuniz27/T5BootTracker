@@ -13,6 +13,39 @@
     "welcome": "Welcome, ",
     "logout": "Log out"
   },
+  "leads": {
+    "status": {
+      "NEW": "New",
+      "QUALIFIED": "Qualified",
+      "INTERESTED": "Interested",
+      "NOT_INTERESTED": "Not interested",
+      "CONVERTED": "Converted",
+      "DISCARDED": "Discarded"
+    },
+    "statusFilterLabel": "Status",
+    "allStatuses": "All statuses",
+    "changeStatus": "Change status",
+    "interactionType": {
+      "CALL": "Call",
+      "WHATSAPP": "WhatsApp",
+      "EMAIL": "Email",
+      "VISIT": "Visit",
+      "NOTE": "Note"
+    },
+    "outcome": {
+      "CALL_AGAIN": "Call again",
+      "SEND_INFO": "Send information",
+      "SCHEDULE_VISIT": "Schedule visit",
+      "AWAIT_REPLY": "Await reply",
+      "SPEAK_COORDINATOR": "Talk to coordinator"
+    },
+    "verification": {
+      "INVITED": "Invited",
+      "PENDING_VERIFICATION": "Pending verification",
+      "VERIFIED": "Active account"
+    },
+    "converted": "Converted"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "agenda": "Schedule",
