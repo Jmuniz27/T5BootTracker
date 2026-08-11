@@ -8,6 +8,11 @@
     "retry": "Try again.",
     "language": "Language"
   },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, ",
+    "logout": "Log out"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "agenda": "Schedule",
