@@ -1679,6 +1679,7 @@ function VendorFilterDropdown({ value, onChange }) {
 // ─── Resend Invitation Modal ────────────────────────────────────────────────
 
 function ResendInvitationModal({ lead, onClose }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [copied, setCopied] = useState(false)
 
@@ -1691,20 +1692,19 @@ function ResendInvitationModal({ lead, onClose }) {
 
   const errorMsg = resendMutation.error
     ? resendMutation.error.response?.status === 429
-      ? 'Demasiados reenvíos en poco tiempo. Intenta de nuevo más tarde.'
-      : (resendMutation.error.response?.data?.error ?? 'No pudimos reenviar la invitación. Intenta de nuevo.')
+      ? t('leads.resendModal.tooMany')
+      : (resendMutation.error.response?.data?.error ?? t('leads.resendModal.error'))
     : null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Reenviar invitación</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">{t('leads.resendModal.title')}</h2>
 
         {!resendMutation.data && !resendMutation.isPending && (
           <>
             <p className="text-sm text-gray-500 mb-6">
-              Se generará un link nuevo para <span className="font-semibold text-gray-800">{lead.name}</span> y el
-              anterior dejará de funcionar.
+              {t('leads.resendModal.warningPrefix')}<span className="font-semibold text-gray-800">{lead.name}</span>{t('leads.resendModal.warningSuffix')}
             </p>
             {errorMsg && <p className="text-red-500 text-sm mb-4">{errorMsg}</p>}
             <div className="flex gap-3">
@@ -1712,25 +1712,25 @@ function ResendInvitationModal({ lead, onClose }) {
                 onClick={onClose}
                 className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
               >
-                Cancelar
+                {t('leads.common.cancel')}
               </button>
               <button
                 onClick={() => resendMutation.mutate()}
                 className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
               >
-                Reenviar
+                {t('leads.resendModal.resend')}
               </button>
             </div>
           </>
         )}
 
-        {resendMutation.isPending && <p className="text-sm text-gray-500 py-4">Reenviando...</p>}
+        {resendMutation.isPending && <p className="text-sm text-gray-500 py-4">{t('leads.resendModal.resending')}</p>}
 
         {resendMutation.data && (
           <>
-            <p className="text-sm text-gray-500 mb-6">Se generó un link nuevo. El anterior ya no funciona.</p>
+            <p className="text-sm text-gray-500 mb-6">{t('leads.resendModal.newLinkGenerated')}</p>
             <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-1.5 mb-6">
-              <span className="text-gray-500">Nuevo enlace de invitación</span>
+              <span className="text-gray-500">{t('leads.resendModal.newLinkLabel')}</span>
               <div className="flex items-center gap-2">
                 <input
                   readOnly
@@ -1747,7 +1747,7 @@ function ResendInvitationModal({ lead, onClose }) {
                   }}
                   className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
                 >
-                  {copied ? '¡Copiado!' : 'Copiar'}
+                  {copied ? t('leads.resendModal.copied') : t('leads.resendModal.copy')}
                 </button>
               </div>
             </div>
@@ -1755,7 +1755,7 @@ function ResendInvitationModal({ lead, onClose }) {
               onClick={onClose}
               className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
             >
-              Listo
+              {t('leads.resendModal.done')}
             </button>
           </>
         )}
@@ -1812,6 +1812,7 @@ function previewDiscountedPrice(totalCost, discountPercentage) {
 }
 
 function ConvertLeadModal({ lead, onClose, onSuccess }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [cedula, setCedula]   = useState('')
   const [programId, setProgramId] = useState('')
@@ -1866,23 +1867,23 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
       setResult(data)
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'Error al convertir. Intenta de nuevo.'
+      const msg = err.response?.data?.error ?? t('leads.convertModal.serverError')
       setErrors((prev) => ({ ...prev, server: msg }))
     },
   })
 
   const validate = () => {
     const errs = {}
-    if (!cedula.trim()) errs.cedula = 'La cédula o RUC es requerida.'
-    else if (!isValidIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
-    if (!email.trim()) errs.email = 'El email es requerido para enviar la invitación.'
-    if (!programId) errs.programId = 'Selecciona un programa.'
-    else if (!cohortId) errs.cohortId = 'Selecciona una cohorte.'
+    if (!cedula.trim()) errs.cedula = t('leads.convertModal.cedulaRequired')
+    else if (!isValidIdentificacion(cedula)) errs.cedula = t('leads.convertModal.cedulaInvalid')
+    if (!email.trim()) errs.email = t('leads.convertModal.emailRequired')
+    if (!programId) errs.programId = t('leads.convertModal.programRequired')
+    else if (!cohortId) errs.cohortId = t('leads.convertModal.cohortRequired')
     const pct = Number(discount)
     if (discount.trim() === '') {
-      errs.discount = 'Ingresa el descuento (0 si no aplica).'
+      errs.discount = t('leads.convertModal.discountRequired')
     } else if (Number.isNaN(pct) || pct < 0 || pct > 100) {
-      errs.discount = 'El descuento va de 0 a 100.'
+      errs.discount = t('leads.convertModal.discountRange')
     }
     return errs
   }
@@ -1910,19 +1911,19 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">¡Lead convertido!</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">{t('leads.convertModal.successTitle')}</h2>
           <p className="text-sm text-gray-500 mb-6">
-            <span className="font-semibold text-gray-800">{lead.name}</span> ahora es Bootcamper.
+            <span className="font-semibold text-gray-800">{lead.name}</span>{t('leads.convertModal.nowBootcamperSuffix')}
           </p>
 
           <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-2 mb-6">
             <div className="flex justify-between">
-              <span className="text-gray-500">Email</span>
+              <span className="text-gray-500">{t('leads.convertModal.emailLabel')}</span>
               <span className="font-medium text-gray-800">{result.email}</span>
             </div>
             {result.invitation_link && (
               <div className="space-y-1.5">
-                <span className="text-gray-500">Enlace de invitación enviado</span>
+                <span className="text-gray-500">{t('leads.convertModal.invitationSent')}</span>
                 <div className="flex items-center gap-2">
                   <input
                     readOnly
@@ -1939,16 +1940,16 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
                     }}
                     className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
                   >
-                    {copied ? '¡Copiado!' : 'Copiar'}
+                    {copied ? t('leads.resendModal.copied') : t('leads.resendModal.copy')}
                   </button>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Si el correo no llega, comparte este link por WhatsApp. Expira en 72 horas.
+                  {t('leads.convertModal.emailFallback')}
                 </p>
               </div>
             )}
             {result.is_returning && (
-              <p className="text-xs text-amber-600 mt-1">⚠ Bootcamper recurrente — se reutilizó la cuenta existente.</p>
+              <p className="text-xs text-amber-600 mt-1">{t('leads.convertModal.returning')}</p>
             )}
           </div>
 
@@ -1956,7 +1957,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             onClick={() => { onSuccess(); onClose() }}
             className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
           >
-            Listo
+            {t('leads.convertModal.done')}
           </button>
         </div>
       </div>
@@ -1973,9 +1974,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Convertir lead</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">{t('leads.convertModal.title')}</h2>
         <p className="text-sm text-gray-500 mb-6">
-          Convirtiendo a <span className="font-semibold text-gray-800">{lead.name}</span> en Bootcamper.
+          {t('leads.convertModal.subtitlePrefix')}<span className="font-semibold text-gray-800">{lead.name}</span>{t('leads.convertModal.subtitleSuffix')}
         </p>
 
         {/* noValidate: con `max` en el descuento, el navegador bloquea el envío
@@ -1986,7 +1987,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Cédula */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cédula / RUC <span className="text-red-500">*</span>
+              {t('leads.convertModal.cedulaLabel')} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -1994,26 +1995,26 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               maxLength={13}
               value={cedula}
               onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
-              placeholder="10 dígitos (cédula) o 13 (RUC)"
+              placeholder={t('leads.convertModal.cedulaPlaceholder')}
               className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${cedulaInputBorderClass(errors.cedula, cedula)}`}
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
             {(cedula.length === 10 || cedula.length === 13) && isValidIdentificacion(cedula) && (
-              <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? 'Cédula válida' : 'RUC válido'}</p>
+              <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? t('leads.convertModal.cedulaValid') : t('leads.convertModal.rucValid')}</p>
             )}
           </div>
 
           {/* Program */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Programa <span className="text-red-500">*</span>
+              {t('leads.convertModal.programLabel')} <span className="text-red-500">*</span>
             </label>
             <CustomSelect
               testId="convert-program"
               value={programId}
               onChange={(val) => setProgramId(val)}
-              placeholder={loadingPrograms ? 'Cargando programas…' : 'Selecciona un programa'}
-              options={programs.map((p) => ({ value: p.id, label: `${p.name} — starts ${p.start_date} · $${p.total_cost}` }))}
+              placeholder={loadingPrograms ? t('leads.convertModal.loadingPrograms') : t('leads.convertModal.selectProgram')}
+              options={programs.map((p) => ({ value: p.id, label: t('leads.convertModal.programOption', { name: p.name, date: p.start_date, cost: p.total_cost }) }))}
             />
             {errors.programId && <p className="text-xs text-red-500 mt-1">{errors.programId}</p>}
           </div>
@@ -2022,12 +2023,12 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {programId && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cohorte <span className="text-red-500">*</span>
+                {t('leads.convertModal.cohortLabel')} <span className="text-red-500">*</span>
               </label>
-              {loadingCohorts && <p className="text-sm text-gray-400">Cargando cohortes…</p>}
+              {loadingCohorts && <p className="text-sm text-gray-400">{t('leads.convertModal.loadingCohorts')}</p>}
               {!loadingCohorts && assignableCohorts.length === 0 && (
                 <p className="text-sm text-gray-400">
-                  Este programa no tiene cohortes próximas ni en curso.
+                  {t('leads.convertModal.noCohorts')}
                 </p>
               )}
               {!loadingCohorts && assignableCohorts.length > 0 && (
@@ -2035,10 +2036,10 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
                   testId="convert-cohort"
                   value={cohortId}
                   onChange={(val) => setCohortId(val)}
-                  placeholder="Selecciona una cohorte"
+                  placeholder={t('leads.convertModal.selectCohort')}
                   options={assignableCohorts.map((c) => ({
                     value: c.id,
-                    label: `Cohorte ${c.number} — ${c.status_label} · inicia ${formatCohortMonth(c.start_month)}`,
+                    label: t('leads.convertModal.cohortOption', { number: c.number, status: c.status_label, month: formatCohortMonth(c.start_month) }),
                   }))}
                 />
               )}
@@ -2049,7 +2050,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Descuento */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="convert-discount">
-              Descuento <span className="text-red-500">*</span> <span className="text-xs text-gray-400 font-normal">(%)</span>
+              {t('leads.convertModal.discountLabel')} <span className="text-red-500">*</span> <span className="text-xs text-gray-400 font-normal">(%)</span>
             </label>
             <input
               id="convert-discount"
@@ -2065,9 +2066,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             {errors.discount && <p className="text-xs text-red-500 mt-1">{errors.discount}</p>}
             {selectedProgram && (
               <p className="text-xs text-gray-500 mt-1">
-                Pagará <span className="font-semibold text-gray-700">{formatMoney(discountedPrice)}</span>
+                {t('leads.convertModal.willPayPrefix')}<span className="font-semibold text-gray-700">{formatMoney(discountedPrice)}</span>
                 {Number(discount) > 0 && (
-                  <> en vez de <span className="line-through">{formatMoney(selectedProgram.total_cost)}</span></>
+                  <>{t('leads.convertModal.insteadOf')}<span className="line-through">{formatMoney(selectedProgram.total_cost)}</span></>
                 )}
               </p>
             )}
@@ -2076,7 +2077,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Email */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email <span className="text-red-500">*</span>
+              {t('leads.convertModal.emailLabel')} <span className="text-red-500">*</span>
             </label>
             <input
               type="email"
@@ -2090,12 +2091,12 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
           {/* Phone */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.convertModal.phoneLabel')}</label>
             <input
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="10 dígitos"
+              placeholder={t('leads.convertModal.phonePlaceholder')}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
@@ -2118,7 +2119,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               disabled={convertMutation.isPending}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
-              {convertMutation.isPending ? 'Convirtiendo…' : 'Convertir a Bootcamper'}
+              {convertMutation.isPending ? t('leads.convertModal.converting') : t('leads.convertModal.submit')}
             </button>
           </div>
         </form>
