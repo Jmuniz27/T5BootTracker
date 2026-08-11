@@ -68,7 +68,23 @@
       "PENDING_VERIFICATION": "Pending verification",
       "VERIFIED": "Active account"
     },
-    "converted": "Converted"
+    "converted": "Converted",
+    "actions": {
+      "menuAria": "Actions for {{name}}",
+      "view": "View lead",
+      "viewHistory": "View history",
+      "logInteraction": "Log interaction",
+      "edit": "Edit lead",
+      "changeStatus": "Change status",
+      "discard": "Discard lead",
+      "restore": "Reactivate lead",
+      "convert": "Convert lead",
+      "convertHint": "First change the status to “Qualified”.",
+      "resendInvitation": "Resend invitation",
+      "release": "Unassign lead",
+      "assign": "Assign to me",
+      "assignmentByAdmin": "Assignment is handled by the Administrator."
+    }
   },
   "nav": {
     "dashboard": "Dashboard",

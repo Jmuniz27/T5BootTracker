@@ -2123,6 +2123,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
 function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit, onResendInvitation, onDiscard, onRestore }) {
+  const { t } = useTranslation()
   const isConverted = lead.status === 'CONVERTED'
   const isDiscarded = lead.status === 'DISCARDED'
   // Editable si no está convertido y es propio, disponible (sin dueño) o soy admin.
@@ -2167,7 +2168,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
       <button
         ref={btnRef}
         onClick={handleToggle}
-        aria-label={`Acciones para ${lead.name}`}
+        aria-label={t('leads.actions.menuAria', { name: lead.name })}
         className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2185,20 +2186,20 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
             onClick={() => { onView(); setOpen(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            Ver lead
+            {t('leads.actions.view')}
           </button>
           <button
             onClick={() => { onViewHistory(); setOpen(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            Ver historial
+            {t('leads.actions.viewHistory')}
           </button>
           {isOwned && !isConverted && (
             <button
               onClick={() => { onLogInteraction(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Registrar interacción
+              {t('leads.actions.logInteraction')}
             </button>
           )}
           {canEdit && (
@@ -2206,7 +2207,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onEdit(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Editar lead
+              {t('leads.actions.edit')}
             </button>
           )}
           {isOwned && !isConverted && (
@@ -2214,7 +2215,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onChangeStatus(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Cambiar estado
+              {t('leads.actions.changeStatus')}
             </button>
           )}
           {(isOwned || isAdmin) && !isConverted && !isDiscarded && (
@@ -2222,7 +2223,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onDiscard(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Descartar lead
+              {t('leads.actions.discard')}
             </button>
           )}
           {isDiscarded && (
@@ -2230,7 +2231,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onRestore(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-[#1e3164] font-medium hover:bg-blue-50"
             >
-              Reactivar lead
+              {t('leads.actions.restore')}
             </button>
           )}
           {isOwned && !isConverted && !isDiscarded && (
@@ -2242,11 +2243,11 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
                 disabled={lead.status !== 'QUALIFIED'}
                 className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
               >
-                Convertir lead
+                {t('leads.actions.convert')}
               </button>
               {lead.status !== 'QUALIFIED' && (
                 <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
-                  Primero cambia el estado a “Calificado”.
+                  {t('leads.actions.convertHint')}
                 </p>
               )}
             </div>
@@ -2256,7 +2257,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onResendInvitation(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Reenviar invitación
+              {t('leads.actions.resendInvitation')}
             </button>
           )}
           {!isAdmin && !isConverted && !isDiscarded && (isOwned ? (
@@ -2266,13 +2267,13 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
                 disabled={!selfAssignEnabled}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-500 disabled:hover:bg-transparent disabled:cursor-not-allowed"
               >
-                Desasignar lead
+                {t('leads.actions.release')}
               </button>
               {/* Con la auto-asignación apagada el pool lo maneja el Admin: si
                   soltás el lead no podrías retomarlo, así que tampoco se libera. */}
               {!selfAssignEnabled && (
                 <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
-                  La asignación la realiza el Administrador.
+                  {t('leads.actions.assignmentByAdmin')}
                 </p>
               )}
             </div>
@@ -2283,11 +2284,11 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
                 disabled={!selfAssignEnabled}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-500 disabled:hover:bg-transparent disabled:cursor-not-allowed"
               >
-                Asignarme
+                {t('leads.actions.assign')}
               </button>
               {!selfAssignEnabled && (
                 <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
-                  La asignación la realiza el Administrador.
+                  {t('leads.actions.assignmentByAdmin')}
                 </p>
               )}
             </div>

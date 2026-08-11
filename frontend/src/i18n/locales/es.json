@@ -68,7 +68,23 @@
       "PENDING_VERIFICATION": "Pendiente de verificación",
       "VERIFIED": "Cuenta activa"
     },
-    "converted": "Convertido"
+    "converted": "Convertido",
+    "actions": {
+      "menuAria": "Acciones para {{name}}",
+      "view": "Ver lead",
+      "viewHistory": "Ver historial",
+      "logInteraction": "Registrar interacción",
+      "edit": "Editar lead",
+      "changeStatus": "Cambiar estado",
+      "discard": "Descartar lead",
+      "restore": "Reactivar lead",
+      "convert": "Convertir lead",
+      "convertHint": "Primero cambia el estado a “Calificado”.",
+      "resendInvitation": "Reenviar invitación",
+      "release": "Desasignar lead",
+      "assign": "Asignarme",
+      "assignmentByAdmin": "La asignación la realiza el Administrador."
+    }
   },
   "nav": {
     "dashboard": "Dashboard",
