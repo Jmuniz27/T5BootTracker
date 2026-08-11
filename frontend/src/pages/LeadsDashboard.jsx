@@ -2343,6 +2343,7 @@ function sortLeads(leads, sortKey) {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function LeadsDashboard() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const isAdmin = currentUser?.role === 'ADMINISTRATOR'
@@ -2564,11 +2565,11 @@ export default function LeadsDashboard() {
           showToast('Lead creado y asignado a ti.')
           if (!isAdmin) setActiveTab('mine')
         } catch {
-          showToast('Lead creado, pero no se pudo asignar. Búscalo en Disponibles.', 'error')
+          showToast(t('leads.toast.createdNotAssigned'), 'error')
           if (!isAdmin) setActiveTab('available')
         }
       } else {
-        showToast('Lead creado. Puedes encontrarlo en Disponibles.')
+        showToast(t('leads.toast.createdAvailable'))
         if (!isAdmin) setActiveTab('available')
       }
       await queryClient.invalidateQueries({ queryKey: ['leads'] })
@@ -2586,7 +2587,7 @@ export default function LeadsDashboard() {
         setDuplicateWarning({ duplicate: data.duplicate, payload: variables })
         return
       }
-      const msg = data?.error ?? 'No se pudo crear el lead.'
+      const msg = data?.error ?? t('leads.toast.createError')
       showToast(msg, 'error')
     },
   })
@@ -2596,7 +2597,7 @@ export default function LeadsDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
-          Dashboard de Leads
+          {t('leads.dashboardTitle')}
         </h1>
         <div className="flex items-center gap-2">
         <ExportMenu
@@ -2615,7 +2616,7 @@ export default function LeadsDashboard() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Nuevo lead
+          {t('leads.newLead')}
         </button>
         </div>
       </div>
@@ -2624,24 +2625,24 @@ export default function LeadsDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 lg:mb-8">
         {isAdmin ? (
           <>
-            <StatCard label="Total leads"  value={statsPagination.all_leads_count ?? allLeads.length} loading={isLoading} />
-            <StatCard label="Asignados"    value={statsPagination.assigned_leads_count ?? assignedLeads.length} loading={isLoading} />
-            <StatCard label="Sin asignar"  value={statsPagination.unassigned_leads_count ?? unassignedLeads.length} loading={isLoading} />
-            <StatCard label="Conversiones" value={conversions} loading={isLoading} />
+            <StatCard label={t('leads.stats.totalLeads')}  value={statsPagination.all_leads_count ?? allLeads.length} loading={isLoading} />
+            <StatCard label={t('leads.stats.assigned')}    value={statsPagination.assigned_leads_count ?? assignedLeads.length} loading={isLoading} />
+            <StatCard label={t('leads.stats.unassigned')}  value={statsPagination.unassigned_leads_count ?? unassignedLeads.length} loading={isLoading} />
+            <StatCard label={t('leads.stats.conversions')} value={conversions} loading={isLoading} />
           </>
         ) : (
           <>
-            <StatCard label="Total leads"    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
-            <StatCard label="Asignados a mí" value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
-            <StatCard label="Conversiones"   value={conversions} loading={isLoading} />
-            <StatCard label="No interesados" value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
+            <StatCard label={t('leads.stats.totalLeads')}    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
+            <StatCard label={t('leads.stats.assignedToMe')} value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
+            <StatCard label={t('leads.stats.conversions')}   value={conversions} loading={isLoading} />
+            <StatCard label={t('leads.stats.notInterested')} value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
           </>
         )}
       </div>
 
       {/* Leads Table */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">Leads</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">{t('leads.tableTitle')}</h2>
 
         {/* Search + controls */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-5">
@@ -2652,7 +2653,7 @@ export default function LeadsDashboard() {
             <input
               type="text"
               data-testid="lead-search"
-              placeholder="Buscar por nombre, email o teléfono"
+              placeholder={t('leads.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -2709,7 +2710,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Asignados ({pagination.assigned_leads_count ?? assignedLeads.length})
+                {t('leads.tabs.assigned')} ({pagination.assigned_leads_count ?? assignedLeads.length})
               </button>
               <button
                 data-testid="tab-unassigned"
@@ -2720,7 +2721,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Sin asignar ({pagination.unassigned_leads_count ?? unassignedLeads.length})
+                {t('leads.tabs.unassigned')} ({pagination.unassigned_leads_count ?? unassignedLeads.length})
               </button>
               <button
                 data-testid="tab-converted-admin"
@@ -2731,7 +2732,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
+                {t('leads.tabs.converted')} ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           ) : (
@@ -2745,7 +2746,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Mis leads ({pagination.my_leads_count ?? activeMyLeads.length})
+                {t('leads.tabs.myLeads')} ({pagination.my_leads_count ?? activeMyLeads.length})
               </button>
               <button
                 data-testid="tab-available"
@@ -2756,7 +2757,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Disponibles ({pagination.available_leads_count ?? availableLeads.length})
+                {t('leads.tabs.available')} ({pagination.available_leads_count ?? availableLeads.length})
               </button>
               <button
                 data-testid="tab-converted"
@@ -2767,7 +2768,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
+                {t('leads.tabs.converted')} ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           )}

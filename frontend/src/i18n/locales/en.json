@@ -25,6 +25,30 @@
     "statusFilterLabel": "Status",
     "allStatuses": "All statuses",
     "changeStatus": "Change status",
+    "dashboardTitle": "Leads Dashboard",
+    "tableTitle": "Leads",
+    "newLead": "New lead",
+    "searchPlaceholder": "Search by name, email or phone",
+    "stats": {
+      "totalLeads": "Total leads",
+      "assigned": "Assigned",
+      "unassigned": "Unassigned",
+      "conversions": "Conversions",
+      "assignedToMe": "Assigned to me",
+      "notInterested": "Not interested"
+    },
+    "tabs": {
+      "assigned": "Assigned",
+      "unassigned": "Unassigned",
+      "converted": "Converted",
+      "myLeads": "My leads",
+      "available": "Available"
+    },
+    "toast": {
+      "createdNotAssigned": "Lead created, but couldn't be assigned. Find it in Available.",
+      "createdAvailable": "Lead created. You can find it in Available.",
+      "createError": "Could not create the lead."
+    },
     "interactionType": {
       "CALL": "Call",
       "WHATSAPP": "WhatsApp",

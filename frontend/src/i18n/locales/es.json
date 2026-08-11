@@ -25,6 +25,30 @@
     "statusFilterLabel": "Estado",
     "allStatuses": "Todos los estados",
     "changeStatus": "Cambiar estado",
+    "dashboardTitle": "Dashboard de Leads",
+    "tableTitle": "Leads",
+    "newLead": "Nuevo lead",
+    "searchPlaceholder": "Buscar por nombre, email o teléfono",
+    "stats": {
+      "totalLeads": "Total leads",
+      "assigned": "Asignados",
+      "unassigned": "Sin asignar",
+      "conversions": "Conversiones",
+      "assignedToMe": "Asignados a mí",
+      "notInterested": "No interesados"
+    },
+    "tabs": {
+      "assigned": "Asignados",
+      "unassigned": "Sin asignar",
+      "converted": "Convertidos",
+      "myLeads": "Mis leads",
+      "available": "Disponibles"
+    },
+    "toast": {
+      "createdNotAssigned": "Lead creado, pero no se pudo asignar. Búscalo en Disponibles.",
+      "createdAvailable": "Lead creado. Puedes encontrarlo en Disponibles.",
+      "createError": "No se pudo crear el lead."
+    },
     "interactionType": {
       "CALL": "Llamada",
       "WHATSAPP": "WhatsApp",
