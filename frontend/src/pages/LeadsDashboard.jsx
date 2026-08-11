@@ -549,6 +549,7 @@ const NEXT_ACTION_OPTIONS = [
 ]
 
 function LogInteractionModal({ lead, onClose, onSuccess }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState(LOG_EMPTY)
   const [errors, setErrors] = useState({})
@@ -576,7 +577,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     const start = new Date()
     const end = new Date(start.getTime() + 30 * 60000)
     setMeetingInitial({
-      title: `Seguimiento: ${lead.name}`,
+      title: t('leads.interactionForm.meetingTitle', { name: lead.name }),
       description: form.notes ?? '',
       start: toDatetimeLocal(start),
       end: toDatetimeLocal(end),
@@ -595,45 +596,45 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Registrar interacción</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">{t('leads.interactionForm.title')}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Tipo + Resultado */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tipo de interacción <span className="text-red-500">*</span>
+                {t('leads.interactionForm.typeLabel')} <span className="text-red-500">*</span>
               </label>
               <CustomSelect
                 testId="interaction-type"
                 value={form.interaction_type}
                 onChange={(val) => setForm((prev) => ({ ...prev, interaction_type: val }))}
-                placeholder="Seleccionar"
+                placeholder={t('leads.common.select')}
                 options={[
-                  { value: 'CALL', label: 'Llamada' },
-                  { value: 'WHATSAPP', label: 'WhatsApp' },
-                  { value: 'EMAIL', label: 'Email' },
-                  { value: 'VISIT', label: 'Visita' },
-                  { value: 'NOTE', label: 'Nota' },
+                  { value: 'CALL', label: t('leads.interactionType.CALL') },
+                  { value: 'WHATSAPP', label: t('leads.interactionType.WHATSAPP') },
+                  { value: 'EMAIL', label: t('leads.interactionType.EMAIL') },
+                  { value: 'VISIT', label: t('leads.interactionType.VISIT') },
+                  { value: 'NOTE', label: t('leads.interactionType.NOTE') },
                 ]}
               />
               {errors.interaction_type && <p className="text-xs text-red-500 mt-1">{errors.interaction_type}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Resultado <span className="text-red-500">*</span>
+                {t('leads.interactionForm.outcomeLabel')} <span className="text-red-500">*</span>
               </label>
               <CustomSelect
                 testId="interaction-outcome"
                 value={form.outcome}
                 onChange={(val) => setForm((prev) => ({ ...prev, outcome: val }))}
-                placeholder="Seleccionar"
+                placeholder={t('leads.common.select')}
                 options={[
-                  { value: 'CALL_AGAIN', label: 'Llamar de nuevo' },
-                  { value: 'SEND_INFO', label: 'Enviar información' },
-                  { value: 'SCHEDULE_VISIT', label: 'Agendar visita' },
-                  { value: 'AWAIT_REPLY', label: 'Esperar respuesta' },
-                  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+                  { value: 'CALL_AGAIN', label: t('leads.outcome.CALL_AGAIN') },
+                  { value: 'SEND_INFO', label: t('leads.outcome.SEND_INFO') },
+                  { value: 'SCHEDULE_VISIT', label: t('leads.outcome.SCHEDULE_VISIT') },
+                  { value: 'AWAIT_REPLY', label: t('leads.outcome.AWAIT_REPLY') },
+                  { value: 'SPEAK_COORDINATOR', label: t('leads.outcome.SPEAK_COORDINATOR') },
                 ]}
               />
               {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
@@ -644,7 +645,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
           <div className="grid grid-cols-2 gap-4 items-start">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nivel de interés <span className="text-xs text-gray-500 font-normal">(opcional)</span>
+                {t('leads.interactionForm.interestLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span>
               </label>
               <InteractiveStarRating
                 value={form.interest_level}
@@ -654,7 +655,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span>
+                {t('leads.interactionForm.durationLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span>
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -663,10 +664,10 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
                   max="999"
                   value={form.duration_minutes}
                   onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="ej. 5"
+                  placeholder={t('leads.interactionForm.durationPlaceholder')}
                   className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
                 />
-                <span className="text-sm text-gray-500">min</span>
+                <span className="text-sm text-gray-500">{t('leads.interactionForm.minutesUnit')}</span>
               </div>
             </div>
           </div>
@@ -674,13 +675,13 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
           {/* Notas */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notas <span className="text-xs text-gray-500 font-normal">(opcional)</span>
+              {t('leads.interactionForm.notesLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span>
             </label>
             <textarea
               data-testid="interaction-notes"
               value={form.notes}
               onChange={set('notes')}
-              placeholder="¿Cómo fue la interacción?"
+              placeholder={t('leads.interactionForm.notesPlaceholder')}
               rows={3}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"
             />
@@ -688,7 +689,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
           {mutation.isError && (
             <p className="text-xs text-red-500 text-center">
-              {mutation.error?.response?.data?.error ?? 'No se pudo guardar la interacción.'}
+              {mutation.error?.response?.data?.error ?? t('leads.interactionForm.saveError')}
             </p>
           )}
 
@@ -698,7 +699,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
             disabled={mutation.isPending}
             className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
           >
-            {mutation.isPending ? 'Guardando...' : 'Guardar interacción'}
+            {mutation.isPending ? t('leads.interactionForm.saving') : t('leads.interactionForm.submit')}
           </button>
 
           <button
@@ -706,7 +707,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
             onClick={openMeeting}
             className="w-full py-2.5 rounded-xl border border-[#213A8E] text-[#213A8E] font-semibold hover:bg-[#213A8E]/5 transition-colors"
           >
-            + Agendar reunión
+            {t('leads.interactionForm.scheduleMeeting')}
           </button>
         </form>
       </div>
@@ -737,6 +738,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
  * causal por sí sola no dice nada.
  */
 function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [reason, setReason] = useState('')
   const [detail, setDetail] = useState('')
@@ -747,22 +749,22 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-      onSuccess(`${lead.name} salió del listado de seguimiento.`)
+      onSuccess(t('leads.discardModal.success', { name: lead.name }))
       onClose()
     },
     onError: (err) => {
-      onError(err.response?.data?.error ?? 'No se pudo descartar el lead.')
+      onError(err.response?.data?.error ?? t('leads.discardModal.error'))
     },
   })
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!reason) {
-      setError('Elige un motivo.')
+      setError(t('leads.discardModal.chooseReason'))
       return
     }
     if (reason === 'OTHER' && !detail.trim()) {
-      setError('Con el motivo "Otro" hay que escribir el detalle.')
+      setError(t('leads.discardModal.otherRequiresDetail'))
       return
     }
     setError('')
@@ -772,23 +774,23 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[440px] shadow-xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} aria-label="Cerrar" className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
+        <button onClick={onClose} aria-label={t('leads.common.closeAria')} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Descartar lead</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">{t('leads.discardModal.title')}</h2>
         <p className="text-sm text-gray-500 mb-1">{lead.name}</p>
         <p className="text-xs text-gray-500 mb-5">
-          Sale del listado de seguimiento. Se puede reactivar después.
+          {t('leads.discardModal.subtitle')}
         </p>
 
         {/* noValidate: la validación propia está en español; la nativa del
             navegador saldría en inglés y taparía este formulario. */}
         <form onSubmit={handleSubmit} noValidate>
           <fieldset className="space-y-2 mb-4">
-            <legend className="text-sm font-medium text-gray-700 mb-2">Motivo</legend>
+            <legend className="text-sm font-medium text-gray-700 mb-2">{t('leads.discardModal.reasonLegend')}</legend>
             {DISCARD_REASONS.map((option) => (
               <label
                 key={option.value}
@@ -806,20 +808,20 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
                   onChange={() => setReason(option.value)}
                   className="accent-[#1e3164]"
                 />
-                {option.label}
+                {t(`leads.discardReason.${option.value}`)}
               </label>
             ))}
           </fieldset>
 
           <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="discard-detail">
-            Detalle {reason === 'OTHER' ? <span className="text-red-500">*</span> : <span className="text-gray-500 font-normal">(opcional)</span>}
+            {t('leads.discardModal.detailLabel')} {reason === 'OTHER' ? <span className="text-red-500">*</span> : <span className="text-gray-500 font-normal">{t('leads.common.optional')}</span>}
           </label>
           <textarea
             id="discard-detail"
             rows={3}
             value={detail}
             onChange={(e) => setDetail(e.target.value)}
-            placeholder="Qué pasó con este lead"
+            placeholder={t('leads.discardModal.detailPlaceholder')}
             className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
           />
 
@@ -831,14 +833,14 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
               onClick={onClose}
               className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button
               type="submit"
               disabled={mutation.isPending}
               className="flex-1 py-2.5 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
             >
-              {mutation.isPending ? 'Descartando…' : 'Descartar'}
+              {mutation.isPending ? t('leads.discardModal.submitting') : t('leads.discardModal.submit')}
             </button>
           </div>
         </form>
@@ -848,6 +850,7 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
 }
 
 function ViewLeadModal({ lead, onClose }) {
+  const { t } = useTranslation()
   const { data: interactions = [] } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -876,13 +879,13 @@ function ViewLeadModal({ lead, onClose }) {
           <div>
             {rating !== null ? (
               <>
-                <p className="text-xs text-gray-500 mb-0.5">Última calificación:</p>
+                <p className="text-xs text-gray-500 mb-0.5">{t('leads.viewModal.lastRating')}</p>
                 <p className="text-3xl font-bold text-gray-900 leading-none mb-1">{rating.toFixed(1)}</p>
                 <StarRating value={rating} />
-                <p className="text-xs text-gray-500 mt-1">Basado en última interacción</p>
+                <p className="text-xs text-gray-500 mt-1">{t('leads.viewModal.basedOnLast')}</p>
               </>
             ) : (
-              <p className="text-sm text-gray-500 mt-4">Sin interacciones aún</p>
+              <p className="text-sm text-gray-500 mt-4">{t('leads.viewModal.noInteractions')}</p>
             )}
           </div>
         </div>
@@ -891,7 +894,7 @@ function ViewLeadModal({ lead, onClose }) {
 
         <div className="space-y-3 text-sm">
           <div>
-            <p className="font-semibold text-gray-700 mb-1">Contacto:</p>
+            <p className="font-semibold text-gray-700 mb-1">{t('leads.viewModal.contact')}</p>
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-gray-600">
                 <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -908,14 +911,14 @@ function ViewLeadModal({ lead, onClose }) {
             </div>
           </div>
           <div>
-            <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
+            <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.source')}</p>
             <p className="text-gray-600">{SOURCE_LABELS[lead.source] || lead.source}</p>
           </div>
           {lead.status === 'DISCARDED' && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="font-semibold text-gray-700 mb-0.5">Motivo del descarte:</p>
+              <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.discardReason')}</p>
               <p className="text-gray-600" data-testid="lead-discard-reason">
-                {lead.discard_reason_display || 'Sin motivo registrado'}
+                {lead.discard_reason_display || t('leads.viewModal.noReason')}
               </p>
               {lead.discard_detail && (
                 <p className="text-gray-600 mt-1">{lead.discard_detail}</p>
@@ -923,31 +926,31 @@ function ViewLeadModal({ lead, onClose }) {
             </div>
           )}
           <div>
-            <p className="font-semibold text-gray-700 mb-0.5">Asignación:</p>
+            <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.assignment')}</p>
             <p className="text-gray-600" data-testid="lead-assignment">{assignmentLabel(lead)}</p>
           </div>
           {lastInteraction?.notes && (
             <div>
-              <p className="font-semibold text-gray-700 mb-0.5">Última nota:</p>
+              <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.lastNote')}</p>
               <p className="text-gray-600">{lastInteraction.notes}</p>
             </div>
           )}
           {lead.program_interest && (
             <div>
-              <p className="font-semibold text-gray-700 mb-0.5">Interés en programa:</p>
+              <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.programInterest')}</p>
               <p className="text-gray-600">{lead.program_interest}</p>
             </div>
           )}
           {isConverted && profile && (
             <div className="pt-3 border-t border-gray-100">
               <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold text-gray-700">Datos del bootcamper:</p>
+                <p className="font-semibold text-gray-700">{t('leads.viewModal.bootcamperData')}</p>
                 <VerificationBadge status={profile.verification_status} />
               </div>
               <div className="text-gray-600 space-y-0.5">
                 <p>{profile.first_name} {profile.last_name}</p>
                 <p>{profile.email}</p>
-                {profile.cedula && <p>Cédula/RUC: {profile.cedula}</p>}
+                {profile.cedula && <p>{t('leads.viewModal.idLabel', { value: profile.cedula })}</p>}
                 {profile.phone && <p>{profile.phone}</p>}
               </div>
             </div>
@@ -961,29 +964,29 @@ function ViewLeadModal({ lead, onClose }) {
 // ─── Release Lead Modal ───────────────────────────────────────────────────────
 
 function ReleaseLeadModal({ onKeep, onRelease, isLoading }) {
+  const { t } = useTranslation()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onKeep}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[420px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-gray-900 mb-3">
-          ¿Seguro que quieres desasignar este lead?
+          {t('leads.releaseModal.title')}
         </h2>
         <p className="text-sm text-gray-500 mb-8">
-          El lead quedará disponible para otros vendedores.
-          Perderás acceso al historial de interacciones.
+          {t('leads.releaseModal.subtitle')}
         </p>
         <button
           onClick={onKeep}
           disabled={isLoading}
           className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold mb-3 hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
         >
-          Conservar lead
+          {t('leads.releaseModal.keep')}
         </button>
         <button
           onClick={onRelease}
           disabled={isLoading}
           className="w-full py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
         >
-          {isLoading ? 'Desasignando…' : 'Desasignar lead'}
+          {isLoading ? t('leads.releaseModal.releasing') : t('leads.releaseModal.release')}
         </button>
       </div>
     </div>
@@ -993,12 +996,13 @@ function ReleaseLeadModal({ onKeep, onRelease, isLoading }) {
 // ─── Admin Reassign Modal (CR-005) ────────────────────────────────────────────
 
 function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
+  const { t } = useTranslation()
   const [ownerId, setOwnerId] = useState('')
   const hasOwner = Boolean(lead.owner)
 
-  let submitLabel = hasOwner ? 'Liberar' : 'Asignar'
-  if (isLoading) submitLabel = 'Guardando…'
-  else if (ownerId) submitLabel = hasOwner ? 'Reasignar' : 'Asignar'
+  let submitLabel = hasOwner ? t('leads.reassignModal.release') : t('leads.reassignModal.assign')
+  if (isLoading) submitLabel = t('leads.reassignModal.saving')
+  else if (ownerId) submitLabel = hasOwner ? t('leads.reassignModal.reassign') : t('leads.reassignModal.assign')
 
   const { data } = useQuery({
     queryKey: ['users', 'salespersons'],
@@ -1013,21 +1017,21 @@ function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[440px] shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-gray-900 mb-1">
-          {hasOwner ? 'Liberar o reasignar lead' : 'Asignar lead'}
+          {hasOwner ? t('leads.reassignModal.titleRelease') : t('leads.reassignModal.titleAssign')}
         </h2>
         <p className="text-sm text-gray-500 mb-5">
-          Vendedor actual: <strong>{lead.owner_name ?? 'Sin asignar'}</strong>
+          {t('leads.reassignModal.currentOwner')} <strong>{lead.owner_name ?? t('leads.common.unassigned')}</strong>
         </p>
 
         <label className="block text-xs font-medium text-gray-600 mb-1.5">
-          {hasOwner ? 'Reasignar a (opcional)' : 'Asignar a'}
+          {hasOwner ? t('leads.reassignModal.reassignTo') : t('leads.reassignModal.assignTo')}
         </label>
         <select
           value={ownerId}
           onChange={(e) => setOwnerId(e.target.value)}
           className="w-full mb-6 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
         >
-          <option value="">{hasOwner ? 'Liberar al pool (sin asignar)' : 'Seleccionar vendedor'}</option>
+          <option value="">{hasOwner ? t('leads.reassignModal.releaseToPool') : t('leads.reassignModal.selectSalesperson')}</option>
           {assignees.map((u) => (
             <option key={u.id} value={u.id}>{u.full_name}</option>
           ))}
@@ -1039,7 +1043,7 @@ function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
             disabled={isLoading}
             className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
           >
-            Cancelar
+            {t('leads.common.cancel')}
           </button>
           <button
             onClick={() => onSubmit(ownerId || null)}

@@ -84,6 +84,89 @@
       "release": "Desasignar lead",
       "assign": "Asignarme",
       "assignmentByAdmin": "La asignación la realiza el Administrador."
+    },
+    "common": {
+      "cancel": "Cancelar",
+      "optional": "(opcional)",
+      "select": "Seleccionar",
+      "unassigned": "Sin asignar",
+      "closeAria": "Cerrar"
+    },
+    "source": {
+      "MANUAL": "Manual",
+      "INSTAGRAM": "Instagram",
+      "WHATSAPP": "WhatsApp",
+      "LANDING_PAGE": "Landing Page"
+    },
+    "discardReason": {
+      "NO_BUDGET": "Sin presupuesto",
+      "SCHEDULE": "Los horarios no le sirven",
+      "NO_RESPONSE": "No responde / los correos rebotan",
+      "FREE_ONLY": "Sólo busca contenido gratis",
+      "OTHER": "Otro"
+    },
+    "interactionForm": {
+      "title": "Registrar interacción",
+      "typeLabel": "Tipo de interacción",
+      "outcomeLabel": "Resultado",
+      "interestLabel": "Nivel de interés",
+      "durationLabel": "Duración de interacción",
+      "durationPlaceholder": "ej. 5",
+      "minutesUnit": "min",
+      "notesLabel": "Notas",
+      "notesPlaceholder": "¿Cómo fue la interacción?",
+      "saveError": "No se pudo guardar la interacción.",
+      "saving": "Guardando...",
+      "submit": "Guardar interacción",
+      "scheduleMeeting": "+ Agendar reunión",
+      "meetingTitle": "Seguimiento: {{name}}"
+    },
+    "discardModal": {
+      "title": "Descartar lead",
+      "subtitle": "Sale del listado de seguimiento. Se puede reactivar después.",
+      "reasonLegend": "Motivo",
+      "detailLabel": "Detalle",
+      "detailPlaceholder": "Qué pasó con este lead",
+      "chooseReason": "Elige un motivo.",
+      "otherRequiresDetail": "Con el motivo \"Otro\" hay que escribir el detalle.",
+      "success": "{{name}} salió del listado de seguimiento.",
+      "error": "No se pudo descartar el lead.",
+      "submitting": "Descartando…",
+      "submit": "Descartar"
+    },
+    "viewModal": {
+      "lastRating": "Última calificación:",
+      "basedOnLast": "Basado en última interacción",
+      "noInteractions": "Sin interacciones aún",
+      "contact": "Contacto:",
+      "source": "Fuente:",
+      "discardReason": "Motivo del descarte:",
+      "noReason": "Sin motivo registrado",
+      "assignment": "Asignación:",
+      "lastNote": "Última nota:",
+      "programInterest": "Interés en programa:",
+      "bootcamperData": "Datos del bootcamper:",
+      "idLabel": "Cédula/RUC: {{value}}"
+    },
+    "releaseModal": {
+      "title": "¿Seguro que quieres desasignar este lead?",
+      "subtitle": "El lead quedará disponible para otros vendedores. Perderás acceso al historial de interacciones.",
+      "keep": "Conservar lead",
+      "releasing": "Desasignando…",
+      "release": "Desasignar lead"
+    },
+    "reassignModal": {
+      "titleRelease": "Liberar o reasignar lead",
+      "titleAssign": "Asignar lead",
+      "currentOwner": "Vendedor actual:",
+      "reassignTo": "Reasignar a (opcional)",
+      "assignTo": "Asignar a",
+      "releaseToPool": "Liberar al pool (sin asignar)",
+      "selectSalesperson": "Seleccionar vendedor",
+      "release": "Liberar",
+      "assign": "Asignar",
+      "reassign": "Reasignar",
+      "saving": "Guardando…"
     }
   },
   "nav": {

@@ -84,6 +84,89 @@
       "release": "Unassign lead",
       "assign": "Assign to me",
       "assignmentByAdmin": "Assignment is handled by the Administrator."
+    },
+    "common": {
+      "cancel": "Cancel",
+      "optional": "(optional)",
+      "select": "Select",
+      "unassigned": "Unassigned",
+      "closeAria": "Close"
+    },
+    "source": {
+      "MANUAL": "Manual",
+      "INSTAGRAM": "Instagram",
+      "WHATSAPP": "WhatsApp",
+      "LANDING_PAGE": "Landing Page"
+    },
+    "discardReason": {
+      "NO_BUDGET": "No budget",
+      "SCHEDULE": "Schedules don't work for them",
+      "NO_RESPONSE": "No response / emails bounce",
+      "FREE_ONLY": "Only looking for free content",
+      "OTHER": "Other"
+    },
+    "interactionForm": {
+      "title": "Log interaction",
+      "typeLabel": "Interaction type",
+      "outcomeLabel": "Outcome",
+      "interestLabel": "Interest level",
+      "durationLabel": "Interaction duration",
+      "durationPlaceholder": "e.g. 5",
+      "minutesUnit": "min",
+      "notesLabel": "Notes",
+      "notesPlaceholder": "How did the interaction go?",
+      "saveError": "Could not save the interaction.",
+      "saving": "Saving...",
+      "submit": "Save interaction",
+      "scheduleMeeting": "+ Schedule meeting",
+      "meetingTitle": "Follow-up: {{name}}"
+    },
+    "discardModal": {
+      "title": "Discard lead",
+      "subtitle": "It leaves the follow-up list. It can be reactivated later.",
+      "reasonLegend": "Reason",
+      "detailLabel": "Detail",
+      "detailPlaceholder": "What happened with this lead",
+      "chooseReason": "Choose a reason.",
+      "otherRequiresDetail": "With the \"Other\" reason you must write the detail.",
+      "success": "{{name}} left the follow-up list.",
+      "error": "Could not discard the lead.",
+      "submitting": "Discarding…",
+      "submit": "Discard"
+    },
+    "viewModal": {
+      "lastRating": "Last rating:",
+      "basedOnLast": "Based on last interaction",
+      "noInteractions": "No interactions yet",
+      "contact": "Contact:",
+      "source": "Source:",
+      "discardReason": "Discard reason:",
+      "noReason": "No reason recorded",
+      "assignment": "Assignment:",
+      "lastNote": "Last note:",
+      "programInterest": "Program interest:",
+      "bootcamperData": "Bootcamper data:",
+      "idLabel": "ID/RUC: {{value}}"
+    },
+    "releaseModal": {
+      "title": "Are you sure you want to unassign this lead?",
+      "subtitle": "The lead will become available to other salespeople. You'll lose access to the interaction history.",
+      "keep": "Keep lead",
+      "releasing": "Unassigning…",
+      "release": "Unassign lead"
+    },
+    "reassignModal": {
+      "titleRelease": "Release or reassign lead",
+      "titleAssign": "Assign lead",
+      "currentOwner": "Current salesperson:",
+      "reassignTo": "Reassign to (optional)",
+      "assignTo": "Assign to",
+      "releaseToPool": "Release to pool (unassigned)",
+      "selectSalesperson": "Select salesperson",
+      "release": "Release",
+      "assign": "Assign",
+      "reassign": "Reassign",
+      "saving": "Saving…"
     }
   },
   "nav": {
