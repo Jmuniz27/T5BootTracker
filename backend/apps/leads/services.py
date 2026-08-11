@@ -2,7 +2,7 @@
 import logging
 from decimal import Decimal
 
-from django.db import transaction, IntegrityError
+from django.db import connection, transaction, IntegrityError
 from django.db.models import F, Func, Q, Value
 from django.utils.timezone import now
 from rest_framework.exceptions import ValidationError, NotFound, APIException
@@ -304,6 +304,134 @@ def find_lead_by_phone(raw):
         return exact
 
     return candidates.filter(phone_digits__endswith=subscriber).order_by('-created_at').first()
+
+
+# --- Superficie del bot de WhatsApp (#279) -----------------------------------
+
+def resolve_program_by_name(name):
+    """Return the active Program ``name`` unambiguously refers to, or None.
+
+    El bot manda el nombre que eligió la persona en el chat ("Data Science"), que
+    no tiene por qué coincidir con cómo se llama el programa en la base ("Data
+    Science Enero 2026"). Se intenta el nombre exacto y, si no, una coincidencia
+    parcial **sólo cuando es única**: con dos programas activos que contengan el
+    texto, elegir uno sería adivinar. Sin resolución la FK queda vacía y el texto
+    igual se conserva en ``program_interest``.
+    """
+    name = (name or '').strip()
+    if not name:
+        return None
+
+    active = Program.objects.filter(is_active=True)
+    exact = active.filter(name__iexact=name).first()
+    if exact is not None:
+        return exact
+
+    partial = list(active.filter(name__icontains=name)[:2])
+    return partial[0] if len(partial) == 1 else None
+
+
+def bot_lookup_payload(raw_phone):
+    """Build the dedup answer the bot's conversational flow branches on.
+
+    ``owner`` sale en cadena vacía —nunca ``None``— cuando el lead no tiene
+    vendedor. El flujo evalúa "no vacío" sobre el valor ya interpolado en una
+    plantilla, y un ``None`` se interpola como el texto ``None``, que daría
+    verdadero y mandaría todo lead sin asignar por la rama de "ya asignado".
+    Por lo mismo el resto de campos van vacíos, no nulos, cuando no hay lead.
+    """
+    lead = find_lead_by_phone(raw_phone)
+    if lead is None:
+        return {'exists': False, 'status': '', 'owner': '', 'lead_id': ''}
+
+    return {
+        'exists': True,
+        'status': lead.status,
+        'owner': lead.owner.get_full_name() if lead.owner else '',
+        'lead_id': str(lead.id),
+    }
+
+
+@transaction.atomic
+def bot_create_lead(validated_data):
+    """Create a WhatsApp lead in the unassigned pool. Returns ``(lead, created)``.
+
+    Con un teléfono que ya existe devuelve el lead existente en vez de crear otro:
+    el bot vuelve a pasar por aquí cada vez que la misma persona retoma la
+    conversación, y duplicar sería el defecto que este endpoint evita.
+    """
+    # Comprobar-y-luego-crear no basta: el bot reintenta por diseño, y dos
+    # peticiones del mismo teléfono a la vez pasan las dos por el SELECT antes de
+    # que ninguna haya insertado. Medido, duplicaba hasta 4 veces el mismo número.
+    # El lock es por número de abonado y se libera al cerrar la transacción, así
+    # que serializa sólo a quien compite por ese teléfono; no hay fila que
+    # bloquear porque justamente todavía no existe.
+    #
+    # No se usa un índice único: el alta manual desde el dashboard admite
+    # teléfonos repetidos a propósito (find_duplicate_lead sólo avisa), y la tabla
+    # en producción ya los tiene.
+    subscriber = normalize_phone(validated_data['phone'])[-SUBSCRIBER_DIGITS:]
+    if subscriber:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', [subscriber])
+
+    existing = find_lead_by_phone(validated_data['phone'])
+    if existing is not None:
+        return existing, False
+
+    program_interest = validated_data.get('program_interest', '')
+    lead = Lead.objects.create(
+        name=validated_data['name'],
+        phone=validated_data['phone'],
+        email=validated_data.get('email') or None,
+        program_interest=program_interest,
+        program=resolve_program_by_name(program_interest),
+        source=Lead.Source.WHATSAPP,
+        status=Lead.Status.NEW,
+    )
+    logger.info('Lead creado por el bot de WhatsApp: %s', lead.id)
+    return lead, True
+
+
+def bot_update_lead_by_phone(raw_phone, validated_data):
+    """Apply the bot's fields to the lead ``raw_phone`` resolves to, or None.
+
+    Un lead convertido queda fuera de alcance. Detrás hay un bootcamper con
+    matrícula y pagos, y su correo es por donde le llegan las notificaciones de
+    cobro y la invitación de onboarding: dejar que el bot lo reescriba deja a
+    cualquiera que conozca el teléfono pisando ese canal. El resto de la
+    superficie ya parte de no confiar en el llamador —el backend fija ``source``,
+    ``status`` y ``owner``—, y esto es lo mismo. La vista lo responde como
+    ``updated: false``, que es una rama que el flujo del bot ya maneja.
+    """
+    lead = find_lead_by_phone(raw_phone)
+    if lead is None:
+        return None
+
+    if lead.status == Lead.Status.CONVERTED:
+        logger.warning('El bot intentó actualizar un lead ya convertido: %s', lead.id)
+        return None
+
+    updated_fields = []
+    if 'name' in validated_data:
+        lead.name = validated_data['name']
+        updated_fields.append('name')
+    if 'email' in validated_data:
+        lead.email = validated_data['email'] or None
+        updated_fields.append('email')
+    if 'program_interest' in validated_data:
+        lead.program_interest = validated_data['program_interest']
+        updated_fields.append('program_interest')
+        program = resolve_program_by_name(lead.program_interest)
+        if program is not None:
+            lead.program = program
+            updated_fields.append('program')
+
+    if updated_fields:
+        updated_fields.append('updated_at')
+        lead.save(update_fields=updated_fields)
+
+    return lead
 
 
 @transaction.atomic
