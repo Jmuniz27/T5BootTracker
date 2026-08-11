@@ -90,6 +90,7 @@ export async function createLead(payload: LeadInput) {
 export interface Program {
   id: string;
   name: string;
+  total_cost?: string;
 }
 
 export async function getPrograms(): Promise<Program[]> {
@@ -144,4 +145,41 @@ export interface ResendInvitationResponse {
 export async function resendInvitation(leadId: string): Promise<ResendInvitationResponse> {
   const { data } = await api.post(`/leads/${leadId}/resend-invitation/`);
   return data;
+}
+
+// El vendedor dueño (o admin) confirma que los datos que el bootcamper completó
+// en el onboarding son correctos. Solo válido si está en PENDING_VERIFICATION.
+// Devuelve el lead actualizado (LeadDetailSerializer).
+export async function verifyBootcamper(leadId: string) {
+  const { data } = await api.patch(`/leads/${leadId}/verify-bootcamper/`);
+  return data;
+}
+
+// ─── Descartar / reactivar lead ───────────────────────────────────────────────
+
+export interface DiscardPayload {
+  reason: string; // NO_BUDGET | SCHEDULE | NO_RESPONSE | FREE_ONLY | OTHER
+  detail?: string;
+}
+
+export async function discardLead(leadId: string, payload: DiscardPayload) {
+  const { data } = await api.patch(`/leads/${leadId}/discard/`, payload);
+  return data;
+}
+
+export async function restoreLead(leadId: string) {
+  const { data } = await api.patch(`/leads/${leadId}/restore/`);
+  return data;
+}
+
+// Con la auto-asignación apagada, el pool lo maneja el Administrador: el vendedor
+// no puede ni asignarse ni liberar. El default (true) evita bloquear la UI si la
+// consulta falla.
+export async function getSelfAssignmentEnabled(): Promise<boolean> {
+  try {
+    const { data } = await api.get('/leads/settings/self-assignment/');
+    return data?.self_assign_enabled ?? true;
+  } catch {
+    return true;
+  }
 }

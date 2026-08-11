@@ -3,7 +3,15 @@ export type LeadStatus =
   | 'QUALIFIED'
   | 'INTERESTED'
   | 'NOT_INTERESTED'
-  | 'CONVERTED';
+  | 'CONVERTED'
+  | 'DISCARDED';
+
+export type DiscardReason =
+  | 'NO_BUDGET'
+  | 'SCHEDULE'
+  | 'NO_RESPONSE'
+  | 'FREE_ONLY'
+  | 'OTHER';
 
 export interface Lead {
   id: string;
@@ -23,6 +31,22 @@ export interface Lead {
   created_at: string;
   bootcamper?: string | null;
   bootcamper_verification_status?: 'INVITED' | 'PENDING_VERIFICATION' | 'VERIFIED' | null;
+  discard_reason?: DiscardReason | '' | null;
+  discard_reason_display?: string | null;
+  discard_detail?: string | null;
+  discarded_at?: string | null;
+  bootcamper_profile?: BootcamperProfile | null;
+}
+
+export interface BootcamperProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  cedula: string | null;
+  verification_status: 'INVITED' | 'PENDING_VERIFICATION' | 'VERIFIED' | null;
+  verified_at: string | null;
+  verified_by_name: string | null;
 }
 
 export interface LeadsResponse {

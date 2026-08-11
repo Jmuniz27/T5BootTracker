@@ -61,7 +61,20 @@ describe('client — refresh flow (WEB-1 / HST-003)', () => {
     await expect(reject401()).rejects.toBeTruthy();
 
     expect(useAuthStore.getState().accessToken).toBeNull();
-    expect(window.location.assign).toHaveBeenCalledWith('/login');
+    // El motivo viaja en la URL: `assign` recarga el documento y el state del
+    // router no sobrevive, así que es lo único que le queda al login para
+    // explicar por qué sacó al usuario.
+    expect(window.location.assign).toHaveBeenCalledWith('/login?expired=1');
+  });
+
+  it('no redirige si la sesión caduca estando ya en el login', async () => {
+    window.location = { pathname: '/login', assign: vi.fn() };
+    refreshSpy.mockRejectedValue(new Error('token_not_valid'));
+
+    await expect(reject401()).rejects.toBeTruthy();
+
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(window.location.assign).not.toHaveBeenCalled();
   });
 
   it('cierra la sesión si no hay refresh token guardado', async () => {

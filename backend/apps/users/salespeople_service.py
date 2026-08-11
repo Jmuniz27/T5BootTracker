@@ -16,11 +16,35 @@ from apps.authentication.models import CustomUser
 from apps.leads.models import Interaction, Lead
 
 
-def list_salespeople_activity():
+def _acotar_por_asignacion(qs, fecha_desde, fecha_hasta):
+    """Recorta la queryset de leads al período pedido (#337).
+
+    Acota por **fecha de asignación** y no por fecha de creación, que es lo que
+    usan los KPIs de analítica. Es una diferencia deliberada: esta vista mide
+    gestión del vendedor, y lo que le corresponde de un lead empieza cuando se
+    lo asignan. Un lead creado en enero y asignado en junio es trabajo de junio.
+
+    Ojo con el efecto de borde: un lead con dueño pero sin `assigned_at` sellado
+    —los anteriores a que se empezara a registrar— queda fuera en cuanto se pide
+    un rango. Sin fechas siguen contando, así que la vista por defecto no cambia.
+    """
+    if fecha_desde:
+        qs = qs.filter(assigned_at__date__gte=fecha_desde)
+    if fecha_hasta:
+        qs = qs.filter(assigned_at__date__lte=fecha_hasta)
+    return qs
+
+
+def list_salespeople_activity(*, fecha_desde=None, fecha_hasta=None):
     """Una fila por vendedor activo, con o sin leads.
 
     Los que no tienen ninguno aparecen en ceros: omitirlos daría la impresión
     de que el vendedor no existe. Los administradores nunca entran.
+
+    Args:
+        fecha_desde, fecha_hasta: acotan por fecha de asignación del lead
+            (ver `_acotar_por_asignacion`). Sin ellas se agrega todo el
+            histórico, que es el comportamiento anterior.
 
     Returns:
         Lista de dicts ordenada por nombre, con `assigned_leads`,
@@ -37,8 +61,9 @@ def list_salespeople_activity():
     counts = {
         row['owner_id']: row
         for row in (
-            Lead.objects
-            .filter(owner__isnull=False)
+            _acotar_por_asignacion(
+                Lead.objects.filter(owner__isnull=False), fecha_desde, fecha_hasta,
+            )
             .values('owner_id')
             .annotate(
                 assigned=Count('id'),
@@ -51,8 +76,10 @@ def list_salespeople_activity():
     # JOIN que repite el lead una vez por interacción e inflaría los conteos de
     # arriba. Acá sólo sobreviven las filas sin interacción, una por lead.
     uncontacted = dict(
-        Lead.objects
-        .filter(owner__isnull=False, interactions__isnull=True)
+        _acotar_por_asignacion(
+            Lead.objects.filter(owner__isnull=False, interactions__isnull=True),
+            fecha_desde, fecha_hasta,
+        )
         .exclude(status=Lead.Status.CONVERTED)
         .values_list('owner_id')
         .annotate(total=Count('id'))

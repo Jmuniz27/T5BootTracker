@@ -3,7 +3,8 @@
 from django.urls import reverse
 from rest_framework import serializers
 from apps.authentication.validators import validate_identificacion
-from .models import BootcamperAssignmentSetting, Payment
+from apps.notifications.services import ALERT_SOURCES
+from .models import BootcamperAssignmentSetting, Payment, PaymentPlan
 from .services import make_receipt_token
 
 MAX_FILE_SIZE_MB = 10
@@ -57,6 +58,8 @@ class PaymentListSerializer(serializers.ModelSerializer):
     program_name = serializers.SerializerMethodField()
     validated_by_name = serializers.SerializerMethodField()
     receipt_file = serializers.SerializerMethodField()
+    is_deleted = serializers.SerializerMethodField()
+    deleted_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
@@ -90,7 +93,18 @@ class PaymentListSerializer(serializers.ModelSerializer):
             "validated_at",
             "submitted_at",
             "updated_at",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by_name",
         )
+
+    def get_is_deleted(self, obj):
+        return obj.deleted_at is not None
+
+    def get_deleted_by_name(self, obj):
+        if obj.deleted_by:
+            return obj.deleted_by.get_full_name()
+        return None
 
     def get_receipt_file(self, obj):
         if not obj.receipt_file:
@@ -122,10 +136,24 @@ class PaymentApproveSerializer(serializers.Serializer):
     )
 
 
+class NotifyCoordinatorSerializer(serializers.Serializer):
+    """Validate the context of a manual alert to the coordinator.
+
+    `source` dice desde qué pantalla se pidió el aviso, para que el correo diga
+    de qué se trata. Se valida contra la lista en vez de ignorar lo desconocido:
+    un valor mal escrito mandaría el correo genérico sin que nadie se entere.
+    """
+
+    source = serializers.ChoiceField(
+        choices=ALERT_SOURCES, required=False, allow_null=True
+    )
+    payment_id = serializers.UUIDField(required=False, allow_null=True)
+
+
 class PaymentRejectSerializer(serializers.Serializer):
     """Validate data required to reject a payment."""
 
-    rejection_reason = serializers.CharField(min_length=1)
+    rejection_reason = serializers.CharField(min_length=1, max_length=300)
 
     def validate_rejection_reason(self, value):
         if not value.strip():
@@ -223,3 +251,55 @@ class BootcamperAssignmentSettingSerializer(serializers.ModelSerializer):
 
     def get_updated_by_name(self, obj):
         return obj.updated_by.get_full_name() if obj.updated_by else None
+
+
+# ── Plan de pagos (lo sube Finanzas por bootcamper) ───────────────────────────
+
+PLAN_ALLOWED = {
+    "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "excel",
+    "application/vnd.ms-excel": "excel",
+}
+PLAN_ALLOWED_EXT = {".pdf": "pdf", ".xlsx": "excel", ".xls": "excel"}
+
+
+class PaymentPlanSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaymentPlan
+        fields = (
+            "id", "bootcamper", "file_type", "original_name",
+            "uploaded_by_name", "uploaded_at", "updated_at", "file_url",
+        )
+
+    def get_uploaded_by_name(self, obj):
+        return obj.uploaded_by.get_full_name() if obj.uploaded_by else None
+
+    def get_file_url(self, obj):
+        return reverse("payment-plan-file", kwargs={"plan_id": obj.id})
+
+
+class PaymentPlanUploadSerializer(serializers.Serializer):
+    """Valida el archivo del plan de pagos (PDF o Excel)."""
+
+    file = serializers.FileField()
+
+    def validate_file(self, file):
+        import os
+
+        detected = PLAN_ALLOWED.get(file.content_type)
+        if detected is None:
+            ext = os.path.splitext(file.name or "")[1].lower()
+            detected = PLAN_ALLOWED_EXT.get(ext)
+            if detected is None:
+                raise serializers.ValidationError(
+                    "Tipo de archivo no permitido. Use PDF o Excel (.xlsx/.xls)."
+                )
+        if file.size > MAX_FILE_SIZE_MB * 1024 * 1024:
+            raise serializers.ValidationError(
+                f"El archivo no puede superar {MAX_FILE_SIZE_MB} MB."
+            )
+        self.file_type = detected
+        return file

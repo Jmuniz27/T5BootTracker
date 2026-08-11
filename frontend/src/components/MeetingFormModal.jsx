@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react'
+import { useModalA11y } from '../hooks/use-modal-a11y'
 
 const EMPTY = { title: '', description: '', start: '', end: '', lead: '', notify_lead: true }
 
 /**
  * Modal reutilizable para crear/editar una reunión (meetings API).
  * Lo usan tanto la Agenda como "Registrar interacción".
+ *
+ * La compuerta `open` vive en este componente y el diálogo en otro aparte:
+ * `useModalA11y` bloquea el scroll del body y atrapa el foco desde que se
+ * monta, y los hooks no admiten un retorno temprano, así que el diálogo sólo
+ * puede existir mientras está abierto.
  */
-export default function MeetingFormModal({
-  open,
+export default function MeetingFormModal({ open, ...props }) {
+  if (!open) return null
+  return <MeetingFormDialog {...props} />
+}
+
+function MeetingFormDialog({
   editingId = null,
   initial,
   leads = [],
@@ -17,17 +27,43 @@ export default function MeetingFormModal({
   onDelete,
   onClose,
 }) {
-  const [form, setForm] = useState(EMPTY)
+  const dialogRef = useModalA11y(onClose)
+  const [form, setForm] = useState(initial ?? EMPTY)
+  const [errors, setErrors] = useState({})
 
+  // Se mantiene la resincronización con `initial`: la Agenda puede cambiar la
+  // reunión que se está editando sin cerrar el modal.
   useEffect(() => {
-    if (open) setForm(initial ?? EMPTY)
-  }, [open, initial])
+    setForm(initial ?? EMPTY)
+    setErrors({})
+  }, [initial])
 
-  const set = (k) => (e) =>
+  const set = (k) => (e) => {
     setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
+    setErrors((prev) => (prev[k] ? { ...prev, [k]: undefined } : prev))
+  }
+
+  function validate() {
+    const errs = {}
+    if (!form.title.trim()) errs.title = 'El título es obligatorio.'
+    if (!form.start) errs.start = 'La fecha de inicio es obligatoria.'
+    if (!form.end) errs.end = 'La fecha de fin es obligatoria.'
+    if (!form.lead) errs.lead = 'Selecciona un lead.'
+    // La fecha de fin no puede ser anterior (ni igual) a la de inicio.
+    if (form.start && form.end && new Date(form.end) <= new Date(form.start)) {
+      errs.end = 'La fecha de fin debe ser posterior a la de inicio.'
+    }
+    return errs
+  }
 
   function handleSubmit(e) {
     e.preventDefault()
+    const errs = validate()
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs)
+      return
+    }
+    setErrors({})
     onSave({
       title: form.title,
       description: form.description,
@@ -38,28 +74,32 @@ export default function MeetingFormModal({
     })
   }
 
-  if (!open) return null
+  const title = editingId ? 'Editar reunión' : 'Nueva reunión'
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <form
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        noValidate
+        className="w-full max-w-md max-h-full overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-xl focus:outline-none"
       >
-        <h2 className="mb-4 text-lg font-bold text-gray-900">
-          {editingId ? 'Editar reunión' : 'Nueva reunión'}
-        </h2>
+        <h2 className="mb-4 text-lg font-bold text-gray-900">{title}</h2>
 
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Título</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">Título <span className="text-red-500">*</span></span>
           <input
-            required
             value={form.title}
             onChange={set('title')}
             placeholder="Reunión con Ana Torres"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.title ? 'border-red-400' : 'border-gray-300'}`}
           />
+          {errors.title && <span className="mt-1 block text-xs text-red-500">{errors.title}</span>}
         </label>
 
         <label className="mb-3 block">
@@ -75,40 +115,40 @@ export default function MeetingFormModal({
 
         <div className="mb-3 grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">Inicio</span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Inicio <span className="text-red-500">*</span></span>
             <input
-              required
               type="datetime-local"
               value={form.start}
               onChange={set('start')}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.start ? 'border-red-400' : 'border-gray-300'}`}
             />
+            {errors.start && <span className="mt-1 block text-xs text-red-500">{errors.start}</span>}
           </label>
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">Fin</span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Fin <span className="text-red-500">*</span></span>
             <input
-              required
               type="datetime-local"
               value={form.end}
               onChange={set('end')}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.end ? 'border-red-400' : 'border-gray-300'}`}
             />
+            {errors.end && <span className="mt-1 block text-xs text-red-500">{errors.end}</span>}
           </label>
         </div>
 
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Lead</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">Lead <span className="text-red-500">*</span></span>
           <select
-            required
             value={form.lead}
             onChange={set('lead')}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.lead ? 'border-red-400' : 'border-gray-300'}`}
           >
             <option value="">Selecciona un lead…</option>
             {leads.map((l) => (
               <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </select>
+          {errors.lead && <span className="mt-1 block text-xs text-red-500">{errors.lead}</span>}
         </label>
 
         <label className="mb-5 flex items-center gap-2">

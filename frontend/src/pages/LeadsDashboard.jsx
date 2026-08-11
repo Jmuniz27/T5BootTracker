@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import ExportMenu from '../components/ExportMenu'
 import { LEAD_REPORT_COLUMNS, SOURCE_LABELS, STATUS_LABELS } from '../lib/leadsReport'
+import { assignmentLabel, DISCARD_REASONS } from '../lib/leadDisplay'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { getLeads, getAllLeads, discardLead, restoreLead, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, verifyBootcamper, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
+import { getLeads, getAllLeads, discardLead, restoreLead, assignLead, releaseLead, adminReassignLead, getInteractions, createLead, createInteraction, updateInteraction, convertLead, resendInvitation, getPrograms, updateLeadStatus, updateLead, getSelfAssignmentSetting } from '../api/leads.api'
 import { getUsers } from '../api/users.api'
 import { getCohorts } from '../api/programs.api'
 import { useAuthStore } from '../store/auth.store'
@@ -28,22 +29,14 @@ const AVATAR_COLORS = [
   'bg-indigo-500',
 ]
 
-// Causales de cierre. Espejo de Lead.DiscardReason en el backend, que es quien
-// valida de verdad: acá sólo se arma el formulario.
-const DISCARD_REASONS = [
-  { value: 'NO_BUDGET',   label: 'Sin presupuesto' },
-  { value: 'SCHEDULE',    label: 'Los horarios no le sirven' },
-  { value: 'NO_RESPONSE', label: 'No responde / los correos rebotan' },
-  { value: 'FREE_ONLY',   label: 'Sólo busca contenido gratis' },
-  { value: 'OTHER',       label: 'Otro' },
-]
-
+// Alineado con los colores de estado de mobile (STATUS_CONFIG en la app):
+// Nuevo=amarillo, Calificado=azul, Interesado=verde, Convertido=morado.
 const STATUS_COLORS = {
-  NEW: 'bg-gray-100 text-gray-500',
+  NEW: 'bg-yellow-100 text-yellow-700',
   QUALIFIED: 'bg-blue-100 text-blue-700',
-  INTERESTED: 'bg-yellow-100 text-yellow-700',
+  INTERESTED: 'bg-green-100 text-green-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
-  CONVERTED: 'bg-green-100 text-green-700',
+  CONVERTED: 'bg-purple-100 text-purple-700',
   DISCARDED: 'bg-slate-200 text-slate-600',
 }
 
@@ -92,7 +85,7 @@ function LeadStatusBadge({ status, lastOutcome }) {
 const VERIFICATION_LABELS = {
   INVITED: 'Invitado',
   PENDING_VERIFICATION: 'Pendiente de verificación',
-  VERIFIED: 'Verificado',
+  VERIFIED: 'Cuenta activa',
 }
 
 const VERIFICATION_COLORS = {
@@ -324,11 +317,34 @@ function ViewHistoryModal({ lead, onClose }) {
                     </>
                   )}
                 </div>
-                {/* Badges: outcome (gris) + próxima acción (azul) */}
+                {/* Badges: outcome (gris) + estado resultante + próxima acción (azul) */}
                 <div className="flex items-center gap-1.5 flex-wrap mb-1">
                   <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">
                     {OUTCOME_LABELS[interaction.outcome]}
                   </span>
+                  {/* En qué quedó el lead tras esta interacción (#325). Se pinta
+                      con los mismos colores del estado en la grilla, para que
+                      leer la evolución no exija aprenderse otra paleta. */}
+                  {interaction.lead_status ? (
+                    <span
+                      data-testid="interaction-lead-status"
+                      className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
+                        STATUS_COLORS[interaction.lead_status] ?? 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      → {interaction.lead_status_display ?? STATUS_LABELS[interaction.lead_status]}
+                    </span>
+                  ) : (
+                    // Las interacciones anteriores a este campo no se pudieron
+                    // reconstruir sin inventar historia (ver migración 0014).
+                    <span
+                      data-testid="interaction-lead-status-missing"
+                      title="Esta interacción es anterior al registro de estados"
+                      className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-gray-50 text-gray-400"
+                    >
+                      Sin registro de estado
+                    </span>
+                  )}
                   {interaction.next_action && (
                     <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">
                       {interaction.next_action}
@@ -476,7 +492,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Duración <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -643,7 +659,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Duración <span className="text-xs text-gray-500 font-normal">(opcional)</span>
+                Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span>
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -836,35 +852,7 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
   )
 }
 
-/**
- * Quién tiene el lead y desde cuándo.
- *
- * La clienta lo pidió como su medida de leads abandonados: quiere ver de un
- * vistazo cuánto lleva alguien sentado sobre el mismo lead. Por eso van juntos
- * el vendedor, la fecha y los días — la fecha sola obliga a hacer la cuenta.
- *
- * `days_assigned` lo calcula el backend, que además lo congela en la fecha de
- * liberación si el lead ya se soltó (CR-006).
- */
-export function assignmentLabel(lead) {
-  if (!lead?.owner) return 'Sin asignar'
-
-  const nombre = lead.owner_name ?? 'Vendedor'
-  const fecha = lead.assigned_at ? new Date(lead.assigned_at) : null
-
-  if (!fecha || Number.isNaN(fecha.getTime())) return nombre
-
-  const desde = fecha.toLocaleDateString('es-EC', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  })
-  const dias = lead.days_assigned
-  if (dias == null) return `${nombre} · desde el ${desde}`
-
-  return `${nombre} · desde el ${desde} (${dias} ${dias === 1 ? 'día' : 'días'})`
-}
-
-function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
-  const queryClient = useQueryClient()
+function ViewLeadModal({ lead, onClose }) {
   const { data: interactions = [] } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -874,13 +862,6 @@ function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
   const rating = lastInteraction?.interest_level ?? null
   const isConverted = lead.status === 'CONVERTED'
   const profile = lead.bootcamper_profile
-
-  const verifyMutation = useMutation({
-    mutationFn: () => verifyBootcamper(lead.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-    },
-  })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -974,20 +955,6 @@ function ViewLeadModal({ lead, isOwned, isAdmin, onClose }) {
                 {profile.cedula && <p>Cédula/RUC: {profile.cedula}</p>}
                 {profile.phone && <p>{profile.phone}</p>}
               </div>
-              {profile.verification_status === 'VERIFIED' && profile.verified_by_name && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Verificado por {profile.verified_by_name}
-                </p>
-              )}
-              {(isOwned || isAdmin) && profile.verification_status === 'PENDING_VERIFICATION' && (
-                <button
-                  onClick={() => verifyMutation.mutate()}
-                  disabled={verifyMutation.isPending}
-                  className="mt-3 w-full py-2 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
-                >
-                  {verifyMutation.isPending ? 'Verificando...' : 'Marcar como verificado'}
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -2261,7 +2228,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Descartar lead
             </button>
           )}
-          {(isOwned || isAdmin) && isDiscarded && (
+          {isDiscarded && (
             <button
               onClick={() => { onRestore(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-[#1e3164] font-medium hover:bg-blue-50"
@@ -2269,13 +2236,23 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Reactivar lead
             </button>
           )}
-          {isOwned && lead.status === 'QUALIFIED' && (
-            <button
-              onClick={() => { onConvert(); setOpen(false) }}
-              className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
-            >
-              Convertir lead
-            </button>
+          {isOwned && !isConverted && !isDiscarded && (
+            <div>
+              {/* Se muestra siempre, pero sólo se habilita en QUALIFIED: así el
+                  vendedor sabe que la conversión existe y qué falta para usarla. */}
+              <button
+                onClick={() => { onConvert(); setOpen(false) }}
+                disabled={lead.status !== 'QUALIFIED'}
+                className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+              >
+                Convertir lead
+              </button>
+              {lead.status !== 'QUALIFIED' && (
+                <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
+                  Primero cambia el estado a “Calificado”.
+                </p>
+              )}
+            </div>
           )}
           {(isOwned || isAdmin) && canResendInvitation && (
             <button
@@ -2285,13 +2262,23 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Reenviar invitación
             </button>
           )}
-          {!isAdmin && !isConverted && (isOwned ? (
-            <button
-              onClick={() => { onRelease(); setOpen(false) }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              Desasignar lead
-            </button>
+          {!isAdmin && !isConverted && !isDiscarded && (isOwned ? (
+            <div>
+              <button
+                onClick={() => { onRelease(); setOpen(false) }}
+                disabled={!selfAssignEnabled}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-500 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+              >
+                Desasignar lead
+              </button>
+              {/* Con la auto-asignación apagada el pool lo maneja el Admin: si
+                  soltás el lead no podrías retomarlo, así que tampoco se libera. */}
+              {!selfAssignEnabled && (
+                <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
+                  La asignación la realiza el Administrador.
+                </p>
+              )}
+            </div>
           ) : (
             <div>
               <button
@@ -2916,8 +2903,6 @@ export default function LeadsDashboard() {
       {viewLead && (
         <ViewLeadModal
           lead={viewLead}
-          isOwned={viewLead._isOwned}
-          isAdmin={isAdmin}
           onClose={() => setViewLead(null)}
         />
       )}

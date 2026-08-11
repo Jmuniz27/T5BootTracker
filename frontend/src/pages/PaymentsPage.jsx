@@ -1,9 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getMyHistory, getMyStatus, getMyPrograms, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
 import { useModalA11y } from '../hooks/use-modal-a11y'
 import Skeleton from '../components/ui/Skeleton'
 import Spinner from '../components/ui/Spinner'
+import Toast from '../components/Toast'
+import ReceiptPreview from '../components/payments/ReceiptPreview'
+import PaymentPlanPanel from '../components/payments/PaymentPlanPanel'
 import { flattenUploadError } from '../lib/payments'
 
 const STATUS_LABELS = {
@@ -26,62 +29,15 @@ function dropZoneClass(dragOver, file) {
   return 'border-gray-300 hover:border-[#213A8E] hover:bg-gray-50'
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
-
-const TOAST_AUTO_DISMISS_MS = 4000
-
-function Toast({ message, type = 'success', onClose }) {
-  const isError = type === 'error'
-  const onCloseRef = useRef(onClose)
-
-  useEffect(() => {
-    onCloseRef.current = onClose
-  }, [onClose])
-
-  // CB-75: dependia de `onClose`, asi que un padre que pasara una arrow inline
-  // reiniciaba los 4s en cada render y el toast podia no cerrarse nunca.
-  useEffect(() => {
-    const timer = setTimeout(() => onCloseRef.current?.(), TOAST_AUTO_DISMISS_MS)
-    return () => clearTimeout(timer)
-  }, [])
-
-  return (
-    <div
-      role={isError ? 'alert' : 'status'}
-      aria-live={isError ? 'assertive' : 'polite'}
-      className="fixed top-5 right-5 z-[70] flex items-center gap-3 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-lg animate-slide-in-right"
-    >
-      <span className={`flex items-center justify-center w-6 h-6 rounded-full ${isError ? 'bg-red-500' : 'bg-green-500'}`}>
-        {isError ? (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        )}
-      </span>
-      <span className="text-sm font-medium">{message}</span>
-      <button
-        onClick={onClose}
-        aria-label="Cerrar notificación"
-        className="text-gray-300 hover:text-white ml-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-  )
-}
-
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, loading }) {
+// El ancho mínimo va detrás de `sm:`: en móvil las tarjetas son celdas de una
+// grilla de dos columnas y 160px fijos las hacían desbordar un Android de
+// 360px (160+160+12 de gap + 32 de padding de página = 364).
+function StatCard({ label, value, sub, loading, className = '' }) {
   if (loading) {
     return (
-      <div aria-busy="true" aria-label={`Cargando ${label}`} className="bg-white rounded-2xl border border-gray-200 p-5 min-w-[160px]">
+      <div aria-busy="true" aria-label={`Cargando ${label}`} className={`bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 sm:min-w-[160px] ${className}`}>
         <Skeleton className="h-3 w-20 mb-3" />
         <Skeleton className="h-8 w-24 mb-2" />
         <Skeleton className="h-3 w-32" />
@@ -89,9 +45,9 @@ function StatCard({ label, value, sub, loading }) {
     )
   }
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5 min-w-[160px] transition-shadow duration-200 hover:shadow-md">
+    <div className={`bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 sm:min-w-[160px] transition-shadow duration-200 hover:shadow-md ${className}`}>
       <p className="text-sm text-gray-500 mb-1">{label}</p>
-      <p className="text-3xl font-bold text-gray-900 mb-1">{value}</p>
+      <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{value}</p>
       <p className="text-xs text-gray-500">{sub}</p>
     </div>
   )
@@ -140,6 +96,18 @@ function UploadModal({ onClose, onSuccess }) {
     mutation.mutate(fd)
   }
 
+  // Tres zonas: cabecera y pie fijos, cuerpo scrollable. Sin acotar la altura,
+  // en una ventana baja el panel se desborda por arriba y por abajo a la vez
+  // —lo centra el `items-center` del overlay— y como `useModalA11y` bloquea el
+  // scroll del body, el botón de subir queda inalcanzable: no hay forma de
+  // enviar el comprobante. El pie va fuera del contenedor scrollable para que
+  // la acción principal nunca se pierda de vista.
+  //
+  // `max-h-full` y no una unidad de viewport: el overlay es `fixed inset-0
+  // p-4`, así que el 100% se resuelve contra su content box —el viewport menos
+  // las 2rem del padding— y el margen queda atado al `p-4` en vez de repetido
+  // en un `calc`. De paso evita que `100vh`, que en móvil ignora la barra de
+  // URL, quede más alto que lo realmente visible.
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
       <div
@@ -148,10 +116,10 @@ function UploadModal({ onClose, onSuccess }) {
         role="dialog"
         aria-modal="true"
         aria-label="Subir comprobante"
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md focus:outline-none animate-zoom-in"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-full flex flex-col overflow-hidden focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 pt-6 pb-4">
+        <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
           <h2 className="text-lg font-semibold text-gray-900">Subir comprobante</h2>
           <button
             onClick={onClose}
@@ -164,115 +132,90 @@ function UploadModal({ onClose, onSuccess }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
-          <p className="text-sm text-gray-500 -mt-1">
-            Sube tu comprobante de transferencia. Revisarás el monto y la fecha en el siguiente paso,
-            una vez escaneado el documento.
-          </p>
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-4 sm:px-6 space-y-4">
+            <p className="text-sm text-gray-500 -mt-1">
+              Sube tu comprobante de transferencia. Revisarás el monto y la fecha en el siguiente paso,
+              una vez escaneado el documento.
+            </p>
 
-          {/* File upload — drag & drop */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Comprobante de transferencia</label>
-            <div
-              onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDragOver(false)
-                const f = e.dataTransfer.files[0]
-                if (f) validateAndSetFile(f)
-              }}
-              className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-6 transition-colors cursor-pointer ${dropZoneClass(dragOver, file)}`}
-              onClick={() => fileRef.current?.click()}
-            >
-              {file ? (
-                <>
-                  <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-sm font-medium text-green-700 truncate max-w-full px-2">{file.name}</p>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setFile(null) }}
-                    className="text-xs text-gray-500 hover:text-red-500 transition-colors"
-                  >
-                    Quitar
-                  </button>
-                </>
-              ) : (
-                <>
-                  <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium text-[#213A8E]">Haz clic para subir</span> o arrastra el archivo
-                  </p>
-                  <p className="text-xs text-gray-500">PNG, JPG o PDF (máx. 10 MB)</p>
-                </>
-              )}
-              <input
-                ref={fileRef}
-                data-testid="upload-file-input"
-                type="file"
-                accept=".jpg,.jpeg,.png,.pdf"
-                className="hidden"
-                onChange={(e) => e.target.files[0] && validateAndSetFile(e.target.files[0])}
-              />
+            {/* File upload — drag & drop */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Comprobante de transferencia</label>
+              <div
+                onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragOver(false)
+                  const f = e.dataTransfer.files[0]
+                  if (f) validateAndSetFile(f)
+                }}
+                className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-8 sm:py-6 transition-colors cursor-pointer ${dropZoneClass(dragOver, file)}`}
+                onClick={() => fileRef.current?.click()}
+              >
+                {file ? (
+                  <>
+                    <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm font-medium text-green-700 truncate max-w-full px-2">{file.name}</p>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setFile(null) }}
+                      className="text-xs text-gray-500 hover:text-red-500 transition-colors"
+                    >
+                      Quitar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium text-[#213A8E]">Haz clic para subir</span>
+                      <span className="hidden sm:inline"> o arrastra el archivo</span>
+                    </p>
+                    <p className="text-xs text-gray-500">PNG, JPG o PDF (máx. 10 MB)</p>
+                  </>
+                )}
+                <input
+                  ref={fileRef}
+                  data-testid="upload-file-input"
+                  type="file"
+                  accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
+                  className="hidden"
+                  onChange={(e) => e.target.files[0] && validateAndSetFile(e.target.files[0])}
+                />
+              </div>
+              {errors.file && <p className="text-red-500 text-xs mt-1">{errors.file}</p>}
             </div>
-            {errors.file && <p className="text-red-500 text-xs mt-1">{errors.file}</p>}
           </div>
 
-          {mutation.isError && (
-            <p className="text-red-500 text-sm">
-              {flattenUploadError(mutation.error)}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            data-testid="upload-submit"
-            disabled={mutation.isPending}
-            className="w-full bg-[#213A8E] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#1a2f72] disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
-          >
-            {mutation.isPending && <Spinner />}
-            {mutation.isPending ? 'Subiendo...' : 'Subir comprobante'}
-          </button>
+          {/* El error de la mutación va en el pie, no en el cuerpo: ahí queda
+              siempre pegado al botón que lo produjo, en vez de al final de una
+              región que puede estar desplazada. */}
+          <div className="shrink-0 px-5 pb-5 pt-1 sm:px-6 sm:pb-6 space-y-2">
+            {mutation.isError && (
+              <p className="text-red-500 text-sm">
+                {flattenUploadError(mutation.error)}
+              </p>
+            )}
+            <button
+              type="submit"
+              data-testid="upload-submit"
+              disabled={mutation.isPending}
+              className="w-full bg-[#213A8E] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#1a2f72] disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
+            >
+              {mutation.isPending && <Spinner />}
+              {mutation.isPending ? 'Subiendo...' : 'Subir comprobante'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
-  )
-}
-
-// ─── Receipt Preview ──────────────────────────────────────────────────────────
-
-function ReceiptPreview({ url, type }) {
-  if (!url) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
-        <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        Comprobante no disponible
-      </div>
-    )
-  }
-  if (type === 'pdf') {
-    return (
-      <object data={url} type="application/pdf" className="w-full h-full rounded-lg">
-        <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm gap-2 p-4 text-center">
-          No se puede previsualizar el PDF aquí.
-          <a href={url} target="_blank" rel="noopener noreferrer" className="text-[#213A8E] font-medium hover:underline">
-            Abrir comprobante en pestaña nueva
-          </a>
-        </div>
-      </object>
-    )
-  }
-  return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
-      <img src={url} alt="Comprobante" className="w-full h-full object-contain rounded-lg" />
-    </a>
   )
 }
 
@@ -295,6 +238,8 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   })
   const qc = useQueryClient()
   const [timedOut, setTimedOut] = useState(false)
+  // Al editar un rechazado, el bootcamper puede adjuntar un comprobante nuevo.
+  const [newReceipt, setNewReceipt] = useState(null)
 
   // OCR runs async (Celery). Poll ocr-status until the backend writes the
   // confidence map (set only after the task finishes), then stop.
@@ -331,7 +276,17 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   }, [ocrData])
 
   const mutation = useMutation({
-    mutationFn: (data) => (isEdit ? updateMyPayment(payment.id, data) : confirmPayment(payment.id, data)),
+    mutationFn: (data) => {
+      if (!isEdit) return confirmPayment(payment.id, data)
+      // Con comprobante nuevo va como multipart; si no, como JSON de solo campos.
+      if (newReceipt) {
+        const fd = new FormData()
+        Object.entries(data).forEach(([k, v]) => fd.append(k, v ?? ''))
+        fd.append('receipt_file', newReceipt)
+        return updateMyPayment(payment.id, fd)
+      }
+      return updateMyPayment(payment.id, data)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-payments'] })
       onSuccess()
@@ -340,8 +295,14 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
 
   const confidence = ocrData?.ocr_confidence || payment.ocr_confidence || {}
 
+  // El backend emite las claves sin prefijo (`bank_name`, `amount`…, ver
+  // ocr.py), pero acá los campos se llaman `ocr_bank_name` porque así se
+  // llaman en el modelo. Indexar con el nombre del campo daba siempre
+  // `undefined`, así que nunca se mostraba ningún porcentaje de confianza.
+  const confidenceOf = (field) => confidence[field.replace(/^ocr_/, '')]
+
   const confColor = (field) => {
-    const v = confidence[field]
+    const v = confidenceOf(field)
     if (v == null) return 'text-gray-500'
     if (v >= 0.8) return 'text-green-600'
     if (v >= 0.5) return 'text-yellow-600'
@@ -349,7 +310,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   }
 
   const confLabel = (field) => {
-    const v = confidence[field]
+    const v = confidenceOf(field)
     if (v == null) return ''
     return `${Math.round(v * 100)}% confianza`
   }
@@ -392,10 +353,10 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
         role="dialog"
         aria-modal="true"
         aria-label={modalTitle}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto focus:outline-none animate-zoom-in"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-full overflow-y-auto overscroll-contain focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+        <div className="flex items-start justify-between gap-3 px-4 pt-5 pb-4 sm:px-6 sm:pt-6 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">{modalTitle}</h2>
             <p className="text-xs text-gray-500 mt-0.5">{modalHint}</p>
@@ -411,19 +372,36 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
           </button>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-0">
+        <div className="grid lg:grid-cols-2 gap-0">
           {/* Comprobante subido */}
-          <div className="border-b md:border-b-0 md:border-r border-gray-100 p-4">
+          <div className="border-b lg:border-b-0 lg:border-r border-gray-100 p-4">
             <p className="text-xs font-medium text-gray-500 mb-2">Comprobante subido</p>
-            <div className="bg-gray-50 border border-gray-200 rounded-xl h-72 md:h-[26rem] overflow-hidden">
+            <div className="bg-gray-50 border border-gray-200 rounded-xl h-48 sm:h-64 lg:h-[26rem] overflow-hidden">
               <ReceiptPreview url={payment.receipt_file} type={payment.receipt_file_type} />
             </div>
+            {isEdit && (
+              <div className="mt-3">
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-[#213A8E] border border-[#213A8E]/40 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  {newReceipt ? 'Cambiar comprobante' : 'Reemplazar comprobante (foto/PDF)'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    className="hidden"
+                    onChange={(e) => setNewReceipt(e.target.files?.[0] || null)}
+                  />
+                </label>
+                {newReceipt && (
+                  <p className="text-xs text-gray-500 mt-1 truncate">Nuevo: {newReceipt.name}</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Datos extraídos */}
-          <div className="px-6 py-5 space-y-4">
+          <div className="px-4 py-4 sm:px-6 sm:py-5 space-y-4">
           {(ocrLoading || ocrProcessing) ? (
-            <div data-testid="ocr-processing" aria-busy="true" className="flex flex-col items-center justify-center py-20 text-center">
+            <div data-testid="ocr-processing" aria-busy="true" className="flex flex-col items-center justify-center py-12 sm:py-20 text-center">
               <svg className="w-10 h-10 text-[#213A8E] animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -450,7 +428,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
                 <div key={key}>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-sm font-medium text-gray-700">{label}</label>
-                    {!isEdit && confidence[key] != null && (
+                    {!isEdit && confidenceOf(key) != null && (
                       <span className={`text-xs font-medium ${confColor(key)}`}>{confLabel(key)}</span>
                     )}
                   </div>
@@ -462,7 +440,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
                     placeholder={isView ? '—' : placeholder}
                     readOnly={isView}
                     disabled={isView}
-                    className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent ${
+                    className={`w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base sm:py-2 sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent ${
                       isView ? 'bg-gray-50 text-gray-600 cursor-default' : ''
                     }`}
                   />
@@ -514,6 +492,12 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
  * partir del botón, para que no lo recorte el `overflow-x-auto` de la tabla, y
  * se abre hacia arriba cuando queda poco espacio abajo.
  */
+
+// Al ser `fixed`, el ancho no lo puede deducir el layout: se calcula acá y
+// tiene que coincidir con la clase `w-44`.
+const MENU_WIDTH = 176
+const VIEWPORT_MARGIN = 8
+
 function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReason, onDelete }) {
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
@@ -530,16 +514,50 @@ function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReaso
       ) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('touchstart', handler)
+    }
   }, [])
 
-  const handleToggle = () => {
-    if (!open && btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect()
-      const upward = window.innerHeight - rect.bottom < 200
-      setOpenUpward(upward)
-      setPos({ top: upward ? rect.top - 4 : rect.bottom + 4, left: rect.right - 176 })
+  // Recalcula la posición a partir del botón. Al ser `fixed`, el menú no la
+  // hereda del layout: hay que fijarla a mano y volver a fijarla cada vez que
+  // el botón se mueve.
+  const reposicionar = useCallback(() => {
+    if (!btnRef.current) return
+    const rect = btnRef.current.getBoundingClientRect()
+    const upward = window.innerHeight - rect.bottom < 200
+    // Sin acotar, `rect.right - MENU_WIDTH` se sale de la pantalla: el botón
+    // vive dentro de una tabla que scrollea en horizontal.
+    const maxLeft = window.innerWidth - MENU_WIDTH - VIEWPORT_MARGIN
+    setOpenUpward(upward)
+    setPos({
+      top: upward ? rect.top - 4 : rect.bottom + 4,
+      left: Math.min(Math.max(VIEWPORT_MARGIN, rect.right - MENU_WIDTH), maxLeft),
+    })
+  }, [])
+
+  // Se reposiciona, no se cierra. Cerrar parecía más simple, pero deja el menú
+  // a merced de cualquier scroll programático: `scrollIntoView` —el que hace
+  // Playwright antes de pulsar, y el del propio navegador al enfocar— llega
+  // justo después de abrirlo y lo cierra en el acto. Reposicionar además evita
+  // cambiarle el comportamiento a quien ya usa esto en escritorio.
+  //
+  // En captura: ni el scroll del `overflow-x-auto` de la tabla ni el del <main>
+  // del layout burbujean hasta window.
+  useEffect(() => {
+    if (!open) return
+    window.addEventListener('scroll', reposicionar, true)
+    window.addEventListener('resize', reposicionar)
+    return () => {
+      window.removeEventListener('scroll', reposicionar, true)
+      window.removeEventListener('resize', reposicionar)
     }
+  }, [open, reposicionar])
+
+  const handleToggle = () => {
+    if (!open) reposicionar()
     setOpen((v) => !v)
   }
 
@@ -554,7 +572,8 @@ function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReaso
   if (payment.status === 'APPROVED' || payment.status === 'PENDING') {
     actions.push({ label: 'Ver información', run: onView })
   }
-  if (payment.status === 'DRAFT' || payment.status === 'REJECTED') {
+  // Se puede eliminar lo que aún no quedó aprobado: borrador, pendiente o rechazado.
+  if (['DRAFT', 'PENDING', 'REJECTED'].includes(payment.status)) {
     actions.push({ label: 'Eliminar', run: onDelete, danger: true })
   }
 
@@ -565,7 +584,7 @@ function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReaso
         onClick={handleToggle}
         aria-label={`Acciones del pago de ${payment.program_name || 'programa'}`}
         aria-expanded={open}
-        className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
+        className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -582,7 +601,7 @@ function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReaso
             <button
               key={label}
               onClick={() => { run(payment); setOpen(false) }}
-              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${danger ? 'text-red-600' : 'text-gray-700'}`}
+              className={`w-full text-left px-4 py-2.5 sm:py-2 text-sm hover:bg-gray-50 ${danger ? 'text-red-600' : 'text-gray-700'}`}
             >
               {label}
             </button>
@@ -593,26 +612,37 @@ function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReaso
   )
 }
 
+// ─── Presentación compartida fila/tarjeta ─────────────────────────────────────
+
+// La fila y la tarjeta muestran los mismos datos; el formato vive acá para que
+// no puedan derivar cuando se agregue un campo.
+function paymentAmountLabel(payment) {
+  const amount = payment.confirmed_amount || payment.ocr_amount
+  return amount
+    ? `$${parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 0 })}`
+    : '—'
+}
+
+const paymentDateLabel = (p) => p.ocr_payment_date || p.submitted_at?.slice(0, 10) || '—'
+
+const paymentInitial = (p) => (p.program_name || 'P')[0].toUpperCase()
+
 // ─── Payment Row ──────────────────────────────────────────────────────────────
 
 function PaymentRow({ payment, ...actions }) {
-  const initial = (payment.program_name || 'P')[0].toUpperCase()
-  const amount = payment.confirmed_amount || payment.ocr_amount
-  const date = payment.ocr_payment_date || payment.submitted_at?.slice(0, 10)
-
   return (
     <tr data-testid="payment-row" className="hover:bg-gray-50 transition-colors">
       <td className="py-3.5 px-3">
         <div className="flex items-center gap-2">
           <span className="w-7 h-7 rounded-full bg-[#213A8E] flex items-center justify-center text-white font-bold text-xs shrink-0">
-            {initial}
+            {paymentInitial(payment)}
           </span>
           <span className="font-medium text-gray-900">{payment.program_name}</span>
         </div>
       </td>
-      <td className="py-3.5 px-3 text-gray-500">{date || '—'}</td>
+      <td className="py-3.5 px-3 text-gray-500">{paymentDateLabel(payment)}</td>
       <td className="py-3.5 px-3 font-semibold text-gray-900">
-        {amount ? `$${parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 0 })}` : '—'}
+        {paymentAmountLabel(payment)}
       </td>
       <td className="py-3.5 px-3">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[payment.status]}`}>
@@ -623,6 +653,44 @@ function PaymentRow({ payment, ...actions }) {
         <PaymentActionsDropdown payment={payment} {...actions} />
       </td>
     </tr>
+  )
+}
+
+// ─── Payment Card ─────────────────────────────────────────────────────────────
+
+/**
+ * La misma información que `PaymentRow`, apilada, para pantallas menores a
+ * `sm`. La tabla exige 600px de ancho: en un teléfono queda con scroll
+ * horizontal y la única columna interactiva —Acciones— es justo la que se va
+ * fuera de pantalla.
+ *
+ * Es un espejo de `PaymentRow`: si se agrega un dato a la fila, va también acá.
+ */
+function PaymentCard({ payment, ...actions }) {
+  return (
+    <li data-testid="payment-card" className="border border-gray-200 rounded-xl p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-7 h-7 rounded-full bg-[#213A8E] flex items-center justify-center text-white font-bold text-xs shrink-0">
+            {paymentInitial(payment)}
+          </span>
+          <span className="font-medium text-gray-900 text-sm truncate">{payment.program_name}</span>
+        </div>
+        <PaymentActionsDropdown payment={payment} {...actions} />
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-lg font-semibold text-gray-900">{paymentAmountLabel(payment)}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{paymentDateLabel(payment)}</p>
+        </div>
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${STATUS_COLORS[payment.status]}`}>
+          {STATUS_LABELS[payment.status]}
+        </span>
+      </div>
+      {/* El motivo del rechazo no se imprime acá, igual que en la fila: se lee
+          en «Ver motivo» (HST-023). */}
+    </li>
   )
 }
 
@@ -652,7 +720,7 @@ function RejectionReasonModal({ payment, onClose }) {
         role="dialog"
         aria-modal="true"
         aria-label="Motivo del rechazo"
-        className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 focus:outline-none animate-zoom-in"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-full overflow-y-auto overscroll-contain p-5 sm:p-6 focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-gray-900">Motivo del rechazo</h2>
@@ -689,7 +757,7 @@ function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
         role="dialog"
         aria-modal="true"
         aria-label="Eliminar pago"
-        className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 focus:outline-none animate-zoom-in"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-full overflow-y-auto overscroll-contain p-5 sm:p-6 focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-gray-900">Eliminar pago</h2>
@@ -834,7 +902,7 @@ export default function PaymentsPage() {
   const showToast = (message, type = 'success') => setToast({ message, type })
 
   return (
-    <div className="flex-1 bg-gray-50 min-h-screen p-4 sm:p-6 lg:p-8">
+    <div className="flex-1 bg-gray-50 p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
@@ -844,7 +912,7 @@ export default function PaymentsPage() {
         <button
           data-testid="upload-button"
           onClick={() => setShowUpload(true)}
-          className="flex items-center gap-2 bg-[#213A8E] text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#1a2f72] transition-colors"
+          className="flex w-full items-center justify-center gap-2 bg-[#213A8E] text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#1a2f72] transition-colors sm:w-auto sm:justify-start"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -872,12 +940,18 @@ export default function PaymentsPage() {
           value={debtValue}
           sub={debtSub}
           loading={isLoading || debtLoading}
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 
+      {/* Plan de pagos (lo sube Finanzas; el bootcamper solo lo consulta) */}
+      <div className="mb-6">
+        <PaymentPlanPanel mode="bootcamper" />
+      </div>
+
       {/* Payment History */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Historial de pagos</h2>
 
           <div className="relative" ref={sortRef}>
@@ -911,39 +985,35 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {['Programa', 'Fecha', 'Monto', 'Estado', 'Acciones'].map((h) => (
-                  <th key={h} className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {isLoading && [...Array(3)].map((_, i) => <SkeletonPaymentRow key={i} />)}
+        {/* El estado vacío queda fuera de la tabla y de la lista para que se
+            pinte una sola vez. Ojo: sin pagos no hay <table> en el DOM. */}
+        {!isLoading && sorted.length === 0 && (
+          <div className="text-center py-10 sm:py-12">
+            <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-sm text-gray-500">No tienes pagos registrados aún.</p>
+            <button
+              onClick={() => setShowUpload(true)}
+              className="mt-3 text-sm text-[#213A8E] font-medium hover:underline"
+            >
+              Subir tu primer comprobante
+            </button>
+          </div>
+        )}
 
-              {!isLoading && sorted.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="text-center py-12">
-                    <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p className="text-sm text-gray-500">No tienes pagos registrados aún.</p>
-                    <button
-                      onClick={() => setShowUpload(true)}
-                      className="mt-3 text-sm text-[#213A8E] font-medium hover:underline"
-                    >
-                      Subir tu primer comprobante
-                    </button>
-                  </td>
-                </tr>
-              )}
+        {(isLoading || sorted.length > 0) && (
+          <>
+            {/* Móvil: tarjetas */}
+            <ul data-testid="payments-card-list" className="space-y-3 sm:hidden">
+              {isLoading && [...Array(3)].map((_, i) => (
+                <li key={i} aria-busy="true">
+                  <Skeleton className="h-24 w-full" rounded="rounded-xl" />
+                </li>
+              ))}
 
               {!isLoading && sorted.map((p) => (
-                <PaymentRow
+                <PaymentCard
                   key={p.id}
                   payment={p}
                   onReview={setReviewPayment}
@@ -953,9 +1023,39 @@ export default function PaymentsPage() {
                   onDelete={setDeleteTarget}
                 />
               ))}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+
+            {/* sm+: tabla */}
+            <div data-testid="payments-table-wrapper" className="hidden overflow-x-auto sm:block">
+              <table className="w-full text-sm min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    {['Programa', 'Fecha', 'Monto', 'Estado', 'Acciones'].map((h) => (
+                      <th key={h} className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {isLoading && [...Array(3)].map((_, i) => <SkeletonPaymentRow key={i} />)}
+
+                  {!isLoading && sorted.map((p) => (
+                    <PaymentRow
+                      key={p.id}
+                      payment={p}
+                      onReview={setReviewPayment}
+                      onEdit={setEditPayment}
+                      onView={setViewPayment}
+                      onViewReason={setReasonPayment}
+                      onDelete={setDeleteTarget}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Modals */}
@@ -964,6 +1064,13 @@ export default function PaymentsPage() {
           onClose={() => setShowUpload(false)}
           onSuccess={(data) => {
             setShowUpload(false)
+            // `ocr_queued: false` = el comprobante se guardó pero el escaneo no
+            // arrancó. Prometer que lo estamos leyendo dejaría al bootcamper
+            // esperando un resultado que no va a llegar.
+            if (data.ocr_queued === false) {
+              showToast('Comprobante recibido. La lectura automática no está disponible ahora; Finanzas lo revisará a mano.')
+              return
+            }
             showToast('Comprobante subido. Estamos escaneando el texto…')
             if (data.status === 'DRAFT') setReviewPayment(data)
           }}

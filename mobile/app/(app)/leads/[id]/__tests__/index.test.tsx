@@ -12,6 +12,7 @@ const CONVERTED_LEAD = {
   is_company: false,
   program_interest: 'Full Stack',
   interaction_count: 2,
+  owner: 'owner-1',
   owner_name: 'Vendedor Uno',
   bootcamper: 'boot-1',
   bootcamper_verification_status: 'INVITED',
@@ -44,8 +45,11 @@ jest.mock('../../../../../src/api/leads.api', () => ({
   assignLead: jest.fn(),
   releaseLead: jest.fn(),
   updateLeadStatus: jest.fn(),
+  discardLead: jest.fn(),
+  restoreLead: jest.fn(),
   getLead: (...args: any[]) => mockGetLead(...args),
   resendInvitation: (...args: any[]) => mockResendInvitation(...args),
+  getSelfAssignmentEnabled: () => Promise.resolve(true),
 }));
 
 jest.mock('../../../../../src/hooks/use-quick-call', () => ({
@@ -142,5 +146,28 @@ describe('LeadDetailScreen — reenvío de invitación', () => {
     await pressText(root, 'Compartir');
 
     expect(mockShare).toHaveBeenCalledWith('https://app.test/onboarding/nuevo', 'Ana Vera');
+  });
+});
+
+describe('LeadDetailScreen — estado de la cuenta del bootcamper', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFocusEffectRan = false;
+    mockGetLead.mockResolvedValue(CONVERTED_LEAD);
+  });
+
+  it('muestra el badge "Cuenta activa" cuando la cuenta ya está activada', async () => {
+    mockGetLead.mockResolvedValue({ ...CONVERTED_LEAD, bootcamper_verification_status: 'VERIFIED' });
+
+    let root: any;
+    await act(async () => {
+      root = renderer.create(<LeadDetailScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(findAllByText(root, 'Cuenta activa').length).toBeGreaterThan(0);
+    // Ya no existe verificación manual.
+    expect(findAllByText(root, 'Marcar como verificado').length).toBe(0);
   });
 });

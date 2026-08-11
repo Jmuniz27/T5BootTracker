@@ -112,6 +112,7 @@ describe('OnboardingPage', () => {
     const [passwordInput, confirmInput] = await screen.findAllByPlaceholderText('••••••••');
     await user.type(passwordInput, CLAVE_PRUEBA);
     await user.type(confirmInput, CLAVE_PRUEBA);
+    await user.click(screen.getByRole('checkbox', { name: /uso de datos|acepto/i }));
     await user.click(screen.getByRole('button', { name: /activar mi cuenta/i }));
 
     await waitFor(() => expect(screen.getByText('Cuenta activada')).toBeInTheDocument());
@@ -119,5 +120,101 @@ describe('OnboardingPage', () => {
       'tok123',
       expect.objectContaining({ password: CLAVE_PRUEBA, password_confirm: CLAVE_PRUEBA })
     );
+  });
+});
+
+describe('OnboardingPage — consentimiento de uso de datos (#329)', () => {
+  async function llegarAlPaso2(user) {
+    getOnboardingInfo.mockResolvedValue(VALID_INFO);
+    renderPage();
+    await screen.findByDisplayValue('Ana');
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+    return screen.findAllByPlaceholderText('••••••••');
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    activateOnboarding.mockResolvedValue({ detail: 'Cuenta activada exitosamente.' });
+  });
+
+  it('la casilla arranca sin marcar', async () => {
+    const user = userEvent.setup();
+    await llegarAlPaso2(user);
+
+    expect(screen.getByRole('checkbox', { name: /acepto/i })).not.toBeChecked();
+  });
+
+  it('la casilla no se deforma cuando el texto ocupa varias líneas', async () => {
+    const user = userEvent.setup();
+    await llegarAlPaso2(user);
+
+    // La frase del consentimiento envuelve en tres líneas en un teléfono, y un
+    // checkbox flex sin ancho intrínseco se aplastaba hasta quedar una elipse.
+    expect(screen.getByRole('checkbox', { name: /acepto/i })).toHaveClass('h-4', 'w-4', 'shrink-0');
+  });
+
+  it('sin aceptar no se activa la cuenta', async () => {
+    const user = userEvent.setup();
+    const [passwordInput, confirmInput] = await llegarAlPaso2(user);
+
+    await user.type(passwordInput, CLAVE_PRUEBA);
+    await user.type(confirmInput, CLAVE_PRUEBA);
+    await user.click(screen.getByRole('button', { name: /activar mi cuenta/i }));
+
+    expect(await screen.findByText(/hay que aceptar el uso de datos/i)).toBeInTheDocument();
+    expect(activateOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('al aceptar, el consentimiento viaja al backend', async () => {
+    const user = userEvent.setup();
+    const [passwordInput, confirmInput] = await llegarAlPaso2(user);
+
+    await user.type(passwordInput, CLAVE_PRUEBA);
+    await user.type(confirmInput, CLAVE_PRUEBA);
+    await user.click(screen.getByRole('checkbox', { name: /acepto/i }));
+    await user.click(screen.getByRole('button', { name: /activar mi cuenta/i }));
+
+    await waitFor(() => expect(activateOnboarding).toHaveBeenCalled());
+    expect(activateOnboarding.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ data_consent: true }),
+    );
+  });
+
+  it('dice para qué se usan los datos', async () => {
+    const user = userEvent.setup();
+    await llegarAlPaso2(user);
+
+    expect(screen.getByText(/fines internos de seguimiento de Coding Bootcamps ESPOL/i)).toBeInTheDocument();
+  });
+});
+
+// jsdom no resuelve media queries ni calcula posiciones: lo que se puede afirmar
+// acá son las clases que deciden la presentación. La medición real vive en
+// e2e/tests/mobile/responsive-auth.spec.js.
+describe('OnboardingPage — presentación responsiva (#352)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('el enlace expirado se centra, como el resto de las pantallas sin formulario', async () => {
+    getOnboardingInfo.mockRejectedValue({
+      response: { status: 400, data: { error: 'El enlace expiró.', code: 'TOKEN_EXPIRED' } },
+    });
+    renderPage();
+
+    // Sin formulario que ancle la lectura, el texto alineado a la izquierda queda
+    // pegado al borde mientras el logo va centrado.
+    expect(await screen.findByRole('heading', { name: /el enlace expiró/i })).toHaveClass('text-center');
+    expect(screen.getByText(/pide a tu vendedor/i)).toHaveClass('text-center');
+  });
+
+  it('el título del enlace expirado baja un escalón en móvil', async () => {
+    getOnboardingInfo.mockRejectedValue({
+      response: { status: 400, data: { error: 'El enlace expiró.', code: 'TOKEN_EXPIRED' } },
+    });
+    renderPage();
+
+    const titulo = await screen.findByRole('heading', { name: /el enlace expiró/i });
+    expect(titulo).toHaveClass('text-2xl', 'sm:text-3xl');
   });
 });

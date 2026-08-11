@@ -9,6 +9,30 @@ from django.http import Http404, HttpResponse
 from django.template.loader import render_to_string
 from django.urls import reverse
 
+# Datos comunes de las alertas de pago al coordinador. Se comparten entre las
+# tres variantes para que sólo cambie lo que de verdad distingue a cada una.
+_ALERT_BASE = {
+    'bootcamper_name': 'Luis Andrade',
+    'bootcamper_email': 'luis.andrade@example.com',
+    'bootcamper_phone': '0991234567',
+    'program_name': 'Data Science Bootcamp',
+    'deficit': '$1,050.00',
+    'rows': [
+        ('Bootcamper', 'Luis Andrade'),
+        ('Email', 'luis.andrade@example.com'),
+        ('Teléfono', '0991234567'),
+        ('Programa', 'Data Science Bootcamp'),
+    ],
+    'payment_rows': [
+        ('Costo acordado', '$2,400.00'),
+        ('Total pagado', '$1,350.00'),
+        ('Adeudado', '$1,050.00'),
+        ('Esperado a la fecha', '$1,790.40'),
+        ('Avance del programa', '74.6%'),
+        ('Pagado del total', '56.3%'),
+    ],
+}
+
 PREVIEWS = {
     'password_reset': {
         'recipient_name': 'Ana Torres',
@@ -52,7 +76,6 @@ PREVIEWS = {
         'bootcamper_name': 'María Gómez',
         'bootcamper_email': 'maria.gomez@example.com',
         'program_name': 'Data Science Bootcamp',
-        'dashboard_url': 'http://localhost:5173/payments',
         'rows': [
             ('Bootcamper', 'María Gómez'),
             ('Email', 'maria.gomez@example.com'),
@@ -60,14 +83,38 @@ PREVIEWS = {
         ],
     },
     'late_payment_alert': {
-        'bootcamper_name': 'Luis Andrade',
-        'bootcamper_email': 'luis.andrade@example.com',
-        'program_name': 'Data Science Bootcamp',
-        'dashboard_url': 'http://localhost:5173/payments',
-        'rows': [
-            ('Bootcamper', 'Luis Andrade'),
-            ('Email', 'luis.andrade@example.com'),
-            ('Programa', 'Data Science Bootcamp'),
+        **_ALERT_BASE,
+        'alert_text': 'El bootcamper tiene pagos pendientes críticos.',
+        'action_text': 'Contacta al bootcamper para regularizar su situación de pagos.',
+    },
+    # Las dos variantes según desde dónde se pidió el aviso. `_template` deja
+    # renderizar el mismo archivo con contextos distintos.
+    'late_payment_alert_critical': {
+        **_ALERT_BASE,
+        '_template': 'late_payment_alert',
+        'alert_text': 'El déficit de este bootcamper supera el 10% del costo del programa.',
+        'action_text': (
+            'Contacta al bootcamper con los datos de arriba para acordar un plan '
+            'de pago, y avísale a Finanzas cuando tengas una respuesta.'
+        ),
+    },
+    'late_payment_alert_receipt': {
+        **_ALERT_BASE,
+        '_template': 'late_payment_alert',
+        'alert_text': (
+            'Finanzas está revisando un comprobante de este bootcamper, que '
+            'además tiene pagos atrasados.'
+        ),
+        'action_text': (
+            'Si el monto del comprobante no coincide con lo que esperabas, '
+            'contacta al bootcamper antes de que Finanzas cierre la revisión.'
+        ),
+        'receipt_rows': [
+            ('Monto del comprobante', '$420.00'),
+            ('Fecha del pago', '28/04/2026'),
+            ('Estado', 'Pendiente'),
+            ('Banco', 'Banco Pichincha'),
+            ('Nro. transacción', '884213770'),
         ],
     },
 }
@@ -88,10 +135,13 @@ def preview_email(request, name):
     if name not in PREVIEWS:
         raise Http404(f'No preview registered for "{name}".')
 
-    context = PREVIEWS[name]
+    context = dict(PREVIEWS[name])
+    # Varias previews pueden apuntar al mismo archivo con contextos distintos.
+    template = context.pop('_template', name)
+
     if request.GET.get('format') == 'txt':
-        body = render_to_string(f'emails/{name}.txt', context)
+        body = render_to_string(f'emails/{template}.txt', context)
         return HttpResponse(body, content_type='text/plain; charset=utf-8')
 
-    body = render_to_string(f'emails/{name}.html', context)
+    body = render_to_string(f'emails/{template}.html', context)
     return HttpResponse(body)

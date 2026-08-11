@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q, UniqueConstraint
 
 
 class Program(models.Model):
@@ -174,7 +175,25 @@ class Enrollment(models.Model):
     class Meta:
         verbose_name = 'Inscripción'
         verbose_name_plural = 'Inscripciones'
-        unique_together = ['bootcamper', 'bootcamp']
+        # La unicidad es por cohorte, no por programa (CB-346): alguien que ya
+        # cursó un programa puede volver a inscribirse en él en otra cohorte
+        # (ej. lo dejó y vuelve más adelante). Lo que no puede pasar es una
+        # segunda inscripción a la *misma* cohorte del mismo programa.
+        #
+        # Postgres no trata dos NULL como iguales, así que la constraint sola
+        # no bloquea duplicados cuando `cohort` es null (programas sin cohortes
+        # creadas todavía) — se cubre aparte con la constraint parcial de abajo.
+        constraints = [
+            UniqueConstraint(
+                fields=['bootcamper', 'bootcamp', 'cohort'],
+                name='unique_enrollment_per_cohort',
+            ),
+            UniqueConstraint(
+                fields=['bootcamper', 'bootcamp'],
+                condition=Q(cohort__isnull=True),
+                name='unique_enrollment_per_program_without_cohort',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.bootcamper} -> {self.bootcamp.name}'

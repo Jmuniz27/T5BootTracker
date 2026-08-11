@@ -121,13 +121,15 @@ class TestOnboardingActivate:
         resp = client.post(ACTIVATE_URL.format(token=token), {
             'password': 'nueva-clave-123',
             'password_confirm': 'nueva-clave-123',
+            'data_consent': True,
         }, format='json')
         assert resp.status_code == 200
 
         bootcamper.refresh_from_db()
         assert bootcamper.has_usable_password() is True
         assert bootcamper.check_password('nueva-clave-123') is True
-        assert bootcamper.verification_status == CustomUser.VerificationStatus.PENDING_VERIFICATION
+        # Activar confirma la cuenta directo: se eliminó el paso manual.
+        assert bootcamper.verification_status == CustomUser.VerificationStatus.VERIFIED
         assert bootcamper.onboarding_completed_at is not None
 
     def test_second_activation_attempt_is_rejected(self, db, salesperson_user, program):
@@ -137,6 +139,7 @@ class TestOnboardingActivate:
         first = client.post(ACTIVATE_URL.format(token=token), {
             'password': 'primera-clave-1',
             'password_confirm': 'primera-clave-1',
+            'data_consent': True,
         }, format='json')
         assert first.status_code == 200
 
@@ -144,6 +147,7 @@ class TestOnboardingActivate:
         second = client.post(ACTIVATE_URL.format(token=token), {
             'password': 'segunda-clave-2',
             'password_confirm': 'segunda-clave-2',
+            'data_consent': True,
         }, format='json')
         assert second.status_code == 400
         assert second.json()['code'] == 'ALREADY_ACTIVATED'
@@ -159,6 +163,7 @@ class TestOnboardingActivate:
         resp = client.post(ACTIVATE_URL.format(token=token), {
             'password': 'una-clave-123',
             'password_confirm': 'otra-clave-456',
+            'data_consent': True,
         }, format='json')
         assert resp.status_code == 400
 
@@ -168,6 +173,7 @@ class TestOnboardingActivate:
         resp = client.post(ACTIVATE_URL.format(token='garbage-token'), {
             'password': 'cualquier-clave1',
             'password_confirm': 'cualquier-clave1',
+            'data_consent': True,
         }, format='json')
         assert resp.status_code == 400
         assert resp.json()['code'] == 'TOKEN_INVALID'
@@ -182,6 +188,7 @@ class TestOnboardingActivate:
         resp = client.post(ACTIVATE_URL.format(token=old_token), {
             'password': 'clave-vieja-123',
             'password_confirm': 'clave-vieja-123',
+            'data_consent': True,
         }, format='json')
         assert resp.status_code == 400
         assert resp.json()['code'] == 'TOKEN_SUPERSEDED'

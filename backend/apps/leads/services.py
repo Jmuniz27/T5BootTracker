@@ -55,6 +55,12 @@ def register_interaction(lead, user, validated_data):
         update_fields.append('status')
 
     lead.save(update_fields=update_fields)
+
+    # Se sella después de guardar el lead: la interacción se crea antes de que se
+    # recalcule el estado, así que hacerlo arriba grabaría el estado anterior.
+    interaction.lead_status = lead.status
+    interaction.save(update_fields=['lead_status'])
+
     return interaction
 
 
@@ -80,6 +86,20 @@ def convert_lead_to_bootcamper(lead, validated_data):
 
     email = validated_data['email']
     phone = validated_data.get('phone') or lead.phone
+
+    # CB-345: si el email del lead en sí (no el que se tecleó acá) es de un
+    # miembro del staff, el lead queda visible con ese nombre en Convertidos
+    # aunque el bootcamper resultante use otro correo — LeadWriteSerializer ya
+    # bloquea la creación de leads nuevos con email de staff, pero esto cierra
+    # el caso de datos previos a ese fix o de un lead cuyo email se editó
+    # después de crearlo.
+    if lead.email and CustomUser.objects.filter(email=lead.email).exclude(
+        role=CustomUser.Role.BOOTCAMPER,
+    ).exists():
+        raise ConflictError({
+            'error': 'El email de este lead pertenece a un miembro del equipo; no se puede convertir.',
+            'code': 'LEAD_EMAIL_CONFLICT',
+        })
 
     invitation_link = None
     is_returning = False
@@ -136,7 +156,15 @@ def convert_lead_to_bootcamper(lead, validated_data):
             agreed_price=agreed_price,
         )
     except IntegrityError:
-        raise ConflictError({'error': 'El bootcamper ya está inscrito en este programa.', 'code': 'ALREADY_ENROLLED'})
+        # CB-346: la unicidad es por cohorte, no por programa — este 409 ahora
+        # sólo dispara si ya existe esa combinación exacta (misma cohorte, o
+        # sin cohorte en ambos casos).
+        detail = (
+            'El bootcamper ya está inscrito en esa cohorte de este programa.'
+            if cohort else
+            'El bootcamper ya está inscrito en este programa sin cohorte asignada.'
+        )
+        raise ConflictError({'error': detail, 'code': 'ALREADY_ENROLLED'})
 
     lead.status = Lead.Status.CONVERTED
     lead.program = program
@@ -315,6 +343,7 @@ def reassign_lead_by_admin(lead_id, admin_user, new_owner=None):
         interaction_type=Interaction.InteractionType.SYSTEM,
         outcome=Interaction.Outcome.REASSIGNED,
         notes=notes,
+        lead_status=lead.status,
     )
 
     return lead
@@ -376,10 +405,17 @@ def discard_lead(lead_id, user, reason, detail=''):
         lead.discard_detail = detail
         lead.discarded_at = now()
         lead.discarded_by = user
+        # Al descartar, el lead se desasigna: sale del vendedor y, al reactivarlo,
+        # queda Disponible para que cualquiera lo retome (CR-006 cierra la tenencia).
+        if lead.owner is not None:
+            lead.released_at = now()
+        lead.owner = None
+        lead.assigned_at = None
         lead.version += 1
         lead.save(update_fields=[
             'status', 'status_before_discard', 'discard_reason', 'discard_detail',
-            'discarded_at', 'discarded_by', 'version', 'updated_at',
+            'discarded_at', 'discarded_by', 'owner', 'assigned_at', 'released_at',
+            'version', 'updated_at',
         ])
 
         Interaction.objects.create(
@@ -387,6 +423,7 @@ def discard_lead(lead_id, user, reason, detail=''):
             salesperson=user,
             interaction_type=Interaction.InteractionType.SYSTEM,
             outcome=Interaction.Outcome.DISCARDED,
+            lead_status=lead.status,
             notes=(
                 f'Lead descartado por {user.get_full_name()}. '
                 f'Motivo: {lead.get_discard_reason_display()}.'
@@ -435,6 +472,7 @@ def restore_lead(lead_id, user):
             salesperson=user,
             interaction_type=Interaction.InteractionType.SYSTEM,
             outcome=Interaction.Outcome.RESTORED,
+            lead_status=lead.status,
             notes=f'Descarte deshecho por {user.get_full_name()}. Vuelve a {lead.get_status_display()}.',
         )
 

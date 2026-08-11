@@ -35,11 +35,18 @@ export const rejectPayment = (id, data) =>
 export const getPrograms = () =>
   client.get('/programs/').then((r) => r.data)
 
-export const notifyCoordinator = (bootcamperId, programId) =>
+// `source` dice desde qué pantalla se pidió el aviso, para que el correo al
+// coordinador diga de qué se trata en vez de ser siempre el mismo texto.
+export const notifyCoordinator = (bootcamperId, programId, { source, paymentId } = {}) =>
   client
-    .post(`/payments/notify-coordinator/${bootcamperId}/`, null, {
-      params: { program_id: programId },
-    })
+    .post(
+      `/payments/notify-coordinator/${bootcamperId}/`,
+      {
+        ...(source ? { source } : {}),
+        ...(paymentId ? { payment_id: paymentId } : {}),
+      },
+      { params: { program_id: programId } },
+    )
     .then((r) => r.data)
 
 export const getMonitoring = (params = {}) =>
@@ -78,6 +85,16 @@ export const assignBootcamper = (bootcamperId, financeOwnerId = null) =>
     )
     .then((r) => r.data)
 
+// #326 — reparto en lote. Los que fallan vienen en `failed` con su motivo; el
+// resto sí queda asignado, así que la respuesta hay que leerla, no asumirla.
+export const bulkAssignBootcampers = (bootcamperIds, financeOwnerId = null) =>
+  client
+    .patch('/payments/bootcampers/bulk-assign/', {
+      bootcamper_ids: bootcamperIds,
+      ...(financeOwnerId ? { finance_owner_id: financeOwnerId } : {}),
+    })
+    .then((r) => r.data)
+
 export const releaseBootcamper = (bootcamperId) =>
   client.patch(`/payments/bootcampers/${bootcamperId}/release/`).then((r) => r.data)
 
@@ -86,8 +103,38 @@ export const releaseBootcamper = (bootcamperId) =>
 //                                          y lo reenvía (backend: REJECTED → PENDING).
 //   DELETE /payments/my-payments/<id>/  → el bootcamper elimina un pago propio en
 //                                          estado DRAFT (en revisión) o REJECTED.
+// `data` puede ser FormData (para adjuntar un comprobante nuevo) o un objeto
+// plano (solo corrige campos). Axios pone el Content-Type correcto en cada caso.
 export const updateMyPayment = (id, data) =>
   client.patch(`/payments/my-payments/${id}/`, data).then((r) => r.data)
 
 export const deleteMyPayment = (id) =>
   client.delete(`/payments/my-payments/${id}/`).then((r) => r.data)
+
+// ── Finanzas edita un pago pendiente (fecha, cuenta/banco y demás datos) ───────
+export const editPayment = (id, data) =>
+  client.patch(`/payments/${id}/edit/`, data).then((r) => r.data)
+
+// ── Plan de pagos (lo sube Finanzas por bootcamper; el bootcamper solo lo ve) ──
+export const getFinancePaymentPlan = (bootcamperId) =>
+  client.get(`/payments/bootcampers/${bootcamperId}/payment-plan/`).then((r) => r.data)
+
+export const uploadFinancePaymentPlan = (bootcamperId, formData) =>
+  client
+    .put(`/payments/bootcampers/${bootcamperId}/payment-plan/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data)
+
+export const deleteFinancePaymentPlan = (bootcamperId) =>
+  client.delete(`/payments/bootcampers/${bootcamperId}/payment-plan/`).then((r) => r.data)
+
+export const getMyPaymentPlan = () =>
+  client.get('/payments/my-payment-plan/').then((r) => r.data)
+
+// El archivo del plan exige auth (JWT), así que no se puede abrir por <a href>:
+// se baja como blob con el cliente y se genera un object URL para verlo.
+export const getPaymentPlanFileUrl = (planId) =>
+  client
+    .get(`/payments/payment-plans/${planId}/file/`, { responseType: 'blob' })
+    .then((r) => URL.createObjectURL(r.data))

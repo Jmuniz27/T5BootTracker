@@ -58,7 +58,9 @@ class LeadListCreateView(APIView):
         # el orden. El reporte de leads las necesita a las dos: la clienta mide
         # el abandono por la distancia entre ambas.
         earliest = latest.order_by('created_at')
-        return Lead.objects.select_related('bootcamper').annotate(
+        # bootcamper__verified_by: lo lee BootcamperSummarySerializer.verified_by_name
+        # (ahora expuesto en el listado); sin él, un N+1 por cada convertido.
+        return Lead.objects.select_related('bootcamper', 'bootcamper__verified_by').annotate(
             interaction_count=Count('interactions', filter=real),
             last_outcome=Subquery(latest.values('outcome')[:1]),
             last_interaction_at=Subquery(latest.values('created_at')[:1]),
@@ -338,11 +340,25 @@ class LeadReleaseView(APIView):
     permission_classes = [IsCommercial]
 
     @extend_schema(
-        responses={200: LeadListSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
+        responses={
+            200: LeadListSerializer,
+            403: OpenApiResponse(description='No eres el dueño, o la asignación la maneja el Administrador'),
+        },
         summary='Liberar lead',
         tags=['Leads'],
     )
     def patch(self, request, pk):
+        # Si la auto-asignación está apagada, el pool lo maneja el Administrador:
+        # el vendedor no puede asignarse ni liberar (antes sólo se bloqueaba
+        # asignarse, así que podía soltar un lead que después no podría retomar).
+        if not get_self_assignment_enabled():
+            return Response(
+                {
+                    'error': 'La asignación de leads la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         lead = get_object_or_404(Lead, pk=pk)
         if lead.owner != request.user:
             return Response(
@@ -378,8 +394,13 @@ class LeadDiscardView(APIView):
     )
     def patch(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
-        # El vendedor cierra lo suyo; el administrador, cualquiera.
-        if request.user.role != CustomUser.Role.ADMINISTRATOR and lead.owner != request.user:
+        # El vendedor cierra lo suyo (o un lead sin dueño); el administrador,
+        # cualquiera. Solo se bloquea si está asignado a otro vendedor.
+        if (
+            request.user.role != CustomUser.Role.ADMINISTRATOR
+            and lead.owner is not None
+            and lead.owner != request.user
+        ):
             return Response(
                 {'error': 'Solo el vendedor asignado puede descartar este lead.', 'code': 'NOT_OWNER'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -413,7 +434,13 @@ class LeadRestoreView(APIView):
     )
     def patch(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
-        if request.user.role != CustomUser.Role.ADMINISTRATOR and lead.owner != request.user:
+        # Un descartado queda sin dueño: cualquiera del equipo comercial puede
+        # reactivarlo (vuelve a Disponible). Solo se restringe si sigue asignado a otro.
+        if (
+            request.user.role != CustomUser.Role.ADMINISTRATOR
+            and lead.owner is not None
+            and lead.owner != request.user
+        ):
             return Response(
                 {'error': 'Solo el vendedor asignado puede reactivar este lead.', 'code': 'NOT_OWNER'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -527,7 +554,14 @@ class LeadDetailView(APIView):
             ),
             pk=pk,
         )
-        if not request.user.is_administrator and lead.owner is not None and lead.owner != request.user:
+        # Los disponibles (sin dueño) y los convertidos son visibles para todo el
+        # equipo comercial; un lead asignado a otro vendedor, solo su dueño o admin.
+        if (
+            not request.user.is_administrator
+            and lead.status != Lead.Status.CONVERTED
+            and lead.owner is not None
+            and lead.owner != request.user
+        ):
             return Response(
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -582,7 +616,15 @@ class InteractionListCreateView(APIView):
     )
     def get(self, request, pk):
         lead = get_object_or_404(Lead, pk=pk)
-        if not request.user.is_administrator and lead.owner != request.user:
+        # El historial es visible para todo el equipo comercial cuando el lead
+        # está disponible (sin dueño) o convertido; si está asignado a otro
+        # vendedor, solo su dueño o el admin lo ven.
+        if (
+            not request.user.is_administrator
+            and lead.status != Lead.Status.CONVERTED
+            and lead.owner is not None
+            and lead.owner != request.user
+        ):
             return Response(
                 {'error': 'No tienes permiso para ver este lead.', 'code': 'FORBIDDEN'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -877,6 +919,7 @@ class ReturningBootcamperView(APIView):
                 interaction_type=Interaction.InteractionType.NOTE,
                 outcome=Interaction.Outcome.CALL_AGAIN,  # <-- ACTUALIZADO AQUÍ
                 notes=notes,
+                lead_status=lead.status,
             )
 
         return Response(LeadListSerializer(lead).data, status=status.HTTP_201_CREATED)

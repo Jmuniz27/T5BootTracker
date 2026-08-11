@@ -5,9 +5,10 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import UsersPage from '../UsersPage';
 import { useAuthStore } from '../../store/auth.store';
-import { getUsers, toggleUserActive, createUser } from '../../api/users.api';
+import { getUsers, toggleUserActive, createUser, updateEnrollmentCohort } from '../../api/users.api';
 
 import { getPrograms, getSelfAssignmentSetting } from '../../api/leads.api';
+import { getCohorts } from '../../api/programs.api';
 
 vi.mock('../../api/users.api', () => ({
   getUsers: vi.fn(),
@@ -15,12 +16,17 @@ vi.mock('../../api/users.api', () => ({
   updateUser: vi.fn(),
   toggleUserActive: vi.fn(),
   resetUserPassword: vi.fn(),
+  updateEnrollmentCohort: vi.fn(),
 }));
 
 vi.mock('../../api/leads.api', () => ({
   getPrograms: vi.fn(),
   getSelfAssignmentSetting: vi.fn(),
   updateSelfAssignmentSetting: vi.fn(),
+}));
+
+vi.mock('../../api/programs.api', () => ({
+  getCohorts: vi.fn(),
 }));
 
 const PROGRAMA = { id: 'prog-1', name: 'Python Full Stack Abril 2026' };
@@ -498,5 +504,195 @@ describe('UsersPage', () => {
       expect(screen.getByText('Boot Camper')).toBeInTheDocument();
       expect(screen.queryByText('Boot Inactivo')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('UsersPage — programa y cohorte del bootcamper (#328)', () => {
+  const CON_COHORTE = {
+    id: 'bc-1',
+    full_name: 'Ana Torres',
+    email: 'ana@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345678',
+    is_active: true,
+    enrollments: [{
+      enrollment_id: 'enr-1',
+      program_id: 'prog-1', program_name: 'Python Full Stack',
+      cohort_id: 'coh-1', cohort_number: 3, cohort_status: 'IN_PROGRESS',
+    }],
+  };
+
+  const OTRO_PROGRAMA = {
+    id: 'bc-2',
+    full_name: 'Luis Vera',
+    email: 'luis@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345679',
+    is_active: true,
+    enrollments: [{
+      enrollment_id: 'enr-2',
+      program_id: 'prog-2', program_name: 'Data Science',
+      cohort_id: 'coh-9', cohort_number: 1, cohort_status: 'FINISHED',
+    }],
+  };
+
+  const SIN_INSCRIPCION = {
+    id: 'bc-3',
+    full_name: 'Pedro Sin',
+    email: 'pedro@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345670',
+    is_active: true,
+    enrollments: [],
+  };
+
+  async function irABootcampers(user) {
+    await user.click(await screen.findByRole('button', { name: /bootcampers/i }));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getUsers.mockResolvedValue({ results: [CON_COHORTE, OTRO_PROGRAMA, SIN_INSCRIPCION] });
+    getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
+  });
+
+  it('la fila dice programa y cohorte', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    expect(screen.getByText(/Python Full Stack/)).toBeInTheDocument();
+    expect(screen.getByText(/Cohorte 3/)).toBeInTheDocument();
+  });
+
+  it('un bootcamper sin inscripción lo dice en vez de dejar el hueco', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    expect(screen.getByText('Sin inscripción')).toBeInTheDocument();
+  });
+
+  it('filtra por programa', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    await user.click(screen.getByRole('button', { name: /filtrar por programa/i }));
+    await user.click(screen.getByRole('option', { name: 'Data Science' }));
+
+    expect(screen.getByText('Luis Vera')).toBeInTheDocument();
+    expect(screen.queryByText('Ana Torres')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pedro Sin')).not.toBeInTheDocument();
+  });
+
+  it('la cohorte sólo aparece con un programa elegido', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    expect(screen.queryByRole('button', { name: /filtrar por cohorte/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /filtrar por programa/i }));
+    await user.click(screen.getByRole('option', { name: 'Python Full Stack' }));
+
+    expect(screen.getByRole('button', { name: /filtrar por cohorte/i })).toBeInTheDocument();
+  });
+
+  it('los filtros de inscripción no aparecen en Administrativos', async () => {
+    // Un vendedor no cursa nada: ahí no significan nada.
+    renderPage();
+    await screen.findByRole('button', { name: /bootcampers/i });
+
+    expect(screen.queryByRole('button', { name: /filtrar por programa/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('UsersPage — cambiar cohorte de un bootcamper (CB-347)', () => {
+  const MATRICULADO = {
+    id: 'bc-1',
+    full_name: 'Ana Torres',
+    email: 'ana@test.com',
+    role: 'BOOTCAMPER',
+    cedula: '0912345678',
+    is_active: true,
+    enrollments: [{
+      enrollment_id: 'enr-1',
+      program_id: 'prog-1', program_name: 'Python Full Stack',
+      cohort_id: null, cohort_number: null, cohort_status: null,
+    }],
+  };
+
+  const COHORTE_2 = {
+    id: 'coh-2', number: 2, status: 'UPCOMING', status_label: 'Próxima', start_month: '2026-09-01',
+  };
+
+  async function irABootcampers(user) {
+    await user.click(await screen.findByRole('button', { name: /bootcampers/i }));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getUsers.mockResolvedValue({ results: [MATRICULADO] });
+    getSelfAssignmentSetting.mockResolvedValue({ self_assign_enabled: true });
+    getCohorts.mockResolvedValue([COHORTE_2]);
+  });
+
+  it('abre el modal con el programa de la inscripción elegida', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    await user.click(await screen.findByRole('button', { name: /cambiar/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /cambiar cohorte/i });
+    expect(within(dialog).getByText(/Python Full Stack/)).toBeInTheDocument();
+  });
+
+  it('asigna una cohorte y muestra un toast de éxito', async () => {
+    const user = userEvent.setup();
+    updateEnrollmentCohort.mockResolvedValue({ ...MATRICULADO });
+    renderPage();
+    await irABootcampers(user);
+
+    await user.click(await screen.findByRole('button', { name: /cambiar/i }));
+    const dialog = await screen.findByRole('dialog', { name: /cambiar cohorte/i });
+
+    await user.click(within(dialog).getByRole('button', { name: /sin cohorte/i }));
+    await user.click(within(dialog).getByRole('option', { name: /cohorte 2/i }));
+    await user.click(within(dialog).getByRole('button', { name: /guardar cambios/i }));
+
+    expect(updateEnrollmentCohort).toHaveBeenCalledWith('bc-1', 'enr-1', 'coh-2');
+    expect(await screen.findByText(/cohorte de ana torres actualizada/i)).toBeInTheDocument();
+  });
+
+  it('el botón guardar arranca deshabilitado si no se cambió nada', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await irABootcampers(user);
+
+    await user.click(await screen.findByRole('button', { name: /cambiar/i }));
+    const dialog = await screen.findByRole('dialog', { name: /cambiar cohorte/i });
+
+    expect(within(dialog).getByRole('button', { name: /guardar cambios/i })).toBeDisabled();
+  });
+
+  it('muestra un toast de error si el backend rechaza el cambio', async () => {
+    const user = userEvent.setup();
+    updateEnrollmentCohort.mockRejectedValue({
+      response: { data: { error: 'La cohorte 2 está finalizada.', code: 'COHORT_NOT_ASSIGNABLE' } },
+    });
+    renderPage();
+    await irABootcampers(user);
+
+    await user.click(await screen.findByRole('button', { name: /cambiar/i }));
+    const dialog = await screen.findByRole('dialog', { name: /cambiar cohorte/i });
+
+    await user.click(within(dialog).getByRole('button', { name: /sin cohorte/i }));
+    await user.click(within(dialog).getByRole('option', { name: /cohorte 2/i }));
+    await user.click(within(dialog).getByRole('button', { name: /guardar cambios/i }));
+
+    // El mensaje aparece dos veces: dentro del modal y en el toast de la página.
+    expect(await screen.findAllByText('La cohorte 2 está finalizada.')).toHaveLength(2);
   });
 });

@@ -10,6 +10,7 @@ import UsersTable from '../components/users/UsersTable'
 import CreateUserModal from '../components/users/CreateUserModal'
 import EditUserModal from '../components/users/EditUserModal'
 import ConfirmToggleModal from '../components/users/ConfirmToggleModal'
+import ChangeCohortModal from '../components/users/ChangeCohortModal'
 import SelfAssignmentToggle from '../components/leads/SelfAssignmentToggle'
 import { ROLE_OPTIONS } from '../components/users/roles'
 import { errorMessage } from '../components/users/apiErrors'
@@ -43,12 +44,16 @@ export default function UsersPage() {
   const currentUserId = useAuthStore((s) => s.user?.id)
 
   const [activeTab, setActiveTab] = useState('staff') // 'staff' | 'bootcampers'
+  // #328: la clienta agrupa a los bootcampers por programa y cohorte.
+  const [programFilter, setProgramFilter] = useState('')
+  const [cohortFilter, setCohortFilter] = useState('')
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('ALL')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [showCreate, setShowCreate] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [toggleTarget, setToggleTarget] = useState(null)
+  const [cohortTarget, setCohortTarget] = useState(null) // { bootcamper, enrollment }
   const [toast, setToast] = useState(null)
 
   const showToast = (message, type = 'success') => setToast({ message, type })
@@ -72,15 +77,47 @@ export default function UsersPage() {
   const bootcamperUsers  = useMemo(() => users.filter((u) => u.role === 'BOOTCAMPER'), [users])
   const tabUsers = activeTab === 'staff' ? staffUsers : bootcamperUsers
 
+  // Las opciones salen de lo que hay en pantalla: ofrecer un programa sin nadie
+  // inscrito sólo lleva a una tabla vacía.
+  const programOptions = useMemo(() => {
+    const porId = new Map()
+    bootcamperUsers.forEach((u) => {
+      (u.enrollments ?? []).forEach((e) => porId.set(e.program_id, e.program_name))
+    })
+    return [...porId.entries()].map(([value, label]) => ({ value, label }))
+  }, [bootcamperUsers])
+
+  // La cohorte depende del programa, igual que en la pantalla de Pagos: fuera de
+  // su programa el número de cohorte no identifica nada.
+  const cohortOptions = useMemo(() => {
+    if (!programFilter) return []
+    const porId = new Map()
+    bootcamperUsers.forEach((u) => {
+      (u.enrollments ?? [])
+        .filter((e) => e.program_id === programFilter && e.cohort_id)
+        .forEach((e) => porId.set(e.cohort_id, `Cohorte ${e.cohort_number}`))
+    })
+    return [...porId.entries()].map(([value, label]) => ({ value, label }))
+  }, [bootcamperUsers, programFilter])
+
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase()
+    const matchesEnrollment = (user) => {
+      if (!programFilter) return true
+      return (user.enrollments ?? []).some(
+        (e) => e.program_id === programFilter && (!cohortFilter || e.cohort_id === cohortFilter),
+      )
+    }
     return tabUsers.filter(
       (u) =>
         matchesSearch(u, term) &&
         (activeTab === 'bootcampers' || roleFilter === 'ALL' || u.role === roleFilter) &&
-        matchesStatus(u, statusFilter),
+        matchesStatus(u, statusFilter) &&
+        // Los filtros de inscripción sólo aplican a bootcampers: en la pestaña
+        // de administrativos no significan nada.
+        (activeTab !== 'bootcampers' || matchesEnrollment(u)),
     )
-  }, [tabUsers, activeTab, search, roleFilter, statusFilter])
+  }, [tabUsers, activeTab, search, roleFilter, statusFilter, programFilter, cohortFilter])
 
   const activeCount = tabUsers.filter((u) => u.is_active).length
   const adminCount  = staffUsers.filter((u) => u.role === 'ADMINISTRATOR').length
@@ -186,6 +223,24 @@ export default function UsersPage() {
           {activeTab === 'staff' && (
             <CustomSelect value={roleFilter} onChange={setRoleFilter} options={ROLE_FILTER_OPTIONS} />
           )}
+          {activeTab === 'bootcampers' && programOptions.length > 0 && (
+            <CustomSelect
+              value={programFilter}
+              onChange={(value) => { setProgramFilter(value); setCohortFilter('') }}
+              options={[{ value: '', label: 'Todos los programas' }, ...programOptions]}
+              placeholder="Todos los programas"
+              ariaLabel="Filtrar por programa"
+            />
+          )}
+          {activeTab === 'bootcampers' && programFilter && cohortOptions.length > 0 && (
+            <CustomSelect
+              value={cohortFilter}
+              onChange={setCohortFilter}
+              options={[{ value: '', label: 'Todas las cohortes' }, ...cohortOptions]}
+              placeholder="Todas las cohortes"
+              ariaLabel="Filtrar por cohorte"
+            />
+          )}
           <CustomSelect value={statusFilter} onChange={setStatusFilter} options={STATUS_FILTER_OPTIONS} />
         </div>
 
@@ -202,6 +257,7 @@ export default function UsersPage() {
           currentUserId={currentUserId}
           onEdit={setEditTarget}
           onToggle={setToggleTarget}
+          onChangeCohort={(bootcamper, enrollment) => setCohortTarget({ bootcamper, enrollment })}
         />
       </div>
 
@@ -228,6 +284,16 @@ export default function UsersPage() {
           isPending={toggleMutation.isPending}
           onConfirm={() => toggleMutation.mutate(toggleTarget)}
           onClose={() => setToggleTarget(null)}
+        />
+      )}
+
+      {cohortTarget && (
+        <ChangeCohortModal
+          bootcamper={cohortTarget.bootcamper}
+          enrollment={cohortTarget.enrollment}
+          onClose={() => setCohortTarget(null)}
+          onSuccess={(msg) => showToast(msg)}
+          onError={(msg) => showToast(msg, 'error')}
         />
       )}
 

@@ -14,7 +14,12 @@ const AuthInput = forwardRef(function AuthInput(
         )}
         <input
           ref={ref}
-          className={`w-full rounded-full px-5 py-3.5 text-sm text-white placeholder-white/30 outline-none transition ${icon ? 'pl-12' : ''} ${endAdornment ? 'pr-12' : ''} ${className}`}
+          // `text-base` (16px) y no `text-sm`: Safari en iOS hace zoom solo al
+          // enfocar un campo de menos de 16px y no vuelve atrás, así que el
+          // usuario terminaba de activar su cuenta con la página ampliada. No
+          // hay forma de desactivarlo por CSS, y fijar `maximum-scale=1` en el
+          // viewport lo ignoran los iOS modernos (y rompe accesibilidad).
+          className={`auth-input-field w-full rounded-full px-5 py-3.5 text-base text-white placeholder-white/30 outline-none transition ${icon ? 'pl-12' : ''} ${endAdornment ? 'pr-12' : ''} ${className}`}
           style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }}
           onFocus={(e) => { e.target.style.borderColor = 'rgba(91,155,213,0.6)'; props.onFocus?.(e); }}
           onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.12)'; props.onBlur?.(e); }}

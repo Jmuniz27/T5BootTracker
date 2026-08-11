@@ -189,7 +189,6 @@ def send_conversion_notification(self, lead_id, bootcamper_id):
                 'bootcamper_name': bootcamper.get_full_name(),
                 'bootcamper_email': bootcamper.email,
                 'program_name': lead.program.name,
-                'dashboard_url': f'{settings.FRONTEND_URL}/payments',
                 'rows': [
                     ('Bootcamper', bootcamper.get_full_name()),
                     ('Email', bootcamper.email),
@@ -208,11 +207,20 @@ def send_conversion_notification(self, lead_id, bootcamper_id):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def send_late_payment_alert(self, bootcamper_id, program_id):
-    """Send a late payment alert to program coordinators."""
+def send_late_payment_alert(self, bootcamper_id, program_id, source=None, payment_id=None):
+    """Send a late payment alert to program coordinators.
+
+    `source` y `payment_id` son opcionales a propósito: la tarea puede estar ya
+    encolada con la firma vieja cuando se despliega esta versión, y en ese caso
+    tiene que seguir corriendo.
+    """
     try:
         from apps.authentication.models import CustomUser
+        from apps.payments.models import Payment
+        from apps.payments.services import PaymentProgressService
         from apps.programs.models import Program
+
+        from .services import build_late_payment_alert
 
         bootcamper = CustomUser.objects.get(id=bootcamper_id)
         program    = Program.objects.get(id=program_id)
@@ -225,24 +233,27 @@ def send_late_payment_alert(self, bootcamper_id, program_id):
             )
             return
 
+        # `.first()` y no `.get()`: que el pago se haya borrado entre el click y
+        # el worker no debe impedir que el coordinador reciba el aviso.
+        payment = Payment.objects.filter(id=payment_id).first() if payment_id else None
+        summary = PaymentProgressService().get_payment_summary(
+            str(bootcamper_id), str(program_id)
+        )
+
+        subject, context = build_late_payment_alert(
+            bootcamper, program, summary, source=source, payment=payment
+        )
+
         send_templated_email(
             template='late_payment_alert',
-            context={
-                'bootcamper_name': bootcamper.get_full_name(),
-                'bootcamper_email': bootcamper.email,
-                'program_name': program.name,
-                'dashboard_url': f'{settings.FRONTEND_URL}/payments',
-                'rows': [
-                    ('Bootcamper', bootcamper.get_full_name()),
-                    ('Email', bootcamper.email),
-                    ('Programa', program.name),
-                ],
-            },
-            subject=f'Alerta de pago: {bootcamper.get_full_name()} — {program.name}',
+            context=context,
+            subject=subject,
             to=to_list or [settings.DEFAULT_FROM_EMAIL],
             cc=cc_list,
         )
-        logger.info('Late payment alert sent for bootcamper %s.', bootcamper_id)
+        logger.info(
+            'Late payment alert sent for bootcamper %s (source=%s).', bootcamper_id, source
+        )
 
     except Exception as exc:
         logger.exception('Error sending late payment alert for bootcamper %s.', bootcamper_id)

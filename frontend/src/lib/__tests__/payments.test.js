@@ -28,4 +28,24 @@ describe('flattenUploadError', () => {
     const error = { response: { data: {} } };
     expect(flattenUploadError(error)).toBe('Error al subir el comprobante.');
   });
+
+  it('no muestra el HTML crudo cuando el backend responde con un 500', () => {
+    const error = {
+      response: {
+        data: '<!doctype html><html lang="en"><head><title>ServerError(500)</title></head><body><h1>ServerError(500)</h1></body></html>',
+      },
+    };
+    const message = flattenUploadError(error);
+    expect(message).toBe('Error al subir el comprobante.');
+    expect(message).not.toContain('doctype');
+  });
+
+  it('devuelve el mensaje genérico ante un cuerpo vacío', () => {
+    expect(flattenUploadError({ response: { data: '' } })).toBe('Error al subir el comprobante.');
+  });
+
+  it('respeta el fallback propio ante una respuesta que no es JSON', () => {
+    const error = { response: { data: '<html>boom</html>' } };
+    expect(flattenUploadError(error, 'No se pudo confirmar.')).toBe('No se pudo confirmar.');
+  });
 });

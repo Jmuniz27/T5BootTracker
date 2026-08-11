@@ -150,6 +150,9 @@ class Interaction(models.Model):
         # sistema, no el formulario del vendedor.
         DISCARDED         = 'DISCARDED',         'Descartado'
         RESTORED          = 'RESTORED',          'Reactivado'
+        # CB-347: cambio de cohorte de un bootcamper desde Usuarios. Igual que
+        # REASSIGNED, sólo lo usa el rastro de sistema.
+        COHORT_CHANGED    = 'COHORT_CHANGED',    'Cohorte modificada'
 
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     lead             = models.ForeignKey(
@@ -175,6 +178,22 @@ class Interaction(models.Model):
     next_action      = models.TextField(blank=True)
     next_action_date = models.DateField(null=True, blank=True)
     created_at       = models.DateTimeField(auto_now_add=True)
+    # Estado en que quedó el lead después de esta interacción (#325).
+    #
+    # El estado vive en Lead.status, que se sobrescribe: al mirar un lead hoy no
+    # había forma de saber que hace dos semanas estaba INTERESTED ni cuándo
+    # cambió. Sellarlo acá deja el historial contando la evolución y no sólo lo
+    # que se conversó.
+    #
+    # Nulo sólo en las interacciones anteriores a este campo que no se pudieron
+    # reconstruir (ver migración 0014).
+    lead_status      = models.CharField(
+        max_length=20,
+        choices=Lead.Status.choices,
+        blank=True,
+        null=True,
+        verbose_name='Estado del lead tras la interacción',
+    )
 
     class Meta:
         verbose_name = 'Interacción'

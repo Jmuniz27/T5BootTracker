@@ -19,6 +19,22 @@ import ProgramSelect from '../../../../src/components/ProgramSelect';
 import { validateIdentificacion } from '../../../../src/utils/identificacion';
 import { copyInvitationLink, shareInvitationLink } from '../../../../src/lib/invitation';
 
+function formatMoney(value?: string | number | null): string {
+  const n = typeof value === 'number' ? value : parseFloat(value ?? '');
+  if (Number.isNaN(n)) return '-';
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Espejo de apply_discount del backend. Sólo para mostrar: el precio que se
+// guarda lo calcula el backend.
+function previewDiscountedPrice(totalCost?: string, discountPercentage?: string): number | null {
+  const cost = parseFloat(totalCost ?? '');
+  const pct = parseFloat(discountPercentage ?? '');
+  if (Number.isNaN(cost)) return null;
+  const safePct = Number.isNaN(pct) ? 0 : Math.min(Math.max(pct, 0), 100);
+  return (cost * (100 - safePct)) / 100;
+}
+
 export default function ConvertLeadScreen() {
   const router = useRouter();
   const { id, name, program, email: emailParam, phone: phoneParam } =
@@ -66,6 +82,11 @@ export default function ConvertLeadScreen() {
 
   const pct = Number(discount);
   const discountValid = discount.trim() !== '' && !Number.isNaN(pct) && pct >= 0 && pct <= 100;
+
+  const selectedProgram = programs.find((p) => p.id === programId);
+  const discountedPrice = selectedProgram
+    ? previewDiscountedPrice(selectedProgram.total_cost, discount)
+    : null;
 
   const canSubmit =
     validateIdentificacion(cedula.trim()) &&
@@ -141,6 +162,9 @@ export default function ConvertLeadScreen() {
                     <Text style={s.actionPrimaryText}>Compartir</Text>
                   </TouchableOpacity>
                 </View>
+                <Text style={s.expiryNote}>
+                  Expira en 72 horas. Si el correo no llega, comparte este enlace por WhatsApp.
+                </Text>
               </>
             ) : (
               <Text style={s.returningNotice}>
@@ -244,6 +268,14 @@ export default function ConvertLeadScreen() {
               keyboardType="numeric"
             />
             {discount !== '' && !discountValid && <Text style={s.errorHint}>El descuento va de 0 a 100.</Text>}
+            {selectedProgram && discountedPrice != null && (
+              <Text style={s.priceHint}>
+                Pagará <Text style={s.priceValue}>{formatMoney(discountedPrice)}</Text>
+                {pct > 0 && selectedProgram.total_cost != null ? (
+                  <Text> en vez de <Text style={s.priceStrike}>{formatMoney(selectedProgram.total_cost)}</Text></Text>
+                ) : null}
+              </Text>
+            )}
           </View>
 
           {error && (
@@ -312,6 +344,9 @@ const s = StyleSheet.create({
   },
   inputError: { borderColor: '#fecaca' },
   errorHint: { fontSize: 12, color: '#dc2626', marginTop: 2 },
+  priceHint: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
+  priceValue: { fontWeight: '700', color: colors.textPrimary },
+  priceStrike: { textDecorationLine: 'line-through' },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -328,6 +363,7 @@ const s = StyleSheet.create({
   resultEmail: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginTop: 4 },
   resultLink: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   resultActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  expiryNote: { fontSize: 12, color: colors.textMuted, marginTop: 12, lineHeight: 17 },
   returningNotice: { fontSize: 13, color: '#b45309', marginTop: 8 },
   actionPrimary: {
     flex: 1,

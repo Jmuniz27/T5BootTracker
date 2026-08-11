@@ -9,7 +9,11 @@
   El lead <strong style="color:#111827;">{{ lead_name }}</strong> ha sido convertido exitosamente a bootcamper.
 </p>
 {% include "emails/components/_datalist.html" with rows=rows %}
-{% endblock %}
-{% block cta %}
-{% include "emails/components/_button.html" with button_url=dashboard_url button_label="Ver panel de pagos" %}
+<p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#4B5563;">
+  Ya puedes contar con esta persona en tu programa. Si necesitas más detalles sobre su
+  inscripción o sus pagos, escríbele a Finanzas.
+</p>
+<p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#6B7280;">
+  Este correo incluye toda la información necesaria; no necesitas ingresar a ningún sistema.
+</p>
 {% endblock %}

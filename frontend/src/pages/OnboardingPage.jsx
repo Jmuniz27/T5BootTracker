@@ -22,14 +22,38 @@ const confirmSchema = z.object({
     .refine((v) => !v || isValidIdentificacion(v), 'Cédula o RUC ecuatoriano inválido'),
 });
 
+// El texto del consentimiento y su versión viven en el backend
+// (authentication/services.py); acá se replica sólo lo que se muestra.
+const DATA_CONSENT_TEXT =
+  'Acepto que mis datos personales sean utilizados para los fines internos de seguimiento de Coding Bootcamps ESPOL.';
+
 const passwordSchema = z
   .object({
     password: z.string().min(8, 'Mínimo 8 caracteres'),
     password_confirm: z.string(),
+    // #329: sin marcar no se activa. El backend lo exige igual — una casilla
+    // que sólo vive en el cliente no es constancia de nada.
+    data_consent: z.boolean(),
   })
-  .refine((d) => d.password === d.password_confirm, {
-    message: 'Las contraseñas no coinciden',
-    path: ['password_confirm'],
+  // superRefine y no dos .refine encadenados: así se juntan todos los problemas
+  // en una pasada. Con una validación de forma que falle (por ejemplo el
+  // consentimiento sin marcar), un .refine posterior ni siquiera corre y el
+  // error de contraseñas quedaría escondido hasta arreglar el otro.
+  .superRefine((d, ctx) => {
+    if (d.password !== d.password_confirm) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Las contraseñas no coinciden',
+        path: ['password_confirm'],
+      });
+    }
+    if (!d.data_consent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Hay que aceptar el uso de datos para continuar',
+        path: ['data_consent'],
+      });
+    }
   });
 
 // Todos los códigos vienen con status 400 (ver authentication/services.py::read_onboarding_token) —
@@ -84,7 +108,10 @@ export default function OnboardingPage() {
   });
 
   const confirmForm = useForm({ resolver: zodResolver(confirmSchema), values: info });
-  const passwordForm = useForm({ resolver: zodResolver(passwordSchema) });
+  const passwordForm = useForm({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { data_consent: false },
+  });
 
   const activateMutation = useMutation({
     mutationFn: (passwordData) =>
@@ -97,7 +124,7 @@ export default function OnboardingPage() {
   if (isLoading) {
     return (
       <AuthLayout>
-        <p className="text-white/50 text-sm text-center py-8">Verificando tu enlace...</p>
+        <p className="text-white/50 text-sm text-center py-6 sm:py-8">Verificando tu enlace...</p>
       </AuthLayout>
     );
   }
@@ -106,8 +133,13 @@ export default function OnboardingPage() {
     const { title, message, showLogin } = onboardingErrorInfo(infoError);
     return (
       <AuthLayout backTo={showLogin ? '/login' : undefined} backLabel="Ir al inicio de sesión">
-        <h1 className="text-3xl font-bold text-white mb-2">{title}</h1>
-        <p className="text-white/50 text-sm py-4">{message}</p>
+        {/* Centrado como el resto de las pantallas "solo-mensaje" que comparten
+            AuthLayout (ResetPasswordPage sin token, OnboardingSuccessPage). Sin
+            formulario que ancle la lectura, el texto alineado a la izquierda queda
+            pegado al borde mientras el logo va centrado: el desbalance se nota en
+            cuanto la pantalla es angosta. */}
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 text-center">{title}</h1>
+        <p className="text-white/50 text-sm text-center py-4">{message}</p>
         {showLogin && (
           <AuthButton onClick={() => navigate('/login')} className="mt-4">
             Ir al inicio de sesión
@@ -120,10 +152,10 @@ export default function OnboardingPage() {
   if (step === 'confirm') {
     return (
       <AuthLayout>
-        <h1 className="text-3xl font-bold text-white mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
           Confirma tus <span className="text-[#5B9BD5]">datos</span>
         </h1>
-        <p className="text-white/50 text-sm mb-10">
+        <p className="text-white/50 text-sm mb-6 sm:mb-10">
           Revisa que tus datos estén correctos antes de crear tu contraseña.
         </p>
 
@@ -133,7 +165,7 @@ export default function OnboardingPage() {
             setStep('password');
           })}
           noValidate
-          className="space-y-5"
+          className="space-y-4 sm:space-y-5"
         >
           <div>
             <label className="block text-sm font-medium text-white/70 mb-2">Nombre</label>
@@ -173,12 +205,12 @@ export default function OnboardingPage() {
 
   return (
     <AuthLayout>
-      <h1 className="text-3xl font-bold text-white mb-2">
+      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
         Crea tu <span className="text-[#5B9BD5]">contraseña</span>
       </h1>
-      <p className="text-white/50 text-sm mb-10">Con esto termina la activación de tu cuenta.</p>
+      <p className="text-white/50 text-sm mb-6 sm:mb-10">Con esto termina la activación de tu cuenta.</p>
 
-      <form onSubmit={passwordForm.handleSubmit((d) => activateMutation.mutate(d))} noValidate className="space-y-5">
+      <form onSubmit={passwordForm.handleSubmit((d) => activateMutation.mutate(d))} noValidate className="space-y-4 sm:space-y-5">
         <div>
           <label className="block text-sm font-medium text-white/70 mb-2">Contraseña</label>
           <PasswordInput
@@ -198,6 +230,25 @@ export default function OnboardingPage() {
             placeholder="••••••••"
             error={passwordForm.formState.errors.password_confirm?.message}
           />
+        </div>
+
+        <div>
+          <label className="flex items-start gap-3 cursor-pointer">
+            {/* h-4 w-4 shrink-0: en móvil la frase del consentimiento ocupa tres
+                líneas y el checkbox, como hijo flex sin ancho intrínseco, se
+                aplastaba hasta quedar una elipse. */}
+            <input
+              type="checkbox"
+              {...passwordForm.register('data_consent')}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/30 bg-transparent text-[#213A8E] focus:ring-white/40"
+            />
+            <span className="text-sm text-white/70 leading-snug">{DATA_CONSENT_TEXT}</span>
+          </label>
+          {passwordForm.formState.errors.data_consent && (
+            <p className="text-red-400 text-sm mt-1.5">
+              {passwordForm.formState.errors.data_consent.message}
+            </p>
+          )}
         </div>
 
         {errorMsg && <p className="text-red-400 text-sm text-center">{errorMsg}</p>}

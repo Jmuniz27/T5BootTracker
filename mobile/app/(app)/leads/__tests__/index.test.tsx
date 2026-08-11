@@ -18,7 +18,7 @@ jest.mock('../../../../src/lib/api', () => ({
 }));
 
 jest.mock('../../../../src/context/AuthContext', () => ({
-  useAuth: () => ({ logout: jest.fn() }),
+  useAuth: () => ({ logout: jest.fn(), user: { role: 'SALESPERSON' } }),
 }));
 
 describe('LeadsScreen', () => {

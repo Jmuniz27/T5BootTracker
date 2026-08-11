@@ -3,6 +3,43 @@ import { COORDINATOR_SCOPE_LABELS, ROLE_BADGE_CLASSES, ROLE_LABELS } from './rol
 
 const COLUMNS = ['Usuario', 'Rol', 'Cédula', 'Estado', 'Acciones']
 
+/**
+ * Programa y cohorte del bootcamper (#328).
+ *
+ * Se listan todas sus inscripciones en vez de elegir una: quien cursa dos
+ * programas los cursa de verdad, y quedarse con el primero escondería el otro.
+ *
+ * "Cambiar" por fila (CB-347): antes no había forma de asignar la cohorte de
+ * una inscripción sin cohorte, ni de corregirla si se asignó mal — sólo se
+ * fijaba una vez, al convertir el lead.
+ */
+function EnrollmentLines({ enrollments, onChangeCohort }) {
+  if (!enrollments?.length) {
+    return <p className="text-xs text-gray-400 mt-1">Sin inscripción</p>
+  }
+
+  return (
+    <div className="mt-1 space-y-0.5">
+      {enrollments.map((e) => (
+        <p key={e.enrollment_id} className="text-xs text-gray-500 truncate">
+          {e.program_name}
+          {e.cohort_number != null
+            ? <span className="text-gray-400"> · Cohorte {e.cohort_number}</span>
+            : <span className="text-gray-400"> · Sin cohorte</span>}
+          {' '}
+          <button
+            type="button"
+            onClick={() => onChangeCohort(e)}
+            className="text-[#213A8E] hover:underline font-medium"
+          >
+            Cambiar
+          </button>
+        </p>
+      ))}
+    </div>
+  )
+}
+
 function SkeletonRow() {
   return (
     <tr>
@@ -129,7 +166,7 @@ function UserActionsDropdown({ user, isSelf, onEdit, onToggle }) {
   )
 }
 
-export default function UsersTable({ users, isLoading, isError, currentUserId, onEdit, onToggle }) {
+export default function UsersTable({ users, isLoading, isError, currentUserId, onEdit, onToggle, onChangeCohort }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm min-w-[640px]">
@@ -180,6 +217,12 @@ export default function UsersTable({ users, isLoading, isError, currentUserId, o
                   </td>
                   <td className="py-3.5 px-3">
                     <RoleBadge role={user.role} />
+                    {user.role === 'BOOTCAMPER' && (
+                      <EnrollmentLines
+                        enrollments={user.enrollments}
+                        onChangeCohort={(enrollment) => onChangeCohort(user, enrollment)}
+                      />
+                    )}
                     {user.role === 'COORDINATOR' && (
                       <p className="text-xs text-gray-500 mt-1">
                         {/* Con varios programas se listan por nombre; el general

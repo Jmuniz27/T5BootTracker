@@ -97,6 +97,26 @@ class TestLeadList:
         row = next(lead for lead in data['converted_leads'] if lead['id'] == str(converted.id))
         assert row['owner_name'] == 'Zahid Diaz'
 
+    def test_converted_lead_row_includes_bootcamper_profile(self, db, salesperson_user):
+        # El dashboard web arma "Ver lead" con el row del listado (no pide el
+        # detalle); sin bootcamper_profile no puede mostrar el estado de la
+        # cuenta (Invitado/Pendiente/Verificado) ni el botón de verificar.
+        bootcamper = CustomUser.objects.create_user(
+            email='boot.profile@test.com', password='testpass123',
+            first_name='Boot', last_name='Camper', role=CustomUser.Role.BOOTCAMPER,
+            verification_status=CustomUser.VerificationStatus.INVITED,
+        )
+        converted = Lead.objects.create(
+            name='Con Perfil', phone='0993335555',
+            status=Lead.Status.CONVERTED, owner=salesperson_user, bootcamper=bootcamper,
+        )
+
+        data = make_client(salesperson_user).get(LEADS_URL).json()
+
+        row = next(lead for lead in data['converted_leads'] if lead['id'] == str(converted.id))
+        assert row['bootcamper_profile'] is not None
+        assert row['bootcamper_profile']['verification_status'] == 'INVITED'
+
     def test_converted_leads_excludes_active_leads(self, db, salesperson_user, assigned_lead):
         client = make_client(salesperson_user)
         data = client.get(LEADS_URL).json()
@@ -785,6 +805,40 @@ class TestInteractions:
         client = make_client(other)
         resp = client.get(f'{LEADS_URL}{assigned_lead.id}/interactions/')
         assert resp.status_code == 403
+
+    def test_converted_lead_info_and_history_visible_to_other_salesperson(self, db, salesperson_user):
+        other = CustomUser.objects.create_user(
+            email='conv.owner@test.com', password='testpass123',
+            first_name='Owner', last_name='X', role=CustomUser.Role.SALESPERSON,
+        )
+        lead = Lead.objects.create(
+            name='Convertido', phone='0990001111', status=Lead.Status.CONVERTED, owner=other,
+        )
+        Interaction.objects.create(
+            lead=lead, salesperson=other,
+            interaction_type=Interaction.InteractionType.WHATSAPP,
+            outcome=Interaction.Outcome.SEND_INFO, notes='hola',
+        )
+        client = make_client(salesperson_user)
+        # Info e historial de un convertido son visibles para todo el equipo comercial.
+        assert client.get(f'{LEADS_URL}{lead.id}/').status_code == 200
+        assert client.get(f'{LEADS_URL}{lead.id}/interactions/').status_code == 200
+
+    def test_available_lead_history_visible_to_other_salesperson(self, db, salesperson_user, sample_lead):
+        worker = CustomUser.objects.create_user(
+            email='worker@test.com', password='testpass123',
+            first_name='W', last_name='K', role=CustomUser.Role.SALESPERSON,
+        )
+        Interaction.objects.create(
+            lead=sample_lead, salesperson=worker,
+            interaction_type=Interaction.InteractionType.CALL,
+            outcome=Interaction.Outcome.CALL_AGAIN, notes='llamada',
+        )
+        client = make_client(salesperson_user)
+        # sample_lead está sin asignar: su historial es visible para todo el equipo.
+        resp = client.get(f'{LEADS_URL}{sample_lead.id}/interactions/')
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
 
 
 # ==========================================

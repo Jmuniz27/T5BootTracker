@@ -42,19 +42,17 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         PROGRAM = 'PROGRAM', 'Por programa'
 
     class VerificationStatus(models.TextChoices):
-        """Estado de verificación del perfil de un bootcamper (sólo aplica a ese rol).
+        """Estado de la cuenta de un bootcamper (sólo aplica a ese rol).
 
         INVITED: recién convertido, aún no activó su cuenta.
-        PENDING_VERIFICATION: activó la cuenta y confirmó sus datos, falta que
-        el vendedor los verifique. No bloquea nada — es informativo.
-        VERIFIED: el vendedor confirmó los datos.
-        REJECTED: el vendedor encontró algo mal (issue #309). El motivo queda en
-        `verification_rejection_reason` y se le notifica por correo. No es
-        terminal: una vez corregidos los datos se puede pasar a VERIFIED.
+        VERIFIED ("Cuenta activa"): activó su cuenta. Se eliminó el paso manual
+        de verificación (no bloqueaba nada), así que activar es la confirmación.
+        PENDING_VERIFICATION / REJECTED: estados del flujo de verificación viejo,
+        ya no se producen; se conservan para datos históricos.
         """
         INVITED              = 'INVITED',              'Invitado'
         PENDING_VERIFICATION = 'PENDING_VERIFICATION', 'Pendiente de verificación'
-        VERIFIED             = 'VERIFIED',              'Verificado'
+        VERIFIED             = 'VERIFIED',              'Cuenta activa'
         REJECTED             = 'REJECTED',             'Rechazado'
 
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -131,6 +129,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         verbose_name='Motivo del rechazo de verificación',
     )
     onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+    # Consentimiento de uso de datos (#329). Se sella al activar la cuenta, que
+    # es el único punto donde la persona entra por su propia mano. Se guarda la
+    # versión del texto aceptado: si cambia, hay que poder saber qué aceptó cada
+    # quien. Nulo = nunca lo aceptó (cuentas anteriores a esto).
+    data_consent_at      = models.DateTimeField(null=True, blank=True, verbose_name='Consentimiento de datos')
+    data_consent_version = models.CharField(max_length=20, blank=True, verbose_name='Versión del consentimiento')
     # Token de invitación vigente (issue #253/#255): comparado contra el
     # `iat` firmado en el token para invalidar el link anterior al reenviar.
     onboarding_token_issued_at = models.DateTimeField(null=True, blank=True)

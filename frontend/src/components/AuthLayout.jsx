@@ -4,8 +4,15 @@ import logo from '../assets/logo.png';
 export default function AuthLayout({ children, backTo, backLabel = 'Volver' }) {
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-8 relative overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #1a2f6e 0%, #0d1b4b 60%, #091336 100%)' }}
+      // Columna y no fila: bajo `lg` el logo entra al flujo como hermano de la
+      // tarjeta. `py-10` es lo que evita que el centrado atrape el desborde —
+      // un formulario alto (los 5 campos del onboarding) crece hacia abajo y el
+      // documento scrollea, en vez de quedar recortado contra el borde.
+      //
+      // `auth-canvas` es el gancho del que cuelga el degradado, que vive en
+      // index.css sobre el elemento raíz: aquí, en un div anidado, no llegaría
+      // al lienzo y el rebote del scroll descubriría blanco.
+      className="auth-canvas relative min-h-screen overflow-hidden flex flex-col items-center justify-center gap-8 px-5 py-10 sm:px-8"
     >
       {/* Radial glow */}
       <div
@@ -15,8 +22,11 @@ export default function AuthLayout({ children, backTo, backLabel = 'Volver' }) {
         }}
       />
 
-      {/* Logo top-left */}
-      <div className="absolute top-8 left-10 z-10 flex items-center gap-3">
+      {/* Logo: en el flujo hasta `lg`, flotando arriba a la izquierda desde ahí.
+          Absoluto en pantallas chicas se superponía al formulario, porque nada
+          reservaba su espacio. El corte es `lg` y no `sm` porque a 640px la
+          tarjeta (x=96..544) todavía cruza la caja del logo (x=40..162). */}
+      <div className="relative z-10 flex items-center gap-3 lg:absolute lg:top-8 lg:left-10">
         <img src={logo} alt="Coding Bootcamps ESPOL" className="w-10 h-10 object-contain" />
         <div className="text-white text-xs font-semibold leading-tight opacity-80">
           CODING<br />BOOTCAMPS<br /><span className="text-[10px] tracking-widest">espol</span>

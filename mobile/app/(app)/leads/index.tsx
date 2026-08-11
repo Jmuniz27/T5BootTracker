@@ -36,6 +36,7 @@ const ROLE_LABEL: Record<string, string> = {
   ADMINISTRATOR: 'Administrador',
   COORDINATOR:   'Coordinador',
   BOOTCAMPER:    'Bootcamper',
+  FINANCE:       'Finanzas',
 };
 
 const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: string }> = {
@@ -44,6 +45,7 @@ const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: stri
   INTERESTED:     { bg: '#dcfce7', color: '#15803d', label: 'Interesado' },
   NOT_INTERESTED: { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
   CONVERTED:      { bg: '#f3e8ff', color: '#7e22ce', label: 'Convertido' },
+  DISCARDED:      { bg: '#f1f5f9', color: '#64748b', label: 'Descartado' },
 };
 
 const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
@@ -53,6 +55,7 @@ const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
   { value: 'INTERESTED',     label: 'Interesado' },
   { value: 'NOT_INTERESTED', label: 'No interesado' },
   { value: 'CONVERTED',      label: 'Convertido' },
+  { value: 'DISCARDED',      label: 'Descartado' },
 ];
 
 const AVATAR_PALETTE = ['#213A8E', '#8b5cf6', '#14b8a6', '#f43f5e', '#f59e0b', '#0891b2', '#ec4899', '#6366f1'];
@@ -144,7 +147,8 @@ type Tab = 'my' | 'available' | 'converted';
 
 export default function LeadsScreen() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const isSalesperson = user?.role === 'SALESPERSON';
 
   const [me, setMe]                     = useState<MeData | null>(null);
   const [tab, setTab]                   = useState<Tab>('my');
@@ -252,15 +256,17 @@ export default function LeadsScreen() {
                 <Text style={styles.headerSub}>Dashboard</Text>
               </View>
               <View style={styles.headerRight}>
-                <TouchableOpacity
-                  style={styles.agendaBtn}
-                  onPress={() => router.push('/(app)/agenda')}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Abrir agenda de seguimientos"
-                >
-                  <Ionicons name="calendar-outline" size={20} color={colors.navy} />
-                </TouchableOpacity>
+                {isSalesperson && (
+                  <TouchableOpacity
+                    style={styles.agendaBtn}
+                    onPress={() => router.push('/(app)/agenda')}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Abrir agenda de seguimientos"
+                  >
+                    <Ionicons name="calendar-outline" size={20} color={colors.navy} />
+                  </TouchableOpacity>
+                )}
                 <View style={styles.headerNameCol}>
                   <Text style={styles.headerName}>{me?.full_name ?? '—'}</Text>
                   <View style={styles.rolePill}>
@@ -277,17 +283,20 @@ export default function LeadsScreen() {
               </View>
             </View>
 
-            {/* Stat cards */}
+            {/* Indicadores (solo lectura, no son botones) */}
+            <Text style={styles.sectionLabel}>Indicadores</Text>
             <View style={styles.statRow}>
-              <View style={styles.statCard}>
+              <View style={styles.statTile}>
                 <Text style={styles.statValue}>{activeMy.length}</Text>
                 <Text style={styles.statLabel}>Mis leads</Text>
               </View>
-              <View style={styles.statCard}>
+              <View style={styles.statDivider} />
+              <View style={styles.statTile}>
                 <Text style={styles.statValue}>{available.length}</Text>
                 <Text style={styles.statLabel}>Disponibles</Text>
               </View>
-              <View style={styles.statCard}>
+              <View style={styles.statDivider} />
+              <View style={styles.statTile}>
                 <Text style={styles.statValue}>{convertedLeads.length}</Text>
                 <Text style={styles.statLabel}>Convertidos</Text>
               </View>
@@ -527,24 +536,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
-  // Stat cards
+  // Indicadores (solo lectura). Panel plano con divisores: se lee como un
+  // resumen, no como tres botones (antes eran tarjetas con borde y elevación).
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
   statRow: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    backgroundColor: '#f1f3f8',
+    borderRadius: 14,
+    paddingVertical: 12,
     marginBottom: 18,
   },
-  statCard: {
+  statTile: {
     flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
     gap: 2,
     alignItems: 'center',
   },
+  statDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    marginVertical: 6,
+    backgroundColor: colors.border,
+  },
   statValue: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: colors.textPrimary,
     letterSpacing: -0.5,
