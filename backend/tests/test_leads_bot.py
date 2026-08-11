@@ -142,6 +142,18 @@ class TestIsJelouBot:
         assert IsJelouBot().has_permission(self._request(BOT_TOKEN), None) is False
         assert IsJelouBot().has_permission(self._request(), None) is False
 
+    @override_settings(JELOU_BOT_TOKEN=BOT_TOKEN)
+    def test_denies_a_non_ascii_token_without_raising(self):
+        """Un byte no ASCII en la cabecera tiene que denegar, no reventar.
+
+        `compare_digest` sobre `str` exige que ambos lados sean ASCII y lanza
+        `TypeError` si no lo son. Django decodifica las cabeceras como latin-1
+        (PEP 3333), así que un byte alto llega como `str` no ASCII: la excepción
+        escapaba del permiso y las tres rutas respondían 500 sin credencial, en
+        vez del 403 que el fail-closed promete.
+        """
+        assert IsJelouBot().has_permission(self._request('ñ' + BOT_TOKEN[1:]), None) is False
+
 
 LOOKUP_URL = '/api/leads/bot/lookup/'
 CREATE_URL = '/api/leads/bot/'
@@ -460,5 +472,17 @@ class TestBotEndpointsRequireTheSecret:
     def test_a_wrong_secret_is_also_closed(self):
         client = APIClient()
         client.credentials(HTTP_X_BOT_TOKEN='otro-secreto')
+
+        assert client.get(LOOKUP_URL, {'phone': '593991000001'}).status_code == 403
+
+    def test_a_non_ascii_secret_is_closed_and_not_a_500(self):
+        """El rechazo tiene que ser 403 también con un byte alto en la cabecera.
+
+        Es la comprobación de extremo a extremo del arreglo de `compare_digest`:
+        antes la excepción escapaba del permiso y la ruta devolvía 500 sin
+        credencial, que además es un 500 provocable por cualquiera.
+        """
+        client = APIClient()
+        client.credentials(HTTP_X_BOT_TOKEN='ñ-secreto-invalido')
 
         assert client.get(LOOKUP_URL, {'phone': '593991000001'}).status_code == 403
