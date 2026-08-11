@@ -266,7 +266,7 @@ function ViewHistoryModal({ lead, onClose }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Historial de interacciones</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">{t('leads.history.title')}</h2>
 
         <div className="overflow-y-auto space-y-3 flex-1 pr-1">
           {isLoading && [1, 2, 3].map((i) => (
@@ -280,7 +280,7 @@ function ViewHistoryModal({ lead, onClose }) {
           ))}
 
           {!isLoading && interactions.length === 0 && (
-            <p className="text-center text-gray-500 py-10 text-sm">Aún no hay interacciones.</p>
+            <p className="text-center text-gray-500 py-10 text-sm">{t('leads.history.empty')}</p>
           )}
 
           {!isLoading && interactions.map((interaction) => (
@@ -307,7 +307,7 @@ function ViewHistoryModal({ lead, onClose }) {
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        {interaction.duration_minutes} min
+                        {interaction.duration_minutes} {t('leads.interactionForm.minutesUnit')}
                       </span>
                     </>
                   )}
@@ -334,10 +334,10 @@ function ViewHistoryModal({ lead, onClose }) {
                     // reconstruir sin inventar historia (ver migración 0014).
                     <span
                       data-testid="interaction-lead-status-missing"
-                      title="Esta interacción es anterior al registro de estados"
+                      title={t('leads.history.noStatusTooltip')}
                       className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-gray-50 text-gray-400"
                     >
-                      Sin registro de estado
+                      {t('leads.history.noStatusRecord')}
                     </span>
                   )}
                   {interaction.next_action && (
@@ -356,7 +356,7 @@ function ViewHistoryModal({ lead, onClose }) {
                   <button
                     onClick={() => setEditTarget(interaction)}
                     className="p-1.5 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
-                    title="Editar interacción"
+                    title={t('leads.interactionForm.editTitle')}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
@@ -382,10 +382,10 @@ function ViewHistoryModal({ lead, onClose }) {
   )
 }
 
-function validateInteractionForm(form) {
+function validateInteractionForm(form, t) {
   const errs = {}
-  if (!form.interaction_type) errs.interaction_type = 'Selecciona un tipo.'
-  if (!form.outcome) errs.outcome = 'Selecciona un resultado.'
+  if (!form.interaction_type) errs.interaction_type = t('leads.interactionForm.selectType')
+  if (!form.outcome) errs.outcome = t('leads.interactionForm.selectOutcome')
   return errs
 }
 
@@ -397,10 +397,10 @@ function buildInteractionPayload(form) {
   return payload
 }
 
-function makeInteractionSubmitHandler(form, mutation, setErrors) {
+function makeInteractionSubmitHandler(form, mutation, setErrors, t) {
   return (e) => {
     e.preventDefault()
-    const errs = validateInteractionForm(form)
+    const errs = validateInteractionForm(form, t)
     if (Object.keys(errs).length) { setErrors(errs); return }
     mutation.mutate(buildInteractionPayload(form))
   }
@@ -431,7 +431,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
     },
   })
 
-  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors)
+  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors, t)
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -567,7 +567,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     },
   })
 
-  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors)
+  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors, t)
 
   // Agendar reunión (meetings API) — mismo modal que la Agenda, lead prefijado.
   const { create: createMeeting } = useMeetingMutations()
@@ -1517,6 +1517,7 @@ function FilterDropdown({ value, onChange }) {
 // ─── Source Filter Dropdown ───────────────────────────────────────────────────
 
 function SourceFilterDropdown({ value, onChange }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -1527,7 +1528,7 @@ function SourceFilterDropdown({ value, onChange }) {
   }, [])
 
   const options = [
-    { value: '', label: 'Todas las fuentes' },
+    { value: '', label: t('leads.filters.allSources') },
     ...Object.entries(SOURCE_LABELS).map(([v, label]) => ({ value: v, label })),
   ]
 
@@ -1542,7 +1543,7 @@ function SourceFilterDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
         </svg>
-        {value ? SOURCE_LABELS[value] : 'Fuente'}
+        {value ? SOURCE_LABELS[value] : t('leads.table.source')}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
@@ -1566,6 +1567,7 @@ function SourceFilterDropdown({ value, onChange }) {
 // ─── Sort Dropdown ────────────────────────────────────────────────────────────
 
 function SortDropdown({ value, onChange }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -1576,11 +1578,11 @@ function SortDropdown({ value, onChange }) {
   }, [])
 
   const options = [
-    { value: 'default', label: 'Por defecto' },
-    { value: 'name_asc', label: 'Nombre A→Z' },
-    { value: 'name_desc', label: 'Nombre Z→A' },
-    { value: 'newest', label: 'Más reciente' },
-    { value: 'oldest', label: 'Más antiguo' },
+    { value: 'default', label: t('leads.sort.default') },
+    { value: 'name_asc', label: t('leads.sort.nameAsc') },
+    { value: 'name_desc', label: t('leads.sort.nameDesc') },
+    { value: 'newest', label: t('leads.sort.newest') },
+    { value: 'oldest', label: t('leads.sort.oldest') },
   ]
 
   const active = options.find((o) => o.value === value)
@@ -1596,7 +1598,7 @@ function SortDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
         </svg>
-        {active?.label ?? 'Ordenar'}
+        {active?.label ?? t('leads.sort.button')}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
@@ -1620,6 +1622,7 @@ function SortDropdown({ value, onChange }) {
 // ─── Vendor Filter (HST-025, admin) ───────────────────────────────────────────
 
 function VendorFilterDropdown({ value, onChange }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -1647,7 +1650,7 @@ function VendorFilterDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
-        {active?.full_name ?? 'Todos los vendedores'}
+        {active?.full_name ?? t('leads.filters.allVendors')}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 max-h-64 overflow-y-auto">
@@ -1657,7 +1660,7 @@ function VendorFilterDropdown({ value, onChange }) {
               !value ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
             }`}
           >
-            Todos los vendedores
+            {t('leads.filters.allVendors')}
           </button>
           {vendors.map((u) => (
             <button
@@ -2310,11 +2313,12 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
 function Pagination({ page, totalPages, onPrev, onNext }) {
+  const { t } = useTranslation()
   if (totalPages <= 1) return null
   return (
     <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
       <p className="text-sm text-gray-500">
-        Página {page} de {totalPages}
+        {t('leads.pagination.info', { page, total: totalPages })}
       </p>
       <div className="flex items-center gap-2">
         <button
@@ -2322,14 +2326,14 @@ function Pagination({ page, totalPages, onPrev, onNext }) {
           disabled={page === 1}
           className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          ← Anterior
+          {t('leads.pagination.prev')}
         </button>
         <button
           onClick={onNext}
           disabled={page === totalPages}
           className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          Siguiente →
+          {t('leads.pagination.next')}
         </button>
       </div>
     </div>
@@ -2468,10 +2472,10 @@ export default function LeadsDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-      showToast('Lead reactivado: vuelve al estado que tenía.')
+      showToast(t('leads.toast.restored'))
     },
     onError: (err) => {
-      showToast(err.response?.data?.error ?? 'No se pudo reactivar el lead.', 'error')
+      showToast(err.response?.data?.error ?? t('leads.toast.restoreError'), 'error')
     },
   })
   // ─── Reporte de leads (CB-58) ───────────────────────────────────────────────
@@ -2510,7 +2514,7 @@ export default function LeadsDashboard() {
     if (truncated) {
       // Nunca truncar en silencio: un reporte incompleto que se ve completo es
       // peor que no tenerlo.
-      showToast('El reporte es muy grande y se exportó sólo una parte. Filtra para acotarlo.', 'error')
+      showToast(t('leads.toast.reportTruncated'), 'error')
     }
 
     // Mismos filtros de cliente que la grilla, para que el archivo diga lo
@@ -2527,10 +2531,10 @@ export default function LeadsDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-      showToast('Lead asignado correctamente.')
+      showToast(t('leads.toast.assigned'))
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'No se pudo asignar el lead.'
+      const msg = err.response?.data?.error ?? t('leads.toast.assignError')
       showToast(msg, 'error')
     },
   })
@@ -2541,10 +2545,10 @@ export default function LeadsDashboard() {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setReleaseTarget(null)
-      showToast('Lead desasignado correctamente.')
+      showToast(t('leads.toast.released'))
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'No se pudo desasignar el lead.'
+      const msg = err.response?.data?.error ?? t('leads.toast.releaseError')
       showToast(msg, 'error')
     },
   })
@@ -2555,10 +2559,10 @@ export default function LeadsDashboard() {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setReassignTarget(null)
-      showToast(ownerId ? 'Lead reasignado correctamente.' : 'Lead liberado correctamente.')
+      showToast(ownerId ? t('leads.toast.reassigned') : t('leads.toast.freed'))
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'No se pudo liberar/reasignar el lead.'
+      const msg = err.response?.data?.error ?? t('leads.toast.reassignError')
       showToast(msg, 'error')
     },
   })
@@ -2571,7 +2575,7 @@ export default function LeadsDashboard() {
       if (autoAssignRef.current) {
         try {
           await assignLead(newLead.id)
-          showToast('Lead creado y asignado a ti.')
+          showToast(t('leads.toast.createdAssigned'))
           if (!isAdmin) setActiveTab('mine')
         } catch {
           showToast(t('leads.toast.createdNotAssigned'), 'error')
@@ -2708,7 +2712,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Todos ({pagination.all_leads_count ?? allLeads.length})
+                {t('leads.tabs.all')} ({pagination.all_leads_count ?? allLeads.length})
               </button>
               <button
                 data-testid="tab-assigned"
@@ -2786,7 +2790,7 @@ export default function LeadsDashboard() {
         {/* Table */}
         {isError && (
           <p className="text-center text-red-500 py-8 text-sm">
-            No se pudieron cargar los leads. Verifica que estés autenticado.
+            {t('leads.table.loadError')}
           </p>
         )}
 
@@ -2794,9 +2798,17 @@ export default function LeadsDashboard() {
         <table className="w-full text-sm min-w-[600px]">
           <thead>
             <tr className="border-b border-gray-100">
-              {['Nombre', 'Email', 'Teléfono', 'Fuente', 'Estado', 'Asignado a', 'Acciones'].map((h) => (
-                <th key={h} className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide">
-                  {h}
+              {[
+                ['name', t('leads.table.name')],
+                ['email', t('leads.table.email')],
+                ['phone', t('leads.table.phone')],
+                ['source', t('leads.table.source')],
+                ['status', t('leads.table.status')],
+                ['assignedTo', t('leads.table.assignedTo')],
+                ['actions', t('leads.table.actions')],
+              ].map(([key, label]) => (
+                <th key={key} className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide">
+                  {label}
                 </th>
               ))}
             </tr>
@@ -2807,7 +2819,7 @@ export default function LeadsDashboard() {
             {!isLoading && !isError && pageLeads.length === 0 && (
               <tr>
                 <td colSpan={7} className="text-center text-gray-500 py-10">
-                  No se encontraron leads.
+                  {t('leads.table.empty')}
                 </td>
               </tr>
             )}
@@ -2827,7 +2839,7 @@ export default function LeadsDashboard() {
                           <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
                           </svg>
-                          Empresa
+                          {t('leads.form.company')}
                         </span>
                       )}
                       <span className="font-medium text-gray-900">{lead.name}</span>
@@ -2844,7 +2856,7 @@ export default function LeadsDashboard() {
                   {isAdmin ? (
                     <button
                       onClick={() => setReassignTarget(lead)}
-                      aria-label={`Asignado a: ${lead.owner_name ?? 'sin asignar'}. Click para cambiar`}
+                      aria-label={t('leads.table.reassignAria', { owner: lead.owner_name ?? t('leads.common.unassigned') })}
                       className="flex items-center gap-2 rounded-lg px-1 -mx-1 py-0.5 hover:bg-gray-50 transition-colors"
                     >
                       {lead.owner ? (
@@ -2856,7 +2868,7 @@ export default function LeadsDashboard() {
                         </>
                       ) : (
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                          Sin asignar
+                          {t('leads.common.unassigned')}
                         </span>
                       )}
                     </button>
@@ -2865,7 +2877,7 @@ export default function LeadsDashboard() {
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
                         {lead.owner_name?.charAt(0) ?? '?'}
                       </div>
-                      <span className="text-gray-700 text-sm">{lead._isOwned ? 'Tú' : lead.owner_name}</span>
+                      <span className="text-gray-700 text-sm">{lead._isOwned ? t('leads.table.you') : lead.owner_name}</span>
                     </div>
                   ) : (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
@@ -2922,7 +2934,7 @@ export default function LeadsDashboard() {
         <LogInteractionModal
           lead={logLead}
           onClose={() => setLogLead(null)}
-          onSuccess={() => { flashLead(logLead.id); showToast('Interacción registrada correctamente.') }}
+          onSuccess={() => { flashLead(logLead.id); showToast(t('leads.toast.interactionLogged')) }}
         />
       )}
 
@@ -2930,7 +2942,7 @@ export default function LeadsDashboard() {
         <ConvertLeadModal
           lead={convertTarget}
           onClose={() => setConvertTarget(null)}
-          onSuccess={() => { flashLead(convertTarget.id); showToast(`${convertTarget.name} convertido correctamente.`) }}
+          onSuccess={() => { flashLead(convertTarget.id); showToast(t('leads.toast.convertedOk', { name: convertTarget.name })) }}
         />
       )}
 
@@ -2954,7 +2966,7 @@ export default function LeadsDashboard() {
         <UpdateStatusModal
           lead={statusLead}
           onClose={() => setStatusLead(null)}
-          onSuccess={() => { flashLead(statusLead.id); showToast('Estado actualizado correctamente.') }}
+          onSuccess={() => { flashLead(statusLead.id); showToast(t('leads.toast.statusUpdated')) }}
         />
       )}
 
@@ -2962,7 +2974,7 @@ export default function LeadsDashboard() {
         <EditLeadModal
           lead={editLead}
           onClose={() => setEditLead(null)}
-          onSuccess={() => { flashLead(editLead.id); showToast('Lead actualizado correctamente.') }}
+          onSuccess={() => { flashLead(editLead.id); showToast(t('leads.toast.leadUpdated')) }}
         />
       )}
 

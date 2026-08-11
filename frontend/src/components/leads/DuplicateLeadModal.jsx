@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useModalA11y } from '../../hooks/use-modal-a11y'
 
 function Row({ label, value }) {
@@ -17,16 +18,16 @@ function Row({ label, value }) {
  * hace acá: comparamos lo que el usuario tipeó (`payload`) contra el lead que
  * volvió (`duplicate`).
  */
-function matchDescription(duplicate, payload) {
+function matchDescription(duplicate, payload, t) {
   const phoneMatches = Boolean(payload?.phone && duplicate?.phone === payload.phone)
   const emailMatches = Boolean(payload?.email && duplicate?.email === payload.email)
 
-  if (phoneMatches && emailMatches) return 'el mismo teléfono y el mismo email'
-  if (phoneMatches) return 'el mismo teléfono'
-  if (emailMatches) return 'el mismo email'
+  if (phoneMatches && emailMatches) return t('leads.duplicate.matchBoth')
+  if (phoneMatches) return t('leads.duplicate.matchPhone')
+  if (emailMatches) return t('leads.duplicate.matchEmail')
   // Fallback: no deberíamos llegar acá si el backend efectivamente encontró un
   // duplicado, pero por las dudas no dejamos el mensaje en blanco.
-  return 'el mismo teléfono o email'
+  return t('leads.duplicate.matchAny')
 }
 
 /**
@@ -35,6 +36,7 @@ function matchDescription(duplicate, payload) {
  * decida, y al confirmar se reenvía la creación con confirm_duplicate.
  */
 export default function DuplicateLeadModal({ duplicate, payload, isLoading, onConfirm, onClose }) {
+  const { t } = useTranslation()
   const dialogRef = useModalA11y(onClose)
 
   return (
@@ -44,7 +46,7 @@ export default function DuplicateLeadModal({ duplicate, payload, isLoading, onCo
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label="Posible lead duplicado"
+        aria-label={t('leads.duplicate.title')}
         className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[460px] shadow-xl focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
@@ -55,22 +57,21 @@ export default function DuplicateLeadModal({ duplicate, payload, isLoading, onCo
             </svg>
           </span>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Posible lead duplicado</h2>
+            <h2 className="text-lg font-bold text-gray-900">{t('leads.duplicate.title')}</h2>
             <p className="text-sm text-gray-500 mt-0.5">
-              Ya existe un lead con {matchDescription(duplicate, payload)}.
+              {t('leads.duplicate.existsWith', { match: matchDescription(duplicate, payload, t) })}
             </p>
           </div>
         </div>
 
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-1.5 mb-5">
-          <Row label="Nombre" value={duplicate?.name} />
-          <Row label="Teléfono" value={duplicate?.phone} />
-          <Row label="Email" value={duplicate?.email} />
+          <Row label={t('leads.duplicate.name')} value={duplicate?.name} />
+          <Row label={t('leads.duplicate.phone')} value={duplicate?.phone} />
+          <Row label={t('leads.duplicate.email')} value={duplicate?.email} />
         </div>
 
         <p className="text-sm text-gray-600 mb-5">
-          Puedes cancelar y revisar el lead existente, o crearlo igual si de verdad
-          se trata de una persona distinta.
+          {t('leads.duplicate.explanation')}
         </p>
 
         <div className="flex justify-end gap-3">
@@ -79,7 +80,7 @@ export default function DuplicateLeadModal({ duplicate, payload, isLoading, onCo
             onClick={onClose}
             className="px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
           >
-            Cancelar
+            {t('leads.common.cancel')}
           </button>
           <button
             type="button"
@@ -87,7 +88,7 @@ export default function DuplicateLeadModal({ duplicate, payload, isLoading, onCo
             disabled={isLoading}
             className="px-4 py-2.5 bg-[#213A8E] text-white text-sm font-semibold rounded-xl hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
           >
-            {isLoading ? 'Creando…' : 'Crear de todos modos'}
+            {isLoading ? t('leads.form.creating') : t('leads.duplicate.createAnyway')}
           </button>
         </div>
       </div>

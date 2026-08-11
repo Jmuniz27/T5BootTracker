@@ -25,6 +25,18 @@
     "statusFilterLabel": "Estado",
     "allStatuses": "Todos los estados",
     "changeStatus": "Cambiar estado",
+    "filters": {
+      "allSources": "Todas las fuentes",
+      "allVendors": "Todos los vendedores"
+    },
+    "sort": {
+      "button": "Ordenar",
+      "default": "Por defecto",
+      "nameAsc": "Nombre A→Z",
+      "nameDesc": "Nombre Z→A",
+      "newest": "Más reciente",
+      "oldest": "Más antiguo"
+    },
     "dashboardTitle": "Dashboard de Leads",
     "tableTitle": "Leads",
     "newLead": "Nuevo lead",
@@ -38,6 +50,7 @@
       "notInterested": "No interesados"
     },
     "tabs": {
+      "all": "Todos",
       "assigned": "Asignados",
       "unassigned": "Sin asignar",
       "converted": "Convertidos",
@@ -47,7 +60,53 @@
     "toast": {
       "createdNotAssigned": "Lead creado, pero no se pudo asignar. Búscalo en Disponibles.",
       "createdAvailable": "Lead creado. Puedes encontrarlo en Disponibles.",
-      "createError": "No se pudo crear el lead."
+      "createError": "No se pudo crear el lead.",
+      "restored": "Lead reactivado: vuelve al estado que tenía.",
+      "restoreError": "No se pudo reactivar el lead.",
+      "reportTruncated": "El reporte es muy grande y se exportó sólo una parte. Filtra para acotarlo.",
+      "assigned": "Lead asignado correctamente.",
+      "assignError": "No se pudo asignar el lead.",
+      "released": "Lead desasignado correctamente.",
+      "releaseError": "No se pudo desasignar el lead.",
+      "reassigned": "Lead reasignado correctamente.",
+      "freed": "Lead liberado correctamente.",
+      "reassignError": "No se pudo liberar/reasignar el lead.",
+      "createdAssigned": "Lead creado y asignado a ti.",
+      "interactionLogged": "Interacción registrada correctamente.",
+      "convertedOk": "{{name}} convertido correctamente.",
+      "statusUpdated": "Estado actualizado correctamente.",
+      "leadUpdated": "Lead actualizado correctamente."
+    },
+    "duplicate": {
+      "title": "Posible lead duplicado",
+      "existsWith": "Ya existe un lead con {{match}}.",
+      "matchBoth": "el mismo teléfono y el mismo email",
+      "matchPhone": "el mismo teléfono",
+      "matchEmail": "el mismo email",
+      "matchAny": "el mismo teléfono o email",
+      "name": "Nombre",
+      "phone": "Teléfono",
+      "email": "Email",
+      "explanation": "Puedes cancelar y revisar el lead existente, o crearlo igual si de verdad se trata de una persona distinta.",
+      "createAnyway": "Crear de todos modos"
+    },
+    "pagination": {
+      "info": "Página {{page}} de {{total}}",
+      "prev": "← Anterior",
+      "next": "Siguiente →"
+    },
+    "table": {
+      "name": "Nombre",
+      "email": "Email",
+      "phone": "Teléfono",
+      "source": "Fuente",
+      "status": "Estado",
+      "assignedTo": "Asignado a",
+      "actions": "Acciones",
+      "loadError": "No se pudieron cargar los leads. Verifica que estés autenticado.",
+      "empty": "No se encontraron leads.",
+      "you": "Tú",
+      "reassignAria": "Asignado a: {{owner}}. Click para cambiar"
     },
     "interactionType": {
       "CALL": "Llamada",
@@ -122,7 +181,15 @@
       "meetingTitle": "Seguimiento: {{name}}",
       "editTitle": "Editar interacción",
       "typeShort": "Tipo",
-      "saveErrorGeneric": "No se pudo guardar. Intenta de nuevo."
+      "saveErrorGeneric": "No se pudo guardar. Intenta de nuevo.",
+      "selectType": "Selecciona un tipo.",
+      "selectOutcome": "Selecciona un resultado."
+    },
+    "history": {
+      "title": "Historial de interacciones",
+      "empty": "Aún no hay interacciones.",
+      "noStatusRecord": "Sin registro de estado",
+      "noStatusTooltip": "Esta interacción es anterior al registro de estados"
     },
     "discardModal": {
       "title": "Descartar lead",

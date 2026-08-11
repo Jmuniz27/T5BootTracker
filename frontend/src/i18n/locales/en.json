@@ -25,6 +25,18 @@
     "statusFilterLabel": "Status",
     "allStatuses": "All statuses",
     "changeStatus": "Change status",
+    "filters": {
+      "allSources": "All sources",
+      "allVendors": "All salespeople"
+    },
+    "sort": {
+      "button": "Sort",
+      "default": "Default",
+      "nameAsc": "Name A→Z",
+      "nameDesc": "Name Z→A",
+      "newest": "Newest",
+      "oldest": "Oldest"
+    },
     "dashboardTitle": "Leads Dashboard",
     "tableTitle": "Leads",
     "newLead": "New lead",
@@ -38,6 +50,7 @@
       "notInterested": "Not interested"
     },
     "tabs": {
+      "all": "All",
       "assigned": "Assigned",
       "unassigned": "Unassigned",
       "converted": "Converted",
@@ -47,7 +60,53 @@
     "toast": {
       "createdNotAssigned": "Lead created, but couldn't be assigned. Find it in Available.",
       "createdAvailable": "Lead created. You can find it in Available.",
-      "createError": "Could not create the lead."
+      "createError": "Could not create the lead.",
+      "restored": "Lead reactivated: it returns to its previous status.",
+      "restoreError": "Could not reactivate the lead.",
+      "reportTruncated": "The report is too large and only part of it was exported. Filter to narrow it down.",
+      "assigned": "Lead assigned successfully.",
+      "assignError": "Could not assign the lead.",
+      "released": "Lead unassigned successfully.",
+      "releaseError": "Could not unassign the lead.",
+      "reassigned": "Lead reassigned successfully.",
+      "freed": "Lead released successfully.",
+      "reassignError": "Could not release/reassign the lead.",
+      "createdAssigned": "Lead created and assigned to you.",
+      "interactionLogged": "Interaction logged successfully.",
+      "convertedOk": "{{name}} converted successfully.",
+      "statusUpdated": "Status updated successfully.",
+      "leadUpdated": "Lead updated successfully."
+    },
+    "duplicate": {
+      "title": "Possible duplicate lead",
+      "existsWith": "A lead already exists with {{match}}.",
+      "matchBoth": "the same phone and the same email",
+      "matchPhone": "the same phone",
+      "matchEmail": "the same email",
+      "matchAny": "the same phone or email",
+      "name": "Name",
+      "phone": "Phone",
+      "email": "Email",
+      "explanation": "You can cancel and review the existing lead, or create it anyway if it really is a different person.",
+      "createAnyway": "Create anyway"
+    },
+    "pagination": {
+      "info": "Page {{page}} of {{total}}",
+      "prev": "← Previous",
+      "next": "Next →"
+    },
+    "table": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "source": "Source",
+      "status": "Status",
+      "assignedTo": "Assigned to",
+      "actions": "Actions",
+      "loadError": "Could not load the leads. Make sure you are authenticated.",
+      "empty": "No leads found.",
+      "you": "You",
+      "reassignAria": "Assigned to: {{owner}}. Click to change"
     },
     "interactionType": {
       "CALL": "Call",
@@ -122,7 +181,15 @@
       "meetingTitle": "Follow-up: {{name}}",
       "editTitle": "Edit interaction",
       "typeShort": "Type",
-      "saveErrorGeneric": "Could not save. Please try again."
+      "saveErrorGeneric": "Could not save. Please try again.",
+      "selectType": "Select a type.",
+      "selectOutcome": "Select an outcome."
+    },
+    "history": {
+      "title": "Interaction history",
+      "empty": "No interactions yet.",
+      "noStatusRecord": "No status record",
+      "noStatusTooltip": "This interaction predates status tracking"
     },
     "discardModal": {
       "title": "Discard lead",
