@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../src/context/AuthContext';
+import LanguageSwitcher from '../../src/components/LanguageSwitcher';
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -83,6 +85,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const { t } = useTranslation();
   const { login } = useAuth();
   const router    = useRouter();
 
@@ -121,13 +124,13 @@ export default function LoginScreen() {
     } catch (err: any) {
       const status = err?.response?.status;
       if (err?.code === 'ROLE_NOT_ALLOWED') {
-        setError('Esta aplicación es solo para vendedores y finanzas.');
+        setError(t('login.roleNotAllowed'));
       } else if (status === 403) {
-        setError(err.response?.data?.error ?? 'Cuenta desactivada. Contacte al administrador.');
+        setError(err.response?.data?.error ?? t('login.accountInactive'));
       } else if (status === 401) {
-        setError('Credenciales inválidas. Verifica e intenta de nuevo.');
+        setError(t('login.invalidCredentials'));
       } else {
-        setError('Error de conexión. Intenta de nuevo.');
+        setError(t('login.connError'));
       }
     } finally {
       setLoading(false);
@@ -138,6 +141,9 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.screen}>
+      <View style={styles.langSwitch}>
+        <LanguageSwitcher variant="dark" />
+      </View>
       <Animated.View style={[styles.inner, { transform: [{ translateY: slideAnim }] }]}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -160,14 +166,14 @@ export default function LoginScreen() {
 
           {/* Headline */}
           <Text style={styles.headline}>
-            Inicia sesión para{' '}
-            <Text style={{ color: ACCENT }}>continuar</Text>
+            {t('login.headingA')}
+            <Text style={{ color: ACCENT }}>{t('login.headingB')}</Text>
           </Text>
 
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Correo electrónico</Text>
+              <Text style={styles.fieldLabel}>{t('login.email')}</Text>
               <Field
                 icon={<EmailIcon />}
                 placeholder="correo@ejemplo.com"
@@ -179,9 +185,9 @@ export default function LoginScreen() {
 
             <View style={styles.fieldGroup}>
               <View style={styles.passwordLabelRow}>
-                <Text style={styles.fieldLabel}>Contraseña</Text>
+                <Text style={styles.fieldLabel}>{t('login.password')}</Text>
                 <Link href="/(auth)/forgot-password" style={styles.forgotLink}>
-                  ¿Olvidaste tu contraseña?
+                  {t('login.forgot')}
                 </Link>
               </View>
               <Field
@@ -203,7 +209,7 @@ export default function LoginScreen() {
             >
               {loading
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.buttonLabel}>Iniciar sesión</Text>
+                : <Text style={styles.buttonLabel}>{t('login.submit')}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -220,6 +226,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
+  langSwitch: { position: 'absolute', top: 52, right: 20, zIndex: 20 },
   inner: {
     flex: 1,
   },

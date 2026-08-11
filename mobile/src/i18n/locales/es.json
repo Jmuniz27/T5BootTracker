@@ -1,0 +1,33 @@
+{
+  "common": {
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "loading": "Cargando…",
+    "language": "Idioma"
+  },
+  "login": {
+    "headingA": "Inicia sesión para ",
+    "headingB": "continuar",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "forgot": "¿Olvidaste tu contraseña?",
+    "submit": "Iniciar sesión",
+    "roleNotAllowed": "Esta aplicación es solo para vendedores y finanzas.",
+    "accountInactive": "Cuenta desactivada. Contacte al administrador.",
+    "invalidCredentials": "Credenciales inválidas. Verifica e intenta de nuevo.",
+    "connError": "Error de conexión. Intenta de nuevo."
+  },
+  "forgot": {
+    "headingA": "Recuperar ",
+    "headingB": "contraseña",
+    "subtitle": "Ingresa tu correo y te enviaremos instrucciones para recuperar tu acceso.",
+    "email": "Correo electrónico",
+    "submit": "Enviar instrucciones",
+    "back": "Volver al inicio de sesión",
+    "sentTitle": "Revisa tu correo",
+    "sentBody1": "Si ",
+    "sentBody2": " está registrado, recibirás un enlace para restablecer tu contraseña.",
+    "error": "No pudimos procesar tu solicitud. Intenta de nuevo más tarde."
+  }
+}

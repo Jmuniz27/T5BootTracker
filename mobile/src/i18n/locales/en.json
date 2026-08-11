@@ -1,0 +1,33 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "loading": "Loading…",
+    "language": "Language"
+  },
+  "login": {
+    "headingA": "Sign in to ",
+    "headingB": "continue",
+    "email": "Email",
+    "password": "Password",
+    "forgot": "Forgot your password?",
+    "submit": "Sign in",
+    "roleNotAllowed": "This app is only for salespeople and finance.",
+    "accountInactive": "Account deactivated. Please contact the administrator.",
+    "invalidCredentials": "Invalid credentials. Please check and try again.",
+    "connError": "Connection error. Please try again."
+  },
+  "forgot": {
+    "headingA": "Recover ",
+    "headingB": "password",
+    "subtitle": "Enter your email and we'll send you instructions to recover your access.",
+    "email": "Email",
+    "submit": "Send instructions",
+    "back": "Back to sign in",
+    "sentTitle": "Check your email",
+    "sentBody1": "If ",
+    "sentBody2": " is registered, you'll receive a link to reset your password.",
+    "error": "We couldn't process your request. Please try again later."
+  }
+}
