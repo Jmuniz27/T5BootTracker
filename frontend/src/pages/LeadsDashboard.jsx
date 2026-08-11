@@ -409,6 +409,7 @@ function makeInteractionSubmitHandler(form, mutation, setErrors) {
 // ─── Edit Interaction Modal ───────────────────────────────────────────────────
 
 function EditInteractionModal({ lead, interaction, onClose }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     interaction_type: interaction.interaction_type ?? '',
@@ -440,38 +441,38 @@ function EditInteractionModal({ lead, interaction, onClose }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Editar interacción</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">{t('leads.interactionForm.editTitle')}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.interactionForm.typeShort')} <span className="text-red-500">*</span></label>
               <CustomSelect
                 value={form.interaction_type}
                 onChange={(val) => setForm((prev) => ({ ...prev, interaction_type: val }))}
-                placeholder="Seleccionar"
+                placeholder={t('leads.common.select')}
                 options={[
-                  { value: 'CALL', label: 'Llamada' },
-                  { value: 'WHATSAPP', label: 'WhatsApp' },
-                  { value: 'EMAIL', label: 'Email' },
-                  { value: 'VISIT', label: 'Visita' },
-                  { value: 'NOTE', label: 'Nota' },
+                  { value: 'CALL', label: t('leads.interactionType.CALL') },
+                  { value: 'WHATSAPP', label: t('leads.interactionType.WHATSAPP') },
+                  { value: 'EMAIL', label: t('leads.interactionType.EMAIL') },
+                  { value: 'VISIT', label: t('leads.interactionType.VISIT') },
+                  { value: 'NOTE', label: t('leads.interactionType.NOTE') },
                 ]}
               />
               {errors.interaction_type && <p className="text-xs text-red-500 mt-1">{errors.interaction_type}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Resultado <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.interactionForm.outcomeLabel')} <span className="text-red-500">*</span></label>
               <CustomSelect
                 value={form.outcome}
                 onChange={(val) => setForm((prev) => ({ ...prev, outcome: val }))}
-                placeholder="Seleccionar"
+                placeholder={t('leads.common.select')}
                 options={[
-                  { value: 'CALL_AGAIN', label: 'Llamar de nuevo' },
-                  { value: 'SEND_INFO', label: 'Enviar información' },
-                  { value: 'SCHEDULE_VISIT', label: 'Agendar visita' },
-                  { value: 'AWAIT_REPLY', label: 'Esperar respuesta' },
-                  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+                  { value: 'CALL_AGAIN', label: t('leads.outcome.CALL_AGAIN') },
+                  { value: 'SEND_INFO', label: t('leads.outcome.SEND_INFO') },
+                  { value: 'SCHEDULE_VISIT', label: t('leads.outcome.SCHEDULE_VISIT') },
+                  { value: 'AWAIT_REPLY', label: t('leads.outcome.AWAIT_REPLY') },
+                  { value: 'SPEAK_COORDINATOR', label: t('leads.outcome.SPEAK_COORDINATOR') },
                 ]}
               />
               {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
@@ -480,14 +481,14 @@ function EditInteractionModal({ lead, interaction, onClose }) {
 
           <div className="grid grid-cols-2 gap-4 items-start">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nivel de interés <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('leads.interactionForm.interestLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span></label>
               <InteractiveStarRating
                 value={form.interest_level}
                 onChange={(v) => setForm((prev) => ({ ...prev, interest_level: v }))}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.interactionForm.durationLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span></label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -495,20 +496,20 @@ function EditInteractionModal({ lead, interaction, onClose }) {
                   max="999"
                   value={form.duration_minutes}
                   onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="ej. 5"
+                  placeholder={t('leads.interactionForm.durationPlaceholder')}
                   className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
                 />
-                <span className="text-sm text-gray-500">min</span>
+                <span className="text-sm text-gray-500">{t('leads.interactionForm.minutesUnit')}</span>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notas <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.interactionForm.notesLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span></label>
             <textarea
               value={form.notes}
               onChange={set('notes')}
-              placeholder="¿Cómo fue la interacción?"
+              placeholder={t('leads.interactionForm.notesPlaceholder')}
               rows={3}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"
             />
@@ -516,16 +517,16 @@ function EditInteractionModal({ lead, interaction, onClose }) {
 
           {mutation.isError && (
             <p className="text-xs text-red-500 text-center">
-              {mutation.error?.response?.data?.error ?? 'No se pudo guardar. Intenta de nuevo.'}
+              {mutation.error?.response?.data?.error ?? t('leads.interactionForm.saveErrorGeneric')}
             </p>
           )}
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button type="submit" disabled={mutation.isPending} className="flex-1 py-3 rounded-xl bg-[#1e3164] text-white font-semibold hover:bg-[#162550] transition-colors disabled:opacity-60">
-              {mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+              {mutation.isPending ? t('leads.form.saving') : t('leads.form.saveChanges')}
             </button>
           </div>
         </form>
@@ -1072,17 +1073,17 @@ function isValidEmail(value) {
 }
 
 // Validación compartida por los modales de crear y editar lead.
-function validateLeadFields(form) {
+function validateLeadFields(form, t) {
   const errs = {}
-  if (!form.name.trim()) errs.name = 'El nombre es requerido.'
+  if (!form.name.trim()) errs.name = t('leads.form.nameRequired')
   const phone = form.phone.trim()
   if (!phone) {
-    errs.phone = 'El teléfono es requerido.'
+    errs.phone = t('leads.form.phoneRequired')
   } else if (!/^(09\d{8}|0[2-7]\d{7})$/.test(phone)) {
-    errs.phone = 'Ingresa un teléfono ecuatoriano válido (ej. 0991234567 o 042345678).'
+    errs.phone = t('leads.form.phoneInvalid')
   }
   if (form.email.trim() && !isValidEmail(form.email.trim())) {
-    errs.email = 'Ingresa un email válido.'
+    errs.email = t('leads.form.emailInvalid')
   }
   return errs
 }
@@ -1094,6 +1095,7 @@ function leadFieldClass(errors, key) {
 }
 
 function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, isAdmin = false }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
@@ -1102,7 +1104,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    const errs = validateLeadFields(form)
+    const errs = validateLeadFields(form, t)
     if (Object.keys(errs).length) { setErrors(errs); return }
     const { autoAssign, ...payload } = form
     if (!payload.email) delete payload.email
@@ -1122,7 +1124,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
         </button>
 
         <div className="flex items-center justify-between mb-6 pr-8">
-          <h2 className="text-xl font-bold text-gray-900">Nuevo lead</h2>
+          <h2 className="text-xl font-bold text-gray-900">{t('leads.form.createTitle')}</h2>
           <button
             type="button"
             onClick={() => setForm((prev) => ({ ...prev, is_company: !prev.is_company }))}
@@ -1135,53 +1137,53 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
             </svg>
-            Empresa
+            {t('leads.form.company')}
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre completo<span className="text-red-500 ml-0.5">*</span>
+              {t('leads.form.fullName')}<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="text" data-testid="create-lead-name" value={form.name} onChange={set('name')} className={inputClass('name')} />
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Teléfono<span className="text-red-500 ml-0.5">*</span>
+              {t('leads.form.phone')}<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="tel" data-testid="create-lead-phone" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={inputClass('phone')} />
             {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.email')}</label>
             <input type="text" data-testid="create-lead-email" value={form.email} onChange={set('email')} className={inputClass('email')} />
             {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fuente</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.source')}</label>
             <CustomSelect
               testId="create-lead-source"
               value={form.source}
               onChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
               options={[
-                { value: 'MANUAL', label: 'Manual' },
-                { value: 'INSTAGRAM', label: 'Instagram' },
-                { value: 'WHATSAPP', label: 'WhatsApp' },
-                { value: 'LANDING_PAGE', label: 'Landing Page' },
+                { value: 'MANUAL', label: t('leads.source.MANUAL') },
+                { value: 'INSTAGRAM', label: t('leads.source.INSTAGRAM') },
+                { value: 'WHATSAPP', label: t('leads.source.WHATSAPP') },
+                { value: 'LANDING_PAGE', label: t('leads.source.LANDING_PAGE') },
               ]}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.programInterest')}</label>
             <CustomSelect
               testId="create-lead-program"
               value={form.program_interest}
               onChange={(val) => setForm((prev) => ({ ...prev, program_interest: val }))}
-              placeholder="Sin especificar"
+              placeholder={t('leads.form.programPlaceholder')}
               options={programs.map((p) => ({ value: p.name, label: p.name }))}
             />
           </div>
@@ -1202,12 +1204,12 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
                   className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
                 />
                 <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
-                  Asignarme este lead
+                  {t('leads.form.assignToMe')}
                 </span>
               </label>
               {!canSelfAssign && (
                 <p className="text-xs text-gray-500 mt-1 ml-7">
-                  La asignación la realiza el Administrador.
+                  {t('leads.actions.assignmentByAdmin')}
                 </p>
               )}
             </div>
@@ -1220,7 +1222,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button
               type="submit"
@@ -1228,7 +1230,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
               disabled={isLoading}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
-              {isLoading ? 'Creando…' : 'Crear lead'}
+              {isLoading ? t('leads.form.creating') : t('leads.form.createSubmit')}
             </button>
           </div>
         </form>
@@ -1240,6 +1242,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
 // ─── Edit Lead Modal ──────────────────────────────────────────────────────────
 
 function EditLeadModal({ lead, onClose, onSuccess }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     name: lead.name ?? '',
@@ -1262,7 +1265,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
       onClose()
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'No se pudo guardar el lead.'
+      const msg = err.response?.data?.error ?? t('leads.form.saveError')
       setErrors((prev) => ({ ...prev, server: msg }))
     },
   })
@@ -1270,7 +1273,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     setErrors({})
-    const errs = validateLeadFields(form)
+    const errs = validateLeadFields(form, t)
     if (Object.keys(errs).length) { setErrors(errs); return }
     mutation.mutate({
       name: form.name.trim(),
@@ -1294,7 +1297,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
         </button>
 
         <div className="flex items-center justify-between mb-6 pr-8">
-          <h2 className="text-xl font-bold text-gray-900">Editar lead</h2>
+          <h2 className="text-xl font-bold text-gray-900">{t('leads.form.editTitle')}</h2>
           <button
             type="button"
             onClick={() => setForm((prev) => ({ ...prev, is_company: !prev.is_company }))}
@@ -1307,53 +1310,53 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
             </svg>
-            Empresa
+            {t('leads.form.company')}
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre completo<span className="text-red-500 ml-0.5">*</span>
+              {t('leads.form.fullName')}<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="text" data-testid="edit-lead-name" value={form.name} onChange={set('name')} className={inputClass('name')} />
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Teléfono<span className="text-red-500 ml-0.5">*</span>
+              {t('leads.form.phone')}<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="tel" data-testid="edit-lead-phone" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={inputClass('phone')} />
             {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.email')}</label>
             <input type="text" data-testid="edit-lead-email" value={form.email} onChange={set('email')} className={inputClass('email')} />
             {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fuente</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.source')}</label>
             <CustomSelect
               testId="edit-lead-source"
               value={form.source}
               onChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
               options={[
-                { value: 'MANUAL', label: 'Manual' },
-                { value: 'INSTAGRAM', label: 'Instagram' },
-                { value: 'WHATSAPP', label: 'WhatsApp' },
-                { value: 'LANDING_PAGE', label: 'Landing Page' },
+                { value: 'MANUAL', label: t('leads.source.MANUAL') },
+                { value: 'INSTAGRAM', label: t('leads.source.INSTAGRAM') },
+                { value: 'WHATSAPP', label: t('leads.source.WHATSAPP') },
+                { value: 'LANDING_PAGE', label: t('leads.source.LANDING_PAGE') },
               ]}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.programInterest')}</label>
             <CustomSelect
               testId="edit-lead-program"
               value={form.program_interest}
               onChange={(val) => setForm((prev) => ({ ...prev, program_interest: val }))}
-              placeholder="Sin especificar"
+              placeholder={t('leads.form.programPlaceholder')}
               options={programs.map((p) => ({ value: p.name, label: p.name }))}
             />
           </div>
@@ -1368,7 +1371,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button
               type="submit"
@@ -1376,7 +1379,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
               disabled={mutation.isPending}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
-              {mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+              {mutation.isPending ? t('leads.form.saving') : t('leads.form.saveChanges')}
             </button>
           </div>
         </form>
@@ -2107,7 +2110,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button
               type="submit"
@@ -2675,7 +2678,7 @@ export default function LeadsDashboard() {
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
             </svg>
-            Empresa
+            {t('leads.form.company')}
           </button>
           <SortDropdown value={sortKey} onChange={setSortKey} />
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />

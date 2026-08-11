@@ -119,7 +119,10 @@
       "saving": "Guardando...",
       "submit": "Guardar interacción",
       "scheduleMeeting": "+ Agendar reunión",
-      "meetingTitle": "Seguimiento: {{name}}"
+      "meetingTitle": "Seguimiento: {{name}}",
+      "editTitle": "Editar interacción",
+      "typeShort": "Tipo",
+      "saveErrorGeneric": "No se pudo guardar. Intenta de nuevo."
     },
     "discardModal": {
       "title": "Descartar lead",
@@ -167,6 +170,27 @@
       "assign": "Asignar",
       "reassign": "Reasignar",
       "saving": "Guardando…"
+    },
+    "form": {
+      "company": "Empresa",
+      "fullName": "Nombre completo",
+      "phone": "Teléfono",
+      "email": "Email",
+      "source": "Fuente",
+      "programInterest": "Interés en programa",
+      "programPlaceholder": "Sin especificar",
+      "assignToMe": "Asignarme este lead",
+      "nameRequired": "El nombre es requerido.",
+      "phoneRequired": "El teléfono es requerido.",
+      "phoneInvalid": "Ingresa un teléfono ecuatoriano válido (ej. 0991234567 o 042345678).",
+      "emailInvalid": "Ingresa un email válido.",
+      "createTitle": "Nuevo lead",
+      "creating": "Creando…",
+      "createSubmit": "Crear lead",
+      "editTitle": "Editar lead",
+      "saveError": "No se pudo guardar el lead.",
+      "saving": "Guardando…",
+      "saveChanges": "Guardar cambios"
     }
   },
   "nav": {

@@ -119,7 +119,10 @@
       "saving": "Saving...",
       "submit": "Save interaction",
       "scheduleMeeting": "+ Schedule meeting",
-      "meetingTitle": "Follow-up: {{name}}"
+      "meetingTitle": "Follow-up: {{name}}",
+      "editTitle": "Edit interaction",
+      "typeShort": "Type",
+      "saveErrorGeneric": "Could not save. Please try again."
     },
     "discardModal": {
       "title": "Discard lead",
@@ -167,6 +170,27 @@
       "assign": "Assign",
       "reassign": "Reassign",
       "saving": "Saving…"
+    },
+    "form": {
+      "company": "Company",
+      "fullName": "Full name",
+      "phone": "Phone",
+      "email": "Email",
+      "source": "Source",
+      "programInterest": "Program interest",
+      "programPlaceholder": "Unspecified",
+      "assignToMe": "Assign this lead to me",
+      "nameRequired": "Name is required.",
+      "phoneRequired": "Phone is required.",
+      "phoneInvalid": "Enter a valid Ecuadorian phone (e.g. 0991234567 or 042345678).",
+      "emailInvalid": "Enter a valid email.",
+      "createTitle": "New lead",
+      "creating": "Creating…",
+      "createSubmit": "Create lead",
+      "editTitle": "Edit lead",
+      "saveError": "Could not save the lead.",
+      "saving": "Saving…",
+      "saveChanges": "Save changes"
     }
   },
   "nav": {
