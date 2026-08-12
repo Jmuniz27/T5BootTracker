@@ -1,29 +1,22 @@
+import { useTranslation } from 'react-i18next'
 import ModalShell from './ModalShell'
 
 export default function ConfirmToggleModal({ user, isPending, onConfirm, onClose }) {
+  const { t } = useTranslation()
   const deactivating = user.is_active
 
-  let confirmLabel = deactivating ? 'Desactivar' : 'Reactivar'
-  if (isPending) confirmLabel = 'Aplicando…'
+  let confirmLabel = deactivating ? t('users.modals.deactivate') : t('users.modals.reactivate')
+  if (isPending) confirmLabel = t('users.modals.applying')
 
   return (
     <ModalShell
-      title={deactivating ? 'Desactivar usuario' : 'Reactivar usuario'}
+      title={deactivating ? t('users.modals.toggleDeactivateTitle') : t('users.modals.toggleReactivateTitle')}
       onClose={onClose}
       width="max-w-[440px]"
     >
       <p className="text-sm text-gray-600">
-        {deactivating ? (
-          <>
-            <span className="font-semibold text-gray-900">{user.full_name}</span> no podrá volver a
-            iniciar sesión hasta que lo reactives. Su historial se conserva.
-          </>
-        ) : (
-          <>
-            <span className="font-semibold text-gray-900">{user.full_name}</span> podrá volver a
-            iniciar sesión con sus credenciales actuales.
-          </>
-        )}
+        <span className="font-semibold text-gray-900">{user.full_name}</span>
+        {deactivating ? t('users.modals.deactivateSuffix') : t('users.modals.reactivateSuffix')}
       </p>
 
       <div className="flex justify-end gap-3 mt-6">
@@ -32,7 +25,7 @@ export default function ConfirmToggleModal({ user, isPending, onConfirm, onClose
           onClick={onClose}
           className="px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
         >
-          Cancelar
+          {t('users.modals.cancel')}
         </button>
         <button
           type="button"
