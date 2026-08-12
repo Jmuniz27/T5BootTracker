@@ -112,7 +112,7 @@ export default function AdminSalespersonActivityPage() {
         </p>
       </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
         <StatCard label="Leads asignados" value={data?.assigned_leads ?? 0} loading={isLoading} />
         <StatCard label="Convertidos" value={data?.converted_leads ?? 0} loading={isLoading} />
         <StatCard label="Tasa de conversión" value={`${data?.conversion_rate ?? 0}%`} loading={isLoading} />
@@ -123,11 +123,6 @@ export default function AdminSalespersonActivityPage() {
           valueClass={(data?.uncontacted_leads ?? 0) > 0 ? 'text-amber-600' : 'text-gray-900'}
         />
         <StatCard label="Interacciones" value={data?.interactions ?? 0} loading={isLoading} />
-        <StatCard
-          label="Primer contacto"
-          value={fmtHours(data?.avg_time_to_first_contact_hours)}
-          loading={isLoading}
-        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

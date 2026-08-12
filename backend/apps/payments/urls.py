@@ -18,8 +18,12 @@ from .views import (
     PaymentDetailView,
     PaymentApproveView,
     PaymentRejectView,
+    PaymentEditView,
     NotifyCoordinatorView,
     ReceiptFileView,
+    FinancePaymentPlanView,
+    MyPaymentPlanView,
+    PaymentPlanFileView,
 )
 
 urlpatterns = [
@@ -31,10 +35,13 @@ urlpatterns = [
     path('my-payments/<uuid:pk>/ocr-status/',         PaymentOCRStatusView.as_view(),    name='payment-ocr-status'),
     path('my-payments/<uuid:pk>/confirm/',            PaymentConfirmView.as_view(),      name='payment-confirm'),
     path('my-payments/<uuid:pk>/',                    MyPaymentDetailView.as_view(),     name='payment-my-detail'),
+    path('my-payment-plan/',                          MyPaymentPlanView.as_view(),       name='my-payment-plan'),
+    path('payment-plans/<uuid:plan_id>/file/',        PaymentPlanFileView.as_view(),     name='payment-plan-file'),
     path('bootcampers/',                              BootcamperPoolView.as_view(),      name='bootcamper-pool'),
     path('bootcampers/bulk-assign/',  BootcamperBulkAssignView.as_view(), name='bootcamper-bulk-assign'),
     path('bootcampers/<uuid:bootcamper_id>/assign/',  BootcamperAssignView.as_view(),    name='bootcamper-assign'),
     path('bootcampers/<uuid:bootcamper_id>/release/', BootcamperReleaseView.as_view(),   name='bootcamper-release'),
+    path('bootcampers/<uuid:bootcamper_id>/payment-plan/', FinancePaymentPlanView.as_view(), name='finance-payment-plan'),
     path('settings/self-assignment/',                  BootcamperAssignmentSettingView.as_view(), name='bootcamper-assignment-setting'),
     path('history/',                                  PaymentHistoryView.as_view(),      name='payment-history'),
     path('queue/',                                    PaymentQueueView.as_view(),        name='payment-queue'),
@@ -42,5 +49,6 @@ urlpatterns = [
     path('notify-coordinator/<uuid:bootcamper_id>/',  NotifyCoordinatorView.as_view(),   name='payment-notify-coordinator'),
     path('<uuid:pk>/approve/',                        PaymentApproveView.as_view(),      name='payment-approve'),
     path('<uuid:pk>/reject/',                         PaymentRejectView.as_view(),       name='payment-reject'),
+    path('<uuid:pk>/edit/',                           PaymentEditView.as_view(),         name='payment-edit'),
     path('<uuid:pk>/',                                PaymentDetailView.as_view(),       name='payment-detail'),
 ]

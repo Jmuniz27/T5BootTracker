@@ -29,12 +29,14 @@ const AVATAR_COLORS = [
   'bg-indigo-500',
 ]
 
+// Alineado con los colores de estado de mobile (STATUS_CONFIG en la app):
+// Nuevo=amarillo, Calificado=azul, Interesado=verde, Convertido=morado.
 const STATUS_COLORS = {
-  NEW: 'bg-gray-100 text-gray-500',
+  NEW: 'bg-yellow-100 text-yellow-700',
   QUALIFIED: 'bg-blue-100 text-blue-700',
-  INTERESTED: 'bg-yellow-100 text-yellow-700',
+  INTERESTED: 'bg-green-100 text-green-700',
   NOT_INTERESTED: 'bg-red-100 text-red-600',
-  CONVERTED: 'bg-green-100 text-green-700',
+  CONVERTED: 'bg-purple-100 text-purple-700',
   DISCARDED: 'bg-slate-200 text-slate-600',
 }
 
@@ -490,7 +492,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Duración <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -657,7 +659,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Duración <span className="text-xs text-gray-500 font-normal">(opcional)</span>
+                Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span>
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -2234,13 +2236,23 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               Reactivar lead
             </button>
           )}
-          {isOwned && lead.status === 'QUALIFIED' && (
-            <button
-              onClick={() => { onConvert(); setOpen(false) }}
-              className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50"
-            >
-              Convertir lead
-            </button>
+          {isOwned && !isConverted && !isDiscarded && (
+            <div>
+              {/* Se muestra siempre, pero sólo se habilita en QUALIFIED: así el
+                  vendedor sabe que la conversión existe y qué falta para usarla. */}
+              <button
+                onClick={() => { onConvert(); setOpen(false) }}
+                disabled={lead.status !== 'QUALIFIED'}
+                className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+              >
+                Convertir lead
+              </button>
+              {lead.status !== 'QUALIFIED' && (
+                <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
+                  Primero cambia el estado a “Calificado”.
+                </p>
+              )}
+            </div>
           )}
           {(isOwned || isAdmin) && canResendInvitation && (
             <button
@@ -2251,12 +2263,22 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
             </button>
           )}
           {!isAdmin && !isConverted && !isDiscarded && (isOwned ? (
-            <button
-              onClick={() => { onRelease(); setOpen(false) }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              Desasignar lead
-            </button>
+            <div>
+              <button
+                onClick={() => { onRelease(); setOpen(false) }}
+                disabled={!selfAssignEnabled}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-500 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+              >
+                Desasignar lead
+              </button>
+              {/* Con la auto-asignación apagada el pool lo maneja el Admin: si
+                  soltás el lead no podrías retomarlo, así que tampoco se libera. */}
+              {!selfAssignEnabled && (
+                <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
+                  La asignación la realiza el Administrador.
+                </p>
+              )}
+            </div>
           ) : (
             <div>
               <button

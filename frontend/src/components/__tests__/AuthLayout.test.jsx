@@ -37,4 +37,16 @@ describe('AuthLayout', () => {
     expect(raiz).toHaveClass('flex-col')
     expect(raiz).toHaveClass('px-5', 'sm:px-8')
   })
+
+  it('delega el fondo al elemento raíz en vez de pintarlo acá', () => {
+    const { container } = renderLayout()
+    const raiz = container.firstChild
+
+    // El degradado vive en index.css sobre `html`: es el único fondo que el
+    // navegador propaga al lienzo, que es lo que se ve cuando el scroll rebota.
+    // En este div no llegaría ahí y el rebote descubriría blanco. Esta clase es
+    // el gancho del que cuelga esa regla.
+    expect(raiz).toHaveClass('auth-canvas')
+    expect(raiz.style.background).toBe('')
+  })
 })

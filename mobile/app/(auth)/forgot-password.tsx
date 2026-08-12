@@ -140,7 +140,7 @@ export default function ForgotPasswordScreen() {
                 un enlace para restablecer tu contraseña.
               </Text>
               <TouchableOpacity
-                style={styles.button}
+                style={[styles.button, styles.buttonBlock]}
                 onPress={() => router.replace('/(auth)/login')}
                 activeOpacity={0.88}
               >
@@ -277,6 +277,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: PRIMARY,
   },
+  // En la pantalla de éxito el botón vive en un contenedor centrado; sin esto
+  // se encogía al ancho del texto y quedaba como una pastilla suelta.
+  buttonBlock: { alignSelf: 'stretch' },
   buttonDisabled: { opacity: 0.5 },
   buttonLabel: {
     color: '#ffffff',

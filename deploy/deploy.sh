@@ -46,15 +46,37 @@ log "Desplegando tag: $IMAGE_TAG"
 # positivos. La base solo se reinicia si algo la toco de verdad.
 OTRA_ANTES="$(docker inspect attendance_db --format '{{.State.StartedAt}}' 2>/dev/null || echo 'ausente')"
 
-# --- 3. Traer imagenes ------------------------------------------------------
+# --- 3. Sincronizar el compose con el commit que se despliega ---------------
+# El compose vive en git, no en la imagen: sin este paso, un cambio como el de
+# CB-316 (agregar el servicio media-permissions) queda mergeado a main pero
+# nunca llega al VPS, porque up -d sólo lee el archivo que ya está en disco.
+# Se baja del mismo SHA que las imagenes para que nunca queden desincronizados.
+# raw.githubusercontent.com no resuelve el tag flotante "latest": ese valor sólo
+# identifica la imagen Docker, no un ref de git. Para ese caso se baja de main,
+# que es a donde "latest" apunta siempre (ver build-push en ci-pr.yml).
+COMPOSE_REF="$IMAGE_TAG"
+[ "$COMPOSE_REF" = "latest" ] && COMPOSE_REF="main"
+REPO_RAW="https://raw.githubusercontent.com/Jmuniz27/T5BootTracker/${COMPOSE_REF}/docker-compose.hetzner.yml"
+log "Sincronizando docker-compose.hetzner.yml (${COMPOSE_REF})..."
+TMP_COMPOSE="$(mktemp)"
+if curl -fsS --max-time 15 "$REPO_RAW" -o "$TMP_COMPOSE" && [ -s "$TMP_COMPOSE" ]; then
+    cp "$COMPOSE" "${COMPOSE}.bak-$(date +%Y%m%d%H%M%S)"
+    mv "$TMP_COMPOSE" "$COMPOSE"
+else
+    log "ERROR: no se pudo bajar docker-compose.hetzner.yml de GitHub."
+    log "       Se sigue con el archivo que ya está en el servidor."
+    rm -f "$TMP_COMPOSE"
+fi
+
+# --- 4. Traer imagenes ------------------------------------------------------
 log "Bajando imagenes de GHCR..."
 docker compose -p "$PROJECT" -f "$COMPOSE" pull
 
-# --- 4. Levantar ------------------------------------------------------------
+# --- 5. Levantar ------------------------------------------------------------
 log "Levantando servicios..."
 docker compose -p "$PROJECT" -f "$COMPOSE" up -d --remove-orphans
 
-# --- 5. Esperar a que el frontend responda ----------------------------------
+# --- 6. Esperar a que el frontend responda ----------------------------------
 log "Esperando al frontend en 127.0.0.1:8080..."
 ok=0
 for i in $(seq 1 30); do
@@ -71,7 +93,7 @@ if [ "$ok" -ne 1 ]; then
     exit 1
 fi
 
-# --- 6. Limpiar imagenes viejas SOLO de este proyecto ------------------------
+# --- 7. Limpiar imagenes viejas SOLO de este proyecto ------------------------
 # Se conservan las RETENER mas recientes de cada repo, para poder hacer rollback.
 #
 # NO se usa `docker image prune`: sin `-a` solo borra imagenes *dangling* (sin tag),
@@ -95,7 +117,7 @@ for repo in "${IMAGE_BASE}-backend" "${IMAGE_BASE}-frontend"; do
         | xargs -r -n1 docker rmi >/dev/null 2>&1 || true
 done
 
-# --- 7. Verificar que la otra app quedo intacta ------------------------------
+# --- 8. Verificar que la otra app quedo intacta ------------------------------
 OTRA_DESPUES="$(docker inspect attendance_db --format '{{.State.StartedAt}}' 2>/dev/null || echo 'ausente')"
 if [ "$OTRA_ANTES" != "$OTRA_DESPUES" ]; then
     log "⚠️  ATENCION: attendance_db se reinicio durante el despliegue."

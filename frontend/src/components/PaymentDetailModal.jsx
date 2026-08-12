@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getPayment, approvePayment, rejectPayment, notifyCoordinator, getMonitoring } from '../api/payments.api'
+import { getPayment, approvePayment, rejectPayment, editPayment, notifyCoordinator, getMonitoring } from '../api/payments.api'
 import { useModalA11y } from '../hooks/use-modal-a11y'
 import Spinner from './ui/Spinner'
 import Skeleton from './ui/Skeleton'
@@ -41,6 +41,9 @@ function sanitizeAmount(raw) {
 // avisarle al coordinador cerrara la pantalla del comprobante que se revisaba.
 export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess, onNotice }) {
   const [fields, setFields] = useState({ confirmed_amount: '', confirmed_bank_name: '', confirmed_transaction_id: '' })
+  // Datos del comprobante que Finanzas puede corregir en un pendiente (fecha,
+  // banco/cuenta y últimos dígitos) antes de aprobar o rechazar.
+  const [ocrEdit, setOcrEdit] = useState({ ocr_payment_date: '', ocr_bank_name: '', ocr_account_last_digits: '' })
   const [rejectReason, setRejectReason] = useState('')
   const [showReject, setShowReject] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
@@ -73,12 +76,21 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
       confirmed_bank_name: payment.confirmed_bank_name || payment.ocr_bank_name || '',
       confirmed_transaction_id: payment.confirmed_transaction_id || payment.ocr_transaction_id || '',
     })
+    setOcrEdit({
+      ocr_payment_date: payment.ocr_payment_date || '',
+      ocr_bank_name: payment.ocr_bank_name || '',
+      ocr_account_last_digits: payment.ocr_account_last_digits || '',
+    })
   }, [payment])
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['payment-queue'] })
     qc.invalidateQueries({ queryKey: ['payment-queue-bootcamper'] })
     qc.invalidateQueries({ queryKey: ['payment-monitoring'] })
+    // Al aprobar/rechazar, el pago sale de pendientes y entra al historial:
+    // sin esto había que recargar la página para verlo ahí.
+    qc.invalidateQueries({ queryKey: ['payment-history'] })
+    qc.invalidateQueries({ queryKey: ['payment-detail', paymentId] })
   }
 
   const approveMutation = useMutation({
@@ -89,6 +101,15 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
   const rejectMutation = useMutation({
     mutationFn: (data) => rejectPayment(paymentId, data),
     onSuccess: () => { invalidate(); onSuccess('Pago rechazado.') },
+  })
+
+  const editMutation = useMutation({
+    mutationFn: (data) => editPayment(paymentId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payment-detail', paymentId] })
+      qc.invalidateQueries({ queryKey: ['payment-queue'] })
+      onSuccess('Datos del comprobante actualizados.')
+    },
   })
 
   const notify = onNotice || onSuccess
@@ -203,17 +224,65 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
               </div>
             ))}
 
-            {/* Sólo lectura: no forman parte de lo que Finanzas confirma. */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div>
-                <p className="text-xs text-gray-500">Fecha de pago</p>
-                <p className="text-sm text-gray-900">{payment.ocr_payment_date || '—'}</p>
+            {/* Fecha y cuenta/banco: en un pendiente, Finanzas los puede corregir. */}
+            {isPending ? (
+              <div className="space-y-3 pt-1">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="ocr_payment_date" className="block text-xs font-medium text-gray-600 mb-1">Fecha de pago</label>
+                    <input
+                      id="ocr_payment_date"
+                      type="date"
+                      data-testid="edit-payment-date"
+                      value={ocrEdit.ocr_payment_date || ''}
+                      onChange={(e) => setOcrEdit((p) => ({ ...p, ocr_payment_date: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="ocr_account_last_digits" className="block text-xs font-medium text-gray-600 mb-1">Cuenta (últimos dígitos)</label>
+                    <input
+                      id="ocr_account_last_digits"
+                      type="text"
+                      inputMode="numeric"
+                      value={ocrEdit.ocr_account_last_digits || ''}
+                      onChange={(e) => setOcrEdit((p) => ({ ...p, ocr_account_last_digits: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="ocr_bank_name" className="block text-xs font-medium text-gray-600 mb-1">Banco / cuenta destino</label>
+                  <input
+                    id="ocr_bank_name"
+                    type="text"
+                    value={ocrEdit.ocr_bank_name || ''}
+                    onChange={(e) => setOcrEdit((p) => ({ ...p, ocr_bank_name: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent"
+                  />
+                </div>
+                <button
+                  data-testid="edit-payment-save"
+                  disabled={editMutation.isPending}
+                  onClick={() => editMutation.mutate(ocrEdit)}
+                  className="text-xs font-medium text-[#213A8E] border border-[#213A8E] px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition-colors inline-flex items-center gap-2"
+                >
+                  {editMutation.isPending && <Spinner />}
+                  {editMutation.isPending ? 'Guardando…' : 'Guardar fecha y cuenta'}
+                </button>
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Cuenta (últimos dígitos)</p>
-                <p className="text-sm text-gray-900">{payment.ocr_account_last_digits || '—'}</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <p className="text-xs text-gray-500">Fecha de pago</p>
+                  <p className="text-sm text-gray-900">{payment.ocr_payment_date || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Cuenta (últimos dígitos)</p>
+                  <p className="text-sm text-gray-900">{payment.ocr_account_last_digits || '—'}</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Texto crudo: herramienta de diagnóstico, no algo que se mire siempre. */}
@@ -275,12 +344,14 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   <textarea
                     id="reject-reason"
                     rows={3}
+                    maxLength={300}
                     data-testid="reject-reason"
                     placeholder="Describe el motivo del rechazo..."
                     value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
+                    onChange={(e) => setRejectReason(e.target.value.slice(0, 300))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
                   />
+                  <p className="text-right text-xs text-gray-400">{rejectReason.length}/300</p>
                   {rejectMutation.isError && (
                     <p className="text-red-500 text-xs animate-shake">{rejectMutation.error?.response?.data?.error || 'Error al rechazar.'}</p>
                   )}

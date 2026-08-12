@@ -152,6 +152,11 @@ REST_FRAMEWORK = {
         # Reenvío de invitación de onboarding (#255) — evita que un vendedor
         # sature de emails al bootcamper con reintentos.
         'invitation': os.environ.get('INVITATION_THROTTLE_RATE', '5/hour'),
+        # Endpoints del bot de WhatsApp (#278). El límite acaba siendo por IP:
+        # estos endpoints no autentican a una persona, así que no hay usuario
+        # sobre el que contar. Holgado a propósito — cada conversación gasta
+        # hasta 3 llamados y todas llegan desde la misma IP de la plataforma.
+        'bot': os.environ.get('BOT_THROTTLE_RATE', '120/min'),
     },
 }
 
@@ -172,6 +177,11 @@ REDIS_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
 # Password reset tokens are single-use (deleted on confirm) but short-lived
 # regardless, since the link travels over email — a channel we don't control.
 PASSWORD_RESET_TOKEN_TTL = int(os.environ.get('PASSWORD_RESET_TOKEN_TTL', 3600))
+
+# Secreto compartido con el bot de WhatsApp (#278). Sin valor, los endpoints del
+# bot rechazan todo: preferimos que la integración deje de funcionar antes que
+# quedar abierta porque a un .env le falte la variable.
+JELOU_BOT_TOKEN = os.environ.get('JELOU_BOT_TOKEN', '')
 
 # CORS
 CORS_ALLOWED_ORIGINS = os.environ.get(

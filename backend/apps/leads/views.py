@@ -340,11 +340,25 @@ class LeadReleaseView(APIView):
     permission_classes = [IsCommercial]
 
     @extend_schema(
-        responses={200: LeadListSerializer, 403: OpenApiResponse(description='No eres el dueño del lead')},
+        responses={
+            200: LeadListSerializer,
+            403: OpenApiResponse(description='No eres el dueño, o la asignación la maneja el Administrador'),
+        },
         summary='Liberar lead',
         tags=['Leads'],
     )
     def patch(self, request, pk):
+        # Si la auto-asignación está apagada, el pool lo maneja el Administrador:
+        # el vendedor no puede asignarse ni liberar (antes sólo se bloqueaba
+        # asignarse, así que podía soltar un lead que después no podría retomar).
+        if not get_self_assignment_enabled():
+            return Response(
+                {
+                    'error': 'La asignación de leads la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         lead = get_object_or_404(Lead, pk=pk)
         if lead.owner != request.user:
             return Response(

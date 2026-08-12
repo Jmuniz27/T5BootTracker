@@ -283,17 +283,20 @@ export default function LeadsScreen() {
               </View>
             </View>
 
-            {/* Stat cards */}
+            {/* Indicadores (solo lectura, no son botones) */}
+            <Text style={styles.sectionLabel}>Indicadores</Text>
             <View style={styles.statRow}>
-              <View style={styles.statCard}>
+              <View style={styles.statTile}>
                 <Text style={styles.statValue}>{activeMy.length}</Text>
                 <Text style={styles.statLabel}>Mis leads</Text>
               </View>
-              <View style={styles.statCard}>
+              <View style={styles.statDivider} />
+              <View style={styles.statTile}>
                 <Text style={styles.statValue}>{available.length}</Text>
                 <Text style={styles.statLabel}>Disponibles</Text>
               </View>
-              <View style={styles.statCard}>
+              <View style={styles.statDivider} />
+              <View style={styles.statTile}>
                 <Text style={styles.statValue}>{convertedLeads.length}</Text>
                 <Text style={styles.statLabel}>Convertidos</Text>
               </View>
@@ -533,24 +536,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
-  // Stat cards
+  // Indicadores (solo lectura). Panel plano con divisores: se lee como un
+  // resumen, no como tres botones (antes eran tarjetas con borde y elevación).
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
   statRow: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    backgroundColor: '#f1f3f8',
+    borderRadius: 14,
+    paddingVertical: 12,
     marginBottom: 18,
   },
-  statCard: {
+  statTile: {
     flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
     gap: 2,
     alignItems: 'center',
   },
+  statDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    marginVertical: 6,
+    backgroundColor: colors.border,
+  },
   statValue: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: colors.textPrimary,
     letterSpacing: -0.5,
