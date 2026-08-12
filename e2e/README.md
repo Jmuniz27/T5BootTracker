@@ -5,14 +5,54 @@ sistema realmente desplegado. Cada escenario está escrito en formato
 **Dado/Cuando/Entonces** y cita la HST que verifica, de modo que el reporte
 sirve como evidencia de aceptación.
 
-| Escenario | Archivo |
-|---|---|
-| HST-001 · Inicio de sesión | `tests/hst-001-login.spec.js` |
-| HST-032 / HST-009 · Alta manual de lead + interacción | `tests/hst-032-009-lead-manual.spec.js` |
-| HST-007 · Auto-asignación | `tests/hst-007-auto-asignacion.spec.js` |
-| HST-013 · Conversión con validación de cédula | `tests/hst-013-conversion.spec.js` |
-| HST-016 / HST-021 · Comprobante: subida, OCR y aprobación | `tests/hst-016-021-pagos.spec.js` |
-| CB-342 · Responsive en teléfono (pagos + AuthLayout) | `tests/mobile/responsive-pagos.spec.js` |
+Conviven dos formatos, con la misma lógica y las mismas aserciones:
+
+| Escenario | Playwright puro | Gherkin (`playwright-bdd`) |
+|---|---|---|
+| HST-001 · Inicio de sesión | `tests/hst-001-login.spec.js` | `features/hst-001-login.feature` |
+| HST-032 / HST-009 · Alta manual de lead + interacción | `tests/hst-032-009-lead-manual.spec.js` | `features/hst-032-009-lead-manual.feature` |
+| HST-007 · Auto-asignación | `tests/hst-007-auto-asignacion.spec.js` | `features/hst-007-autoasignacion.feature` |
+| HST-013 · Conversión con validación de cédula | `tests/hst-013-conversion.spec.js` | `features/hst-013-conversion.feature` |
+| HST-016 / HST-021 · Comprobante: subida, OCR y aprobación | `tests/hst-016-021-pagos.spec.js` | `features/hst-016-021-pagos.feature` |
+| CB-342 · Responsive en teléfono (pagos + AuthLayout) | `tests/mobile/responsive-pagos.spec.js` | — (no es un criterio de aceptación con el cliente) |
+
+### Por qué dos formatos y no uno solo
+
+Los `.spec.js` en `tests/` son la suite original: usan el helper
+`support/gwt.js` para que el título del test se lea como Dado/Cuando/Entonces,
+pero el archivo en sí es JavaScript, no Gherkin — no hay un `.feature` que un
+no-programador (o un evaluador que busca específicamente una herramienta de
+aceptación tipo Cucumber) pueda leer sin abrir código.
+
+`features/*.feature` + `steps/*.steps.js` (vía `playwright-bdd`) son Gherkin
+real: el texto de cada escenario es el mismo que ya estaba en `gwt.js`, pero
+ahora vive en un `.feature` independiente del código, y las step definitions
+en `steps/` llaman a los mismos helpers de `tests/support/` que usan los specs
+puros — no hay lógica duplicada, sólo una capa de traducción entre el texto
+Gherkin y la implementación existente. `steps/fixtures/*.js` expone la sesión
+pre-autenticada por rol (anónimo, vendedor, bootcamper) como una instancia de
+`test` con nombre `test`, que es lo que `playwright-bdd` necesita para
+detectar automáticamente qué fixtures usa cada `.feature` al generar los
+specs.
+
+Se mantienen ambos porque no hay necesidad de elegir: los `.spec.js` siguen
+sirviendo como regresión técnica de bajo nivel (incluida la suite móvil, que
+no tiene equivalente en Gherkin porque no es un criterio de aceptación
+acordado con la clienta sino una verificación de layout), y los `.feature`
+son la evidencia de aceptación que se puede mostrar sin abrir un editor de
+código.
+
+### Generar y correr la suite Gherkin
+
+```bash
+cd e2e
+npm run pretest:bdd   # bddgen: genera .features-gen/ a partir de features/ + steps/
+npm run test:bdd      # equivale a: playwright test --project=bdd
+```
+
+`test:bdd` corre `pretest:bdd` automáticamente antes (convención `pre*` de
+npm). `.features-gen/` es un directorio generado — está en `.gitignore`, igual
+que `playwright-report/`.
 
 ## Cómo correrla
 

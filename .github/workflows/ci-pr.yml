@@ -43,8 +43,23 @@ jobs:
       - name: Check for missing migrations
         run: docker compose exec -T backend python manage.py makemigrations --check --dry-run
 
-      - name: Run tests
-        run: docker compose exec -T backend pytest --tb=short -q
+      # Umbral real, no aspiracional: la corrida del 2026-08-11 midió 87% sobre
+      # apps/ (ver docs/testing/test-run-2026-08-11.txt). 85% deja margen para
+      # fluctuación normal sin dejar de ser un gate significativo.
+      - name: Run tests with coverage
+        run: docker compose exec -T backend pytest --tb=short -q --cov=apps --cov-report=xml --cov-report=term --cov-fail-under=85
+
+      - name: Copy coverage report out of the container
+        if: always()
+        run: docker compose cp backend:/app/coverage.xml backend/coverage.xml || true
+
+      - name: Upload backend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          retention-days: 14
 
       - name: Run linter
         run: docker compose exec -T backend python -m ruff check . --select E,F,W --ignore E501
@@ -89,9 +104,19 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Run tests
+      # El umbral vive en vite.config.js (test.coverage.thresholds) para que
+      # `npm run test -- --coverage` en local se comporte igual que en CI.
+      - name: Run tests with coverage
         working-directory: frontend
-        run: npm run test
+        run: npx vitest run --coverage
+
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          retention-days: 14
 
   mobile-ci:
     name: Mobile — Build & Test
