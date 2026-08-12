@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import SessionTimeoutWarning from '../SessionTimeoutWarning'
@@ -19,6 +20,7 @@ const AVATAR_COLORS = [
 ]
 
 export default function AppLayout() {
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const name = user?.full_name || user?.email || '?'
   const avatarColor = AVATAR_COLORS[(name.charCodeAt(0) ?? 0) % AVATAR_COLORS.length]
@@ -58,7 +60,7 @@ export default function AppLayout() {
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
-            aria-label="Abrir menú"
+            aria-label={t('common.openMenu')}
             aria-expanded={sidebarOpen}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

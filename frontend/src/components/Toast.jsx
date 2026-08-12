@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const AUTO_DISMISS_MS = 4000
 
 export default function Toast({ message, type = 'success', onClose }) {
+  const { t } = useTranslation()
   const isError = type === 'error'
   const onCloseRef = useRef(onClose)
 
@@ -43,7 +45,7 @@ export default function Toast({ message, type = 'success', onClose }) {
       <span className="min-w-0 flex-1 text-sm font-medium break-words">{message}</span>
       <button
         onClick={onClose}
-        aria-label="Cerrar notificación"
+        aria-label={t('common.closeNotification')}
         className="shrink-0 text-gray-300 hover:text-white ml-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

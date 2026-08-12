@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
@@ -8,23 +10,27 @@ import PasswordInput from '../components/PasswordInput';
 import AuthButton from '../components/AuthButton';
 import { confirmPasswordReset } from '../api/auth.api';
 
-const schema = z
-  .object({
-    password: z.string().min(8, 'Mínimo 8 caracteres'),
-    password_confirm: z.string(),
-  })
-  .refine((d) => d.password === d.password_confirm, {
-    message: 'Las contraseñas no coinciden',
-    path: ['password_confirm'],
-  });
+function buildSchema(t) {
+  return z
+    .object({
+      password: z.string().min(8, t('reset.minChars')),
+      password_confirm: z.string(),
+    })
+    .refine((d) => d.password === d.password_confirm, {
+      message: t('reset.noMatch'),
+      path: ['password_confirm'],
+    });
+}
 
-function resetPasswordErrorMessage(error) {
-  if (error?.response?.status === 400) return error.response.data?.error ?? 'Token expirado o inválido.';
-  if (error) return 'Error de conexión. Intenta de nuevo.';
+function resetPasswordErrorMessage(error, t) {
+  if (error?.response?.status === 400) return error.response.data?.error ?? t('reset.tokenInvalid');
+  if (error) return t('reset.connError');
   return null;
 }
 
 export default function ResetPasswordPage() {
+  const { t } = useTranslation();
+  const schema = useMemo(() => buildSchema(t), [t]);
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
@@ -40,15 +46,15 @@ export default function ResetPasswordPage() {
     onSuccess: () => navigate('/reset-success'),
   });
 
-  const errorMsg = resetPasswordErrorMessage(error);
+  const errorMsg = resetPasswordErrorMessage(error, t);
 
   if (!token) {
     return (
-      <AuthLayout backTo="/login" backLabel="Volver al inicio de sesión">
+      <AuthLayout backTo="/login" backLabel={t('common.backToLogin')}>
         <p className="text-white/50 text-sm text-center py-8">
-          Enlace inválido.{' '}
+          {t('reset.invalidLink')}{' '}
           <a href="/forgot-password" className="text-[#5B9BD5] hover:underline">
-            Solicita un nuevo reset
+            {t('reset.requestNew')}
           </a>
           .
         </p>
@@ -57,16 +63,16 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <AuthLayout backTo="/login" backLabel="Volver al inicio de sesión">
+    <AuthLayout backTo="/login" backLabel={t('common.backToLogin')}>
       <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-        Nueva <span className="text-[#5B9BD5]">contraseña</span>
+        {t('reset.titleA')}<span className="text-[#5B9BD5]">{t('reset.titleB')}</span>
       </h1>
-      <p className="text-white/50 text-sm mb-6 sm:mb-10">Ingresa tu nueva contraseña</p>
+      <p className="text-white/50 text-sm mb-6 sm:mb-10">{t('reset.subtitle')}</p>
 
       <form onSubmit={handleSubmit((d) => mutate(d))} noValidate className="space-y-4 sm:space-y-5">
         <div>
           <label className="block text-sm font-medium text-white/70 mb-2">
-            Nueva contraseña
+            {t('reset.newPassword')}
           </label>
           <PasswordInput
             {...register('password')}
@@ -77,7 +83,7 @@ export default function ResetPasswordPage() {
 
         <div>
           <label className="block text-sm font-medium text-white/70 mb-2">
-            Confirmar contraseña
+            {t('reset.confirmPassword')}
           </label>
           <PasswordInput
             {...register('password_confirm')}
@@ -91,7 +97,7 @@ export default function ResetPasswordPage() {
         )}
 
         <AuthButton type="submit" disabled={isPending} className="mt-4">
-          {isPending ? 'Guardando...' : 'Guardar contraseña'}
+          {isPending ? t('reset.saving') : t('reset.save')}
         </AuthButton>
       </form>
     </AuthLayout>
