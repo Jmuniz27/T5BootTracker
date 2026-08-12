@@ -314,6 +314,48 @@
       "submit": "Convertir a Bootcamper"
     }
   },
+  "payments": {
+    "status": {
+      "APPROVED": "Aprobado",
+      "REJECTED": "Rechazado",
+      "PENDING": "Pendiente",
+      "DRAFT": "En revisión"
+    },
+    "receipt": {
+      "unavailable": "Comprobante no disponible",
+      "pdfNoPreview": "No se puede previsualizar el PDF aquí.",
+      "openNewTab": "Abrir comprobante en pestaña nueva",
+      "mobileNoPreview": "Vista previa no disponible en el móvil.",
+      "openPdf": "Abrir el PDF",
+      "alt": "Comprobante"
+    },
+    "history": {
+      "title": "Historial de solicitudes",
+      "deletedByBootcamper": "Eliminado por el bootcamper",
+      "perReceipt": "(según el comprobante)",
+      "sent": "Enviado {{date}}",
+      "reviewedBy": "Revisado por {{name}} · {{date}}",
+      "deletedBy": "Eliminado por {{name}}",
+      "view": "Ver",
+      "empty": "Todavía no hay solicitudes de pago.",
+      "showMore_one": "Ver {{count}} solicitud más",
+      "showMore_other": "Ver {{count}} solicitudes más"
+    },
+    "plan": {
+      "title": "Plan de pagos",
+      "loading": "Cargando…",
+      "uploadedBy": "Subido por {{name}}",
+      "view": "Ver plan",
+      "uploading": "Subiendo…",
+      "replace": "Reemplazar",
+      "delete": "Eliminar",
+      "noneFinance": "Este bootcamper todavía no tiene un plan de pagos.",
+      "upload": "Subir plan (PDF o Excel)",
+      "noneBootcamper": "Aún no hay un plan de pagos cargado.",
+      "uploadError": "No se pudo subir el archivo.",
+      "openError": "No se pudo abrir el archivo."
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "agenda": "Agenda",

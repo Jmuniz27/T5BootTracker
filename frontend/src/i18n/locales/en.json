@@ -314,6 +314,48 @@
       "submit": "Convert to Bootcamper"
     }
   },
+  "payments": {
+    "status": {
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "PENDING": "Pending",
+      "DRAFT": "Under review"
+    },
+    "receipt": {
+      "unavailable": "Receipt not available",
+      "pdfNoPreview": "The PDF can't be previewed here.",
+      "openNewTab": "Open receipt in a new tab",
+      "mobileNoPreview": "Preview not available on mobile.",
+      "openPdf": "Open the PDF",
+      "alt": "Receipt"
+    },
+    "history": {
+      "title": "Request history",
+      "deletedByBootcamper": "Deleted by the bootcamper",
+      "perReceipt": "(per the receipt)",
+      "sent": "Sent {{date}}",
+      "reviewedBy": "Reviewed by {{name}} · {{date}}",
+      "deletedBy": "Deleted by {{name}}",
+      "view": "View",
+      "empty": "No payment requests yet.",
+      "showMore_one": "View {{count}} more request",
+      "showMore_other": "View {{count}} more requests"
+    },
+    "plan": {
+      "title": "Payment plan",
+      "loading": "Loading…",
+      "uploadedBy": "Uploaded by {{name}}",
+      "view": "View plan",
+      "uploading": "Uploading…",
+      "replace": "Replace",
+      "delete": "Delete",
+      "noneFinance": "This bootcamper doesn't have a payment plan yet.",
+      "upload": "Upload plan (PDF or Excel)",
+      "noneBootcamper": "No payment plan uploaded yet.",
+      "uploadError": "Could not upload the file.",
+      "openError": "Could not open the file."
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "agenda": "Schedule",
