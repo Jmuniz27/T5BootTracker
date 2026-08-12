@@ -671,6 +671,28 @@
       "payments": "Cobro de pagos",
       "noSourceResponse": "No responde a fuente",
       "paymentFooter": "{{collected}} de {{expected}}"
+    },
+    "charts": {
+      "loading": "Cargando analíticas…",
+      "loadError": "No pudimos cargar las analíticas",
+      "loadError403": " (requiere permisos de administrador).",
+      "loadErrorRetry": ". Intenta de nuevo.",
+      "noData": "Sin datos para este período",
+      "conversionTitle": "Tasa de conversión por fuente",
+      "conversionSubtitle": "% de leads convertidos según su origen",
+      "conversionSeries": "Conversión",
+      "responseTitle": "Tiempo de respuesta promedio",
+      "responseSubtitle": "Horas hasta la primera interacción (por semana)",
+      "responseSeries": "Horas promedio",
+      "responseTooltip": "Promedio",
+      "newLeadsTitle": "Leads nuevos",
+      "newLeadsSubtitle": "Ingresos por período",
+      "newLeadsSeries": "Leads nuevos",
+      "leadsTooltip": "Leads",
+      "paymentsTitle": "Cobro por programa",
+      "paymentsSubtitle": "Esperado vs. cobrado",
+      "expected": "Esperado",
+      "collected": "Cobrado"
     }
   },
   "nav": {

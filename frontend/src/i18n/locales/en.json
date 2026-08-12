@@ -671,6 +671,28 @@
       "payments": "Payment collection",
       "noSourceResponse": "Not applicable to source",
       "paymentFooter": "{{collected}} of {{expected}}"
+    },
+    "charts": {
+      "loading": "Loading analytics…",
+      "loadError": "We couldn't load the analytics",
+      "loadError403": " (requires administrator permissions).",
+      "loadErrorRetry": ". Please try again.",
+      "noData": "No data for this period",
+      "conversionTitle": "Conversion rate by source",
+      "conversionSubtitle": "% of leads converted by their origin",
+      "conversionSeries": "Conversion",
+      "responseTitle": "Average response time",
+      "responseSubtitle": "Hours to first interaction (per week)",
+      "responseSeries": "Average hours",
+      "responseTooltip": "Average",
+      "newLeadsTitle": "New leads",
+      "newLeadsSubtitle": "Intake per period",
+      "newLeadsSeries": "New leads",
+      "leadsTooltip": "Leads",
+      "paymentsTitle": "Collection by program",
+      "paymentsSubtitle": "Expected vs. collected",
+      "expected": "Expected",
+      "collected": "Collected"
     }
   },
   "nav": {
