@@ -693,6 +693,37 @@
       "paymentsSubtitle": "Expected vs. collected",
       "expected": "Expected",
       "collected": "Collected"
+    },
+    "salespeople": {
+      "loadError": "We couldn't load the salespeople. Please try again.",
+      "empty": "No active salespeople.",
+      "uncontacted": "{{count}} not contacted",
+      "assignedLeads_one": "assigned lead",
+      "assignedLeads_other": "assigned leads",
+      "converted": "Converted",
+      "ofAssigned": "{{converted}} of {{assigned}}",
+      "noLeads": "No assigned leads"
+    },
+    "spDetail": {
+      "notFound": "That user doesn't exist or isn't a salesperson.",
+      "loadError": "We couldn't load the performance. Please try again.",
+      "back": "← Analytics · Salesperson",
+      "loading": "Loading…",
+      "subtitle": "Sales performance. Collection is viewed in the Finance portfolio.",
+      "assignedLeads": "Assigned leads",
+      "converted": "Converted",
+      "conversionRate": "Conversion rate",
+      "uncontacted": "Not contacted",
+      "interactions": "Interactions",
+      "byStatusTitle": "Leads by status",
+      "byStatusHint": "Includes statuses with no leads, at zero.",
+      "leadsSeries": "Leads",
+      "byMonthTitle": "Monthly trend",
+      "byMonthHint": "Grouped by the month the lead was taken.",
+      "noDatedLeads": "No dated assigned leads yet.",
+      "assignedSeries": "Assigned",
+      "convertedSeries": "Converted",
+      "avgRetention": "Average retention of their leads: {{hours}}."
     }
   },
   "nav": {

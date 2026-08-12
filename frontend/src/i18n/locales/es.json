@@ -693,6 +693,37 @@
       "paymentsSubtitle": "Esperado vs. cobrado",
       "expected": "Esperado",
       "collected": "Cobrado"
+    },
+    "salespeople": {
+      "loadError": "No pudimos cargar los vendedores. Intenta de nuevo.",
+      "empty": "No hay vendedores activos.",
+      "uncontacted": "{{count}} sin contactar",
+      "assignedLeads_one": "lead asignado",
+      "assignedLeads_other": "leads asignados",
+      "converted": "Convertidos",
+      "ofAssigned": "{{converted}} de {{assigned}}",
+      "noLeads": "Sin leads asignados"
+    },
+    "spDetail": {
+      "notFound": "Ese usuario no existe o no es un vendedor.",
+      "loadError": "No pudimos cargar el rendimiento. Intenta de nuevo.",
+      "back": "← Analítica · Vendedor",
+      "loading": "Cargando…",
+      "subtitle": "Rendimiento comercial. El cobro se consulta en la cartera de Finanzas.",
+      "assignedLeads": "Leads asignados",
+      "converted": "Convertidos",
+      "conversionRate": "Tasa de conversión",
+      "uncontacted": "Sin contactar",
+      "interactions": "Interacciones",
+      "byStatusTitle": "Leads por estado",
+      "byStatusHint": "Incluye los estados sin leads, en cero.",
+      "leadsSeries": "Leads",
+      "byMonthTitle": "Evolución mensual",
+      "byMonthHint": "Agrupado por el mes en que tomó el lead.",
+      "noDatedLeads": "Todavía no hay leads asignados con fecha.",
+      "assignedSeries": "Asignados",
+      "convertedSeries": "Convertidos",
+      "avgRetention": "Retención promedio de sus leads: {{hours}}."
     }
   },
   "nav": {
