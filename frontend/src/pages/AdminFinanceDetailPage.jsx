@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getFinanceBootcampers } from '../api/finance.api'
@@ -22,6 +23,7 @@ function fmtMoney(value) {
 }
 
 function BootcamperCard({ bc, financeName, isConfirming, isPending, onAskRelease, onCancelRelease, onRelease }) {
+  const { t } = useTranslation()
   const expected = parseFloat(bc.expected_amount) || 0
   const paid = parseFloat(bc.total_paid) || 0
   const paidPct = expected > 0 ? Math.min((paid / expected) * 100, 100) : 0
@@ -37,20 +39,20 @@ function BootcamperCard({ bc, financeName, isConfirming, isPending, onAskRelease
           <p className="text-xs text-gray-500 truncate mt-0.5">
             {bc.program_name}
             {bc.cohort_number != null && (
-              <span className="text-gray-400"> · Cohorte {bc.cohort_number}</span>
+              <span className="text-gray-400"> · {t('portfolios.detail.cohortNumber', { number: bc.cohort_number })}</span>
             )}
           </p>
         </div>
         {isCritical && (
           <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-600 flex-shrink-0">
-            Crítico
+            {t('portfolios.detail.critical')}
           </span>
         )}
       </div>
 
       <div className="mb-3">
         <div className="flex justify-between mb-1">
-          <span className="text-xs text-gray-400">Pagado</span>
+          <span className="text-xs text-gray-400">{t('portfolios.detail.paid')}</span>
           <span className="text-xs font-semibold text-gray-700">{paidPct.toFixed(0)}%</span>
         </div>
         <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -64,11 +66,11 @@ function BootcamperCard({ bc, financeName, isConfirming, isPending, onAskRelease
       <div className="flex items-end justify-between">
         <div>
           <p className="text-lg font-bold text-gray-900 leading-tight">{fmtMoney(bc.total_paid)}</p>
-          <p className="text-xs text-gray-400">de {fmtMoney(bc.expected_amount)}</p>
+          <p className="text-xs text-gray-400">{t('portfolios.detail.ofExpected', { amount: fmtMoney(bc.expected_amount) })}</p>
         </div>
         {bc.pending_payments > 0 && (
           <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-            {bc.pending_payments} pendiente{bc.pending_payments === 1 ? '' : 's'}
+            {t('portfolios.detail.pending', { count: bc.pending_payments })}
           </span>
         )}
       </div>
@@ -78,7 +80,7 @@ function BootcamperCard({ bc, financeName, isConfirming, isPending, onAskRelease
       {isConfirming ? (
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-xs text-amber-900">
-            Vuelve al pool y deja de estar a cargo de {financeName ?? 'esta persona'}.
+            {t('portfolios.detail.releaseWarning', { name: financeName ?? t('portfolios.detail.releaseWarningFallback') })}
           </p>
           <div className="flex gap-2 mt-2">
             <button
@@ -86,14 +88,14 @@ function BootcamperCard({ bc, financeName, isConfirming, isPending, onAskRelease
               disabled={isPending}
               className="flex-1 py-2 rounded-lg bg-[#213A8E] text-white text-xs font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
-              {isPending ? 'Desasignando…' : 'Sí, desasignar'}
+              {isPending ? t('portfolios.detail.releasing') : t('portfolios.detail.confirmRelease')}
             </button>
             <button
               onClick={onCancelRelease}
               disabled={isPending}
               className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-white transition-colors disabled:opacity-60"
             >
-              Cancelar
+              {t('portfolios.detail.cancel')}
             </button>
           </div>
         </div>
@@ -102,7 +104,7 @@ function BootcamperCard({ bc, financeName, isConfirming, isPending, onAskRelease
           onClick={() => onAskRelease(bc)}
           className="mt-4 w-full py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors"
         >
-          Desasignar
+          {t('portfolios.detail.release')}
         </button>
       )}
     </div>
@@ -121,6 +123,7 @@ function SkeletonCard() {
 }
 
 export default function AdminFinanceDetailPage() {
+  const { t } = useTranslation()
   const { financeId } = useParams()
   const navigate = useNavigate()
   // Slicer por estado de COHORTE, con el estilo de píldoras del resto de la app.
@@ -151,14 +154,14 @@ export default function AdminFinanceDetailPage() {
       setToast({
         type: 'success',
         message: nombre
-          ? `${nombre} volvió al pool sin responsable.`
-          : 'Bootcamper devuelto al pool.',
+          ? t('portfolios.detail.releaseSuccess', { name: nombre })
+          : t('portfolios.detail.releaseSuccessFallback'),
       })
     },
     onError: (err) => {
       setToast({
         type: 'error',
-        message: err?.response?.data?.error ?? 'No pudimos desasignar al bootcamper.',
+        message: err?.response?.data?.error ?? t('portfolios.detail.releaseError'),
       })
     },
   })
@@ -194,8 +197,8 @@ export default function AdminFinanceDetailPage() {
       <div className="p-6 sm:p-8">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
           {error?.response?.status === 404
-            ? 'Ese usuario no existe o no es de Finanzas.'
-            : 'No pudimos cargar la cartera. Intenta de nuevo.'}
+            ? t('portfolios.detail.notFound')
+            : t('portfolios.detail.loadError')}
         </div>
       </div>
     )
@@ -207,24 +210,24 @@ export default function AdminFinanceDetailPage() {
         onClick={() => navigate('/payments')}
         className="text-sm text-gray-500 hover:text-[#1D3176] transition-colors mb-4"
       >
-        ← Finanzas
+        {t('portfolios.detail.back')}
       </button>
 
       <header className="mb-6">
         <h1 className="text-xl font-semibold text-gray-900">
-          {data?.finance_name ?? 'Cargando…'}
+          {data?.finance_name ?? t('portfolios.detail.loading')}
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Bootcampers que monitorea. Puedes desasignar para devolverlos al pool.
+          {t('portfolios.detail.subtitle')}
         </p>
       </header>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Bootcampers" value={bootcampers.length} loading={isLoading} />
-        <StatCard label="Cobrado" value={fmtMoney(totals.paid)} loading={isLoading} />
-        <StatCard label="Esperado" value={fmtMoney(totals.expected)} loading={isLoading} />
+        <StatCard label={t('portfolios.detail.statBootcampers')} value={bootcampers.length} loading={isLoading} />
+        <StatCard label={t('portfolios.detail.statCollected')} value={fmtMoney(totals.paid)} loading={isLoading} />
+        <StatCard label={t('portfolios.detail.statExpected')} value={fmtMoney(totals.expected)} loading={isLoading} />
         <StatCard
-          label="En crítico"
+          label={t('portfolios.detail.statCritical')}
           value={totals.critical}
           loading={isLoading}
           valueClass={totals.critical > 0 ? 'text-red-600' : 'text-gray-900'}
@@ -242,10 +245,10 @@ export default function AdminFinanceDetailPage() {
       {!isLoading && bootcampers.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 mb-5">
           {/* Mismo slicer de píldoras que "Administrativos / Bootcampers". */}
-          <div role="tablist" aria-label="Estado de la cohorte" className="inline-flex bg-gray-100 rounded-xl p-1">
+          <div role="tablist" aria-label={t('portfolios.detail.tablistAria')} className="inline-flex bg-gray-100 rounded-xl p-1">
             {[
-              { id: 'en_curso', label: `En curso (${enCurso.length})` },
-              { id: 'finalizadas', label: `Finalizadas (${finalizadas.length})` },
+              { id: 'en_curso', label: t('portfolios.detail.tabInProgress', { count: enCurso.length }) },
+              { id: 'finalizadas', label: t('portfolios.detail.tabFinished', { count: finalizadas.length }) },
             ].map(({ id, label }) => (
               <button
                 key={id}
@@ -269,11 +272,11 @@ export default function AdminFinanceDetailPage() {
                 value={programId}
                 onChange={setProgramId}
                 options={[
-                  { value: '', label: 'Todos los programas' },
+                  { value: '', label: t('portfolios.detail.allPrograms') },
                   ...programas.map(([id, name]) => ({ value: id, label: name })),
                 ]}
-                placeholder="Todos los programas"
-                ariaLabel="Filtrar por programa"
+                placeholder={t('portfolios.detail.allPrograms')}
+                ariaLabel={t('portfolios.detail.filterByProgram')}
               />
             </div>
           )}
@@ -283,7 +286,7 @@ export default function AdminFinanceDetailPage() {
       {!isLoading && bootcampers.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
           <p className="text-sm text-gray-500">
-            Todavía no tomó ningún bootcamper del pool.
+            {t('portfolios.detail.emptyNone')}
           </p>
         </div>
       )}
@@ -292,8 +295,8 @@ export default function AdminFinanceDetailPage() {
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
           <p className="text-sm text-gray-500">
             {tab === 'finalizadas'
-              ? 'No tiene bootcampers en cohortes finalizadas.'
-              : 'Toda su cartera está en cohortes finalizadas.'}
+              ? t('portfolios.detail.emptyFinishedTab')
+              : t('portfolios.detail.emptyAllFinished')}
           </p>
         </div>
       )}
