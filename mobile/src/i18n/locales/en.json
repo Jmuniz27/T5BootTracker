@@ -6,6 +6,49 @@
     "loading": "Loading…",
     "language": "Language"
   },
+  "app": {
+    "restrictedTitle": "Restricted access",
+    "restrictedMsg": "This app is for the sales team (salespeople and finance). Sign in with an authorized account.",
+    "logout": "Log out"
+  },
+  "leads": {
+    "status": {
+      "NEW": "New",
+      "QUALIFIED": "Qualified",
+      "INTERESTED": "Interested",
+      "NOT_INTERESTED": "Not interested",
+      "CONVERTED": "Converted",
+      "DISCARDED": "Discarded"
+    },
+    "roles": {
+      "SALESPERSON": "Salesperson",
+      "ADMINISTRATOR": "Administrator",
+      "COORDINATOR": "Coordinator",
+      "BOOTCAMPER": "Bootcamper",
+      "FINANCE": "Finance"
+    },
+    "filterAll": "All",
+    "list": {
+      "loadError": "We couldn't load the leads. Please try again.",
+      "title": "Leads",
+      "subtitle": "Dashboard",
+      "agendaAria": "Open follow-up schedule",
+      "indicators": "Indicators",
+      "myLeads": "My leads",
+      "available": "Available",
+      "converted": "Converted",
+      "searchPlaceholder": "Search by name, email or phone",
+      "tabMy": "My leads ({{count}})",
+      "tabAvailable": "Available ({{count}})",
+      "tabConverted": "Converted ({{count}})",
+      "emptyTitle": "No results",
+      "emptyMy": "You have no assigned leads.",
+      "emptyConverted": "You haven't converted any lead yet.",
+      "emptyAvailable": "No leads available to assign to you.",
+      "logout": "Log out",
+      "newLeadAria": "New lead"
+    }
+  },
   "login": {
     "headingA": "Sign in to ",
     "headingB": "continue",

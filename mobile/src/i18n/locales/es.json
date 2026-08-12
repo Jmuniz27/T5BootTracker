@@ -6,6 +6,49 @@
     "loading": "Cargando…",
     "language": "Idioma"
   },
+  "app": {
+    "restrictedTitle": "Acceso restringido",
+    "restrictedMsg": "Esta aplicación es para el equipo comercial (vendedores y finanzas). Ingresa con una cuenta autorizada.",
+    "logout": "Cerrar sesión"
+  },
+  "leads": {
+    "status": {
+      "NEW": "Nuevo",
+      "QUALIFIED": "Calificado",
+      "INTERESTED": "Interesado",
+      "NOT_INTERESTED": "No interesado",
+      "CONVERTED": "Convertido",
+      "DISCARDED": "Descartado"
+    },
+    "roles": {
+      "SALESPERSON": "Vendedor",
+      "ADMINISTRATOR": "Administrador",
+      "COORDINATOR": "Coordinador",
+      "BOOTCAMPER": "Bootcamper",
+      "FINANCE": "Finanzas"
+    },
+    "filterAll": "Todos",
+    "list": {
+      "loadError": "No pudimos cargar los leads. Intenta de nuevo.",
+      "title": "Leads",
+      "subtitle": "Dashboard",
+      "agendaAria": "Abrir agenda de seguimientos",
+      "indicators": "Indicadores",
+      "myLeads": "Mis leads",
+      "available": "Disponibles",
+      "converted": "Convertidos",
+      "searchPlaceholder": "Buscar por nombre, email o teléfono",
+      "tabMy": "Mis leads ({{count}})",
+      "tabAvailable": "Disponibles ({{count}})",
+      "tabConverted": "Convertidos ({{count}})",
+      "emptyTitle": "Sin resultados",
+      "emptyMy": "No tienes leads asignados.",
+      "emptyConverted": "Aún no has convertido ningún lead.",
+      "emptyAvailable": "No hay leads disponibles para asignarte.",
+      "logout": "Cerrar sesión",
+      "newLeadAria": "Nuevo lead"
+    }
+  },
   "login": {
     "headingA": "Inicia sesión para ",
     "headingB": "continuar",
