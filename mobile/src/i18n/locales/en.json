@@ -76,6 +76,32 @@
       "copy": "Copy",
       "share": "Share"
     },
+    "programSelect": {
+      "placeholder": "Select a program",
+      "loading": "Loading programs…",
+      "title": "Program"
+    },
+    "form": {
+      "newTitle": "New lead",
+      "editTitle": "Edit lead",
+      "create": "Create",
+      "save": "Save",
+      "duplicateTitle": "Possible duplicate",
+      "duplicateMsg": "A similar lead already exists. Create it anyway?",
+      "createAnyway": "Create anyway",
+      "createError": "We couldn't create the lead. Check the data.",
+      "saveError": "We couldn't save the changes. Check the data.",
+      "name": "Name *",
+      "namePlaceholder": "Lead name",
+      "phone": "Phone *",
+      "email": "Email",
+      "emailPlaceholder": "email@example.com",
+      "program": "Program interest",
+      "source": "Source",
+      "isCompany": "It's a company",
+      "assignMe": "Assign this lead to me",
+      "assignByAdmin": "Assignment is handled by the Administrator."
+    },
     "list": {
       "loadError": "We couldn't load the leads. Please try again.",
       "title": "Leads",

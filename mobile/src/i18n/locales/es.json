@@ -76,6 +76,32 @@
       "copy": "Copiar",
       "share": "Compartir"
     },
+    "programSelect": {
+      "placeholder": "Selecciona un programa",
+      "loading": "Cargando programas…",
+      "title": "Programa"
+    },
+    "form": {
+      "newTitle": "Nuevo lead",
+      "editTitle": "Editar lead",
+      "create": "Crear",
+      "save": "Guardar",
+      "duplicateTitle": "Posible duplicado",
+      "duplicateMsg": "Ya existe un lead parecido. ¿Crearlo igual?",
+      "createAnyway": "Crear igual",
+      "createError": "No pudimos crear el lead. Verifica los datos.",
+      "saveError": "No pudimos guardar los cambios. Verifica los datos.",
+      "name": "Nombre *",
+      "namePlaceholder": "Nombre del lead",
+      "phone": "Teléfono *",
+      "email": "Email",
+      "emailPlaceholder": "correo@ejemplo.com",
+      "program": "Programa de interés",
+      "source": "Origen",
+      "isCompany": "Es una empresa",
+      "assignMe": "Asignarme este lead",
+      "assignByAdmin": "La asignación la realiza el Administrador."
+    },
     "list": {
       "loadError": "No pudimos cargar los leads. Intenta de nuevo.",
       "title": "Leads",
