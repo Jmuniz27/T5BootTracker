@@ -11,6 +11,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../src/theme/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { fetchLeads } from '../../src/api/leads.api';
@@ -44,15 +45,17 @@ function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
 }
 
-function prettyDate(key: string): string {
-  const [y, m, d] = key.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  if (key === todayKey()) return 'Hoy';
-  return date.toLocaleDateString('es-EC', { weekday: 'long', day: '2-digit', month: 'short' });
-}
-
 export default function AgendaScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+
+  function prettyDate(key: string): string {
+    const [y, m, d] = key.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    if (key === todayKey()) return t('agenda.today');
+    return date.toLocaleDateString('es-EC', { weekday: 'long', day: '2-digit', month: 'short' });
+  }
+
   const { user } = useAuth();
   const isSalesperson = user?.role === 'SALESPERSON';
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -74,7 +77,7 @@ export default function AgendaScreen() {
       setLeads([...leadData.my_leads, ...leadData.available_leads].map((l) => ({ id: l.id, name: l.name })));
       setError(null);
     } catch {
-      setError('No pudimos cargar las reuniones. Revisa tu conexión.');
+      setError(t('agenda.loadError'));
     }
   }, []);
 
@@ -125,7 +128,7 @@ export default function AgendaScreen() {
       setModalOpen(false);
       await load();
     } catch {
-      setError('No pudimos guardar la reunión. Intenta de nuevo.');
+      setError(t('agenda.saveError'));
     } finally {
       setSaving(false);
     }
@@ -139,7 +142,7 @@ export default function AgendaScreen() {
       setModalOpen(false);
       await load();
     } catch {
-      setError('No pudimos eliminar la reunión. Intenta de nuevo.');
+      setError(t('agenda.deleteError'));
     } finally {
       setDeleting(false);
     }
@@ -153,12 +156,12 @@ export default function AgendaScreen() {
       <SafeAreaView style={st.screen}>
         <View style={st.restrictedCard}>
           <Ionicons name="lock-closed-outline" size={40} color={colors.navy} />
-          <Text style={st.restrictedTitle}>Acceso restringido</Text>
+          <Text style={st.restrictedTitle}>{t('agenda.restrictedTitle')}</Text>
           <Text style={st.restrictedMsg}>
-            La agenda de seguimientos es del equipo de ventas.
+            {t('agenda.restrictedMsg')}
           </Text>
           <TouchableOpacity style={st.restrictedBtn} onPress={() => router.back()} activeOpacity={0.85}>
-            <Text style={st.restrictedBtnText}>Volver</Text>
+            <Text style={st.restrictedBtnText}>{t('agenda.back')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -171,7 +174,7 @@ export default function AgendaScreen() {
         <TouchableOpacity style={st.backBtn} hitSlop={8} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={st.headerTitle}>Agenda</Text>
+        <Text style={st.headerTitle}>{t('agenda.title')}</Text>
         <TouchableOpacity style={st.newBtn} onPress={openCreate} activeOpacity={0.85}>
           <Ionicons name="add" size={20} color={colors.white} />
         </TouchableOpacity>
@@ -205,7 +208,7 @@ export default function AgendaScreen() {
           {dayItems.length === 0 ? (
             <View style={st.emptyDay}>
               <Ionicons name="calendar-clear-outline" size={28} color={colors.border} />
-              <Text style={st.emptyText}>Sin reuniones este día</Text>
+              <Text style={st.emptyText}>{t('agenda.emptyDay')}</Text>
             </View>
           ) : (
             dayItems.map((item) => (
@@ -215,7 +218,7 @@ export default function AgendaScreen() {
                   <Text style={st.timeText}>{timeLabel(item.start_time)}</Text>
                 </View>
                 <View style={st.rowInfo}>
-                  <Text style={st.rowTitle} numberOfLines={1}>{item.title || 'Reunión'}</Text>
+                  <Text style={st.rowTitle} numberOfLines={1}>{item.title || t('agenda.meeting')}</Text>
                   <Text style={st.rowLead} numberOfLines={1}>{leadNameById[item.lead] ?? ''}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.border} />

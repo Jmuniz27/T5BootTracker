@@ -11,6 +11,40 @@
     "restrictedMsg": "This app is for the sales team (salespeople and finance). Sign in with an authorized account.",
     "logout": "Log out"
   },
+  "meetingForm": {
+    "titleRequired": "The title is required.",
+    "selectLeadError": "Select a lead.",
+    "endAfterStart": "The end date must be after the start date.",
+    "cancel": "Cancel",
+    "editTitle": "Edit meeting",
+    "newTitle": "New meeting",
+    "save": "Save",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Meeting with…",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Details, next action…",
+    "startLabel": "Start",
+    "endLabel": "End",
+    "leadLabel": "Lead",
+    "selectLead": "Select a lead",
+    "invite": "Invite the lead by email",
+    "deleteMeeting": "Delete meeting",
+    "pickerDone": "Done",
+    "chooseLead": "Choose lead",
+    "noLeads": "No leads available."
+  },
+  "agenda": {
+    "loadError": "We couldn't load the meetings. Check your connection.",
+    "saveError": "We couldn't save the meeting. Please try again.",
+    "deleteError": "We couldn't delete the meeting. Please try again.",
+    "today": "Today",
+    "restrictedTitle": "Restricted access",
+    "restrictedMsg": "The follow-up schedule is for the sales team.",
+    "back": "Back",
+    "title": "Schedule",
+    "emptyDay": "No meetings this day",
+    "meeting": "Meeting"
+  },
   "leads": {
     "status": {
       "NEW": "New",

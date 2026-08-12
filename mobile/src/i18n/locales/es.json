@@ -11,6 +11,40 @@
     "restrictedMsg": "Esta aplicación es para el equipo comercial (vendedores y finanzas). Ingresa con una cuenta autorizada.",
     "logout": "Cerrar sesión"
   },
+  "meetingForm": {
+    "titleRequired": "El título es obligatorio.",
+    "selectLeadError": "Selecciona un lead.",
+    "endAfterStart": "La fecha de fin debe ser posterior a la de inicio.",
+    "cancel": "Cancelar",
+    "editTitle": "Editar reunión",
+    "newTitle": "Nueva reunión",
+    "save": "Guardar",
+    "titleLabel": "Título",
+    "titlePlaceholder": "Reunión con…",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "Detalles, próxima acción…",
+    "startLabel": "Inicio",
+    "endLabel": "Fin",
+    "leadLabel": "Lead",
+    "selectLead": "Selecciona un lead",
+    "invite": "Invitar al lead por correo",
+    "deleteMeeting": "Eliminar reunión",
+    "pickerDone": "Listo",
+    "chooseLead": "Elegir lead",
+    "noLeads": "No hay leads disponibles."
+  },
+  "agenda": {
+    "loadError": "No pudimos cargar las reuniones. Revisa tu conexión.",
+    "saveError": "No pudimos guardar la reunión. Intenta de nuevo.",
+    "deleteError": "No pudimos eliminar la reunión. Intenta de nuevo.",
+    "today": "Hoy",
+    "restrictedTitle": "Acceso restringido",
+    "restrictedMsg": "La agenda de seguimientos es del equipo de ventas.",
+    "back": "Volver",
+    "title": "Agenda",
+    "emptyDay": "Sin reuniones este día",
+    "meeting": "Reunión"
+  },
   "leads": {
     "status": {
       "NEW": "Nuevo",

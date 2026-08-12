@@ -50,13 +50,16 @@ export interface MeetingFormErrors {
 }
 
 /** Valida el form y devuelve un error por campo (vacío si está todo OK). */
-export function validateMeetingForm(v: MeetingFormValues): MeetingFormErrors {
+export function validateMeetingForm(
+  v: MeetingFormValues,
+  t: (key: string) => string,
+): MeetingFormErrors {
   const errors: MeetingFormErrors = {};
-  if (!v.title.trim()) errors.title = 'El título es obligatorio.';
-  if (!v.lead) errors.lead = 'Selecciona un lead.';
+  if (!v.title.trim()) errors.title = t('meetingForm.titleRequired');
+  if (!v.lead) errors.lead = t('meetingForm.selectLeadError');
   // La fecha de fin no puede ser anterior (ni igual) a la de inicio.
   if (v.end.getTime() <= v.start.getTime()) {
-    errors.end = 'La fecha de fin debe ser posterior a la de inicio.';
+    errors.end = t('meetingForm.endAfterStart');
   }
   return errors;
 }
