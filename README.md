@@ -9,7 +9,7 @@ conversión a bootcamper → control de pagos, con notificaciones automáticas y
 reportes analíticos.
 
 - **Cliente:** PhD. Carmen Vaca (cvaca@espol.edu.ec)
-- **Producción:** https://boottracker.taws.espol.edu.ec
+- **Producción:** https://boottracker.codingbootcampslatam.com (URL oficial final; el despliegue en `boottracker.taws.espol.edu.ec` se da de baja)
 - **Entrega parcial:** 15 jun 2026 — flujo end-to-end (login → leads → interacciones)
 - **Entrega final:** 17 ago 2026 — producción + docs + handoff
 
@@ -139,7 +139,7 @@ API interactiva (Swagger UI): `http://localhost:8000/api/schema/swagger-ui/`
 | Backend Django | ✅ Auth, Leads, Payments, Programs, Notifications. Analytics: stub vacío. |
 | Frontend React | ✅ Login, dashboard de leads, interacciones, conversión, pagos (vendedor/bootcamper/admin). |
 | Mobile Expo | ✅ Auth (login, forgot-password). App: home, leads, log-interaction. |
-| DevOps | ✅ CI verde. Desplegado en producción: https://boottracker.taws.espol.edu.ec |
+| DevOps | ✅ CI verde. Desplegado en producción: https://boottracker.codingbootcampslatam.com |
 
 ## Convenciones
 
