@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../../../src/theme/colors';
 import { convertLead, getPrograms, getCohorts, type Program, type Cohort, type ConvertResponse } from '../../../../src/api/leads.api';
 import ProgramSelect from '../../../../src/components/ProgramSelect';
@@ -36,6 +37,7 @@ function previewDiscountedPrice(totalCost?: string, discountPercentage?: string)
 }
 
 export default function ConvertLeadScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { id, name, program, email: emailParam, phone: phoneParam } =
     useLocalSearchParams<{ id: string; name?: string; program?: string; email?: string; phone?: string }>();
@@ -78,7 +80,7 @@ export default function ConvertLeadScreen() {
       .finally(() => setLoadingCohorts(false));
   }, [programId]);
 
-  const cohortOptions = cohorts.map((c) => ({ id: c.id, name: `Cohorte ${c.number} — ${c.status_label}` }));
+  const cohortOptions = cohorts.map((c) => ({ id: c.id, name: t('leads.convert.cohortOption', { number: c.number, status: c.status_label }) }));
 
   const pct = Number(discount);
   const discountValid = discount.trim() !== '' && !Number.isNaN(pct) && pct >= 0 && pct <= 100;
@@ -114,7 +116,7 @@ export default function ConvertLeadScreen() {
       const firstError = detail && typeof detail === 'object' ? Object.values(detail)[0] : null;
       setError(
         (Array.isArray(firstError) ? firstError[0] : firstError) ??
-          'No pudimos convertir el lead. Verifica los datos.',
+          t('leads.convert.convertError'),
       );
     } finally {
       setLoading(false);
@@ -137,44 +139,44 @@ export default function ConvertLeadScreen() {
     return (
       <SafeAreaView style={s.screen}>
         <View style={s.header}>
-          <Text style={s.headerTitle}>¡Lead convertido!</Text>
+          <Text style={s.headerTitle}>{t('leads.convert.successTitle')}</Text>
           <View style={s.headerSpacer} />
         </View>
         <ScrollView contentContainerStyle={s.body}>
           <View style={s.card}>
-            <Text style={s.leadName}>{name} ahora es Bootcamper.</Text>
-            <Text style={s.label}>Email</Text>
+            <Text style={s.leadName}>{t('leads.convert.nowBootcamper', { name })}</Text>
+            <Text style={s.label}>{t('leads.convert.email')}</Text>
             <Text style={s.resultEmail}>{result.email}</Text>
 
             {result.invitation_link ? (
               <>
-                <Text style={s.label}>Enlace de invitación</Text>
+                <Text style={s.label}>{t('leads.convert.invitationLink')}</Text>
                 <Text style={s.resultLink} selectable numberOfLines={2}>
                   {result.invitation_link}
                 </Text>
                 <View style={s.resultActions}>
                   <TouchableOpacity style={s.actionGhost} onPress={handleCopy} activeOpacity={0.8}>
                     <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={18} color={colors.navy} />
-                    <Text style={s.actionGhostText}>{copied ? 'Copiado' : 'Copiar'}</Text>
+                    <Text style={s.actionGhostText}>{copied ? t('leads.convert.copied') : t('leads.convert.copy')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={s.actionPrimary} onPress={handleShare} activeOpacity={0.85}>
                     <Ionicons name="share-social-outline" size={18} color={colors.white} />
-                    <Text style={s.actionPrimaryText}>Compartir</Text>
+                    <Text style={s.actionPrimaryText}>{t('leads.convert.share')}</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={s.expiryNote}>
-                  Expira en 72 horas. Si el correo no llega, comparte este enlace por WhatsApp.
+                  {t('leads.convert.expiryNote')}
                 </Text>
               </>
             ) : (
               <Text style={s.returningNotice}>
-                ⚠ Bootcamper recurrente — se reutilizó la cuenta existente.
+                {t('leads.convert.returning')}
               </Text>
             )}
           </View>
 
           <TouchableOpacity style={s.doneBtn} onPress={() => router.back()} activeOpacity={0.85}>
-            <Text style={s.doneBtnText}>Listo</Text>
+            <Text style={s.doneBtnText}>{t('leads.convert.done')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
@@ -187,7 +189,7 @@ export default function ConvertLeadScreen() {
         <TouchableOpacity style={s.backBtn} hitSlop={8} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Convertir a bootcamper</Text>
+        <Text style={s.headerTitle}>{t('leads.convert.title')}</Text>
         <TouchableOpacity
           style={[s.saveBtn, !canSubmit && s.saveBtnDisabled]}
           onPress={submit}
@@ -197,7 +199,7 @@ export default function ConvertLeadScreen() {
           {loading ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text style={s.saveBtnText}>Convertir</Text>
+            <Text style={s.saveBtnText}>{t('leads.convert.convert')}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -207,48 +209,48 @@ export default function ConvertLeadScreen() {
           {name ? <Text style={s.leadName}>{name}</Text> : null}
 
           <View style={s.card}>
-            <Text style={s.label}>Cédula / RUC *</Text>
+            <Text style={s.label}>{t('leads.convert.cedula')}</Text>
             <TextInput
               style={s.input}
               value={cedula}
               onChangeText={(v) => setCedula(v.replace(/[^0-9]/g, '').slice(0, 13))}
-              placeholder="10 dígitos (cédula) o 13 (RUC)"
+              placeholder={t('leads.convert.cedulaPlaceholder')}
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
               maxLength={13}
             />
 
-            <Text style={s.label}>Programa *</Text>
+            <Text style={s.label}>{t('leads.convert.program')}</Text>
             <ProgramSelect programs={programs} selectedId={programId || null} onSelect={setProgramId} />
 
-            <Text style={s.label}>Cohorte *</Text>
+            <Text style={s.label}>{t('leads.convert.cohort')}</Text>
             {!programId ? (
-              <Text style={s.hint}>Elige un programa primero.</Text>
+              <Text style={s.hint}>{t('leads.convert.chooseProgramFirst')}</Text>
             ) : loadingCohorts ? (
-              <Text style={s.hint}>Cargando cohortes…</Text>
+              <Text style={s.hint}>{t('leads.convert.loadingCohorts')}</Text>
             ) : cohortOptions.length === 0 ? (
-              <Text style={s.hint}>Este programa no tiene cohortes próximas ni en curso.</Text>
+              <Text style={s.hint}>{t('leads.convert.noCohorts')}</Text>
             ) : (
               <ProgramSelect
                 programs={cohortOptions}
                 selectedId={cohortId || null}
                 onSelect={setCohortId}
-                placeholder="Selecciona una cohorte"
+                placeholder={t('leads.convert.selectCohort')}
               />
             )}
 
-            <Text style={s.label}>Email *</Text>
+            <Text style={s.label}>{t('leads.convert.emailRequired')}</Text>
             <TextInput
               style={s.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="correo@ejemplo.com"
+              placeholder={t('leads.convert.emailPlaceholder')}
               placeholderTextColor={colors.textMuted}
               keyboardType="email-address"
               autoCapitalize="none"
             />
 
-            <Text style={s.label}>Teléfono</Text>
+            <Text style={s.label}>{t('leads.convert.phone')}</Text>
             <TextInput
               style={s.input}
               value={phone}
@@ -258,21 +260,21 @@ export default function ConvertLeadScreen() {
               keyboardType="phone-pad"
             />
 
-            <Text style={s.label}>Descuento (%) *</Text>
+            <Text style={s.label}>{t('leads.convert.discount')}</Text>
             <TextInput
               style={[s.input, discount !== '' && !discountValid && s.inputError]}
               value={discount}
               onChangeText={(v) => setDiscount(v.replace(/[^0-9.]/g, '').slice(0, 6))}
-              placeholder="0 si no aplica"
+              placeholder={t('leads.convert.discountPlaceholder')}
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
-            {discount !== '' && !discountValid && <Text style={s.errorHint}>El descuento va de 0 a 100.</Text>}
+            {discount !== '' && !discountValid && <Text style={s.errorHint}>{t('leads.convert.discountRange')}</Text>}
             {selectedProgram && discountedPrice != null && (
               <Text style={s.priceHint}>
-                Pagará <Text style={s.priceValue}>{formatMoney(discountedPrice)}</Text>
+                {t('leads.convert.willPay')}<Text style={s.priceValue}>{formatMoney(discountedPrice)}</Text>
                 {pct > 0 && selectedProgram.total_cost != null ? (
-                  <Text> en vez de <Text style={s.priceStrike}>{formatMoney(selectedProgram.total_cost)}</Text></Text>
+                  <Text>{t('leads.convert.insteadOf')}<Text style={s.priceStrike}>{formatMoney(selectedProgram.total_cost)}</Text></Text>
                 ) : null}
               </Text>
             )}
