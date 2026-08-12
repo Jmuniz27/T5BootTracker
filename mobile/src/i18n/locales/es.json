@@ -111,6 +111,26 @@
       "scheduleMeeting": "Agendar reunión",
       "saved": "Interacción guardada"
     },
+    "history": {
+      "editError": "No pudimos guardar los cambios. Intenta de nuevo.",
+      "editTitle": "Editar interacción",
+      "save": "Guardar",
+      "type": "Tipo",
+      "outcome": "Resultado",
+      "interest": "Nivel de interés",
+      "optional": "(opcional)",
+      "duration": "Duración de interacción",
+      "minutes": "minutos",
+      "notes": "Notas",
+      "notesPlaceholder": "Notas de la interacción...",
+      "minShort": "min",
+      "loadError": "No pudimos cargar el historial. Intenta de nuevo.",
+      "title": "Historial",
+      "count": "{{count}} interacciones",
+      "retry": "Reintentar",
+      "emptyTitle": "Sin interacciones",
+      "emptyText": "Aún no hay registros para este lead."
+    },
     "convert": {
       "convertError": "No pudimos convertir el lead. Verifica los datos.",
       "successTitle": "¡Lead convertido!",

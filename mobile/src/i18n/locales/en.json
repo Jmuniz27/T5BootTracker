@@ -111,6 +111,26 @@
       "scheduleMeeting": "Schedule meeting",
       "saved": "Interaction saved"
     },
+    "history": {
+      "editError": "We couldn't save the changes. Please try again.",
+      "editTitle": "Edit interaction",
+      "save": "Save",
+      "type": "Type",
+      "outcome": "Outcome",
+      "interest": "Interest level",
+      "optional": "(optional)",
+      "duration": "Interaction duration",
+      "minutes": "minutes",
+      "notes": "Notes",
+      "notesPlaceholder": "Interaction notes...",
+      "minShort": "min",
+      "loadError": "We couldn't load the history. Please try again.",
+      "title": "History",
+      "count": "{{count}} interactions",
+      "retry": "Retry",
+      "emptyTitle": "No interactions",
+      "emptyText": "No records for this lead yet."
+    },
     "convert": {
       "convertError": "We couldn't convert the lead. Check the data.",
       "successTitle": "Lead converted!",
