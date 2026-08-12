@@ -7,7 +7,6 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
   SafeAreaView,
   Modal,
@@ -21,6 +20,8 @@ import { colors } from '../../../src/theme/colors';
 import { fetchLeads } from '../../../src/api/leads.api';
 import { api } from '../../../src/lib/api';
 import { useAuth } from '../../../src/context/AuthContext';
+import { FadeInView } from '../../../src/components/FadeInView';
+import { LeadCardSkeleton } from '../../../src/components/Skeleton';
 import type { Lead, LeadStatus } from '../../../src/types/leads';
 
 interface MeData {
@@ -227,13 +228,16 @@ export default function LeadsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.screen}>
-        <ActivityIndicator style={styles.loader} color={colors.navy} size="large" />
+        {Array.from({ length: 6 }).map((_, i) => (
+          <LeadCardSkeleton key={i} />
+        ))}
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <FadeInView style={styles.screen}>
+      <SafeAreaView style={styles.screen}>
       <FlatList
         data={displayed}
         keyExtractor={(item) => item.id}
@@ -427,7 +431,8 @@ export default function LeadsScreen() {
       >
         <Ionicons name="add" size={28} color={colors.white} />
       </TouchableOpacity>
-    </SafeAreaView>
+      </SafeAreaView>
+    </FadeInView>
   );
 }
 
@@ -437,9 +442,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#f8f9fb',
-  },
-  loader: {
-    marginTop: 80,
   },
   listContent: {
     paddingHorizontal: 16,
