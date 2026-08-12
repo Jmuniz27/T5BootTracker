@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import CustomSelect from '../CustomSelect'
 
 // Espejo de Lead.source en backend/apps/leads/models.py
@@ -19,7 +20,11 @@ const inputClass =
  * objeto `filters` y se lo pasa tal cual al hook, que lo usa como queryKey.
  */
 export default function AnalyticsFilters({ filters, onChange }) {
+  const { t } = useTranslation()
   const set = (field) => (value) => onChange({ ...filters, [field]: value })
+  const segmentOptions = SEGMENT_OPTIONS.map((o) =>
+    o.value === '' ? { ...o, label: t('analytics.filters.allSources') } : o,
+  )
 
   const invalidRange =
     filters.fecha_desde && filters.fecha_hasta && filters.fecha_desde > filters.fecha_hasta
@@ -31,7 +36,7 @@ export default function AnalyticsFilters({ filters, onChange }) {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label htmlFor="analytics-desde" className="block text-sm font-medium text-gray-700 mb-1">
-            Desde
+            {t('analytics.filters.from')}
           </label>
           <input
             id="analytics-desde"
@@ -45,7 +50,7 @@ export default function AnalyticsFilters({ filters, onChange }) {
 
         <div>
           <label htmlFor="analytics-hasta" className="block text-sm font-medium text-gray-700 mb-1">
-            Hasta
+            {t('analytics.filters.to')}
           </label>
           <input
             id="analytics-hasta"
@@ -58,19 +63,19 @@ export default function AnalyticsFilters({ filters, onChange }) {
         </div>
 
         <div>
-          <span className="block text-sm font-medium text-gray-700 mb-1">Fuente</span>
+          <span className="block text-sm font-medium text-gray-700 mb-1">{t('analytics.filters.source')}</span>
           <CustomSelect
             value={filters.segment}
             onChange={set('segment')}
-            options={SEGMENT_OPTIONS}
-            placeholder="Todas las fuentes"
+            options={segmentOptions}
+            placeholder={t('analytics.filters.allSources')}
           />
         </div>
       </div>
 
       {invalidRange && (
         <p role="alert" className="text-xs text-red-500 mt-3">
-          La fecha “Desde” no puede ser posterior a “Hasta”.
+          {t('analytics.filters.invalidRange')}
         </p>
       )}
 
@@ -80,7 +85,7 @@ export default function AnalyticsFilters({ filters, onChange }) {
           onClick={() => onChange({ ...EMPTY })}
           className="mt-3 text-sm text-[#213A8E] font-medium hover:underline"
         >
-          Limpiar filtros
+          {t('analytics.filters.clear')}
         </button>
       )}
     </div>

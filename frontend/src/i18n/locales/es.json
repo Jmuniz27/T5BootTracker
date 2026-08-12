@@ -646,6 +646,33 @@
       "save": "Guardar"
     }
   },
+  "analytics": {
+    "title": "Analítica",
+    "subtitle": "Indicadores de conversión, tiempo de respuesta y cobro de pagos.",
+    "tabsAria": "Vistas de analítica",
+    "tabGeneral": "Vista General",
+    "tabSalesperson": "Vendedor",
+    "tabComparison": "Comparativa",
+    "filters": {
+      "from": "Desde",
+      "to": "Hasta",
+      "source": "Fuente",
+      "allSources": "Todas las fuentes",
+      "invalidRange": "La fecha “Desde” no puede ser posterior a “Hasta”.",
+      "clear": "Limpiar filtros"
+    },
+    "kpi": {
+      "loadError": "No se pudieron cargar los indicadores. Intenta de nuevo.",
+      "conversionRate": "Tasa de conversión",
+      "conversionFooter": "{{converted}} de {{total}} leads",
+      "responseTime": "Promedio de tiempo de respuesta",
+      "noInteractions": "Sin interacciones registradas",
+      "withoutResponse": "{{count}} leads sin respuesta",
+      "payments": "Cobro de pagos",
+      "noSourceResponse": "No responde a fuente",
+      "paymentFooter": "{{collected}} de {{expected}}"
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "agenda": "Agenda",

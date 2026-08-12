@@ -646,6 +646,33 @@
       "save": "Save"
     }
   },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Conversion, response-time and payment-collection metrics.",
+    "tabsAria": "Analytics views",
+    "tabGeneral": "Overview",
+    "tabSalesperson": "Salesperson",
+    "tabComparison": "Comparison",
+    "filters": {
+      "from": "From",
+      "to": "To",
+      "source": "Source",
+      "allSources": "All sources",
+      "invalidRange": "The “From” date can't be later than “To”.",
+      "clear": "Clear filters"
+    },
+    "kpi": {
+      "loadError": "Could not load the metrics. Please try again.",
+      "conversionRate": "Conversion rate",
+      "conversionFooter": "{{converted}} of {{total}} leads",
+      "responseTime": "Average response time",
+      "noInteractions": "No interactions recorded",
+      "withoutResponse": "{{count}} leads without response",
+      "payments": "Payment collection",
+      "noSourceResponse": "Not applicable to source",
+      "paymentFooter": "{{collected}} of {{expected}}"
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "agenda": "Schedule",
