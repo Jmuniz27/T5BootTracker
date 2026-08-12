@@ -8,9 +8,12 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
+    "pretest:bdd": "bddgen",
+    "test:bdd": "playwright test --project=bdd",
     "report": "playwright show-report"
   },
   "devDependencies": {
-    "@playwright/test": "1.56.0"
+    "@playwright/test": "1.56.0",
+    "playwright-bdd": "^9.2.0"
   }
 }

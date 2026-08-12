@@ -1,6 +1,17 @@
 import { defineConfig, devices } from '@playwright/test'
+import { defineBddConfig } from 'playwright-bdd'
 
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:5173'
+
+// Genera specs Playwright reales a partir de features/*.feature + steps/*.js
+// (playwright-bdd). Cada step file trae su propio `test` (ver
+// steps/fixtures.js), así que no hace falta `importTestFrom` aquí: el
+// binding de storageState por rol viaja con cada step definition.
+const bddTestDir = defineBddConfig({
+  features: 'features/*.feature',
+  steps: ['steps/*.steps.js', 'steps/fixtures/*.js'],
+  outputDir: '.features-gen',
+})
 
 export default defineConfig({
   testDir: './tests',
@@ -21,6 +32,9 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
 
+  // `--project=bdd` y `--project=chromium` corren por separado (ver npm
+  // scripts), así que el mismo reporter sirve para ambos: cada corrida sólo
+  // contiene los tests del proyecto invocado.
   reporter: process.env.CI
     ? [['list'], ['html', { open: 'never' }], ['junit', { outputFile: 'reports/junit.xml' }]]
     : [['list'], ['html', { open: 'never' }]],
@@ -62,6 +76,17 @@ export default defineConfig({
       name: 'mobile-chromium',
       testMatch: /mobile\/.*\.spec\.js/,
       use: { ...devices['Pixel 7'] },
+      dependencies: ['setup'],
+    },
+    {
+      // Escenarios Gherkin (features/*.feature + steps/*.steps.js),
+      // generados a specs reales por `bddgen` (ver "pretest:bdd" en
+      // package.json). Corre por separado con `npm run test:bdd`: no forma
+      // parte de la corrida por defecto de `npm test` para no duplicar la
+      // cobertura de los mismos flujos que ya cubren `chromium`/`mobile-chromium`.
+      name: 'bdd',
+      testDir: bddTestDir,
+      use: { ...devices['Desktop Chrome'] },
       dependencies: ['setup'],
     },
   ],
