@@ -1,7 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../store/auth.store'
-import LanguageSwitcher from '../LanguageSwitcher'
 
 const NAV_ITEMS = [
   {
@@ -127,9 +126,6 @@ export default function Sidebar({ onClose }) {
       </nav>
 
       <div className="px-3 pb-6 space-y-3">
-        <div className="px-3">
-          <LanguageSwitcher />
-        </div>
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#213A8E] transition-colors"

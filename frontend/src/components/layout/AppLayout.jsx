@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import LanguageSwitcher from '../LanguageSwitcher'
 import SessionTimeoutWarning from '../SessionTimeoutWarning'
 import PageTransition from '../ui/PageTransition'
 import { useIdleTimeout } from '../../hooks/use-idle-timeout'
@@ -71,6 +72,7 @@ export default function AppLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-3">
+            <LanguageSwitcher />
             <div className="text-right hidden sm:block">
               <p className="text-sm font-normal text-gray-900 leading-tight">
                 {user?.full_name || user?.email || 'User'}
