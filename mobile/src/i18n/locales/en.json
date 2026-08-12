@@ -76,6 +76,41 @@
       "copy": "Copy",
       "share": "Share"
     },
+    "interactionType": {
+      "CALL": "Call",
+      "WHATSAPP": "WhatsApp",
+      "EMAIL": "Email",
+      "VISIT": "Visit",
+      "NOTE": "Note"
+    },
+    "outcome": {
+      "CALL_AGAIN": "Call again",
+      "SEND_INFO": "Send information",
+      "SCHEDULE_VISIT": "Schedule visit",
+      "AWAIT_REPLY": "Await reply",
+      "SPEAK_COORDINATOR": "Talk to coordinator"
+    },
+    "logInteraction": {
+      "yourLead": "your lead",
+      "meetingTitle": "Follow-up: {{name}}",
+      "meetingError": "We couldn't schedule the meeting. Please try again.",
+      "saveError": "We couldn't save the interaction. Please try again.",
+      "headerTitle": "Log interaction",
+      "save": "Save",
+      "optional": "(optional)",
+      "typeTitle": "Interaction type",
+      "outcomeTitle": "Outcome",
+      "interestTitle": "Interest level",
+      "durationTitle": "Interaction duration",
+      "minutes": "minutes",
+      "notesTitle": "Notes",
+      "notesPlaceholder": "How did the interaction go?",
+      "scheduleTitle": "Schedule next meeting",
+      "scheduleHint": "It appears in your Schedule and syncs with Google Calendar.",
+      "meetingScheduled": "Meeting scheduled",
+      "scheduleMeeting": "Schedule meeting",
+      "saved": "Interaction saved"
+    },
     "convert": {
       "convertError": "We couldn't convert the lead. Check the data.",
       "successTitle": "Lead converted!",

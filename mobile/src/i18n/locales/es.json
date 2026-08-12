@@ -76,6 +76,41 @@
       "copy": "Copiar",
       "share": "Compartir"
     },
+    "interactionType": {
+      "CALL": "Llamada",
+      "WHATSAPP": "WhatsApp",
+      "EMAIL": "Email",
+      "VISIT": "Visita",
+      "NOTE": "Nota"
+    },
+    "outcome": {
+      "CALL_AGAIN": "Llamar de nuevo",
+      "SEND_INFO": "Enviar información",
+      "SCHEDULE_VISIT": "Agendar visita",
+      "AWAIT_REPLY": "Esperar respuesta",
+      "SPEAK_COORDINATOR": "Hablar coordinador"
+    },
+    "logInteraction": {
+      "yourLead": "tu lead",
+      "meetingTitle": "Seguimiento: {{name}}",
+      "meetingError": "No pudimos agendar la reunión. Intenta de nuevo.",
+      "saveError": "No pudimos guardar la interacción. Intenta de nuevo.",
+      "headerTitle": "Registrar interacción",
+      "save": "Guardar",
+      "optional": "(opcional)",
+      "typeTitle": "Tipo de interacción",
+      "outcomeTitle": "Resultado",
+      "interestTitle": "Nivel de interés",
+      "durationTitle": "Duración de interacción",
+      "minutes": "minutos",
+      "notesTitle": "Notas",
+      "notesPlaceholder": "¿Cómo fue la interacción?",
+      "scheduleTitle": "Agendar próxima reunión",
+      "scheduleHint": "Aparece en tu Agenda y se sincroniza con Google Calendar.",
+      "meetingScheduled": "Reunión agendada",
+      "scheduleMeeting": "Agendar reunión",
+      "saved": "Interacción guardada"
+    },
     "convert": {
       "convertError": "No pudimos convertir el lead. Verifica los datos.",
       "successTitle": "¡Lead convertido!",
