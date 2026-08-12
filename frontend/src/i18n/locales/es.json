@@ -745,6 +745,39 @@
       "colLeads": "Leads",
       "colConverted": "Convertidos",
       "colRate": "Tasa"
+    },
+    "leadMgmt": {
+      "loadError": "No pudimos cargar las métricas de gestión",
+      "title": "Gestión de leads por vendedor",
+      "subtitle": "Tiempo de retención y de primer contacto sobre los leads asignados.",
+      "avgRetention": "Retención promedio",
+      "leadsConsidered": "{{count}} leads asignados",
+      "unassigned": "Leads sin asignar",
+      "unassignedFooter": "Esperando que un vendedor los tome",
+      "salesperson": "Vendedor",
+      "allSalespeople": "Todos los vendedores",
+      "colSalesperson": "Vendedor",
+      "colActiveLeads": "Leads activos",
+      "colRetention": "Retención prom.",
+      "colFirstContact": "Primer contacto",
+      "loading": "Cargando métricas…",
+      "noneInPeriod": "Sin leads asignados en este período"
+    },
+    "spLeads": {
+      "loadError": "No pudimos cargar los leads de este vendedor",
+      "loading": "Cargando leads…",
+      "summary": "{{count}} leads asignados a {{name}}",
+      "colLead": "Lead",
+      "colSource": "Fuente",
+      "colStatus": "Estado",
+      "colProgram": "Programa",
+      "colCreated": "Ingreso",
+      "colAssigned": "Asignado",
+      "colRetention": "Retención",
+      "colFirstContact": "Primer contacto",
+      "colInteractions": "Interacciones",
+      "emptyPeriod": "Este vendedor no tiene leads asignados en el período",
+      "released": "liberado"
     }
   },
   "nav": {

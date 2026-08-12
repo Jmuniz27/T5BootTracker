@@ -745,6 +745,39 @@
       "colLeads": "Leads",
       "colConverted": "Converted",
       "colRate": "Rate"
+    },
+    "leadMgmt": {
+      "loadError": "We couldn't load the management metrics",
+      "title": "Lead management by salesperson",
+      "subtitle": "Retention and first-contact time over assigned leads.",
+      "avgRetention": "Average retention",
+      "leadsConsidered": "{{count}} assigned leads",
+      "unassigned": "Unassigned leads",
+      "unassignedFooter": "Waiting for a salesperson to take them",
+      "salesperson": "Salesperson",
+      "allSalespeople": "All salespeople",
+      "colSalesperson": "Salesperson",
+      "colActiveLeads": "Active leads",
+      "colRetention": "Avg. retention",
+      "colFirstContact": "First contact",
+      "loading": "Loading metrics…",
+      "noneInPeriod": "No assigned leads in this period"
+    },
+    "spLeads": {
+      "loadError": "We couldn't load this salesperson's leads",
+      "loading": "Loading leads…",
+      "summary": "{{count}} leads assigned to {{name}}",
+      "colLead": "Lead",
+      "colSource": "Source",
+      "colStatus": "Status",
+      "colProgram": "Program",
+      "colCreated": "Intake",
+      "colAssigned": "Assigned",
+      "colRetention": "Retention",
+      "colFirstContact": "First contact",
+      "colInteractions": "Interactions",
+      "emptyPeriod": "This salesperson has no assigned leads in the period",
+      "released": "released"
     }
   },
   "nav": {
