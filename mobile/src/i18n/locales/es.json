@@ -11,6 +11,14 @@
     "restrictedMsg": "Esta aplicación es para el equipo comercial (vendedores y finanzas). Ingresa con una cuenta autorizada.",
     "logout": "Cerrar sesión"
   },
+  "quickCall": {
+    "logCallTitle": "Registrar llamada",
+    "logCallMsg": "¿Quieres registrar la interacción con {{name}}?",
+    "notNow": "Ahora no",
+    "logAction": "Registrar",
+    "cantCallTitle": "No se pudo llamar",
+    "cantCallMsg": "Este dispositivo no puede realizar llamadas o el número no es válido."
+  },
   "meetingForm": {
     "titleRequired": "El título es obligatorio.",
     "selectLeadError": "Selecciona un lead.",

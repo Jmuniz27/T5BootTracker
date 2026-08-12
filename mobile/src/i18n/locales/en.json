@@ -11,6 +11,14 @@
     "restrictedMsg": "This app is for the sales team (salespeople and finance). Sign in with an authorized account.",
     "logout": "Log out"
   },
+  "quickCall": {
+    "logCallTitle": "Log call",
+    "logCallMsg": "Do you want to log the interaction with {{name}}?",
+    "notNow": "Not now",
+    "logAction": "Log",
+    "cantCallTitle": "Couldn't call",
+    "cantCallMsg": "This device can't make calls or the number is invalid."
+  },
   "meetingForm": {
     "titleRequired": "The title is required.",
     "selectLeadError": "Select a lead.",
