@@ -355,6 +355,20 @@
       "uploadError": "No se pudo subir el archivo.",
       "openError": "No se pudo abrir el archivo."
     },
+    "queue": {
+      "title": "Cola de pagos",
+      "subtitle": "Comprobantes pendientes",
+      "searchPlaceholder": "Buscar bootcamper...",
+      "allPrograms": "Todos los programas",
+      "colBootcamper": "Bootcamper",
+      "colProgram": "Programa",
+      "colAmount": "Monto",
+      "colDate": "Fecha",
+      "colStatus": "Estado",
+      "colActions": "Acciones",
+      "viewDetail": "Ver detalle",
+      "empty": "No hay pagos pendientes de revisión."
+    },
     "detail": {
       "title": "Detalle del pago",
       "close": "Cerrar",

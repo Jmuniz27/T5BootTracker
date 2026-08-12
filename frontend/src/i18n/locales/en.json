@@ -355,6 +355,20 @@
       "uploadError": "Could not upload the file.",
       "openError": "Could not open the file."
     },
+    "queue": {
+      "title": "Payment queue",
+      "subtitle": "Pending receipts",
+      "searchPlaceholder": "Search bootcamper...",
+      "allPrograms": "All programs",
+      "colBootcamper": "Bootcamper",
+      "colProgram": "Program",
+      "colAmount": "Amount",
+      "colDate": "Date",
+      "colStatus": "Status",
+      "colActions": "Actions",
+      "viewDetail": "View detail",
+      "empty": "No payments pending review."
+    },
     "detail": {
       "title": "Payment detail",
       "close": "Close",
