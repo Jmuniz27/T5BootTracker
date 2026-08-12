@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import ExportMenu from '../components/ExportMenu'
 import { LEAD_REPORT_COLUMNS, SOURCE_LABELS, STATUS_LABELS } from '../lib/leadsReport'
 import { assignmentLabel, DISCARD_REASONS } from '../lib/leadDisplay'
@@ -40,21 +41,11 @@ const STATUS_COLORS = {
   DISCARDED: 'bg-slate-200 text-slate-600',
 }
 
-const INTERACTION_TYPE_LABELS = {
-  CALL: 'Llamada',
-  WHATSAPP: 'WhatsApp',
-  EMAIL: 'Email',
-  VISIT: 'Visita',
-  NOTE: 'Nota',
-}
-
-const OUTCOME_LABELS = {
-  CALL_AGAIN: 'Llamar de nuevo',
-  SEND_INFO: 'Enviar información',
-  SCHEDULE_VISIT: 'Agendar visita',
-  AWAIT_REPLY: 'Esperar respuesta',
-  SPEAK_COORDINATOR: 'Hablar coordinador',
-}
+// Estados y resultados conocidos: las etiquetas visibles se traducen por i18n
+// (leads.status / leads.outcome / leads.interactionType). Los valores del
+// reporte/exportación siguen en lib/leadsReport.js (paso aparte).
+const LEAD_STATUSES = ['NEW', 'QUALIFIED', 'INTERESTED', 'NOT_INTERESTED', 'CONVERTED', 'DISCARDED']
+const LEAD_OUTCOMES = ['CALL_AGAIN', 'SEND_INFO', 'SCHEDULE_VISIT', 'AWAIT_REPLY', 'SPEAK_COORDINATOR']
 
 const OUTCOME_COLORS = {
   CALL_AGAIN: 'bg-blue-50 text-blue-600',
@@ -64,28 +55,30 @@ const OUTCOME_COLORS = {
   SPEAK_COORDINATOR: 'bg-blue-50 text-blue-600',
 }
 
+// Devuelve la etiqueta traducida del estado, con fallback al resultado y al valor crudo.
+function leadStatusLabel(t, status, lastOutcome) {
+  if (LEAD_STATUSES.includes(status)) return t(`leads.status.${status}`)
+  if (LEAD_OUTCOMES.includes(lastOutcome)) return t(`leads.outcome.${lastOutcome}`)
+  return status
+}
+
 // Badge usa status como fuente de verdad; lastOutcome solo como fallback visual si status no tiene label
 function LeadStatusBadge({ status, lastOutcome }) {
+  const { t } = useTranslation()
   if (status === 'CONVERTED') {
     return (
       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-        Convertido
+        {t('leads.status.CONVERTED')}
       </span>
     )
   }
-  const label = STATUS_LABELS[status] ?? OUTCOME_LABELS[lastOutcome] ?? status
+  const label = leadStatusLabel(t, status, lastOutcome)
   const color = STATUS_COLORS[status] ?? OUTCOME_COLORS[lastOutcome] ?? 'bg-gray-100 text-gray-500'
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
       {label}
     </span>
   )
-}
-
-const VERIFICATION_LABELS = {
-  INVITED: 'Invitado',
-  PENDING_VERIFICATION: 'Pendiente de verificación',
-  VERIFIED: 'Cuenta activa',
 }
 
 const VERIFICATION_COLORS = {
@@ -95,8 +88,9 @@ const VERIFICATION_COLORS = {
 }
 
 function VerificationBadge({ status }) {
+  const { t } = useTranslation()
   if (!status) return null
-  const label = VERIFICATION_LABELS[status] ?? status
+  const label = VERIFICATION_COLORS[status] ? t(`leads.verification.${status}`) : status
   const color = VERIFICATION_COLORS[status] ?? 'bg-gray-100 text-gray-500'
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
@@ -250,6 +244,7 @@ function SkeletonRow() {
 // ─── View History Modal ───────────────────────────────────────────────────────
 
 function ViewHistoryModal({ lead, onClose }) {
+  const { t } = useTranslation()
   const [editTarget, setEditTarget] = useState(null)
   const { data: interactions = [], isLoading } = useQuery({
     queryKey: ['interactions', lead.id],
@@ -271,7 +266,7 @@ function ViewHistoryModal({ lead, onClose }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Historial de interacciones</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">{t('leads.history.title')}</h2>
 
         <div className="overflow-y-auto space-y-3 flex-1 pr-1">
           {isLoading && [1, 2, 3].map((i) => (
@@ -285,7 +280,7 @@ function ViewHistoryModal({ lead, onClose }) {
           ))}
 
           {!isLoading && interactions.length === 0 && (
-            <p className="text-center text-gray-500 py-10 text-sm">Aún no hay interacciones.</p>
+            <p className="text-center text-gray-500 py-10 text-sm">{t('leads.history.empty')}</p>
           )}
 
           {!isLoading && interactions.map((interaction) => (
@@ -297,7 +292,7 @@ function ViewHistoryModal({ lead, onClose }) {
                 {/* Tipo + estrellas + duración */}
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="text-sm font-medium text-gray-900">
-                    {INTERACTION_TYPE_LABELS[interaction.interaction_type]}
+                    {t(`leads.interactionType.${interaction.interaction_type}`)}
                   </span>
                   {interaction.interest_level != null && interaction.interest_level > 0 && (
                     <span className="inline-flex items-center gap-0.5 text-xs text-amber-500 font-semibold">
@@ -312,7 +307,7 @@ function ViewHistoryModal({ lead, onClose }) {
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        {interaction.duration_minutes} min
+                        {interaction.duration_minutes} {t('leads.interactionForm.minutesUnit')}
                       </span>
                     </>
                   )}
@@ -320,7 +315,7 @@ function ViewHistoryModal({ lead, onClose }) {
                 {/* Badges: outcome (gris) + estado resultante + próxima acción (azul) */}
                 <div className="flex items-center gap-1.5 flex-wrap mb-1">
                   <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">
-                    {OUTCOME_LABELS[interaction.outcome]}
+                    {t(`leads.outcome.${interaction.outcome}`)}
                   </span>
                   {/* En qué quedó el lead tras esta interacción (#325). Se pinta
                       con los mismos colores del estado en la grilla, para que
@@ -332,17 +327,17 @@ function ViewHistoryModal({ lead, onClose }) {
                         STATUS_COLORS[interaction.lead_status] ?? 'bg-gray-100 text-gray-600'
                       }`}
                     >
-                      → {interaction.lead_status_display ?? STATUS_LABELS[interaction.lead_status]}
+                      → {LEAD_STATUSES.includes(interaction.lead_status) ? t(`leads.status.${interaction.lead_status}`) : (interaction.lead_status_display ?? interaction.lead_status)}
                     </span>
                   ) : (
                     // Las interacciones anteriores a este campo no se pudieron
                     // reconstruir sin inventar historia (ver migración 0014).
                     <span
                       data-testid="interaction-lead-status-missing"
-                      title="Esta interacción es anterior al registro de estados"
+                      title={t('leads.history.noStatusTooltip')}
                       className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-gray-50 text-gray-400"
                     >
-                      Sin registro de estado
+                      {t('leads.history.noStatusRecord')}
                     </span>
                   )}
                   {interaction.next_action && (
@@ -361,7 +356,7 @@ function ViewHistoryModal({ lead, onClose }) {
                   <button
                     onClick={() => setEditTarget(interaction)}
                     className="p-1.5 rounded-lg bg-[#1e3164] text-white hover:bg-[#162550] transition-colors"
-                    title="Editar interacción"
+                    title={t('leads.interactionForm.editTitle')}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
@@ -387,10 +382,10 @@ function ViewHistoryModal({ lead, onClose }) {
   )
 }
 
-function validateInteractionForm(form) {
+function validateInteractionForm(form, t) {
   const errs = {}
-  if (!form.interaction_type) errs.interaction_type = 'Selecciona un tipo.'
-  if (!form.outcome) errs.outcome = 'Selecciona un resultado.'
+  if (!form.interaction_type) errs.interaction_type = t('leads.interactionForm.selectType')
+  if (!form.outcome) errs.outcome = t('leads.interactionForm.selectOutcome')
   return errs
 }
 
@@ -402,10 +397,10 @@ function buildInteractionPayload(form) {
   return payload
 }
 
-function makeInteractionSubmitHandler(form, mutation, setErrors) {
+function makeInteractionSubmitHandler(form, mutation, setErrors, t) {
   return (e) => {
     e.preventDefault()
-    const errs = validateInteractionForm(form)
+    const errs = validateInteractionForm(form, t)
     if (Object.keys(errs).length) { setErrors(errs); return }
     mutation.mutate(buildInteractionPayload(form))
   }
@@ -414,6 +409,7 @@ function makeInteractionSubmitHandler(form, mutation, setErrors) {
 // ─── Edit Interaction Modal ───────────────────────────────────────────────────
 
 function EditInteractionModal({ lead, interaction, onClose }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     interaction_type: interaction.interaction_type ?? '',
@@ -435,7 +431,7 @@ function EditInteractionModal({ lead, interaction, onClose }) {
     },
   })
 
-  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors)
+  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors, t)
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -445,38 +441,38 @@ function EditInteractionModal({ lead, interaction, onClose }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Editar interacción</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">{t('leads.interactionForm.editTitle')}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.interactionForm.typeShort')} <span className="text-red-500">*</span></label>
               <CustomSelect
                 value={form.interaction_type}
                 onChange={(val) => setForm((prev) => ({ ...prev, interaction_type: val }))}
-                placeholder="Seleccionar"
+                placeholder={t('leads.common.select')}
                 options={[
-                  { value: 'CALL', label: 'Llamada' },
-                  { value: 'WHATSAPP', label: 'WhatsApp' },
-                  { value: 'EMAIL', label: 'Email' },
-                  { value: 'VISIT', label: 'Visita' },
-                  { value: 'NOTE', label: 'Nota' },
+                  { value: 'CALL', label: t('leads.interactionType.CALL') },
+                  { value: 'WHATSAPP', label: t('leads.interactionType.WHATSAPP') },
+                  { value: 'EMAIL', label: t('leads.interactionType.EMAIL') },
+                  { value: 'VISIT', label: t('leads.interactionType.VISIT') },
+                  { value: 'NOTE', label: t('leads.interactionType.NOTE') },
                 ]}
               />
               {errors.interaction_type && <p className="text-xs text-red-500 mt-1">{errors.interaction_type}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Resultado <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.interactionForm.outcomeLabel')} <span className="text-red-500">*</span></label>
               <CustomSelect
                 value={form.outcome}
                 onChange={(val) => setForm((prev) => ({ ...prev, outcome: val }))}
-                placeholder="Seleccionar"
+                placeholder={t('leads.common.select')}
                 options={[
-                  { value: 'CALL_AGAIN', label: 'Llamar de nuevo' },
-                  { value: 'SEND_INFO', label: 'Enviar información' },
-                  { value: 'SCHEDULE_VISIT', label: 'Agendar visita' },
-                  { value: 'AWAIT_REPLY', label: 'Esperar respuesta' },
-                  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+                  { value: 'CALL_AGAIN', label: t('leads.outcome.CALL_AGAIN') },
+                  { value: 'SEND_INFO', label: t('leads.outcome.SEND_INFO') },
+                  { value: 'SCHEDULE_VISIT', label: t('leads.outcome.SCHEDULE_VISIT') },
+                  { value: 'AWAIT_REPLY', label: t('leads.outcome.AWAIT_REPLY') },
+                  { value: 'SPEAK_COORDINATOR', label: t('leads.outcome.SPEAK_COORDINATOR') },
                 ]}
               />
               {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
@@ -485,14 +481,14 @@ function EditInteractionModal({ lead, interaction, onClose }) {
 
           <div className="grid grid-cols-2 gap-4 items-start">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nivel de interés <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('leads.interactionForm.interestLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span></label>
               <InteractiveStarRating
                 value={form.interest_level}
                 onChange={(v) => setForm((prev) => ({ ...prev, interest_level: v }))}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.interactionForm.durationLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span></label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -500,20 +496,20 @@ function EditInteractionModal({ lead, interaction, onClose }) {
                   max="999"
                   value={form.duration_minutes}
                   onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="ej. 5"
+                  placeholder={t('leads.interactionForm.durationPlaceholder')}
                   className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
                 />
-                <span className="text-sm text-gray-500">min</span>
+                <span className="text-sm text-gray-500">{t('leads.interactionForm.minutesUnit')}</span>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notas <span className="text-xs text-gray-500 font-normal">(opcional)</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.interactionForm.notesLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span></label>
             <textarea
               value={form.notes}
               onChange={set('notes')}
-              placeholder="¿Cómo fue la interacción?"
+              placeholder={t('leads.interactionForm.notesPlaceholder')}
               rows={3}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"
             />
@@ -521,16 +517,16 @@ function EditInteractionModal({ lead, interaction, onClose }) {
 
           {mutation.isError && (
             <p className="text-xs text-red-500 text-center">
-              {mutation.error?.response?.data?.error ?? 'No se pudo guardar. Intenta de nuevo.'}
+              {mutation.error?.response?.data?.error ?? t('leads.interactionForm.saveErrorGeneric')}
             </p>
           )}
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button type="submit" disabled={mutation.isPending} className="flex-1 py-3 rounded-xl bg-[#1e3164] text-white font-semibold hover:bg-[#162550] transition-colors disabled:opacity-60">
-              {mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+              {mutation.isPending ? t('leads.form.saving') : t('leads.form.saveChanges')}
             </button>
           </div>
         </form>
@@ -554,6 +550,7 @@ const NEXT_ACTION_OPTIONS = [
 ]
 
 function LogInteractionModal({ lead, onClose, onSuccess }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState(LOG_EMPTY)
   const [errors, setErrors] = useState({})
@@ -570,7 +567,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     },
   })
 
-  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors)
+  const handleSubmit = makeInteractionSubmitHandler(form, mutation, setErrors, t)
 
   // Agendar reunión (meetings API) — mismo modal que la Agenda, lead prefijado.
   const { create: createMeeting } = useMeetingMutations()
@@ -581,7 +578,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
     const start = new Date()
     const end = new Date(start.getTime() + 30 * 60000)
     setMeetingInitial({
-      title: `Seguimiento: ${lead.name}`,
+      title: t('leads.interactionForm.meetingTitle', { name: lead.name }),
       description: form.notes ?? '',
       start: toDatetimeLocal(start),
       end: toDatetimeLocal(end),
@@ -600,45 +597,45 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Registrar interacción</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">{t('leads.interactionForm.title')}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Tipo + Resultado */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tipo de interacción <span className="text-red-500">*</span>
+                {t('leads.interactionForm.typeLabel')} <span className="text-red-500">*</span>
               </label>
               <CustomSelect
                 testId="interaction-type"
                 value={form.interaction_type}
                 onChange={(val) => setForm((prev) => ({ ...prev, interaction_type: val }))}
-                placeholder="Seleccionar"
+                placeholder={t('leads.common.select')}
                 options={[
-                  { value: 'CALL', label: 'Llamada' },
-                  { value: 'WHATSAPP', label: 'WhatsApp' },
-                  { value: 'EMAIL', label: 'Email' },
-                  { value: 'VISIT', label: 'Visita' },
-                  { value: 'NOTE', label: 'Nota' },
+                  { value: 'CALL', label: t('leads.interactionType.CALL') },
+                  { value: 'WHATSAPP', label: t('leads.interactionType.WHATSAPP') },
+                  { value: 'EMAIL', label: t('leads.interactionType.EMAIL') },
+                  { value: 'VISIT', label: t('leads.interactionType.VISIT') },
+                  { value: 'NOTE', label: t('leads.interactionType.NOTE') },
                 ]}
               />
               {errors.interaction_type && <p className="text-xs text-red-500 mt-1">{errors.interaction_type}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Resultado <span className="text-red-500">*</span>
+                {t('leads.interactionForm.outcomeLabel')} <span className="text-red-500">*</span>
               </label>
               <CustomSelect
                 testId="interaction-outcome"
                 value={form.outcome}
                 onChange={(val) => setForm((prev) => ({ ...prev, outcome: val }))}
-                placeholder="Seleccionar"
+                placeholder={t('leads.common.select')}
                 options={[
-                  { value: 'CALL_AGAIN', label: 'Llamar de nuevo' },
-                  { value: 'SEND_INFO', label: 'Enviar información' },
-                  { value: 'SCHEDULE_VISIT', label: 'Agendar visita' },
-                  { value: 'AWAIT_REPLY', label: 'Esperar respuesta' },
-                  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador' },
+                  { value: 'CALL_AGAIN', label: t('leads.outcome.CALL_AGAIN') },
+                  { value: 'SEND_INFO', label: t('leads.outcome.SEND_INFO') },
+                  { value: 'SCHEDULE_VISIT', label: t('leads.outcome.SCHEDULE_VISIT') },
+                  { value: 'AWAIT_REPLY', label: t('leads.outcome.AWAIT_REPLY') },
+                  { value: 'SPEAK_COORDINATOR', label: t('leads.outcome.SPEAK_COORDINATOR') },
                 ]}
               />
               {errors.outcome && <p className="text-xs text-red-500 mt-1">{errors.outcome}</p>}
@@ -649,7 +646,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
           <div className="grid grid-cols-2 gap-4 items-start">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nivel de interés <span className="text-xs text-gray-500 font-normal">(opcional)</span>
+                {t('leads.interactionForm.interestLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span>
               </label>
               <InteractiveStarRating
                 value={form.interest_level}
@@ -659,7 +656,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Duración de interacción <span className="text-xs text-gray-500 font-normal">(opcional)</span>
+                {t('leads.interactionForm.durationLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span>
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -668,10 +665,10 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
                   max="999"
                   value={form.duration_minutes}
                   onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="ej. 5"
+                  placeholder={t('leads.interactionForm.durationPlaceholder')}
                   className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 text-center"
                 />
-                <span className="text-sm text-gray-500">min</span>
+                <span className="text-sm text-gray-500">{t('leads.interactionForm.minutesUnit')}</span>
               </div>
             </div>
           </div>
@@ -679,13 +676,13 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
           {/* Notas */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notas <span className="text-xs text-gray-500 font-normal">(opcional)</span>
+              {t('leads.interactionForm.notesLabel')} <span className="text-xs text-gray-500 font-normal">{t('leads.common.optional')}</span>
             </label>
             <textarea
               data-testid="interaction-notes"
               value={form.notes}
               onChange={set('notes')}
-              placeholder="¿Cómo fue la interacción?"
+              placeholder={t('leads.interactionForm.notesPlaceholder')}
               rows={3}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"
             />
@@ -693,7 +690,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
 
           {mutation.isError && (
             <p className="text-xs text-red-500 text-center">
-              {mutation.error?.response?.data?.error ?? 'No se pudo guardar la interacción.'}
+              {mutation.error?.response?.data?.error ?? t('leads.interactionForm.saveError')}
             </p>
           )}
 
@@ -703,7 +700,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
             disabled={mutation.isPending}
             className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
           >
-            {mutation.isPending ? 'Guardando...' : 'Guardar interacción'}
+            {mutation.isPending ? t('leads.interactionForm.saving') : t('leads.interactionForm.submit')}
           </button>
 
           <button
@@ -711,7 +708,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
             onClick={openMeeting}
             className="w-full py-2.5 rounded-xl border border-[#213A8E] text-[#213A8E] font-semibold hover:bg-[#213A8E]/5 transition-colors"
           >
-            + Agendar reunión
+            {t('leads.interactionForm.scheduleMeeting')}
           </button>
         </form>
       </div>
@@ -742,6 +739,7 @@ function LogInteractionModal({ lead, onClose, onSuccess }) {
  * causal por sí sola no dice nada.
  */
 function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [reason, setReason] = useState('')
   const [detail, setDetail] = useState('')
@@ -752,22 +750,22 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-      onSuccess(`${lead.name} salió del listado de seguimiento.`)
+      onSuccess(t('leads.discardModal.success', { name: lead.name }))
       onClose()
     },
     onError: (err) => {
-      onError(err.response?.data?.error ?? 'No se pudo descartar el lead.')
+      onError(err.response?.data?.error ?? t('leads.discardModal.error'))
     },
   })
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!reason) {
-      setError('Elige un motivo.')
+      setError(t('leads.discardModal.chooseReason'))
       return
     }
     if (reason === 'OTHER' && !detail.trim()) {
-      setError('Con el motivo "Otro" hay que escribir el detalle.')
+      setError(t('leads.discardModal.otherRequiresDetail'))
       return
     }
     setError('')
@@ -777,23 +775,23 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[440px] shadow-xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} aria-label="Cerrar" className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
+        <button onClick={onClose} aria-label={t('leads.common.closeAria')} className="absolute top-4 right-4 text-gray-500 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Descartar lead</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">{t('leads.discardModal.title')}</h2>
         <p className="text-sm text-gray-500 mb-1">{lead.name}</p>
         <p className="text-xs text-gray-500 mb-5">
-          Sale del listado de seguimiento. Se puede reactivar después.
+          {t('leads.discardModal.subtitle')}
         </p>
 
         {/* noValidate: la validación propia está en español; la nativa del
             navegador saldría en inglés y taparía este formulario. */}
         <form onSubmit={handleSubmit} noValidate>
           <fieldset className="space-y-2 mb-4">
-            <legend className="text-sm font-medium text-gray-700 mb-2">Motivo</legend>
+            <legend className="text-sm font-medium text-gray-700 mb-2">{t('leads.discardModal.reasonLegend')}</legend>
             {DISCARD_REASONS.map((option) => (
               <label
                 key={option.value}
@@ -811,20 +809,20 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
                   onChange={() => setReason(option.value)}
                   className="accent-[#1e3164]"
                 />
-                {option.label}
+                {t(`leads.discardReason.${option.value}`)}
               </label>
             ))}
           </fieldset>
 
           <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="discard-detail">
-            Detalle {reason === 'OTHER' ? <span className="text-red-500">*</span> : <span className="text-gray-500 font-normal">(opcional)</span>}
+            {t('leads.discardModal.detailLabel')} {reason === 'OTHER' ? <span className="text-red-500">*</span> : <span className="text-gray-500 font-normal">{t('leads.common.optional')}</span>}
           </label>
           <textarea
             id="discard-detail"
             rows={3}
             value={detail}
             onChange={(e) => setDetail(e.target.value)}
-            placeholder="Qué pasó con este lead"
+            placeholder={t('leads.discardModal.detailPlaceholder')}
             className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
           />
 
@@ -836,14 +834,14 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
               onClick={onClose}
               className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button
               type="submit"
               disabled={mutation.isPending}
               className="flex-1 py-2.5 rounded-xl bg-[#213A8E] text-white text-sm font-semibold hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
             >
-              {mutation.isPending ? 'Descartando…' : 'Descartar'}
+              {mutation.isPending ? t('leads.discardModal.submitting') : t('leads.discardModal.submit')}
             </button>
           </div>
         </form>
@@ -853,6 +851,7 @@ function DiscardLeadModal({ lead, onClose, onSuccess, onError }) {
 }
 
 function ViewLeadModal({ lead, onClose }) {
+  const { t } = useTranslation()
   const { data: interactions = [] } = useQuery({
     queryKey: ['interactions', lead.id],
     queryFn: () => getInteractions(lead.id),
@@ -881,13 +880,13 @@ function ViewLeadModal({ lead, onClose }) {
           <div>
             {rating !== null ? (
               <>
-                <p className="text-xs text-gray-500 mb-0.5">Última calificación:</p>
+                <p className="text-xs text-gray-500 mb-0.5">{t('leads.viewModal.lastRating')}</p>
                 <p className="text-3xl font-bold text-gray-900 leading-none mb-1">{rating.toFixed(1)}</p>
                 <StarRating value={rating} />
-                <p className="text-xs text-gray-500 mt-1">Basado en última interacción</p>
+                <p className="text-xs text-gray-500 mt-1">{t('leads.viewModal.basedOnLast')}</p>
               </>
             ) : (
-              <p className="text-sm text-gray-500 mt-4">Sin interacciones aún</p>
+              <p className="text-sm text-gray-500 mt-4">{t('leads.viewModal.noInteractions')}</p>
             )}
           </div>
         </div>
@@ -896,7 +895,7 @@ function ViewLeadModal({ lead, onClose }) {
 
         <div className="space-y-3 text-sm">
           <div>
-            <p className="font-semibold text-gray-700 mb-1">Contacto:</p>
+            <p className="font-semibold text-gray-700 mb-1">{t('leads.viewModal.contact')}</p>
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-gray-600">
                 <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -913,14 +912,14 @@ function ViewLeadModal({ lead, onClose }) {
             </div>
           </div>
           <div>
-            <p className="font-semibold text-gray-700 mb-0.5">Fuente:</p>
+            <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.source')}</p>
             <p className="text-gray-600">{SOURCE_LABELS[lead.source] || lead.source}</p>
           </div>
           {lead.status === 'DISCARDED' && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="font-semibold text-gray-700 mb-0.5">Motivo del descarte:</p>
+              <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.discardReason')}</p>
               <p className="text-gray-600" data-testid="lead-discard-reason">
-                {lead.discard_reason_display || 'Sin motivo registrado'}
+                {lead.discard_reason_display || t('leads.viewModal.noReason')}
               </p>
               {lead.discard_detail && (
                 <p className="text-gray-600 mt-1">{lead.discard_detail}</p>
@@ -928,31 +927,31 @@ function ViewLeadModal({ lead, onClose }) {
             </div>
           )}
           <div>
-            <p className="font-semibold text-gray-700 mb-0.5">Asignación:</p>
+            <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.assignment')}</p>
             <p className="text-gray-600" data-testid="lead-assignment">{assignmentLabel(lead)}</p>
           </div>
           {lastInteraction?.notes && (
             <div>
-              <p className="font-semibold text-gray-700 mb-0.5">Última nota:</p>
+              <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.lastNote')}</p>
               <p className="text-gray-600">{lastInteraction.notes}</p>
             </div>
           )}
           {lead.program_interest && (
             <div>
-              <p className="font-semibold text-gray-700 mb-0.5">Interés en programa:</p>
+              <p className="font-semibold text-gray-700 mb-0.5">{t('leads.viewModal.programInterest')}</p>
               <p className="text-gray-600">{lead.program_interest}</p>
             </div>
           )}
           {isConverted && profile && (
             <div className="pt-3 border-t border-gray-100">
               <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold text-gray-700">Datos del bootcamper:</p>
+                <p className="font-semibold text-gray-700">{t('leads.viewModal.bootcamperData')}</p>
                 <VerificationBadge status={profile.verification_status} />
               </div>
               <div className="text-gray-600 space-y-0.5">
                 <p>{profile.first_name} {profile.last_name}</p>
                 <p>{profile.email}</p>
-                {profile.cedula && <p>Cédula/RUC: {profile.cedula}</p>}
+                {profile.cedula && <p>{t('leads.viewModal.idLabel', { value: profile.cedula })}</p>}
                 {profile.phone && <p>{profile.phone}</p>}
               </div>
             </div>
@@ -966,29 +965,29 @@ function ViewLeadModal({ lead, onClose }) {
 // ─── Release Lead Modal ───────────────────────────────────────────────────────
 
 function ReleaseLeadModal({ onKeep, onRelease, isLoading }) {
+  const { t } = useTranslation()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onKeep}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[420px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-gray-900 mb-3">
-          ¿Seguro que quieres desasignar este lead?
+          {t('leads.releaseModal.title')}
         </h2>
         <p className="text-sm text-gray-500 mb-8">
-          El lead quedará disponible para otros vendedores.
-          Perderás acceso al historial de interacciones.
+          {t('leads.releaseModal.subtitle')}
         </p>
         <button
           onClick={onKeep}
           disabled={isLoading}
           className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold mb-3 hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
         >
-          Conservar lead
+          {t('leads.releaseModal.keep')}
         </button>
         <button
           onClick={onRelease}
           disabled={isLoading}
           className="w-full py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
         >
-          {isLoading ? 'Desasignando…' : 'Desasignar lead'}
+          {isLoading ? t('leads.releaseModal.releasing') : t('leads.releaseModal.release')}
         </button>
       </div>
     </div>
@@ -998,12 +997,13 @@ function ReleaseLeadModal({ onKeep, onRelease, isLoading }) {
 // ─── Admin Reassign Modal (CR-005) ────────────────────────────────────────────
 
 function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
+  const { t } = useTranslation()
   const [ownerId, setOwnerId] = useState('')
   const hasOwner = Boolean(lead.owner)
 
-  let submitLabel = hasOwner ? 'Liberar' : 'Asignar'
-  if (isLoading) submitLabel = 'Guardando…'
-  else if (ownerId) submitLabel = hasOwner ? 'Reasignar' : 'Asignar'
+  let submitLabel = hasOwner ? t('leads.reassignModal.release') : t('leads.reassignModal.assign')
+  if (isLoading) submitLabel = t('leads.reassignModal.saving')
+  else if (ownerId) submitLabel = hasOwner ? t('leads.reassignModal.reassign') : t('leads.reassignModal.assign')
 
   const { data } = useQuery({
     queryKey: ['users', 'salespersons'],
@@ -1018,21 +1018,21 @@ function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[440px] shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-gray-900 mb-1">
-          {hasOwner ? 'Liberar o reasignar lead' : 'Asignar lead'}
+          {hasOwner ? t('leads.reassignModal.titleRelease') : t('leads.reassignModal.titleAssign')}
         </h2>
         <p className="text-sm text-gray-500 mb-5">
-          Vendedor actual: <strong>{lead.owner_name ?? 'Sin asignar'}</strong>
+          {t('leads.reassignModal.currentOwner')} <strong>{lead.owner_name ?? t('leads.common.unassigned')}</strong>
         </p>
 
         <label className="block text-xs font-medium text-gray-600 mb-1.5">
-          {hasOwner ? 'Reasignar a (opcional)' : 'Asignar a'}
+          {hasOwner ? t('leads.reassignModal.reassignTo') : t('leads.reassignModal.assignTo')}
         </label>
         <select
           value={ownerId}
           onChange={(e) => setOwnerId(e.target.value)}
           className="w-full mb-6 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
         >
-          <option value="">{hasOwner ? 'Liberar al pool (sin asignar)' : 'Seleccionar vendedor'}</option>
+          <option value="">{hasOwner ? t('leads.reassignModal.releaseToPool') : t('leads.reassignModal.selectSalesperson')}</option>
           {assignees.map((u) => (
             <option key={u.id} value={u.id}>{u.full_name}</option>
           ))}
@@ -1044,7 +1044,7 @@ function AdminReassignModal({ lead, onClose, onSubmit, isLoading }) {
             disabled={isLoading}
             className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
           >
-            Cancelar
+            {t('leads.common.cancel')}
           </button>
           <button
             onClick={() => onSubmit(ownerId || null)}
@@ -1073,17 +1073,17 @@ function isValidEmail(value) {
 }
 
 // Validación compartida por los modales de crear y editar lead.
-function validateLeadFields(form) {
+function validateLeadFields(form, t) {
   const errs = {}
-  if (!form.name.trim()) errs.name = 'El nombre es requerido.'
+  if (!form.name.trim()) errs.name = t('leads.form.nameRequired')
   const phone = form.phone.trim()
   if (!phone) {
-    errs.phone = 'El teléfono es requerido.'
+    errs.phone = t('leads.form.phoneRequired')
   } else if (!/^(09\d{8}|0[2-7]\d{7})$/.test(phone)) {
-    errs.phone = 'Ingresa un teléfono ecuatoriano válido (ej. 0991234567 o 042345678).'
+    errs.phone = t('leads.form.phoneInvalid')
   }
   if (form.email.trim() && !isValidEmail(form.email.trim())) {
-    errs.email = 'Ingresa un email válido.'
+    errs.email = t('leads.form.emailInvalid')
   }
   return errs
 }
@@ -1095,6 +1095,7 @@ function leadFieldClass(errors, key) {
 }
 
 function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, isAdmin = false }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const { data: programs = [] } = useQuery({ queryKey: ['programs'], queryFn: getPrograms })
@@ -1103,7 +1104,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    const errs = validateLeadFields(form)
+    const errs = validateLeadFields(form, t)
     if (Object.keys(errs).length) { setErrors(errs); return }
     const { autoAssign, ...payload } = form
     if (!payload.email) delete payload.email
@@ -1123,7 +1124,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
         </button>
 
         <div className="flex items-center justify-between mb-6 pr-8">
-          <h2 className="text-xl font-bold text-gray-900">Nuevo lead</h2>
+          <h2 className="text-xl font-bold text-gray-900">{t('leads.form.createTitle')}</h2>
           <button
             type="button"
             onClick={() => setForm((prev) => ({ ...prev, is_company: !prev.is_company }))}
@@ -1136,53 +1137,53 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
             </svg>
-            Empresa
+            {t('leads.form.company')}
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre completo<span className="text-red-500 ml-0.5">*</span>
+              {t('leads.form.fullName')}<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="text" data-testid="create-lead-name" value={form.name} onChange={set('name')} className={inputClass('name')} />
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Teléfono<span className="text-red-500 ml-0.5">*</span>
+              {t('leads.form.phone')}<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="tel" data-testid="create-lead-phone" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={inputClass('phone')} />
             {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.email')}</label>
             <input type="text" data-testid="create-lead-email" value={form.email} onChange={set('email')} className={inputClass('email')} />
             {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fuente</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.source')}</label>
             <CustomSelect
               testId="create-lead-source"
               value={form.source}
               onChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
               options={[
-                { value: 'MANUAL', label: 'Manual' },
-                { value: 'INSTAGRAM', label: 'Instagram' },
-                { value: 'WHATSAPP', label: 'WhatsApp' },
-                { value: 'LANDING_PAGE', label: 'Landing Page' },
+                { value: 'MANUAL', label: t('leads.source.MANUAL') },
+                { value: 'INSTAGRAM', label: t('leads.source.INSTAGRAM') },
+                { value: 'WHATSAPP', label: t('leads.source.WHATSAPP') },
+                { value: 'LANDING_PAGE', label: t('leads.source.LANDING_PAGE') },
               ]}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.programInterest')}</label>
             <CustomSelect
               testId="create-lead-program"
               value={form.program_interest}
               onChange={(val) => setForm((prev) => ({ ...prev, program_interest: val }))}
-              placeholder="Sin especificar"
+              placeholder={t('leads.form.programPlaceholder')}
               options={programs.map((p) => ({ value: p.name, label: p.name }))}
             />
           </div>
@@ -1203,12 +1204,12 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
                   className="w-4 h-4 accent-[#1e3164] rounded disabled:opacity-50"
                 />
                 <span className={`text-sm font-medium ${canSelfAssign ? 'text-gray-700' : 'text-gray-500'}`}>
-                  Asignarme este lead
+                  {t('leads.form.assignToMe')}
                 </span>
               </label>
               {!canSelfAssign && (
                 <p className="text-xs text-gray-500 mt-1 ml-7">
-                  La asignación la realiza el Administrador.
+                  {t('leads.actions.assignmentByAdmin')}
                 </p>
               )}
             </div>
@@ -1221,7 +1222,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button
               type="submit"
@@ -1229,7 +1230,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
               disabled={isLoading}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
-              {isLoading ? 'Creando…' : 'Crear lead'}
+              {isLoading ? t('leads.form.creating') : t('leads.form.createSubmit')}
             </button>
           </div>
         </form>
@@ -1241,6 +1242,7 @@ function CreateLeadModal({ onClose, onSubmit, isLoading, canSelfAssign = true, i
 // ─── Edit Lead Modal ──────────────────────────────────────────────────────────
 
 function EditLeadModal({ lead, onClose, onSuccess }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     name: lead.name ?? '',
@@ -1263,7 +1265,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
       onClose()
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'No se pudo guardar el lead.'
+      const msg = err.response?.data?.error ?? t('leads.form.saveError')
       setErrors((prev) => ({ ...prev, server: msg }))
     },
   })
@@ -1271,7 +1273,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     setErrors({})
-    const errs = validateLeadFields(form)
+    const errs = validateLeadFields(form, t)
     if (Object.keys(errs).length) { setErrors(errs); return }
     mutation.mutate({
       name: form.name.trim(),
@@ -1295,7 +1297,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
         </button>
 
         <div className="flex items-center justify-between mb-6 pr-8">
-          <h2 className="text-xl font-bold text-gray-900">Editar lead</h2>
+          <h2 className="text-xl font-bold text-gray-900">{t('leads.form.editTitle')}</h2>
           <button
             type="button"
             onClick={() => setForm((prev) => ({ ...prev, is_company: !prev.is_company }))}
@@ -1308,53 +1310,53 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
             </svg>
-            Empresa
+            {t('leads.form.company')}
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre completo<span className="text-red-500 ml-0.5">*</span>
+              {t('leads.form.fullName')}<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="text" data-testid="edit-lead-name" value={form.name} onChange={set('name')} className={inputClass('name')} />
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Teléfono<span className="text-red-500 ml-0.5">*</span>
+              {t('leads.form.phone')}<span className="text-red-500 ml-0.5">*</span>
             </label>
             <input type="tel" data-testid="edit-lead-phone" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={inputClass('phone')} />
             {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.email')}</label>
             <input type="text" data-testid="edit-lead-email" value={form.email} onChange={set('email')} className={inputClass('email')} />
             {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fuente</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.source')}</label>
             <CustomSelect
               testId="edit-lead-source"
               value={form.source}
               onChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
               options={[
-                { value: 'MANUAL', label: 'Manual' },
-                { value: 'INSTAGRAM', label: 'Instagram' },
-                { value: 'WHATSAPP', label: 'WhatsApp' },
-                { value: 'LANDING_PAGE', label: 'Landing Page' },
+                { value: 'MANUAL', label: t('leads.source.MANUAL') },
+                { value: 'INSTAGRAM', label: t('leads.source.INSTAGRAM') },
+                { value: 'WHATSAPP', label: t('leads.source.WHATSAPP') },
+                { value: 'LANDING_PAGE', label: t('leads.source.LANDING_PAGE') },
               ]}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Interés en programa</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.form.programInterest')}</label>
             <CustomSelect
               testId="edit-lead-program"
               value={form.program_interest}
               onChange={(val) => setForm((prev) => ({ ...prev, program_interest: val }))}
-              placeholder="Sin especificar"
+              placeholder={t('leads.form.programPlaceholder')}
               options={programs.map((p) => ({ value: p.name, label: p.name }))}
             />
           </div>
@@ -1369,7 +1371,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button
               type="submit"
@@ -1377,7 +1379,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
               disabled={mutation.isPending}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
-              {mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+              {mutation.isPending ? t('leads.form.saving') : t('leads.form.saveChanges')}
             </button>
           </div>
         </form>
@@ -1389,6 +1391,7 @@ function EditLeadModal({ lead, onClose, onSuccess }) {
 // ─── Update Status Modal ──────────────────────────────────────────────────────
 
 function UpdateStatusModal({ lead, onClose, onSuccess }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [status, setStatus] = useState(lead.status)
 
@@ -1416,12 +1419,12 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Cambiar estado</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">{t('leads.changeStatus')}</h2>
         <p className="text-sm text-gray-500 mb-6">{lead.name}</p>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-2 mb-6">
-            {Object.entries(STATUS_LABELS).filter(([value]) => !['CONVERTED', 'NEW', 'DISCARDED'].includes(value)).map(([value, label]) => (
+            {LEAD_STATUSES.filter((value) => !['CONVERTED', 'NEW', 'DISCARDED'].includes(value)).map((value) => (
               <button
                 key={value}
                 type="button"
@@ -1432,7 +1435,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
                     : 'border-gray-200 text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                {label}
+                {t(`leads.status.${value}`)}
                 {status === value && (
                   <svg className="w-4 h-4 text-[#1e3164]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -1464,6 +1467,7 @@ function UpdateStatusModal({ lead, onClose, onSuccess }) {
 // ─── Filter Dropdown ──────────────────────────────────────────────────────────
 
 function FilterDropdown({ value, onChange }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -1474,8 +1478,8 @@ function FilterDropdown({ value, onChange }) {
   }, [])
 
   const options = [
-    { value: '', label: 'Todos los estados' },
-    ...Object.entries(STATUS_LABELS).map(([v, label]) => ({ value: v, label })),
+    { value: '', label: t('leads.allStatuses') },
+    ...LEAD_STATUSES.map((v) => ({ value: v, label: t(`leads.status.${v}`) })),
   ]
 
   return (
@@ -1489,7 +1493,7 @@ function FilterDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 010 2H4a1 1 0 01-1-1zM6 10a1 1 0 011-1h10a1 1 0 010 2H7a1 1 0 01-1-1zM9 16a1 1 0 011-1h4a1 1 0 010 2h-4a1 1 0 01-1-1z" />
         </svg>
-        {value ? STATUS_LABELS[value] : 'Estado'}
+        {value ? t(`leads.status.${value}`) : t('leads.statusFilterLabel')}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
@@ -1513,6 +1517,7 @@ function FilterDropdown({ value, onChange }) {
 // ─── Source Filter Dropdown ───────────────────────────────────────────────────
 
 function SourceFilterDropdown({ value, onChange }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -1523,7 +1528,7 @@ function SourceFilterDropdown({ value, onChange }) {
   }, [])
 
   const options = [
-    { value: '', label: 'Todas las fuentes' },
+    { value: '', label: t('leads.filters.allSources') },
     ...Object.entries(SOURCE_LABELS).map(([v, label]) => ({ value: v, label })),
   ]
 
@@ -1538,7 +1543,7 @@ function SourceFilterDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
         </svg>
-        {value ? SOURCE_LABELS[value] : 'Fuente'}
+        {value ? SOURCE_LABELS[value] : t('leads.table.source')}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
@@ -1562,6 +1567,7 @@ function SourceFilterDropdown({ value, onChange }) {
 // ─── Sort Dropdown ────────────────────────────────────────────────────────────
 
 function SortDropdown({ value, onChange }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -1572,11 +1578,11 @@ function SortDropdown({ value, onChange }) {
   }, [])
 
   const options = [
-    { value: 'default', label: 'Por defecto' },
-    { value: 'name_asc', label: 'Nombre A→Z' },
-    { value: 'name_desc', label: 'Nombre Z→A' },
-    { value: 'newest', label: 'Más reciente' },
-    { value: 'oldest', label: 'Más antiguo' },
+    { value: 'default', label: t('leads.sort.default') },
+    { value: 'name_asc', label: t('leads.sort.nameAsc') },
+    { value: 'name_desc', label: t('leads.sort.nameDesc') },
+    { value: 'newest', label: t('leads.sort.newest') },
+    { value: 'oldest', label: t('leads.sort.oldest') },
   ]
 
   const active = options.find((o) => o.value === value)
@@ -1592,7 +1598,7 @@ function SortDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
         </svg>
-        {active?.label ?? 'Ordenar'}
+        {active?.label ?? t('leads.sort.button')}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
@@ -1616,6 +1622,7 @@ function SortDropdown({ value, onChange }) {
 // ─── Vendor Filter (HST-025, admin) ───────────────────────────────────────────
 
 function VendorFilterDropdown({ value, onChange }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -1643,7 +1650,7 @@ function VendorFilterDropdown({ value, onChange }) {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
-        {active?.full_name ?? 'Todos los vendedores'}
+        {active?.full_name ?? t('leads.filters.allVendors')}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 max-h-64 overflow-y-auto">
@@ -1653,7 +1660,7 @@ function VendorFilterDropdown({ value, onChange }) {
               !value ? 'text-[#213A8E] font-semibold bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
             }`}
           >
-            Todos los vendedores
+            {t('leads.filters.allVendors')}
           </button>
           {vendors.map((u) => (
             <button
@@ -1675,6 +1682,7 @@ function VendorFilterDropdown({ value, onChange }) {
 // ─── Resend Invitation Modal ────────────────────────────────────────────────
 
 function ResendInvitationModal({ lead, onClose }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [copied, setCopied] = useState(false)
 
@@ -1687,20 +1695,19 @@ function ResendInvitationModal({ lead, onClose }) {
 
   const errorMsg = resendMutation.error
     ? resendMutation.error.response?.status === 429
-      ? 'Demasiados reenvíos en poco tiempo. Intenta de nuevo más tarde.'
-      : (resendMutation.error.response?.data?.error ?? 'No pudimos reenviar la invitación. Intenta de nuevo.')
+      ? t('leads.resendModal.tooMany')
+      : (resendMutation.error.response?.data?.error ?? t('leads.resendModal.error'))
     : null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 sm:p-8 w-full max-w-[480px] shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Reenviar invitación</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">{t('leads.resendModal.title')}</h2>
 
         {!resendMutation.data && !resendMutation.isPending && (
           <>
             <p className="text-sm text-gray-500 mb-6">
-              Se generará un link nuevo para <span className="font-semibold text-gray-800">{lead.name}</span> y el
-              anterior dejará de funcionar.
+              {t('leads.resendModal.warningPrefix')}<span className="font-semibold text-gray-800">{lead.name}</span>{t('leads.resendModal.warningSuffix')}
             </p>
             {errorMsg && <p className="text-red-500 text-sm mb-4">{errorMsg}</p>}
             <div className="flex gap-3">
@@ -1708,25 +1715,25 @@ function ResendInvitationModal({ lead, onClose }) {
                 onClick={onClose}
                 className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
               >
-                Cancelar
+                {t('leads.common.cancel')}
               </button>
               <button
                 onClick={() => resendMutation.mutate()}
                 className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
               >
-                Reenviar
+                {t('leads.resendModal.resend')}
               </button>
             </div>
           </>
         )}
 
-        {resendMutation.isPending && <p className="text-sm text-gray-500 py-4">Reenviando...</p>}
+        {resendMutation.isPending && <p className="text-sm text-gray-500 py-4">{t('leads.resendModal.resending')}</p>}
 
         {resendMutation.data && (
           <>
-            <p className="text-sm text-gray-500 mb-6">Se generó un link nuevo. El anterior ya no funciona.</p>
+            <p className="text-sm text-gray-500 mb-6">{t('leads.resendModal.newLinkGenerated')}</p>
             <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-1.5 mb-6">
-              <span className="text-gray-500">Nuevo enlace de invitación</span>
+              <span className="text-gray-500">{t('leads.resendModal.newLinkLabel')}</span>
               <div className="flex items-center gap-2">
                 <input
                   readOnly
@@ -1743,7 +1750,7 @@ function ResendInvitationModal({ lead, onClose }) {
                   }}
                   className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
                 >
-                  {copied ? '¡Copiado!' : 'Copiar'}
+                  {copied ? t('leads.resendModal.copied') : t('leads.resendModal.copy')}
                 </button>
               </div>
             </div>
@@ -1751,7 +1758,7 @@ function ResendInvitationModal({ lead, onClose }) {
               onClick={onClose}
               className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
             >
-              Listo
+              {t('leads.resendModal.done')}
             </button>
           </>
         )}
@@ -1808,6 +1815,7 @@ function previewDiscountedPrice(totalCost, discountPercentage) {
 }
 
 function ConvertLeadModal({ lead, onClose, onSuccess }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [cedula, setCedula]   = useState('')
   const [programId, setProgramId] = useState('')
@@ -1862,23 +1870,23 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
       setResult(data)
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'Error al convertir. Intenta de nuevo.'
+      const msg = err.response?.data?.error ?? t('leads.convertModal.serverError')
       setErrors((prev) => ({ ...prev, server: msg }))
     },
   })
 
   const validate = () => {
     const errs = {}
-    if (!cedula.trim()) errs.cedula = 'La cédula o RUC es requerida.'
-    else if (!isValidIdentificacion(cedula)) errs.cedula = 'Cédula o RUC ecuatoriano inválido.'
-    if (!email.trim()) errs.email = 'El email es requerido para enviar la invitación.'
-    if (!programId) errs.programId = 'Selecciona un programa.'
-    else if (!cohortId) errs.cohortId = 'Selecciona una cohorte.'
+    if (!cedula.trim()) errs.cedula = t('leads.convertModal.cedulaRequired')
+    else if (!isValidIdentificacion(cedula)) errs.cedula = t('leads.convertModal.cedulaInvalid')
+    if (!email.trim()) errs.email = t('leads.convertModal.emailRequired')
+    if (!programId) errs.programId = t('leads.convertModal.programRequired')
+    else if (!cohortId) errs.cohortId = t('leads.convertModal.cohortRequired')
     const pct = Number(discount)
     if (discount.trim() === '') {
-      errs.discount = 'Ingresa el descuento (0 si no aplica).'
+      errs.discount = t('leads.convertModal.discountRequired')
     } else if (Number.isNaN(pct) || pct < 0 || pct > 100) {
-      errs.discount = 'El descuento va de 0 a 100.'
+      errs.discount = t('leads.convertModal.discountRange')
     }
     return errs
   }
@@ -1906,19 +1914,19 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">¡Lead convertido!</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">{t('leads.convertModal.successTitle')}</h2>
           <p className="text-sm text-gray-500 mb-6">
-            <span className="font-semibold text-gray-800">{lead.name}</span> ahora es Bootcamper.
+            <span className="font-semibold text-gray-800">{lead.name}</span>{t('leads.convertModal.nowBootcamperSuffix')}
           </p>
 
           <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-2 mb-6">
             <div className="flex justify-between">
-              <span className="text-gray-500">Email</span>
+              <span className="text-gray-500">{t('leads.convertModal.emailLabel')}</span>
               <span className="font-medium text-gray-800">{result.email}</span>
             </div>
             {result.invitation_link && (
               <div className="space-y-1.5">
-                <span className="text-gray-500">Enlace de invitación enviado</span>
+                <span className="text-gray-500">{t('leads.convertModal.invitationSent')}</span>
                 <div className="flex items-center gap-2">
                   <input
                     readOnly
@@ -1935,16 +1943,16 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
                     }}
                     className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
                   >
-                    {copied ? '¡Copiado!' : 'Copiar'}
+                    {copied ? t('leads.resendModal.copied') : t('leads.resendModal.copy')}
                   </button>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Si el correo no llega, comparte este link por WhatsApp. Expira en 72 horas.
+                  {t('leads.convertModal.emailFallback')}
                 </p>
               </div>
             )}
             {result.is_returning && (
-              <p className="text-xs text-amber-600 mt-1">⚠ Bootcamper recurrente — se reutilizó la cuenta existente.</p>
+              <p className="text-xs text-amber-600 mt-1">{t('leads.convertModal.returning')}</p>
             )}
           </div>
 
@@ -1952,7 +1960,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             onClick={() => { onSuccess(); onClose() }}
             className="w-full py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors"
           >
-            Listo
+            {t('leads.convertModal.done')}
           </button>
         </div>
       </div>
@@ -1969,9 +1977,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Convertir lead</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">{t('leads.convertModal.title')}</h2>
         <p className="text-sm text-gray-500 mb-6">
-          Convirtiendo a <span className="font-semibold text-gray-800">{lead.name}</span> en Bootcamper.
+          {t('leads.convertModal.subtitlePrefix')}<span className="font-semibold text-gray-800">{lead.name}</span>{t('leads.convertModal.subtitleSuffix')}
         </p>
 
         {/* noValidate: con `max` en el descuento, el navegador bloquea el envío
@@ -1982,7 +1990,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Cédula */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cédula / RUC <span className="text-red-500">*</span>
+              {t('leads.convertModal.cedulaLabel')} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -1990,26 +1998,26 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               maxLength={13}
               value={cedula}
               onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
-              placeholder="10 dígitos (cédula) o 13 (RUC)"
+              placeholder={t('leads.convertModal.cedulaPlaceholder')}
               className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 ${cedulaInputBorderClass(errors.cedula, cedula)}`}
             />
             {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
             {(cedula.length === 10 || cedula.length === 13) && isValidIdentificacion(cedula) && (
-              <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? 'Cédula válida' : 'RUC válido'}</p>
+              <p className="text-xs text-green-600 mt-1">✓ {cedula.length === 10 ? t('leads.convertModal.cedulaValid') : t('leads.convertModal.rucValid')}</p>
             )}
           </div>
 
           {/* Program */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Programa <span className="text-red-500">*</span>
+              {t('leads.convertModal.programLabel')} <span className="text-red-500">*</span>
             </label>
             <CustomSelect
               testId="convert-program"
               value={programId}
               onChange={(val) => setProgramId(val)}
-              placeholder={loadingPrograms ? 'Cargando programas…' : 'Selecciona un programa'}
-              options={programs.map((p) => ({ value: p.id, label: `${p.name} — starts ${p.start_date} · $${p.total_cost}` }))}
+              placeholder={loadingPrograms ? t('leads.convertModal.loadingPrograms') : t('leads.convertModal.selectProgram')}
+              options={programs.map((p) => ({ value: p.id, label: t('leads.convertModal.programOption', { name: p.name, date: p.start_date, cost: p.total_cost }) }))}
             />
             {errors.programId && <p className="text-xs text-red-500 mt-1">{errors.programId}</p>}
           </div>
@@ -2018,12 +2026,12 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {programId && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cohorte <span className="text-red-500">*</span>
+                {t('leads.convertModal.cohortLabel')} <span className="text-red-500">*</span>
               </label>
-              {loadingCohorts && <p className="text-sm text-gray-400">Cargando cohortes…</p>}
+              {loadingCohorts && <p className="text-sm text-gray-400">{t('leads.convertModal.loadingCohorts')}</p>}
               {!loadingCohorts && assignableCohorts.length === 0 && (
                 <p className="text-sm text-gray-400">
-                  Este programa no tiene cohortes próximas ni en curso.
+                  {t('leads.convertModal.noCohorts')}
                 </p>
               )}
               {!loadingCohorts && assignableCohorts.length > 0 && (
@@ -2031,10 +2039,10 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
                   testId="convert-cohort"
                   value={cohortId}
                   onChange={(val) => setCohortId(val)}
-                  placeholder="Selecciona una cohorte"
+                  placeholder={t('leads.convertModal.selectCohort')}
                   options={assignableCohorts.map((c) => ({
                     value: c.id,
-                    label: `Cohorte ${c.number} — ${c.status_label} · inicia ${formatCohortMonth(c.start_month)}`,
+                    label: t('leads.convertModal.cohortOption', { number: c.number, status: c.status_label, month: formatCohortMonth(c.start_month) }),
                   }))}
                 />
               )}
@@ -2045,7 +2053,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Descuento */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="convert-discount">
-              Descuento <span className="text-red-500">*</span> <span className="text-xs text-gray-400 font-normal">(%)</span>
+              {t('leads.convertModal.discountLabel')} <span className="text-red-500">*</span> <span className="text-xs text-gray-400 font-normal">(%)</span>
             </label>
             <input
               id="convert-discount"
@@ -2061,9 +2069,9 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
             {errors.discount && <p className="text-xs text-red-500 mt-1">{errors.discount}</p>}
             {selectedProgram && (
               <p className="text-xs text-gray-500 mt-1">
-                Pagará <span className="font-semibold text-gray-700">{formatMoney(discountedPrice)}</span>
+                {t('leads.convertModal.willPayPrefix')}<span className="font-semibold text-gray-700">{formatMoney(discountedPrice)}</span>
                 {Number(discount) > 0 && (
-                  <> en vez de <span className="line-through">{formatMoney(selectedProgram.total_cost)}</span></>
+                  <>{t('leads.convertModal.insteadOf')}<span className="line-through">{formatMoney(selectedProgram.total_cost)}</span></>
                 )}
               </p>
             )}
@@ -2072,7 +2080,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
           {/* Email */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email <span className="text-red-500">*</span>
+              {t('leads.convertModal.emailLabel')} <span className="text-red-500">*</span>
             </label>
             <input
               type="email"
@@ -2086,12 +2094,12 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 
           {/* Phone */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('leads.convertModal.phoneLabel')}</label>
             <input
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="10 dígitos"
+              placeholder={t('leads.convertModal.phonePlaceholder')}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
@@ -2106,7 +2114,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('leads.common.cancel')}
             </button>
             <button
               type="submit"
@@ -2114,7 +2122,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
               disabled={convertMutation.isPending}
               className="flex-1 py-3 rounded-xl bg-[#213A8E] text-white font-semibold hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
             >
-              {convertMutation.isPending ? 'Convirtiendo…' : 'Convertir a Bootcamper'}
+              {convertMutation.isPending ? t('leads.convertModal.converting') : t('leads.convertModal.submit')}
             </button>
           </div>
         </form>
@@ -2126,6 +2134,7 @@ function ConvertLeadModal({ lead, onClose, onSuccess }) {
 // ─── Actions Dropdown ─────────────────────────────────────────────────────────
 
 function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, onRelease, onAssign, onViewHistory, onLogInteraction, onConvert, onChangeStatus, onEdit, onResendInvitation, onDiscard, onRestore }) {
+  const { t } = useTranslation()
   const isConverted = lead.status === 'CONVERTED'
   const isDiscarded = lead.status === 'DISCARDED'
   // Editable si no está convertido y es propio, disponible (sin dueño) o soy admin.
@@ -2170,7 +2179,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
       <button
         ref={btnRef}
         onClick={handleToggle}
-        aria-label={`Acciones para ${lead.name}`}
+        aria-label={t('leads.actions.menuAria', { name: lead.name })}
         className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2188,20 +2197,20 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
             onClick={() => { onView(); setOpen(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            Ver lead
+            {t('leads.actions.view')}
           </button>
           <button
             onClick={() => { onViewHistory(); setOpen(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            Ver historial
+            {t('leads.actions.viewHistory')}
           </button>
           {isOwned && !isConverted && (
             <button
               onClick={() => { onLogInteraction(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Registrar interacción
+              {t('leads.actions.logInteraction')}
             </button>
           )}
           {canEdit && (
@@ -2209,7 +2218,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onEdit(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Editar lead
+              {t('leads.actions.edit')}
             </button>
           )}
           {isOwned && !isConverted && (
@@ -2217,7 +2226,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onChangeStatus(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Cambiar estado
+              {t('leads.actions.changeStatus')}
             </button>
           )}
           {(isOwned || isAdmin) && !isConverted && !isDiscarded && (
@@ -2225,7 +2234,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onDiscard(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Descartar lead
+              {t('leads.actions.discard')}
             </button>
           )}
           {isDiscarded && (
@@ -2233,7 +2242,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onRestore(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-[#1e3164] font-medium hover:bg-blue-50"
             >
-              Reactivar lead
+              {t('leads.actions.restore')}
             </button>
           )}
           {isOwned && !isConverted && !isDiscarded && (
@@ -2245,11 +2254,11 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
                 disabled={lead.status !== 'QUALIFIED'}
                 className="w-full text-left px-4 py-2 text-sm text-green-700 font-medium hover:bg-green-50 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
               >
-                Convertir lead
+                {t('leads.actions.convert')}
               </button>
               {lead.status !== 'QUALIFIED' && (
                 <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
-                  Primero cambia el estado a “Calificado”.
+                  {t('leads.actions.convertHint')}
                 </p>
               )}
             </div>
@@ -2259,7 +2268,7 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
               onClick={() => { onResendInvitation(); setOpen(false) }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Reenviar invitación
+              {t('leads.actions.resendInvitation')}
             </button>
           )}
           {!isAdmin && !isConverted && !isDiscarded && (isOwned ? (
@@ -2269,13 +2278,13 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
                 disabled={!selfAssignEnabled}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-500 disabled:hover:bg-transparent disabled:cursor-not-allowed"
               >
-                Desasignar lead
+                {t('leads.actions.release')}
               </button>
               {/* Con la auto-asignación apagada el pool lo maneja el Admin: si
                   soltás el lead no podrías retomarlo, así que tampoco se libera. */}
               {!selfAssignEnabled && (
                 <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
-                  La asignación la realiza el Administrador.
+                  {t('leads.actions.assignmentByAdmin')}
                 </p>
               )}
             </div>
@@ -2286,11 +2295,11 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
                 disabled={!selfAssignEnabled}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-500 disabled:hover:bg-transparent disabled:cursor-not-allowed"
               >
-                Asignarme
+                {t('leads.actions.assign')}
               </button>
               {!selfAssignEnabled && (
                 <p className="px-4 pb-2 text-xs text-gray-500 leading-snug">
-                  La asignación la realiza el Administrador.
+                  {t('leads.actions.assignmentByAdmin')}
                 </p>
               )}
             </div>
@@ -2304,11 +2313,12 @@ function ActionsDropdown({ lead, isOwned, isAdmin, selfAssignEnabled, onView, on
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
 function Pagination({ page, totalPages, onPrev, onNext }) {
+  const { t } = useTranslation()
   if (totalPages <= 1) return null
   return (
     <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
       <p className="text-sm text-gray-500">
-        Página {page} de {totalPages}
+        {t('leads.pagination.info', { page, total: totalPages })}
       </p>
       <div className="flex items-center gap-2">
         <button
@@ -2316,14 +2326,14 @@ function Pagination({ page, totalPages, onPrev, onNext }) {
           disabled={page === 1}
           className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          ← Anterior
+          {t('leads.pagination.prev')}
         </button>
         <button
           onClick={onNext}
           disabled={page === totalPages}
           className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          Siguiente →
+          {t('leads.pagination.next')}
         </button>
       </div>
     </div>
@@ -2346,6 +2356,7 @@ function sortLeads(leads, sortKey) {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function LeadsDashboard() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const isAdmin = currentUser?.role === 'ADMINISTRATOR'
@@ -2461,10 +2472,10 @@ export default function LeadsDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-      showToast('Lead reactivado: vuelve al estado que tenía.')
+      showToast(t('leads.toast.restored'))
     },
     onError: (err) => {
-      showToast(err.response?.data?.error ?? 'No se pudo reactivar el lead.', 'error')
+      showToast(err.response?.data?.error ?? t('leads.toast.restoreError'), 'error')
     },
   })
   // ─── Reporte de leads (CB-58) ───────────────────────────────────────────────
@@ -2503,7 +2514,7 @@ export default function LeadsDashboard() {
     if (truncated) {
       // Nunca truncar en silencio: un reporte incompleto que se ve completo es
       // peor que no tenerlo.
-      showToast('El reporte es muy grande y se exportó sólo una parte. Filtra para acotarlo.', 'error')
+      showToast(t('leads.toast.reportTruncated'), 'error')
     }
 
     // Mismos filtros de cliente que la grilla, para que el archivo diga lo
@@ -2520,10 +2531,10 @@ export default function LeadsDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-      showToast('Lead asignado correctamente.')
+      showToast(t('leads.toast.assigned'))
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'No se pudo asignar el lead.'
+      const msg = err.response?.data?.error ?? t('leads.toast.assignError')
       showToast(msg, 'error')
     },
   })
@@ -2534,10 +2545,10 @@ export default function LeadsDashboard() {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setReleaseTarget(null)
-      showToast('Lead desasignado correctamente.')
+      showToast(t('leads.toast.released'))
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'No se pudo desasignar el lead.'
+      const msg = err.response?.data?.error ?? t('leads.toast.releaseError')
       showToast(msg, 'error')
     },
   })
@@ -2548,10 +2559,10 @@ export default function LeadsDashboard() {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       setReassignTarget(null)
-      showToast(ownerId ? 'Lead reasignado correctamente.' : 'Lead liberado correctamente.')
+      showToast(ownerId ? t('leads.toast.reassigned') : t('leads.toast.freed'))
     },
     onError: (err) => {
-      const msg = err.response?.data?.error ?? 'No se pudo liberar/reasignar el lead.'
+      const msg = err.response?.data?.error ?? t('leads.toast.reassignError')
       showToast(msg, 'error')
     },
   })
@@ -2564,14 +2575,14 @@ export default function LeadsDashboard() {
       if (autoAssignRef.current) {
         try {
           await assignLead(newLead.id)
-          showToast('Lead creado y asignado a ti.')
+          showToast(t('leads.toast.createdAssigned'))
           if (!isAdmin) setActiveTab('mine')
         } catch {
-          showToast('Lead creado, pero no se pudo asignar. Búscalo en Disponibles.', 'error')
+          showToast(t('leads.toast.createdNotAssigned'), 'error')
           if (!isAdmin) setActiveTab('available')
         }
       } else {
-        showToast('Lead creado. Puedes encontrarlo en Disponibles.')
+        showToast(t('leads.toast.createdAvailable'))
         if (!isAdmin) setActiveTab('available')
       }
       await queryClient.invalidateQueries({ queryKey: ['leads'] })
@@ -2589,7 +2600,7 @@ export default function LeadsDashboard() {
         setDuplicateWarning({ duplicate: data.duplicate, payload: variables })
         return
       }
-      const msg = data?.error ?? 'No se pudo crear el lead.'
+      const msg = data?.error ?? t('leads.toast.createError')
       showToast(msg, 'error')
     },
   })
@@ -2599,7 +2610,7 @@ export default function LeadsDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
-          Dashboard de Leads
+          {t('leads.dashboardTitle')}
         </h1>
         <div className="flex items-center gap-2">
         <ExportMenu
@@ -2618,7 +2629,7 @@ export default function LeadsDashboard() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Nuevo lead
+          {t('leads.newLead')}
         </button>
         </div>
       </div>
@@ -2627,24 +2638,24 @@ export default function LeadsDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 lg:mb-8">
         {isAdmin ? (
           <>
-            <StatCard label="Total leads"  value={statsPagination.all_leads_count ?? allLeads.length} loading={isLoading} />
-            <StatCard label="Asignados"    value={statsPagination.assigned_leads_count ?? assignedLeads.length} loading={isLoading} />
-            <StatCard label="Sin asignar"  value={statsPagination.unassigned_leads_count ?? unassignedLeads.length} loading={isLoading} />
-            <StatCard label="Conversiones" value={conversions} loading={isLoading} />
+            <StatCard label={t('leads.stats.totalLeads')}  value={statsPagination.all_leads_count ?? allLeads.length} loading={isLoading} />
+            <StatCard label={t('leads.stats.assigned')}    value={statsPagination.assigned_leads_count ?? assignedLeads.length} loading={isLoading} />
+            <StatCard label={t('leads.stats.unassigned')}  value={statsPagination.unassigned_leads_count ?? unassignedLeads.length} loading={isLoading} />
+            <StatCard label={t('leads.stats.conversions')} value={conversions} loading={isLoading} />
           </>
         ) : (
           <>
-            <StatCard label="Total leads"    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
-            <StatCard label="Asignados a mí" value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
-            <StatCard label="Conversiones"   value={conversions} loading={isLoading} />
-            <StatCard label="No interesados" value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
+            <StatCard label={t('leads.stats.totalLeads')}    value={(statsPagination.my_leads_count ?? 0) + (statsPagination.available_leads_count ?? 0)} loading={isLoading} />
+            <StatCard label={t('leads.stats.assignedToMe')} value={statsPagination.my_leads_count ?? myLeads.length} loading={isLoading} />
+            <StatCard label={t('leads.stats.conversions')}   value={conversions} loading={isLoading} />
+            <StatCard label={t('leads.stats.notInterested')} value={myLeads.filter((l) => l.status === 'NOT_INTERESTED').length} loading={isLoading} />
           </>
         )}
       </div>
 
       {/* Leads Table */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">Leads</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">{t('leads.tableTitle')}</h2>
 
         {/* Search + controls */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-5">
@@ -2655,7 +2666,7 @@ export default function LeadsDashboard() {
             <input
               type="text"
               data-testid="lead-search"
-              placeholder="Buscar por nombre, email o teléfono"
+              placeholder={t('leads.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -2672,7 +2683,7 @@ export default function LeadsDashboard() {
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
             </svg>
-            Empresa
+            {t('leads.form.company')}
           </button>
           <SortDropdown value={sortKey} onChange={setSortKey} />
           <FilterDropdown value={statusFilter} onChange={setStatusFilter} />
@@ -2701,7 +2712,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Todos ({pagination.all_leads_count ?? allLeads.length})
+                {t('leads.tabs.all')} ({pagination.all_leads_count ?? allLeads.length})
               </button>
               <button
                 data-testid="tab-assigned"
@@ -2712,7 +2723,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Asignados ({pagination.assigned_leads_count ?? assignedLeads.length})
+                {t('leads.tabs.assigned')} ({pagination.assigned_leads_count ?? assignedLeads.length})
               </button>
               <button
                 data-testid="tab-unassigned"
@@ -2723,7 +2734,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Sin asignar ({pagination.unassigned_leads_count ?? unassignedLeads.length})
+                {t('leads.tabs.unassigned')} ({pagination.unassigned_leads_count ?? unassignedLeads.length})
               </button>
               <button
                 data-testid="tab-converted-admin"
@@ -2734,7 +2745,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
+                {t('leads.tabs.converted')} ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           ) : (
@@ -2748,7 +2759,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Mis leads ({pagination.my_leads_count ?? activeMyLeads.length})
+                {t('leads.tabs.myLeads')} ({pagination.my_leads_count ?? activeMyLeads.length})
               </button>
               <button
                 data-testid="tab-available"
@@ -2759,7 +2770,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Disponibles ({pagination.available_leads_count ?? availableLeads.length})
+                {t('leads.tabs.available')} ({pagination.available_leads_count ?? availableLeads.length})
               </button>
               <button
                 data-testid="tab-converted"
@@ -2770,7 +2781,7 @@ export default function LeadsDashboard() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Convertidos ({pagination.converted_leads_count ?? convertedLeads.length})
+                {t('leads.tabs.converted')} ({pagination.converted_leads_count ?? convertedLeads.length})
               </button>
             </>
           )}
@@ -2779,7 +2790,7 @@ export default function LeadsDashboard() {
         {/* Table */}
         {isError && (
           <p className="text-center text-red-500 py-8 text-sm">
-            No se pudieron cargar los leads. Verifica que estés autenticado.
+            {t('leads.table.loadError')}
           </p>
         )}
 
@@ -2787,9 +2798,17 @@ export default function LeadsDashboard() {
         <table className="w-full text-sm min-w-[600px]">
           <thead>
             <tr className="border-b border-gray-100">
-              {['Nombre', 'Email', 'Teléfono', 'Fuente', 'Estado', 'Asignado a', 'Acciones'].map((h) => (
-                <th key={h} className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide">
-                  {h}
+              {[
+                ['name', t('leads.table.name')],
+                ['email', t('leads.table.email')],
+                ['phone', t('leads.table.phone')],
+                ['source', t('leads.table.source')],
+                ['status', t('leads.table.status')],
+                ['assignedTo', t('leads.table.assignedTo')],
+                ['actions', t('leads.table.actions')],
+              ].map(([key, label]) => (
+                <th key={key} className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide">
+                  {label}
                 </th>
               ))}
             </tr>
@@ -2800,7 +2819,7 @@ export default function LeadsDashboard() {
             {!isLoading && !isError && pageLeads.length === 0 && (
               <tr>
                 <td colSpan={7} className="text-center text-gray-500 py-10">
-                  No se encontraron leads.
+                  {t('leads.table.empty')}
                 </td>
               </tr>
             )}
@@ -2820,7 +2839,7 @@ export default function LeadsDashboard() {
                           <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
                           </svg>
-                          Empresa
+                          {t('leads.form.company')}
                         </span>
                       )}
                       <span className="font-medium text-gray-900">{lead.name}</span>
@@ -2837,7 +2856,7 @@ export default function LeadsDashboard() {
                   {isAdmin ? (
                     <button
                       onClick={() => setReassignTarget(lead)}
-                      aria-label={`Asignado a: ${lead.owner_name ?? 'sin asignar'}. Click para cambiar`}
+                      aria-label={t('leads.table.reassignAria', { owner: lead.owner_name ?? t('leads.common.unassigned') })}
                       className="flex items-center gap-2 rounded-lg px-1 -mx-1 py-0.5 hover:bg-gray-50 transition-colors"
                     >
                       {lead.owner ? (
@@ -2849,7 +2868,7 @@ export default function LeadsDashboard() {
                         </>
                       ) : (
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                          Sin asignar
+                          {t('leads.common.unassigned')}
                         </span>
                       )}
                     </button>
@@ -2858,7 +2877,7 @@ export default function LeadsDashboard() {
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${AVATAR_COLORS[(lead.owner_name?.charCodeAt(0) ?? 89) % AVATAR_COLORS.length]}`}>
                         {lead.owner_name?.charAt(0) ?? '?'}
                       </div>
-                      <span className="text-gray-700 text-sm">{lead._isOwned ? 'Tú' : lead.owner_name}</span>
+                      <span className="text-gray-700 text-sm">{lead._isOwned ? t('leads.table.you') : lead.owner_name}</span>
                     </div>
                   ) : (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
@@ -2915,7 +2934,7 @@ export default function LeadsDashboard() {
         <LogInteractionModal
           lead={logLead}
           onClose={() => setLogLead(null)}
-          onSuccess={() => { flashLead(logLead.id); showToast('Interacción registrada correctamente.') }}
+          onSuccess={() => { flashLead(logLead.id); showToast(t('leads.toast.interactionLogged')) }}
         />
       )}
 
@@ -2923,7 +2942,7 @@ export default function LeadsDashboard() {
         <ConvertLeadModal
           lead={convertTarget}
           onClose={() => setConvertTarget(null)}
-          onSuccess={() => { flashLead(convertTarget.id); showToast(`${convertTarget.name} convertido correctamente.`) }}
+          onSuccess={() => { flashLead(convertTarget.id); showToast(t('leads.toast.convertedOk', { name: convertTarget.name })) }}
         />
       )}
 
@@ -2947,7 +2966,7 @@ export default function LeadsDashboard() {
         <UpdateStatusModal
           lead={statusLead}
           onClose={() => setStatusLead(null)}
-          onSuccess={() => { flashLead(statusLead.id); showToast('Estado actualizado correctamente.') }}
+          onSuccess={() => { flashLead(statusLead.id); showToast(t('leads.toast.statusUpdated')) }}
         />
       )}
 
@@ -2955,7 +2974,7 @@ export default function LeadsDashboard() {
         <EditLeadModal
           lead={editLead}
           onClose={() => setEditLead(null)}
-          onSuccess={() => { flashLead(editLead.id); showToast('Lead actualizado correctamente.') }}
+          onSuccess={() => { flashLead(editLead.id); showToast(t('leads.toast.leadUpdated')) }}
         />
       )}
 

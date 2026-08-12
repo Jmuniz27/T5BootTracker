@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { validateMeetingForm, type MeetingFormValues, type MeetingFormErrors } from '../lib/meeting-form';
 
@@ -51,6 +52,7 @@ export default function MeetingFormModal({
   onDelete,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const [form, setForm] = useState<MeetingFormValues>(initial);
   const [errors, setErrors] = useState<MeetingFormErrors>({});
   const [leadPickerOpen, setLeadPickerOpen] = useState(false);
@@ -84,7 +86,7 @@ export default function MeetingFormModal({
   // Al presionar Guardar: si algo falta, se muestra el error en vez de que el
   // botón quede deshabilitado en silencio.
   function handleSave() {
-    const errs = validateMeetingForm(form);
+    const errs = validateMeetingForm(form, t);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
@@ -142,46 +144,46 @@ export default function MeetingFormModal({
         <Animated.View style={[s.sheet, { transform: [{ translateY: sheetY }] }]}>
           <View style={s.header}>
             <TouchableOpacity onPress={onClose} hitSlop={8}>
-              <Text style={s.cancel}>Cancelar</Text>
+              <Text style={s.cancel}>{t('meetingForm.cancel')}</Text>
             </TouchableOpacity>
-            <Text style={s.title}>{editingId ? 'Editar reunión' : 'Nueva reunión'}</Text>
+            <Text style={s.title}>{editingId ? t('meetingForm.editTitle') : t('meetingForm.newTitle')}</Text>
             <TouchableOpacity onPress={handleSave} disabled={saving} hitSlop={8}>
               {saving ? (
                 <ActivityIndicator size="small" color={colors.navy} />
               ) : (
-                <Text style={s.save}>Guardar</Text>
+                <Text style={s.save}>{t('meetingForm.save')}</Text>
               )}
             </TouchableOpacity>
           </View>
 
           <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
-            <Text style={s.label}>Título <Text style={s.required}>*</Text></Text>
+            <Text style={s.label}>{t('meetingForm.titleLabel')} <Text style={s.required}>*</Text></Text>
             <TextInput
               style={[s.input, errors.title && s.inputError]}
               value={form.title}
               onChangeText={(v) => set('title', v)}
-              placeholder="Reunión con…"
+              placeholder={t('meetingForm.titlePlaceholder')}
               placeholderTextColor={colors.textMuted}
             />
             {errors.title && <Text style={s.errorText}>{errors.title}</Text>}
 
-            <Text style={s.label}>Descripción</Text>
+            <Text style={s.label}>{t('meetingForm.descriptionLabel')}</Text>
             <TextInput
               style={[s.input, s.textarea]}
               value={form.description}
               onChangeText={(v) => set('description', v)}
-              placeholder="Detalles, próxima acción…"
+              placeholder={t('meetingForm.descriptionPlaceholder')}
               placeholderTextColor={colors.textMuted}
               multiline
             />
 
-            <Text style={s.label}>Inicio <Text style={s.required}>*</Text></Text>
+            <Text style={s.label}>{t('meetingForm.startLabel')} <Text style={s.required}>*</Text></Text>
             <TouchableOpacity style={s.pickerBtn} onPress={() => openPicker('start')} activeOpacity={0.7}>
               <Ionicons name="time-outline" size={16} color={colors.navy} />
               <Text style={s.pickerText}>{fmt(form.start)}</Text>
             </TouchableOpacity>
 
-            <Text style={s.label}>Fin <Text style={s.required}>*</Text></Text>
+            <Text style={s.label}>{t('meetingForm.endLabel')} <Text style={s.required}>*</Text></Text>
             <TouchableOpacity
               style={[s.pickerBtn, errors.end && s.inputError]}
               onPress={() => openPicker('end')}
@@ -192,7 +194,7 @@ export default function MeetingFormModal({
             </TouchableOpacity>
             {errors.end && <Text style={s.errorText}>{errors.end}</Text>}
 
-            <Text style={s.label}>Lead <Text style={s.required}>*</Text></Text>
+            <Text style={s.label}>{t('meetingForm.leadLabel')} <Text style={s.required}>*</Text></Text>
             <TouchableOpacity
               style={[s.pickerBtn, errors.lead && s.inputError]}
               onPress={() => setLeadPickerOpen(true)}
@@ -200,7 +202,7 @@ export default function MeetingFormModal({
             >
               <Ionicons name="person-outline" size={16} color={colors.navy} />
               <Text style={[s.pickerText, !form.lead && { color: colors.textMuted }]}>
-                {form.leadName || 'Selecciona un lead'}
+                {form.leadName || t('meetingForm.selectLead')}
               </Text>
               <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
             </TouchableOpacity>
@@ -214,7 +216,7 @@ export default function MeetingFormModal({
               <View style={[s.checkbox, form.notifyLead && s.checkboxOn]}>
                 {form.notifyLead && <Ionicons name="checkmark" size={14} color={colors.white} />}
               </View>
-              <Text style={s.notifyText}>Invitar al lead por correo</Text>
+              <Text style={s.notifyText}>{t('meetingForm.invite')}</Text>
             </TouchableOpacity>
 
             {editingId && (
@@ -222,7 +224,7 @@ export default function MeetingFormModal({
                 {deleting ? (
                   <ActivityIndicator size="small" color={colors.error} />
                 ) : (
-                  <Text style={s.deleteText}>Eliminar reunión</Text>
+                  <Text style={s.deleteText}>{t('meetingForm.deleteMeeting')}</Text>
                 )}
               </TouchableOpacity>
             )}
@@ -238,10 +240,10 @@ export default function MeetingFormModal({
         <Modal transparent visible animationType="fade" onRequestClose={() => setPickerTarget(null)}>
           <Pressable style={s.overlay} onPress={() => setPickerTarget(null)}>
             <Pressable style={s.pickerSheet} onPress={() => {}}>
-              <Text style={s.pickerTitle}>{pickerTarget === 'start' ? 'Inicio' : 'Fin'}</Text>
+              <Text style={s.pickerTitle}>{pickerTarget === 'start' ? t('meetingForm.startLabel') : t('meetingForm.endLabel')}</Text>
               <DateTimePicker value={draft} mode="datetime" display="spinner" onChange={onIosChange} />
               <TouchableOpacity style={s.pickerDone} onPress={() => commitPicked(draft)} activeOpacity={0.85}>
-                <Text style={s.pickerDoneText}>Listo</Text>
+                <Text style={s.pickerDoneText}>{t('meetingForm.pickerDone')}</Text>
               </TouchableOpacity>
             </Pressable>
           </Pressable>
@@ -252,10 +254,10 @@ export default function MeetingFormModal({
       <Modal visible={leadPickerOpen} transparent animationType="fade" onRequestClose={() => setLeadPickerOpen(false)}>
         <Pressable style={s.overlay} onPress={() => setLeadPickerOpen(false)}>
           <View style={s.leadSheet}>
-            <Text style={s.leadTitle}>Elegir lead</Text>
+            <Text style={s.leadTitle}>{t('meetingForm.chooseLead')}</Text>
             <ScrollView>
               {leads.length === 0 ? (
-                <Text style={s.leadEmpty}>No hay leads disponibles.</Text>
+                <Text style={s.leadEmpty}>{t('meetingForm.noLeads')}</Text>
               ) : (
                 leads.map((l) => (
                   <TouchableOpacity

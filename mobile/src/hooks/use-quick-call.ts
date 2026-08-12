@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { openDialer } from '../lib/phone';
 import type { Lead } from '../types/leads';
 
@@ -12,6 +13,7 @@ import type { Lead } from '../types/leads';
  * una llamada que iniciamos nosotros — no en cualquier cambio de estado.
  */
 export function useQuickCall() {
+  const { t } = useTranslation();
   const router = useRouter();
   const pendingLead = useRef<Lead | null>(null);
   const appState = useRef<AppStateStatus>(AppState.currentState);
@@ -27,12 +29,12 @@ export function useQuickCall() {
         const lead = pendingLead.current;
         pendingLead.current = null;
         Alert.alert(
-          'Registrar llamada',
-          `¿Quieres registrar la interacción con ${lead.name}?`,
+          t('quickCall.logCallTitle'),
+          t('quickCall.logCallMsg', { name: lead.name }),
           [
-            { text: 'Ahora no', style: 'cancel' },
+            { text: t('quickCall.notNow'), style: 'cancel' },
             {
-              text: 'Registrar',
+              text: t('quickCall.logAction'),
               onPress: () =>
                 router.push({
                   pathname: '/(app)/leads/[id]/log-interaction',
@@ -45,7 +47,7 @@ export function useQuickCall() {
     });
 
     return () => subscription.remove();
-  }, [router]);
+  }, [router, t]);
 
   const startCall = useCallback(async (lead: Lead) => {
     const launched = await openDialer(lead.phone);
@@ -53,12 +55,9 @@ export function useQuickCall() {
       // Se recuerda el lead para ofrecer el registro al volver a la app.
       pendingLead.current = lead;
     } else {
-      Alert.alert(
-        'No se pudo llamar',
-        'Este dispositivo no puede realizar llamadas o el número no es válido.',
-      );
+      Alert.alert(t('quickCall.cantCallTitle'), t('quickCall.cantCallMsg'));
     }
-  }, []);
+  }, [t]);
 
   return { startCall };
 }

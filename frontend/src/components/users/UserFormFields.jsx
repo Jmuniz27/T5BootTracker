@@ -1,4 +1,5 @@
 import { Controller, useWatch } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import CustomSelect from '../CustomSelect'
 import { getPrograms } from '../../api/leads.api'
@@ -27,7 +28,12 @@ function Field({ label, required, hint, error, children }) {
  * vendedor, y el alcance decide de qué programas.
  */
 function CoordinatorScopeFields({ control, errors }) {
+  const { t } = useTranslation()
   const scope = useWatch({ control, name: 'coordinator_scope' })
+  const scopeOptions = COORDINATOR_SCOPE_OPTIONS.map((o) => ({
+    value: o.value,
+    label: o.value === 'GENERAL' ? t('users.scope.generalOption') : t('users.scope.programOption'),
+  }))
 
   const { data: programs = [], isLoading } = useQuery({
     queryKey: ['programs'],
@@ -38,11 +44,10 @@ function CoordinatorScopeFields({ control, errors }) {
   return (
     <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-4 space-y-4">
       <p className="text-xs text-purple-900/80">
-        El coordinador no tiene acceso al CRM. La cuenta sirve para que reciba los avisos que el
-        vendedor le envíe.
+        {t('users.form.coordinatorNote')}
       </p>
 
-      <Field label="Alcance" required error={errors.coordinator_scope?.message}>
+      <Field label={t('users.form.scope')} required error={errors.coordinator_scope?.message}>
         <Controller
           name="coordinator_scope"
           control={control}
@@ -50,15 +55,15 @@ function CoordinatorScopeFields({ control, errors }) {
             <CustomSelect
               value={field.value}
               onChange={field.onChange}
-              options={COORDINATOR_SCOPE_OPTIONS}
-              placeholder="Seleccionar alcance"
+              options={scopeOptions}
+              placeholder={t('users.form.selectScope')}
             />
           )}
         />
       </Field>
 
       {scope === 'PROGRAM' && (
-        <Field label="Programas" required error={errors.coordinator_programs?.message}>
+        <Field label={t('users.form.programs')} required error={errors.coordinator_programs?.message}>
           <Controller
             name="coordinator_programs"
             control={control}
@@ -82,12 +87,13 @@ function CoordinatorScopeFields({ control, errors }) {
  * para que se vea cuántos y cuáles están marcados sin abrir nada.
  */
 function ProgramCheckboxes({ value, onChange, programs, isLoading }) {
+  const { t } = useTranslation()
   if (isLoading) {
-    return <p className="text-sm text-gray-400">Cargando programas…</p>
+    return <p className="text-sm text-gray-400">{t('users.form.loadingPrograms')}</p>
   }
 
   if (programs.length === 0) {
-    return <p className="text-sm text-gray-400">No hay programas creados todavía.</p>
+    return <p className="text-sm text-gray-400">{t('users.form.noPrograms')}</p>
   }
 
   const toggle = (id) =>
@@ -115,25 +121,27 @@ function ProgramCheckboxes({ value, onChange, programs, isLoading }) {
  * aplica en creación — al editar, el reseteo va por su propia acción.
  */
 export default function UserFormFields({ register, errors, control, includePassword = false }) {
+  const { t } = useTranslation()
   const role = useWatch({ control, name: 'role' })
+  const roleOptions = ROLE_OPTIONS.map((o) => ({ value: o.value, label: t(`users.roles.${o.value}`) }))
 
   return (
     <>
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Nombre" required error={errors.first_name?.message}>
+        <Field label={t('users.form.firstName')} required error={errors.first_name?.message}>
           <input {...register('first_name')} placeholder="Ana" className={inputClass} />
         </Field>
-        <Field label="Apellido" required error={errors.last_name?.message}>
+        <Field label={t('users.form.lastName')} required error={errors.last_name?.message}>
           <input {...register('last_name')} placeholder="Vera" className={inputClass} />
         </Field>
       </div>
 
-      <Field label="Email" required error={errors.email?.message}>
+      <Field label={t('users.form.email')} required error={errors.email?.message}>
         <input {...register('email')} type="email" placeholder="ana.vera@espol.edu.ec" className={inputClass} />
       </Field>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Rol" required error={errors.role?.message}>
+        <Field label={t('users.form.role')} required error={errors.role?.message}>
           <Controller
             name="role"
             control={control}
@@ -141,13 +149,13 @@ export default function UserFormFields({ register, errors, control, includePassw
               <CustomSelect
                 value={field.value}
                 onChange={field.onChange}
-                options={ROLE_OPTIONS}
-                placeholder="Seleccionar rol"
+                options={roleOptions}
+                placeholder={t('users.form.selectRole')}
               />
             )}
           />
         </Field>
-        <Field label="Cédula" hint="opcional" error={errors.cedula?.message}>
+        <Field label={t('users.form.cedula')} hint={t('users.form.optional')} error={errors.cedula?.message}>
           <input
             {...register('cedula')}
             inputMode="numeric"
@@ -160,7 +168,7 @@ export default function UserFormFields({ register, errors, control, includePassw
 
       {role === 'COORDINATOR' && <CoordinatorScopeFields control={control} errors={errors} />}
 
-      <Field label="Teléfono" hint="opcional" error={errors.phone?.message}>
+      <Field label={t('users.form.phone')} hint={t('users.form.optional')} error={errors.phone?.message}>
         <input {...register('phone')} placeholder="0991234567" className={inputClass} />
       </Field>
 
@@ -169,15 +177,15 @@ export default function UserFormFields({ register, errors, control, includePassw
           deja en blanco, el backend envía una invitación por correo para que
           la persona elija su propia contraseña. */}
       {includePassword && role !== 'COORDINATOR' && (
-        <Field label="Contraseña temporal" hint="opcional" error={errors.password?.message}>
+        <Field label={t('users.form.tempPassword')} hint={t('users.form.optional')} error={errors.password?.message}>
           <input
             {...register('password')}
             type="text"
-            placeholder="Déjalo en blanco para invitar por correo"
+            placeholder={t('users.form.passwordPlaceholder')}
             className={inputClass}
           />
           <p className="text-xs text-gray-500 mt-1">
-            En blanco, se le envía un correo de activación. Si escribes una, se le comparte a la persona para su primer ingreso.
+            {t('users.form.passwordHint')}
           </p>
         </Field>
       )}

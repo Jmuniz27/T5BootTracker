@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../../../src/theme/colors';
 import { updateLead, getPrograms, type Program } from '../../../../src/api/leads.api';
 import ProgramSelect from '../../../../src/components/ProgramSelect';
@@ -26,6 +27,7 @@ const SOURCES = [
 ] as const;
 
 export default function EditLeadScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string; lead?: string }>();
 
@@ -77,7 +79,7 @@ export default function EditLeadScreen() {
         detail && typeof detail === 'object' ? Object.values(detail)[0] : null;
       setError(
         (Array.isArray(firstError) ? firstError[0] : firstError) ??
-          'No pudimos guardar los cambios. Verifica los datos.',
+          t('leads.form.saveError'),
       );
       setLoading(false);
     }
@@ -89,7 +91,7 @@ export default function EditLeadScreen() {
         <TouchableOpacity style={s.backBtn} hitSlop={8} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Editar lead</Text>
+        <Text style={s.headerTitle}>{t('leads.form.editTitle')}</Text>
         <TouchableOpacity
           style={[s.saveBtn, !canSubmit && s.saveBtnDisabled]}
           onPress={submit}
@@ -99,7 +101,7 @@ export default function EditLeadScreen() {
           {loading ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text style={s.saveBtnText}>Guardar</Text>
+            <Text style={s.saveBtnText}>{t('leads.form.save')}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -107,16 +109,16 @@ export default function EditLeadScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
           <View style={s.card}>
-            <Text style={s.label}>Nombre *</Text>
+            <Text style={s.label}>{t('leads.form.name')}</Text>
             <TextInput
               style={s.input}
               value={name}
               onChangeText={setName}
-              placeholder="Nombre del lead"
+              placeholder={t('leads.form.namePlaceholder')}
               placeholderTextColor={colors.textMuted}
             />
 
-            <Text style={s.label}>Teléfono *</Text>
+            <Text style={s.label}>{t('leads.form.phone')}</Text>
             <TextInput
               style={s.input}
               value={phone}
@@ -126,22 +128,22 @@ export default function EditLeadScreen() {
               keyboardType="phone-pad"
             />
 
-            <Text style={s.label}>Email</Text>
+            <Text style={s.label}>{t('leads.form.email')}</Text>
             <TextInput
               style={s.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="correo@ejemplo.com"
+              placeholder={t('leads.form.emailPlaceholder')}
               placeholderTextColor={colors.textMuted}
               keyboardType="email-address"
               autoCapitalize="none"
             />
 
-            <Text style={s.label}>Programa de interés</Text>
+            <Text style={s.label}>{t('leads.form.program')}</Text>
             <ProgramSelect programs={programs} selectedId={programId} onSelect={setProgramId} />
 
 
-            <Text style={s.label}>Origen</Text>
+            <Text style={s.label}>{t('leads.form.source')}</Text>
             <View style={s.chips}>
               {SOURCES.map((src) => {
                 const active = source === src.value;
@@ -167,7 +169,7 @@ export default function EditLeadScreen() {
                 {isCompany && <Ionicons name="checkmark" size={14} color={colors.white} />}
               </View>
               <Ionicons name="business-outline" size={16} color={colors.textMuted} />
-              <Text style={s.companyText}>Es una empresa</Text>
+              <Text style={s.companyText}>{t('leads.form.isCompany')}</Text>
             </TouchableOpacity>
           </View>
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -17,9 +18,9 @@ import Skeleton from '../components/ui/Skeleton'
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS = {
-  ON_TRACK: { label: 'Al día',    bg: 'bg-emerald-100', text: 'text-emerald-700', bar: 'bg-emerald-500' },
-  AT_RISK:  { label: 'En riesgo', bg: 'bg-amber-100',   text: 'text-amber-700',   bar: 'bg-amber-500'   },
-  CRITICAL: { label: 'Crítico',   bg: 'bg-red-100',     text: 'text-red-600',     bar: 'bg-red-500'     },
+  ON_TRACK: { bg: 'bg-emerald-100', text: 'text-emerald-700', bar: 'bg-emerald-500' },
+  AT_RISK:  { bg: 'bg-amber-100',   text: 'text-amber-700',   bar: 'bg-amber-500'   },
+  CRITICAL: { bg: 'bg-red-100',     text: 'text-red-600',     bar: 'bg-red-500'     },
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -34,7 +35,9 @@ function fmt(v) {
 // ─── Bootcamper Card ──────────────────────────────────────────────────────────
 
 function BootcamperCard({ bc, onClick, action }) {
-  const cfg       = STATUS[bc.payment_status] || STATUS.ON_TRACK
+  const { t } = useTranslation()
+  const statusKey = STATUS[bc.payment_status] ? bc.payment_status : 'ON_TRACK'
+  const cfg       = STATUS[statusKey]
   const totalCost = parseFloat(bc.total_cost) || 1
   const totalPaid = parseFloat(bc.total_paid) || 0
   const paidPct   = Math.min((totalPaid / totalCost) * 100, 100)
@@ -62,7 +65,7 @@ function BootcamperCard({ bc, onClick, action }) {
           </div>
         </div>
         <span className={`px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ml-2 ${cfg.bg} ${cfg.text}`}>
-          {cfg.label}
+          {t(`payments.monitoringStatus.${statusKey}`)}
         </span>
       </div>
 
@@ -70,14 +73,14 @@ function BootcamperCard({ bc, onClick, action }) {
       <p className="text-xs text-gray-500 mb-3 truncate">
         {bc.program_name}
         {bc.cohort_number != null && (
-          <span className="text-gray-400"> · Cohorte {bc.cohort_number}</span>
+          <span className="text-gray-400"> · {t('payments.finance.cohortNumber', { number: bc.cohort_number })}</span>
         )}
       </p>
 
       {/* Progress bar */}
       <div className="mb-3">
         <div className="flex justify-between mb-1">
-          <span className="text-xs text-gray-500">Pagado</span>
+          <span className="text-xs text-gray-500">{t('payments.finance.paid')}</span>
           <span className="text-xs font-semibold text-gray-700">{paidPct.toFixed(0)}%</span>
         </div>
         <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -89,14 +92,14 @@ function BootcamperCard({ bc, onClick, action }) {
       <div className="flex items-end justify-between">
         <div>
           <p className="text-lg font-bold text-gray-900 leading-tight">{fmt(bc.total_paid)}</p>
-          <p className="text-xs text-gray-500">de {fmt(bc.total_cost)}</p>
+          <p className="text-xs text-gray-500">{t('payments.finance.ofAmount', { amount: fmt(bc.total_cost) })}</p>
         </div>
         {bc.pending_payments > 0 && (
           <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            {bc.pending_payments} pendiente{bc.pending_payments !== 1 ? 's' : ''}
+            {t('payments.finance.pending', { count: bc.pending_payments })}
           </span>
         )}
       </div>
@@ -135,6 +138,7 @@ function SkeletonCard() {
 const PAGE_SIZE = 100
 
 export default function FinancePaymentsPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [search, setSearch]             = useState('')
@@ -188,13 +192,13 @@ export default function FinancePaymentsPage() {
     mutationFn: assignBootcamper,
     onSuccess: () => {
       refreshPool()
-      showToast('Bootcamper asignado. Ya podés monitorear sus pagos.')
+      showToast(t('payments.finance.toast.assigned'))
     },
     onError: (err) => {
       // 409: otra persona de Finanzas lo tomó primero. Se refresca igual para
       // que la tarjeta desaparezca del pool en vez de quedar como señuelo.
       refreshPool()
-      showToast(err.response?.data?.error ?? 'No se pudo asignar el bootcamper.', 'error')
+      showToast(err.response?.data?.error ?? t('payments.finance.toast.assignError'), 'error')
     },
   })
 
@@ -202,10 +206,10 @@ export default function FinancePaymentsPage() {
     mutationFn: releaseBootcamper,
     onSuccess: () => {
       refreshPool()
-      showToast('Bootcamper devuelto al pool.')
+      showToast(t('payments.finance.toast.released'))
     },
     onError: (err) => {
-      showToast(err.response?.data?.error ?? 'No se pudo liberar el bootcamper.', 'error')
+      showToast(err.response?.data?.error ?? t('payments.finance.toast.releaseError'), 'error')
     },
   })
 
@@ -216,9 +220,9 @@ export default function FinancePaymentsPage() {
   const finalizados = mine.filter((b) => b.is_fully_paid)
   const visibles   = tab === 'finalizados' ? finalizados : enCobro
 
-  let mensajeVacio = 'Todavía no monitoreás a nadie. Tomá uno del pool de abajo.'
-  if (tab === 'finalizados') mensajeVacio = 'Todavía nadie completó el pago.'
-  else if (search) mensajeVacio = 'Ninguno de tus bootcampers coincide con la búsqueda.'
+  let mensajeVacio = t('payments.finance.emptyNoOne')
+  if (tab === 'finalizados') mensajeVacio = t('payments.finance.emptyNoneFinished')
+  else if (search) mensajeVacio = t('payments.finance.emptyNoMatch')
 
   const stats = {
     total:    enCobro.length,
@@ -236,9 +240,9 @@ export default function FinancePaymentsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Monitoreo de Pagos</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('payments.finance.title')}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Tomá bootcampers del pool para seguirles el cobro
+            {t('payments.finance.subtitle')}
           </p>
         </div>
       </div>
@@ -247,7 +251,7 @@ export default function FinancePaymentsPage() {
       {!isLoading && mine.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <StatCard
-            label="Bootcampers"
+            label={t('payments.finance.statBootcampers')}
             value={stats.total}
             iconClass="bg-[#213A8E]/10 text-[#213A8E]"
             icon={(
@@ -255,7 +259,7 @@ export default function FinancePaymentsPage() {
             )}
           />
           <StatCard
-            label="Críticos"
+            label={t('payments.finance.statCritical')}
             value={stats.critical}
             containerClass="bg-red-50 border-red-100"
             valueClass="text-red-600"
@@ -266,7 +270,7 @@ export default function FinancePaymentsPage() {
             )}
           />
           <StatCard
-            label="En riesgo"
+            label={t('payments.finance.statAtRisk')}
             value={stats.atRisk}
             containerClass="bg-amber-50 border-amber-100"
             valueClass="text-amber-600"
@@ -277,7 +281,7 @@ export default function FinancePaymentsPage() {
             )}
           />
           <StatCard
-            label="Al día"
+            label={t('payments.finance.statOnTrack')}
             value={stats.onTrack}
             containerClass="bg-emerald-50 border-emerald-100"
             valueClass="text-emerald-600"
@@ -298,7 +302,7 @@ export default function FinancePaymentsPage() {
           </svg>
           <input
             type="text"
-            placeholder="Buscar bootcamper..."
+            placeholder={t('payments.finance.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-transparent bg-white"
@@ -308,10 +312,10 @@ export default function FinancePaymentsPage() {
           value={programId}
           onChange={(val) => { setProgramId(val); setCohortId('') }}
           options={[
-            { value: '', label: 'Todos los programas' },
+            { value: '', label: t('payments.finance.allPrograms') },
             ...programs.map((p) => ({ value: p.id, label: p.name })),
           ]}
-          placeholder="Todos los programas"
+          placeholder={t('payments.finance.allPrograms')}
         />
         {/* Sólo con un programa elegido: una cohorte suelta no identifica nada,
             porque el número se repite entre programas. */}
@@ -320,26 +324,26 @@ export default function FinancePaymentsPage() {
             value={cohortId}
             onChange={setCohortId}
             options={[
-              { value: '', label: 'Todas las cohortes' },
+              { value: '', label: t('payments.finance.allCohorts') },
               ...cohorts.map((c) => ({
                 value: c.id,
-                label: `Cohorte ${c.number} · ${c.status_label}`,
+                label: t('payments.finance.cohortOption', { number: c.number, status: c.status_label }),
               })),
             ]}
-            placeholder="Todas las cohortes"
-            ariaLabel="Filtrar por cohorte"
+            placeholder={t('payments.finance.allCohorts')}
+            ariaLabel={t('payments.finance.filterByCohort')}
           />
         )}
         <CustomSelect
           value={statusFilter}
           onChange={setStatusFilter}
           options={[
-            { value: '', label: 'Todos los estados' },
-            { value: 'CRITICAL', label: 'Crítico' },
-            { value: 'AT_RISK', label: 'En riesgo' },
-            { value: 'ON_TRACK', label: 'Al día' },
+            { value: '', label: t('payments.finance.allStatuses') },
+            { value: 'CRITICAL', label: t('payments.monitoringStatus.CRITICAL') },
+            { value: 'AT_RISK', label: t('payments.monitoringStatus.AT_RISK') },
+            { value: 'ON_TRACK', label: t('payments.monitoringStatus.ON_TRACK') },
           ]}
-          placeholder="Todos los estados"
+          placeholder={t('payments.finance.allStatuses')}
         />
         {isFetching && !isLoading && (
           <svg className="w-4 h-4 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -359,10 +363,10 @@ export default function FinancePaymentsPage() {
         <>
           {/* Quien completó el pago no desaparece ni se libera: pasa de pestaña.
               Así se distingue a quién hay que seguir cobrando. */}
-          <div role="tablist" aria-label="Estado de cobro" className="flex gap-1 mb-5 border-b border-gray-200">
+          <div role="tablist" aria-label={t('payments.finance.tablistAria')} className="flex gap-1 mb-5 border-b border-gray-200">
             {[
-              { id: 'cobro', label: `En cobro (${enCobro.length})` },
-              { id: 'finalizados', label: `Pagos finalizados (${finalizados.length})` },
+              { id: 'cobro', label: t('payments.finance.tabInProgress', { count: enCobro.length }) },
+              { id: 'finalizados', label: t('payments.finance.tabFinished', { count: finalizados.length }) },
             ].map(({ id, label }) => (
               <button
                 key={id}
@@ -381,15 +385,15 @@ export default function FinancePaymentsPage() {
           </div>
 
           <Section
-            title={tab === 'finalizados' ? 'Pagos finalizados' : 'Mis bootcampers'}
+            title={tab === 'finalizados' ? t('payments.finance.sectionFinished') : t('payments.finance.sectionMine')}
             count={visibles.length}
             empty={mensajeVacio}
             cards={visibles}
             onCardClick={handleCardClick}
             renderAction={(bc) => (
               <CardAction
-                label="Liberar"
-                pendingLabel="Liberando…"
+                label={t('payments.finance.release')}
+                pendingLabel={t('payments.finance.releasing')}
                 variant="secondary"
                 // Con la auto-asignación apagada el pool lo maneja el Admin: si
                 // liberás no podrías retomarlo, así que tampoco se libera.
@@ -401,20 +405,20 @@ export default function FinancePaymentsPage() {
           />
 
           <Section
-            title="Disponibles"
+            title={t('payments.finance.available')}
             subtitle={
               puedeAutoasignarse
-                ? 'Bootcampers sin responsable de cobro'
-                : 'El Administrador deshabilitó la auto-asignación: él reparte el cobro.'
+                ? t('payments.finance.availableSubtitle')
+                : t('payments.finance.availableSubtitleDisabled')
             }
             count={available.length}
-            empty="No hay bootcampers esperando en el pool."
+            empty={t('payments.finance.poolEmpty')}
             cards={available}
             onCardClick={handleCardClick}
             renderAction={(bc) => (
               <CardAction
-                label="Asignarme"
-                pendingLabel="Asignando…"
+                label={t('payments.finance.assign')}
+                pendingLabel={t('payments.finance.assigning')}
                 disabled={!puedeAutoasignarse}
                 isPending={assignMutation.isPending && assignMutation.variables === bc.bootcamper_id}
                 onClick={() => assignMutation.mutate(bc.bootcamper_id)}

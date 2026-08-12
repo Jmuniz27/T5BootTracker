@@ -11,27 +11,29 @@ export const coordinatorScopeFields = {
  * backend/apps/users/serializers.py: el coordinador debe declarar alcance, y
  * el alcance por programa exige elegir al menos uno.
  */
-export function refineCoordinatorScope(values, ctx) {
-  if (values.role !== 'COORDINATOR') return
+export function makeRefineCoordinatorScope(t) {
+  return function refineCoordinatorScope(values, ctx) {
+    if (values.role !== 'COORDINATOR') return
 
-  if (!values.coordinator_scope) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['coordinator_scope'],
-      message: 'Indica si el coordinador es general o de un programa',
-    })
-    return
-  }
+    if (!values.coordinator_scope) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['coordinator_scope'],
+        message: t('users.validation.scopeRequired'),
+      })
+      return
+    }
 
-  if (
-    values.coordinator_scope === 'PROGRAM' &&
-    (values.coordinator_programs ?? []).length === 0
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['coordinator_programs'],
-      message: 'Selecciona al menos un programa que coordina',
-    })
+    if (
+      values.coordinator_scope === 'PROGRAM' &&
+      (values.coordinator_programs ?? []).length === 0
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['coordinator_programs'],
+        message: t('users.validation.programsRequired'),
+      })
+    }
   }
 }
 

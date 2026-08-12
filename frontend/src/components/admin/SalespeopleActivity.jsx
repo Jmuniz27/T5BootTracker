@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { getSalespeopleActivity } from '../../api/salespeople.api'
 
@@ -34,6 +35,7 @@ function MailIcon() {
 }
 
 function SalespersonCard({ person, onSelect }) {
+  const { t } = useTranslation()
   const assigned    = person.assigned_leads ?? 0
   const converted   = person.converted_leads ?? 0
   const uncontacted = person.uncontacted_leads ?? 0
@@ -59,7 +61,7 @@ function SalespersonCard({ person, onSelect }) {
         </div>
         {uncontacted > 0 && (
           <span className="shrink-0 inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
-            {uncontacted} sin contactar
+            {t('analytics.salespeople.uncontacted', { count: uncontacted })}
           </span>
         )}
       </div>
@@ -67,7 +69,7 @@ function SalespersonCard({ person, onSelect }) {
       <p className="text-2xl font-bold text-gray-900 leading-tight">
         {assigned}
         <span className="text-sm font-medium text-gray-400 ml-1.5">
-          lead{assigned === 1 ? '' : 's'} asignado{assigned === 1 ? '' : 's'}
+          {t('analytics.salespeople.assignedLeads', { count: assigned })}
         </span>
       </p>
 
@@ -77,7 +79,7 @@ function SalespersonCard({ person, onSelect }) {
           culparía al vendedor por no haber recibido nada. */}
       <div className="mt-3">
         <div className="flex justify-between mb-1">
-          <span className="text-xs text-gray-400">Convertidos</span>
+          <span className="text-xs text-gray-400">{t('analytics.salespeople.converted')}</span>
           <span className="text-xs font-semibold text-gray-700">
             {assigned > 0 ? `${rate}%` : '—'}
           </span>
@@ -89,7 +91,7 @@ function SalespersonCard({ person, onSelect }) {
           />
         </div>
         <p className="text-xs text-gray-400 mt-2">
-          {assigned > 0 ? `${converted} de ${assigned}` : 'Sin leads asignados'}
+          {assigned > 0 ? t('analytics.salespeople.ofAssigned', { converted, assigned }) : t('analytics.salespeople.noLeads')}
         </p>
       </div>
     </button>
@@ -108,6 +110,7 @@ function SkeletonCard() {
 }
 
 export default function SalespeopleActivity() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { data: salespeople = [], isLoading, isError } = useQuery({
     queryKey: ['salespeople-activity'],
@@ -118,7 +121,7 @@ export default function SalespeopleActivity() {
     <>
       {isError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-          No pudimos cargar los vendedores. Intenta de nuevo.
+          {t('analytics.salespeople.loadError')}
         </div>
       )}
 
@@ -132,7 +135,7 @@ export default function SalespeopleActivity() {
 
       {!isLoading && !isError && salespeople.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
-          <p className="text-sm text-gray-500">No hay vendedores activos.</p>
+          <p className="text-sm text-gray-500">{t('analytics.salespeople.empty')}</p>
         </div>
       )}
 

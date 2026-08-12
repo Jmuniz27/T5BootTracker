@@ -12,6 +12,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts'
+import { useTranslation } from 'react-i18next'
 import { useAnalyticsKpis } from '../../hooks/use-analytics-kpis'
 import {
   toConversionBySegment,
@@ -43,6 +44,7 @@ const shortDate = (iso) => {
 }
 
 function ChartCard({ title, subtitle, isEmpty, children }) {
+  const { t } = useTranslation()
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="mb-3">
@@ -51,7 +53,7 @@ function ChartCard({ title, subtitle, isEmpty, children }) {
       </div>
       {isEmpty ? (
         <div className="flex h-[260px] items-center justify-center text-sm text-gray-500">
-          Sin datos para este período
+          {t('analytics.charts.noData')}
         </div>
       ) : (
         <div className="h-[260px]">{children}</div>
@@ -76,12 +78,13 @@ const tooltipStyle = {
 }
 
 export default function AnalyticsCharts({ filters = {} }) {
+  const { t } = useTranslation()
   const { data, isLoading, isError, error } = useAnalyticsKpis(filters)
 
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center text-sm text-gray-500">
-        Cargando analíticas…
+        {t('analytics.charts.loading')}
       </div>
     )
   }
@@ -89,10 +92,10 @@ export default function AnalyticsCharts({ filters = {} }) {
   if (isError) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        No pudimos cargar las analíticas
+        {t('analytics.charts.loadError')}
         {error?.response?.status === 403
-          ? ' (requiere permisos de administrador).'
-          : '. Intenta de nuevo.'}
+          ? t('analytics.charts.loadError403')
+          : t('analytics.charts.loadErrorRetry')}
       </div>
     )
   }
@@ -106,8 +109,8 @@ export default function AnalyticsCharts({ filters = {} }) {
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {/* Conversión por fuente */}
       <ChartCard
-        title="Tasa de conversión por fuente"
-        subtitle="% de leads convertidos según su origen"
+        title={t('analytics.charts.conversionTitle')}
+        subtitle={t('analytics.charts.conversionSubtitle')}
         isEmpty={conversion.length === 0}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -117,17 +120,17 @@ export default function AnalyticsCharts({ filters = {} }) {
             <YAxis unit="%" {...axisProps} />
             <Tooltip
               {...tooltipStyle}
-              formatter={(value) => [`${value}%`, 'Conversión']}
+              formatter={(value) => [`${value}%`, t('analytics.charts.conversionSeries')]}
             />
-            <Bar dataKey="rate" name="Conversión" fill={COLORS.conversion} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="rate" name={t('analytics.charts.conversionSeries')} fill={COLORS.conversion} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
 
       {/* Tiempo de respuesta */}
       <ChartCard
-        title="Tiempo de respuesta promedio"
-        subtitle="Horas hasta la primera interacción (por semana)"
+        title={t('analytics.charts.responseTitle')}
+        subtitle={t('analytics.charts.responseSubtitle')}
         isEmpty={responseTime.length === 0}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -138,12 +141,12 @@ export default function AnalyticsCharts({ filters = {} }) {
             <Tooltip
               {...tooltipStyle}
               labelFormatter={shortDate}
-              formatter={(value) => [`${value} h`, 'Promedio']}
+              formatter={(value) => [`${value} h`, t('analytics.charts.responseTooltip')]}
             />
             <Line
               type="monotone"
               dataKey="avgHours"
-              name="Horas promedio"
+              name={t('analytics.charts.responseSeries')}
               stroke={COLORS.response}
               strokeWidth={2}
               dot={{ r: 3 }}
@@ -155,8 +158,8 @@ export default function AnalyticsCharts({ filters = {} }) {
 
       {/* Leads nuevos por período (alimenta la tarjeta "Crecimiento de leads") */}
       <ChartCard
-        title="Leads nuevos"
-        subtitle="Ingresos por período"
+        title={t('analytics.charts.newLeadsTitle')}
+        subtitle={t('analytics.charts.newLeadsSubtitle')}
         isEmpty={velocity.length === 0}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -173,12 +176,12 @@ export default function AnalyticsCharts({ filters = {} }) {
             <Tooltip
               {...tooltipStyle}
               labelFormatter={shortDate}
-              formatter={(value) => [value, 'Leads']}
+              formatter={(value) => [value, t('analytics.charts.leadsTooltip')]}
             />
             <Area
               type="monotone"
               dataKey="count"
-              name="Leads nuevos"
+              name={t('analytics.charts.newLeadsSeries')}
               stroke={COLORS.velocity}
               strokeWidth={2}
               fill="url(#velocityFill)"
@@ -189,8 +192,8 @@ export default function AnalyticsCharts({ filters = {} }) {
 
       {/* Cobro por programa */}
       <ChartCard
-        title="Cobro por programa"
-        subtitle="Esperado vs. cobrado"
+        title={t('analytics.charts.paymentsTitle')}
+        subtitle={t('analytics.charts.paymentsSubtitle')}
         isEmpty={payments.length === 0}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -200,8 +203,8 @@ export default function AnalyticsCharts({ filters = {} }) {
             <YAxis tickFormatter={(v) => currency.format(v)} width={72} {...axisProps} />
             <Tooltip {...tooltipStyle} formatter={(value) => currency.format(value)} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="expected" name="Esperado" fill={COLORS.expected} radius={[4, 4, 0, 0]} />
-            <Bar dataKey="collected" name="Cobrado" fill={COLORS.collected} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="expected" name={t('analytics.charts.expected')} fill={COLORS.expected} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="collected" name={t('analytics.charts.collected')} fill={COLORS.collected} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
