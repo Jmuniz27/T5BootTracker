@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getCohorts } from '../../api/programs.api'
 import { updateEnrollmentCohort } from '../../api/users.api'
@@ -32,6 +33,7 @@ function formatMonth(value) {
  * backend va a rechazar.
  */
 export default function ChangeCohortModal({ bootcamper, enrollment, onClose, onSuccess, onError }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [cohortId, setCohortId] = useState(enrollment.cohort_id ?? NO_COHORT)
 
@@ -56,11 +58,11 @@ export default function ChangeCohortModal({ bootcamper, enrollment, onClose, onS
       updateEnrollmentCohort(bootcamper.id, enrollment.enrollment_id, cohortId || null),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      onSuccess(`Cohorte de ${bootcamper.full_name} actualizada.`)
+      onSuccess(t('users.modals.cohortUpdated', { name: bootcamper.full_name }))
       onClose()
     },
     onError: (error) => {
-      onError(errorMessage(error, 'No se pudo cambiar la cohorte. Intenta de nuevo.'))
+      onError(errorMessage(error, t('users.modals.cohortError')))
     },
   })
 
@@ -68,39 +70,39 @@ export default function ChangeCohortModal({ bootcamper, enrollment, onClose, onS
 
   return (
     <ModalShell
-      title="Cambiar cohorte"
-      subtitle={`${bootcamper.full_name} — ${enrollment.program_name}`}
+      title={t('users.modals.changeCohortTitle')}
+      subtitle={t('users.modals.changeCohortSubtitle', { name: bootcamper.full_name, program: enrollment.program_name })}
       onClose={onClose}
     >
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Cohorte</label>
-          {loadingCohorts && <p className="text-sm text-gray-400">Cargando cohortes…</p>}
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.modals.cohortLabel')}</label>
+          {loadingCohorts && <p className="text-sm text-gray-400">{t('users.modals.loadingCohorts')}</p>}
           {!loadingCohorts && (
             <CustomSelect
               testId="change-cohort-select"
               value={cohortId}
               onChange={setCohortId}
-              placeholder="Sin cohorte"
+              placeholder={t('users.modals.noCohort')}
               options={[
-                { value: NO_COHORT, label: 'Sin cohorte' },
+                { value: NO_COHORT, label: t('users.modals.noCohort') },
                 ...assignableCohorts.map((c) => ({
                   value: c.id,
-                  label: `Cohorte ${c.number} — ${c.status_label} · inicia ${formatMonth(c.start_month)}`,
+                  label: t('users.modals.cohortOption', { number: c.number, status: c.status_label, month: formatMonth(c.start_month) }),
                 })),
               ]}
             />
           )}
           {!loadingCohorts && assignableCohorts.length === 0 && (
             <p className="text-xs text-gray-400 mt-1">
-              Este programa no tiene cohortes próximas ni en curso.
+              {t('users.modals.noCohorts')}
             </p>
           )}
         </div>
 
         {mutation.isError && (
           <p className="text-sm text-red-500">
-            {errorMessage(mutation.error, 'No se pudo cambiar la cohorte. Intenta de nuevo.')}
+            {errorMessage(mutation.error, t('users.modals.cohortError'))}
           </p>
         )}
 
@@ -110,7 +112,7 @@ export default function ChangeCohortModal({ bootcamper, enrollment, onClose, onS
             onClick={onClose}
             className="px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
           >
-            Cancelar
+            {t('users.modals.cancel')}
           </button>
           <button
             type="button"
@@ -118,7 +120,7 @@ export default function ChangeCohortModal({ bootcamper, enrollment, onClose, onS
             disabled={mutation.isPending || !hasChanged}
             className="px-4 py-2.5 bg-[#213A8E] text-white text-sm font-semibold rounded-xl hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
           >
-            {mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+            {mutation.isPending ? t('users.modals.saving') : t('users.modals.saveChanges')}
           </button>
         </div>
       </div>

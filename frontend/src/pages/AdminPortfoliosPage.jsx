@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import FinancePortfolios from '../components/admin/FinancePortfolios'
 
 /**
@@ -10,12 +11,13 @@ import FinancePortfolios from '../components/admin/FinancePortfolios'
  * El administrador no tiene cartera propia: mira las ajenas, y sólo mira.
  */
 export default function AdminPortfoliosPage() {
+  const { t } = useTranslation()
   return (
     <div className="p-6 sm:p-8">
       <header className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Cobro</h1>
+        <h1 className="text-xl font-semibold text-gray-900">{t('portfolios.title')}</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Cartera de bootcampers por responsable de Finanzas. Sólo consulta.
+          {t('portfolios.subtitle')}
         </p>
       </header>
 

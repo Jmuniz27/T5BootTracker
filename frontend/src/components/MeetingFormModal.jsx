@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useModalA11y } from '../hooks/use-modal-a11y'
 
 const EMPTY = { title: '', description: '', start: '', end: '', lead: '', notify_lead: true }
@@ -27,6 +28,7 @@ function MeetingFormDialog({
   onDelete,
   onClose,
 }) {
+  const { t } = useTranslation()
   const dialogRef = useModalA11y(onClose)
   const [form, setForm] = useState(initial ?? EMPTY)
   const [errors, setErrors] = useState({})
@@ -45,13 +47,13 @@ function MeetingFormDialog({
 
   function validate() {
     const errs = {}
-    if (!form.title.trim()) errs.title = 'El título es obligatorio.'
-    if (!form.start) errs.start = 'La fecha de inicio es obligatoria.'
-    if (!form.end) errs.end = 'La fecha de fin es obligatoria.'
-    if (!form.lead) errs.lead = 'Selecciona un lead.'
+    if (!form.title.trim()) errs.title = t('agenda.form.titleRequired')
+    if (!form.start) errs.start = t('agenda.form.startRequired')
+    if (!form.end) errs.end = t('agenda.form.endRequired')
+    if (!form.lead) errs.lead = t('agenda.form.selectLead')
     // La fecha de fin no puede ser anterior (ni igual) a la de inicio.
     if (form.start && form.end && new Date(form.end) <= new Date(form.start)) {
-      errs.end = 'La fecha de fin debe ser posterior a la de inicio.'
+      errs.end = t('agenda.form.endAfterStart')
     }
     return errs
   }
@@ -74,7 +76,7 @@ function MeetingFormDialog({
     })
   }
 
-  const title = editingId ? 'Editar reunión' : 'Nueva reunión'
+  const title = editingId ? t('agenda.form.editTitle') : t('agenda.form.newTitle')
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -92,30 +94,30 @@ function MeetingFormDialog({
         <h2 className="mb-4 text-lg font-bold text-gray-900">{title}</h2>
 
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Título <span className="text-red-500">*</span></span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">{t('agenda.form.titleLabel')} <span className="text-red-500">*</span></span>
           <input
             value={form.title}
             onChange={set('title')}
-            placeholder="Reunión con Ana Torres"
+            placeholder={t('agenda.form.titlePlaceholder')}
             className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.title ? 'border-red-400' : 'border-gray-300'}`}
           />
           {errors.title && <span className="mt-1 block text-xs text-red-500">{errors.title}</span>}
         </label>
 
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Descripción</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">{t('agenda.form.descriptionLabel')}</span>
           <textarea
             value={form.description}
             onChange={set('description')}
             rows={3}
-            placeholder="Detalles, notas, próxima acción…"
+            placeholder={t('agenda.form.descriptionPlaceholder')}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
           />
         </label>
 
         <div className="mb-3 grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">Inicio <span className="text-red-500">*</span></span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">{t('agenda.form.startLabel')} <span className="text-red-500">*</span></span>
             <input
               type="datetime-local"
               value={form.start}
@@ -125,7 +127,7 @@ function MeetingFormDialog({
             {errors.start && <span className="mt-1 block text-xs text-red-500">{errors.start}</span>}
           </label>
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">Fin <span className="text-red-500">*</span></span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">{t('agenda.form.endLabel')} <span className="text-red-500">*</span></span>
             <input
               type="datetime-local"
               value={form.end}
@@ -137,13 +139,13 @@ function MeetingFormDialog({
         </div>
 
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Lead <span className="text-red-500">*</span></span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">{t('agenda.form.leadLabel')} <span className="text-red-500">*</span></span>
           <select
             value={form.lead}
             onChange={set('lead')}
             className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.lead ? 'border-red-400' : 'border-gray-300'}`}
           >
-            <option value="">Selecciona un lead…</option>
+            <option value="">{t('agenda.form.leadPlaceholder')}</option>
             {leads.map((l) => (
               <option key={l.id} value={l.id}>{l.name}</option>
             ))}
@@ -153,7 +155,7 @@ function MeetingFormDialog({
 
         <label className="mb-5 flex items-center gap-2">
           <input type="checkbox" checked={form.notify_lead} onChange={set('notify_lead')} />
-          <span className="text-sm text-gray-700">Invitar al lead por correo</span>
+          <span className="text-sm text-gray-700">{t('agenda.form.invite')}</span>
         </label>
 
         <div className="flex items-center justify-between">
@@ -164,7 +166,7 @@ function MeetingFormDialog({
               disabled={deleting}
               className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
             >
-              Eliminar
+              {t('agenda.form.delete')}
             </button>
           ) : (
             <span />
@@ -175,14 +177,14 @@ function MeetingFormDialog({
               onClick={onClose}
               className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
             >
-              Cancelar
+              {t('agenda.form.cancel')}
             </button>
             <button
               type="submit"
               disabled={saving}
               className="rounded-lg bg-[#213A8E] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
-              {saving ? 'Guardando…' : 'Guardar'}
+              {saving ? t('agenda.form.saving') : t('agenda.form.save')}
             </button>
           </div>
         </div>
