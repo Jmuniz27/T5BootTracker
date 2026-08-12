@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { updateBootcamperAssignmentSetting } from '../../api/payments.api'
 
 function formatUpdatedAt(value) {
@@ -18,6 +19,7 @@ function formatUpdatedAt(value) {
  * cualquier otro rol, así que esconderlo es comodidad y no el control real.
  */
 export default function BootcamperAssignmentToggle({ setting, isLoading, onResult }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const enabled = setting?.self_assign_enabled ?? false
 
@@ -29,13 +31,13 @@ export default function BootcamperAssignmentToggle({ setting, isLoading, onResul
       queryClient.invalidateQueries({ queryKey: ['bootcamper-pool'] })
       onResult(
         updated.self_assign_enabled
-          ? 'Auto-asignación habilitada. Finanzas ya puede tomar bootcampers del pool.'
-          : 'Auto-asignación deshabilitada. Solo el Administrador reparte el cobro.',
+          ? t('portfolios.toggle.enabled')
+          : t('portfolios.toggle.disabled'),
       )
     },
     onError: (error) => {
       onResult(
-        error.response?.data?.error ?? 'No se pudo cambiar el control de auto-asignación.',
+        error.response?.data?.error ?? t('portfolios.toggle.error'),
         'error',
       )
     },
@@ -47,15 +49,15 @@ export default function BootcamperAssignmentToggle({ setting, isLoading, onResul
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 mb-6 flex flex-wrap items-center justify-between gap-4">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-gray-900">Auto-asignación de cobro</p>
+        <p className="text-sm font-semibold text-gray-900">{t('portfolios.toggle.title')}</p>
         <p className="text-xs text-gray-500 mt-0.5">
           {enabled
-            ? 'Finanzas puede tomar bootcampers del pool por su cuenta.'
-            : 'Solo el Administrador reparte el cobro. Finanzas no puede tomar del pool.'}
+            ? t('portfolios.toggle.onHint')
+            : t('portfolios.toggle.offHint')}
         </p>
         {setting?.updated_by_name && updatedAt && (
           <p className="text-xs text-gray-500 mt-1">
-            Último cambio: {setting.updated_by_name} · {updatedAt}
+            {t('portfolios.toggle.lastChange', { name: setting.updated_by_name, date: updatedAt })}
           </p>
         )}
       </div>
@@ -64,7 +66,7 @@ export default function BootcamperAssignmentToggle({ setting, isLoading, onResul
         type="button"
         role="switch"
         aria-checked={enabled}
-        aria-label="Auto-asignación de cobro"
+        aria-label={t('portfolios.toggle.title')}
         disabled={busy}
         onClick={() => mutation.mutate(!enabled)}
         className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${

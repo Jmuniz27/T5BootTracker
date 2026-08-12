@@ -2,15 +2,17 @@ import { emptyMeetingForm, meetingToForm, formToPayload, validateMeetingForm } f
 import type { Meeting } from '../../api/meetings.api';
 
 describe('validateMeetingForm', () => {
+  const t = (key: string) => key;
+
   it('sin errores cuando el form está completo y las fechas son válidas', () => {
     const f = emptyMeetingForm();
     f.title = 'Reunión';
     f.lead = 'lead-1';
-    expect(validateMeetingForm(f)).toEqual({});
+    expect(validateMeetingForm(f, t)).toEqual({});
   });
 
   it('marca título y lead cuando faltan', () => {
-    const errs = validateMeetingForm(emptyMeetingForm());
+    const errs = validateMeetingForm(emptyMeetingForm(), t);
     expect(errs.title).toBeTruthy();
     expect(errs.lead).toBeTruthy();
   });
@@ -20,7 +22,7 @@ describe('validateMeetingForm', () => {
     f.title = 'Reunión';
     f.lead = 'lead-1';
     f.end = new Date(f.start.getTime() - 60 * 1000);
-    expect(validateMeetingForm(f).end).toBeTruthy();
+    expect(validateMeetingForm(f, t).end).toBeTruthy();
   });
 });
 

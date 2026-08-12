@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import {
   ResponsiveContainer,
@@ -44,10 +45,10 @@ const BAR_COLORS = {
  * ejemplo que dio la clienta, así que va primero entre los acotados.
  */
 const RANGE_OPTIONS = [
-  { value: '',    label: 'Todo el histórico' },
-  { value: '365', label: 'Último año' },
-  { value: '180', label: 'Últimos 6 meses' },
-  { value: '90',  label: 'Últimos 3 meses' },
+  { value: '',    labelKey: 'analytics.comparison.allHistory' },
+  { value: '365', labelKey: 'analytics.comparison.rangeYear' },
+  { value: '180', labelKey: 'analytics.comparison.range6m' },
+  { value: '90',  labelKey: 'analytics.comparison.range3m' },
 ]
 
 /** Nombre corto para el eje: los completos se pisan entre sí. */
@@ -66,6 +67,8 @@ function EmptyState({ children }) {
 }
 
 export default function SalespeopleComparison() {
+  const { t } = useTranslation()
+  const rangeOptions = RANGE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const [selected, setSelected] = useState(() => new Set())
   const [rangeDays, setRangeDays] = useState('')
 
@@ -118,7 +121,7 @@ export default function SalespeopleComparison() {
   if (isError) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        No pudimos cargar a los vendedores. Intenta de nuevo.
+        {t('analytics.comparison.loadError')}
       </div>
     )
   }
@@ -128,7 +131,7 @@ export default function SalespeopleComparison() {
   }
 
   if (salespeople.length === 0) {
-    return <EmptyState>Todavía no hay vendedores con leads asignados.</EmptyState>
+    return <EmptyState>{t('analytics.comparison.emptyNoSalespeople')}</EmptyState>
   }
 
   return (
@@ -137,7 +140,7 @@ export default function SalespeopleComparison() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-3 flex-wrap">
             <p className="text-sm font-medium text-gray-700">
-              Elige a quiénes comparar
+              {t('analytics.comparison.choose')}
             </p>
             <label className="inline-flex items-center gap-2 text-sm text-gray-500 cursor-pointer hover:text-gray-700 transition-colors">
               <input
@@ -147,16 +150,16 @@ export default function SalespeopleComparison() {
                 onChange={alternarTodos}
                 className="rounded border-gray-300 text-[#213A8E] focus:ring-[#213A8E]"
               />
-              {todosMarcados ? 'Quitar todos' : 'Seleccionar todos'}
+              {todosMarcados ? t('analytics.comparison.removeAll') : t('analytics.comparison.selectAll')}
             </label>
           </div>
           <div className="min-w-[200px]">
             <CustomSelect
               value={rangeDays}
               onChange={setRangeDays}
-              options={RANGE_OPTIONS}
-              placeholder="Todo el histórico"
-              ariaLabel="Período a comparar"
+              options={rangeOptions}
+              placeholder={t('analytics.comparison.allHistory')}
+              ariaLabel={t('analytics.comparison.period')}
             />
           </div>
         </div>
@@ -187,19 +190,19 @@ export default function SalespeopleComparison() {
       </div>
 
       {comparados.length === 0 && (
-        <EmptyState>Marca dos o más vendedores para verlos lado a lado.</EmptyState>
+        <EmptyState>{t('analytics.comparison.emptyPickTwo')}</EmptyState>
       )}
 
       {comparados.length > 0 && (
         <>
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-gray-900">
-              Leads manejados y convertidos
+              {t('analytics.comparison.chartTitle')}
             </h3>
             <p data-testid="comparison-period" className="text-xs text-gray-400 mb-4">
               {rangeDays
-                ? `${RANGE_OPTIONS.find((o) => o.value === rangeDays)?.label} · por fecha de asignación`
-                : 'Todo el histórico'}
+                ? t('analytics.comparison.periodSuffix', { label: rangeOptions.find((o) => o.value === rangeDays)?.label })
+                : t('analytics.comparison.allHistory')}
             </p>
             {/* Alto fijo y ancho responsivo: recharts necesita un alto concreto
                 para dibujar, pero el ancho sí se adapta al contenedor. */}
@@ -211,8 +214,8 @@ export default function SalespeopleComparison() {
                   <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="Leads" fill={BAR_COLORS.assigned} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Convertidos" fill={BAR_COLORS.converted} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Leads" name={t('analytics.comparison.leadsSeries')} fill={BAR_COLORS.assigned} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Convertidos" name={t('analytics.comparison.convertedSeries')} fill={BAR_COLORS.converted} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -222,9 +225,14 @@ export default function SalespeopleComparison() {
             <table className="w-full text-sm min-w-[420px]">
               <thead>
                 <tr className="border-b border-gray-100 text-left">
-                  {['Vendedor', 'Leads', 'Convertidos', 'Tasa'].map((h) => (
-                    <th key={h} className="py-2 px-2 text-xs uppercase tracking-wide text-gray-500 font-medium">
-                      {h}
+                  {[
+                    ['salesperson', t('analytics.comparison.colSalesperson')],
+                    ['leads', t('analytics.comparison.colLeads')],
+                    ['converted', t('analytics.comparison.colConverted')],
+                    ['rate', t('analytics.comparison.colRate')],
+                  ].map(([key, label]) => (
+                    <th key={key} className="py-2 px-2 text-xs uppercase tracking-wide text-gray-500 font-medium">
+                      {label}
                     </th>
                   ))}
                 </tr>

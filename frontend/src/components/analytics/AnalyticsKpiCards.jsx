@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useAnalyticsKpis } from '../../hooks/use-analytics-kpis'
 import {
   toConversionCard,
@@ -42,12 +43,13 @@ function KpiCard({ label, value, footer, isLoading }) {
  * → misma queryKey → una sola petición para toda la pantalla.
  */
 export default function AnalyticsKpiCards({ filters = {} }) {
+  const { t } = useTranslation()
   const { data, isLoading, isError } = useAnalyticsKpis(filters)
 
   if (isError) {
     return (
       <p className="text-center text-red-500 py-8 text-sm">
-        No se pudieron cargar los indicadores. Intenta de nuevo.
+        {t('analytics.kpi.loadError')}
       </p>
     )
   }
@@ -62,28 +64,28 @@ export default function AnalyticsKpiCards({ filters = {} }) {
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6">
       <KpiCard
         isLoading={isLoading}
-        label="Tasa de conversión"
+        label={t('analytics.kpi.conversionRate')}
         value={fmt(conversion.value, '%')}
-        footer={`${conversion.converted} de ${conversion.total} leads`}
+        footer={t('analytics.kpi.conversionFooter', { converted: conversion.converted, total: conversion.total })}
       />
       <KpiCard
         isLoading={isLoading}
-        label="Promedio de tiempo de respuesta"
+        label={t('analytics.kpi.responseTime')}
         value={fmt(response.value, ' h')}
         footer={
           response.value === null
-            ? 'Sin interacciones registradas'
-            : `${response.withoutResponse} leads sin respuesta`
+            ? t('analytics.kpi.noInteractions')
+            : t('analytics.kpi.withoutResponse', { count: response.withoutResponse })
         }
       />
       <KpiCard
         isLoading={isLoading}
-        label="Cobro de pagos"
+        label={t('analytics.kpi.payments')}
         value={fmt(payment.value, '%')}
         footer={
           segmentFilterActive
-            ? 'No responde a fuente'
-            : `${currency.format(payment.collected)} de ${currency.format(payment.expected)}`
+            ? t('analytics.kpi.noSourceResponse')
+            : t('analytics.kpi.paymentFooter', { collected: currency.format(payment.collected), expected: currency.format(payment.expected) })
         }
       />
     </div>

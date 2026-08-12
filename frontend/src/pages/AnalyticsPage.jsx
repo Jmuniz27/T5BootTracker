@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import AnalyticsFilters, { EMPTY_ANALYTICS_FILTERS } from '../components/analytics/AnalyticsFilters'
 import AnalyticsKpiCards from '../components/analytics/AnalyticsKpiCards'
@@ -28,16 +29,17 @@ import SalespeopleComparison from '../components/analytics/SalespeopleComparison
  */
 
 const TABS = [
-  { id: 'general', label: 'Vista General' },
-  { id: 'vendedor', label: 'Vendedor' },
+  { id: 'general', labelKey: 'analytics.tabGeneral' },
+  { id: 'vendedor', labelKey: 'analytics.tabSalesperson' },
   // #327: la de vendedor muestra a uno a la vez, así que comparar obligaba a
   // cambiar de selección y acordarse de los números anteriores.
-  { id: 'comparativa', label: 'Comparativa' },
+  { id: 'comparativa', labelKey: 'analytics.tabComparison' },
 ]
 
 const DEFAULT_TAB = 'general'
 
 export default function AnalyticsPage() {
+  const { t } = useTranslation()
   const [filters, setFilters] = useState(EMPTY_ANALYTICS_FILTERS)
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -52,14 +54,14 @@ export default function AnalyticsPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <header className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Analítica</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('analytics.title')}</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Indicadores de conversión, tiempo de respuesta y cobro de pagos.
+          {t('analytics.subtitle')}
         </p>
       </header>
 
-      <div role="tablist" aria-label="Vistas de analítica" className="flex gap-1 mb-6 border-b border-gray-200">
-        {TABS.map(({ id, label }) => (
+      <div role="tablist" aria-label={t('analytics.tabsAria')} className="flex gap-1 mb-6 border-b border-gray-200">
+        {TABS.map(({ id, labelKey }) => (
           <button
             key={id}
             role="tab"
@@ -73,7 +75,7 @@ export default function AnalyticsPage() {
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>

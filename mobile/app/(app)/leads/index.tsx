@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../../src/theme/colors';
 import { fetchLeads } from '../../../src/api/leads.api';
 import { api } from '../../../src/lib/api';
@@ -31,31 +32,17 @@ interface MeData {
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-const ROLE_LABEL: Record<string, string> = {
-  SALESPERSON:   'Vendedor',
-  ADMINISTRATOR: 'Administrador',
-  COORDINATOR:   'Coordinador',
-  BOOTCAMPER:    'Bootcamper',
-  FINANCE:       'Finanzas',
+const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string }> = {
+  NEW:            { bg: '#fefce8', color: '#a16207' },
+  QUALIFIED:      { bg: '#dbeafe', color: '#1d4ed8' },
+  INTERESTED:     { bg: '#dcfce7', color: '#15803d' },
+  NOT_INTERESTED: { bg: '#fee2e2', color: '#dc2626' },
+  CONVERTED:      { bg: '#f3e8ff', color: '#7e22ce' },
+  DISCARDED:      { bg: '#f1f5f9', color: '#64748b' },
 };
 
-const STATUS_CONFIG: Record<LeadStatus, { bg: string; color: string; label: string }> = {
-  NEW:            { bg: '#fefce8', color: '#a16207', label: 'Nuevo' },
-  QUALIFIED:      { bg: '#dbeafe', color: '#1d4ed8', label: 'Calificado' },
-  INTERESTED:     { bg: '#dcfce7', color: '#15803d', label: 'Interesado' },
-  NOT_INTERESTED: { bg: '#fee2e2', color: '#dc2626', label: 'No interesado' },
-  CONVERTED:      { bg: '#f3e8ff', color: '#7e22ce', label: 'Convertido' },
-  DISCARDED:      { bg: '#f1f5f9', color: '#64748b', label: 'Descartado' },
-};
-
-const STATUS_FILTERS: { value: LeadStatus | null; label: string }[] = [
-  { value: null,             label: 'Todos' },
-  { value: 'NEW',            label: 'Nuevo' },
-  { value: 'QUALIFIED',      label: 'Calificado' },
-  { value: 'INTERESTED',     label: 'Interesado' },
-  { value: 'NOT_INTERESTED', label: 'No interesado' },
-  { value: 'CONVERTED',      label: 'Convertido' },
-  { value: 'DISCARDED',      label: 'Descartado' },
+const STATUS_FILTER_VALUES: (LeadStatus | null)[] = [
+  null, 'NEW', 'QUALIFIED', 'INTERESTED', 'NOT_INTERESTED', 'CONVERTED', 'DISCARDED',
 ];
 
 const AVATAR_PALETTE = ['#213A8E', '#8b5cf6', '#14b8a6', '#f43f5e', '#f59e0b', '#0891b2', '#ec4899', '#6366f1'];
@@ -85,10 +72,11 @@ function Avatar({ name, isCompany }: { name: string; isCompany?: boolean }) {
 
 // El badge usa `status` como fuente de verdad (igual que el web) — last_outcome ya no decide el color.
 function StatusBadge({ status }: { status: LeadStatus }) {
+  const { t } = useTranslation();
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.NEW;
   return (
     <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
-      <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
+      <Text style={[styles.badgeText, { color: cfg.color }]}>{t(`leads.status.${status}`)}</Text>
     </View>
   );
 }
@@ -100,22 +88,25 @@ function StatusChips({
   value: LeadStatus | null;
   onChange: (key: LeadStatus | null) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.chipsRow}
     >
-      {STATUS_FILTERS.map((f) => {
-        const active = value === f.value;
+      {STATUS_FILTER_VALUES.map((value2) => {
+        const active = value === value2;
         return (
           <TouchableOpacity
-            key={String(f.value)}
+            key={String(value2)}
             style={[styles.chip, active && styles.chipActive]}
-            onPress={() => onChange(f.value)}
+            onPress={() => onChange(value2)}
             activeOpacity={0.7}
           >
-            <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>
+              {value2 === null ? t('leads.filterAll') : t(`leads.status.${value2}`)}
+            </Text>
           </TouchableOpacity>
         );
       })}
@@ -146,6 +137,7 @@ function LeadCard({ lead, onOpenDetail }: CardProps) {
 type Tab = 'my' | 'available' | 'converted';
 
 export default function LeadsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { logout, user } = useAuth();
   const isSalesperson = user?.role === 'SALESPERSON';
@@ -190,7 +182,7 @@ export default function LeadsScreen() {
       setConvertedLeads(data.converted_leads ?? data.my_leads.filter((l) => l.status === 'CONVERTED'));
       setError(null);
     } catch {
-      setError('No pudimos cargar los leads. Intenta de nuevo.');
+      setError(t('leads.list.loadError'));
     }
   }
 
@@ -252,8 +244,8 @@ export default function LeadsScreen() {
             {/* Header */}
             <View style={styles.header}>
               <View>
-                <Text style={styles.headerTitle}>Leads</Text>
-                <Text style={styles.headerSub}>Dashboard</Text>
+                <Text style={styles.headerTitle}>{t('leads.list.title')}</Text>
+                <Text style={styles.headerSub}>{t('leads.list.subtitle')}</Text>
               </View>
               <View style={styles.headerRight}>
                 {isSalesperson && (
@@ -262,7 +254,7 @@ export default function LeadsScreen() {
                     onPress={() => router.push('/(app)/agenda')}
                     activeOpacity={0.8}
                     accessibilityRole="button"
-                    accessibilityLabel="Abrir agenda de seguimientos"
+                    accessibilityLabel={t('leads.list.agendaAria')}
                   >
                     <Ionicons name="calendar-outline" size={20} color={colors.navy} />
                   </TouchableOpacity>
@@ -271,7 +263,7 @@ export default function LeadsScreen() {
                   <Text style={styles.headerName}>{me?.full_name ?? '—'}</Text>
                   <View style={styles.rolePill}>
                     <Text style={styles.roleText}>
-                      {ROLE_LABEL[me?.role ?? ''] ?? me?.role}
+                      {me?.role ? t(`leads.roles.${me.role}`, me.role) : me?.role}
                     </Text>
                   </View>
                 </View>
@@ -284,21 +276,21 @@ export default function LeadsScreen() {
             </View>
 
             {/* Indicadores (solo lectura, no son botones) */}
-            <Text style={styles.sectionLabel}>Indicadores</Text>
+            <Text style={styles.sectionLabel}>{t('leads.list.indicators')}</Text>
             <View style={styles.statRow}>
               <View style={styles.statTile}>
                 <Text style={styles.statValue}>{activeMy.length}</Text>
-                <Text style={styles.statLabel}>Mis leads</Text>
+                <Text style={styles.statLabel}>{t('leads.list.myLeads')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statTile}>
                 <Text style={styles.statValue}>{available.length}</Text>
-                <Text style={styles.statLabel}>Disponibles</Text>
+                <Text style={styles.statLabel}>{t('leads.list.available')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statTile}>
                 <Text style={styles.statValue}>{convertedLeads.length}</Text>
-                <Text style={styles.statLabel}>Convertidos</Text>
+                <Text style={styles.statLabel}>{t('leads.list.converted')}</Text>
               </View>
             </View>
 
@@ -310,7 +302,7 @@ export default function LeadsScreen() {
                   style={styles.searchInput}
                   value={search}
                   onChangeText={handleSearchChange}
-                  placeholder="Buscar por nombre, email o teléfono"
+                  placeholder={t('leads.list.searchPlaceholder')}
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   returnKeyType="search"
@@ -340,7 +332,7 @@ export default function LeadsScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.tabText, tab === 'my' && styles.tabTextActive]} numberOfLines={1}>
-                  Mis leads ({activeMy.length})
+                  {t('leads.list.tabMy', { count: activeMy.length })}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -349,7 +341,7 @@ export default function LeadsScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.tabText, tab === 'available' && styles.tabTextActive]} numberOfLines={1}>
-                  Disponibles ({available.length})
+                  {t('leads.list.tabAvailable', { count: available.length })}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -358,7 +350,7 @@ export default function LeadsScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.tabText, tab === 'converted' && styles.tabTextActive]} numberOfLines={1}>
-                  Convertidos ({convertedLeads.length})
+                  {t('leads.list.tabConverted', { count: convertedLeads.length })}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -372,13 +364,13 @@ export default function LeadsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="people-outline" size={40} color={colors.border} />
-            <Text style={styles.emptyTitle}>Sin resultados</Text>
+            <Text style={styles.emptyTitle}>{t('leads.list.emptyTitle')}</Text>
             <Text style={styles.emptyText}>
               {tab === 'my'
-                ? 'No tienes leads asignados.'
+                ? t('leads.list.emptyMy')
                 : tab === 'converted'
-                ? 'Aún no has convertido ningún lead.'
-                : 'No hay leads disponibles para asignarte.'}
+                ? t('leads.list.emptyConverted')
+                : t('leads.list.emptyAvailable')}
             </Text>
           </View>
         }
@@ -419,7 +411,7 @@ export default function LeadsScreen() {
               activeOpacity={0.7}
             >
               <Ionicons name="log-out-outline" size={20} color="#dc2626" />
-              <Text style={styles.menuItemTextDanger}>Cerrar sesión</Text>
+              <Text style={styles.menuItemTextDanger}>{t('leads.list.logout')}</Text>
             </TouchableOpacity>
           </Animated.View>
         </Pressable>
@@ -431,7 +423,7 @@ export default function LeadsScreen() {
         onPress={() => router.push('/(app)/leads/new')}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel="Nuevo lead"
+        accessibilityLabel={t('leads.list.newLeadAria')}
       >
         <Ionicons name="add" size={28} color={colors.white} />
       </TouchableOpacity>

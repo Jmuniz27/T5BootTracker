@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -11,21 +13,23 @@ const inputClass =
 
 const PROGRAM_FIELDS = ['name', 'start_date', 'end_date', 'total_cost']
 
-const schema = z
-  .object({
-    name: z.string().trim().min(1, 'El nombre es requerido'),
-    start_date: z.string().min(1, 'La fecha de inicio es requerida'),
-    end_date: z.string().min(1, 'La fecha de fin es requerida'),
-    total_cost: z
-      .string()
-      .min(1, 'El costo es requerido')
-      .refine((v) => Number(v) > 0, 'El costo debe ser mayor que cero'),
-  })
-  // Misma regla que ProgramWriteSerializer.validate en el backend.
-  .refine((v) => v.end_date > v.start_date, {
-    path: ['end_date'],
-    message: 'La fecha de fin debe ser posterior a la de inicio',
-  })
+function buildSchema(t) {
+  return z
+    .object({
+      name: z.string().trim().min(1, t('programs.validation.nameRequired')),
+      start_date: z.string().min(1, t('programs.validation.startRequired')),
+      end_date: z.string().min(1, t('programs.validation.endRequired')),
+      total_cost: z
+        .string()
+        .min(1, t('programs.validation.costRequired'))
+        .refine((v) => Number(v) > 0, t('programs.validation.costPositive')),
+    })
+    // Misma regla que ProgramWriteSerializer.validate en el backend.
+    .refine((v) => v.end_date > v.start_date, {
+      path: ['end_date'],
+      message: t('programs.validation.endAfterStart'),
+    })
+}
 
 /** `htmlFor` asocia la etiqueta con su input, para lectores de pantalla. */
 function Field({ label, error, htmlFor, children }) {
@@ -42,6 +46,8 @@ function Field({ label, error, htmlFor, children }) {
 }
 
 export default function CreateProgramModal({ onClose, onSuccess, onError }) {
+  const { t } = useTranslation()
+  const schema = useMemo(() => buildSchema(t), [t])
   const queryClient = useQueryClient()
 
   const {
@@ -58,24 +64,24 @@ export default function CreateProgramModal({ onClose, onSuccess, onError }) {
     mutationFn: createProgram,
     onSuccess: (program) => {
       queryClient.invalidateQueries({ queryKey: ['programs'] })
-      onSuccess(`Programa ${program.name} creado correctamente.`)
+      onSuccess(t('programs.programCreated', { name: program.name }))
       onClose()
     },
     onError: (error) => {
       // Devuelve null cuando el error ya quedó pintado bajo su campo.
-      const general = applyServerErrors(error, setError, PROGRAM_FIELDS)
+      const general = applyServerErrors(error, setError, PROGRAM_FIELDS, t('users.genericError'))
       if (general) onError(general)
     },
   })
 
   return (
     <ModalShell
-      title="Nuevo programa"
-      subtitle="El costo y las fechas del programa son la referencia para los pagos."
+      title={t('programs.createProgramTitle')}
+      subtitle={t('programs.createProgramSubtitle')}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit((values) => mutation.mutate(values))} className="space-y-4" noValidate>
-        <Field label="Nombre" htmlFor="program-name" error={errors.name?.message}>
+        <Field label={t('programs.name')} htmlFor="program-name" error={errors.name?.message}>
           <input
             id="program-name"
             {...register('name')}
@@ -85,15 +91,15 @@ export default function CreateProgramModal({ onClose, onSuccess, onError }) {
         </Field>
 
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="Fecha de inicio" htmlFor="program-start" error={errors.start_date?.message}>
+          <Field label={t('programs.startDate')} htmlFor="program-start" error={errors.start_date?.message}>
             <input id="program-start" {...register('start_date')} type="date" className={inputClass} />
           </Field>
-          <Field label="Fecha de fin" htmlFor="program-end" error={errors.end_date?.message}>
+          <Field label={t('programs.endDate')} htmlFor="program-end" error={errors.end_date?.message}>
             <input id="program-end" {...register('end_date')} type="date" className={inputClass} />
           </Field>
         </div>
 
-        <Field label="Costo total" htmlFor="program-cost" error={errors.total_cost?.message}>
+        <Field label={t('programs.totalCost')} htmlFor="program-cost" error={errors.total_cost?.message}>
           <input
             id="program-cost"
             {...register('total_cost')}
@@ -111,14 +117,14 @@ export default function CreateProgramModal({ onClose, onSuccess, onError }) {
             onClick={onClose}
             className="px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
           >
-            Cancelar
+            {t('programs.cancel')}
           </button>
           <button
             type="submit"
             disabled={mutation.isPending}
             className="px-4 py-2.5 bg-[#1D3176] text-white text-sm font-medium rounded-xl hover:bg-[#182861] transition-colors disabled:opacity-60"
           >
-            {mutation.isPending ? 'Creando…' : 'Crear programa'}
+            {mutation.isPending ? t('programs.creating') : t('programs.createProgram')}
           </button>
         </div>
       </form>

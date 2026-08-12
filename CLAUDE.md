@@ -175,6 +175,14 @@ boot-tracker/
 - JWT: expo-secure-store — nunca AsyncStorage
 - Notificaciones: Expo Notifications
 
+### Internacionalización (i18n) — OBLIGATORIO en web y mobile
+La app es **bilingüe español/inglés** (default: **español**; toggle manual, elección persistida). **Todo texto visible al usuario DEBE pasar por `t('clave')`** y tener entrada en **es.json y en.json**. Nada de strings hardcodeados en la UI.
+
+- **Web:** `i18next` + `react-i18next`. Locales en `frontend/src/i18n/locales/{es,en}.json`; init en `frontend/src/i18n/index.js`; `useTranslation()` en componentes; `<LanguageSwitcher />` para cambiar idioma.
+- **Mobile:** `i18next` + `react-i18next`, persistido en `expo-secure-store`. Locales en `mobile/src/i18n/locales/{es,en}.json`; init en `mobile/src/i18n/index.ts`; `<LanguageSwitcher />` en `mobile/src/components/`.
+- **Claves** por dominio (`common`, `auth`/`login`/`forgot`, `nav`, `leads`, `payments`, `agenda`, `analytics`, `users`…). El **español debe ser idéntico al texto original** para no cambiar la UI ni romper tests.
+- **Regla para cualquier feature/fix/cambio nuevo:** si agrega o toca texto visible, ese texto va por `t()` con su versión **española E inglesa** en ambos locales. Un PR con strings hardcodeados nuevos no cumple la convención.
+
 ### Linear auto-sync (`/linear-sync`)
 - **Uso:** después de mergear un PR a `main`, corre `/linear-sync CB-<N>`
   (ej. `/linear-sync CB-40`). Verifica el issue antes de cerrarlo.

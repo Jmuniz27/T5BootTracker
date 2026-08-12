@@ -65,3 +65,7 @@ backend/query.sql
 docs/audit/
 
 google-credentials.json
+
+# Informe LaTeX 2P y spec de la entrega final (repo aparte / local)
+doc_ing2_2p/
+02FinalProjectSpec_en*.txt

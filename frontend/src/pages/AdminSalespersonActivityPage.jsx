@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import {
   Bar,
@@ -63,6 +64,7 @@ function ChartCard({ title, hint, children }) {
 }
 
 export default function AdminSalespersonActivityPage() {
+  const { t } = useTranslation()
   const { salespersonId } = useParams()
   const navigate = useNavigate()
 
@@ -77,8 +79,8 @@ export default function AdminSalespersonActivityPage() {
       <div className="p-4 sm:p-6 lg:p-8">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
           {error?.response?.status === 404
-            ? 'Ese usuario no existe o no es un vendedor.'
-            : 'No pudimos cargar el rendimiento. Intenta de nuevo.'}
+            ? t('analytics.spDetail.notFound')
+            : t('analytics.spDetail.loadError')}
         </div>
       </div>
     )
@@ -102,31 +104,31 @@ export default function AdminSalespersonActivityPage() {
         onClick={() => navigate('/analytics?tab=vendedor')}
         className="text-sm text-gray-500 hover:text-[#1D3176] transition-colors mb-4"
       >
-        ← Analítica · Vendedor
+        {t('analytics.spDetail.back')}
       </button>
 
       <header className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{data?.salesperson ?? 'Cargando…'}</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{data?.salesperson ?? t('analytics.spDetail.loading')}</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Rendimiento comercial. El cobro se consulta en la cartera de Finanzas.
+          {t('analytics.spDetail.subtitle')}
         </p>
       </header>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
-        <StatCard label="Leads asignados" value={data?.assigned_leads ?? 0} loading={isLoading} />
-        <StatCard label="Convertidos" value={data?.converted_leads ?? 0} loading={isLoading} />
-        <StatCard label="Tasa de conversión" value={`${data?.conversion_rate ?? 0}%`} loading={isLoading} />
+        <StatCard label={t('analytics.spDetail.assignedLeads')} value={data?.assigned_leads ?? 0} loading={isLoading} />
+        <StatCard label={t('analytics.spDetail.converted')} value={data?.converted_leads ?? 0} loading={isLoading} />
+        <StatCard label={t('analytics.spDetail.conversionRate')} value={`${data?.conversion_rate ?? 0}%`} loading={isLoading} />
         <StatCard
-          label="Sin contactar"
+          label={t('analytics.spDetail.uncontacted')}
           value={data?.uncontacted_leads ?? 0}
           loading={isLoading}
           valueClass={(data?.uncontacted_leads ?? 0) > 0 ? 'text-amber-600' : 'text-gray-900'}
         />
-        <StatCard label="Interacciones" value={data?.interactions ?? 0} loading={isLoading} />
+        <StatCard label={t('analytics.spDetail.interactions')} value={data?.interactions ?? 0} loading={isLoading} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Leads por estado" hint="Incluye los estados sin leads, en cero.">
+        <ChartCard title={t('analytics.spDetail.byStatusTitle')} hint={t('analytics.spDetail.byStatusHint')}>
           {!isLoading && (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={byStatus} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
@@ -134,15 +136,15 @@ export default function AdminSalespersonActivityPage() {
                 <XAxis dataKey="label" {...axisProps} interval={0} angle={-20} textAnchor="end" height={50} />
                 <YAxis allowDecimals={false} {...axisProps} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #e2e8f0' }} />
-                <Bar dataKey="count" name="Leads" fill={COLORS.status} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" name={t('analytics.spDetail.leadsSeries')} fill={COLORS.status} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
-        <ChartCard title="Evolución mensual" hint="Agrupado por el mes en que tomó el lead.">
+        <ChartCard title={t('analytics.spDetail.byMonthTitle')} hint={t('analytics.spDetail.byMonthHint')}>
           {!isLoading && byMonth.length === 0 && (
-            <p className="text-sm text-gray-400">Todavía no hay leads asignados con fecha.</p>
+            <p className="text-sm text-gray-400">{t('analytics.spDetail.noDatedLeads')}</p>
           )}
           {!isLoading && byMonth.length > 0 && (
             <ResponsiveContainer width="100%" height="100%">
@@ -152,8 +154,8 @@ export default function AdminSalespersonActivityPage() {
                 <YAxis allowDecimals={false} {...axisProps} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #e2e8f0' }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="assigned" name="Asignados" stroke={COLORS.assigned} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="converted" name="Convertidos" stroke={COLORS.converted} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="assigned" name={t('analytics.spDetail.assignedSeries')} stroke={COLORS.assigned} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="converted" name={t('analytics.spDetail.convertedSeries')} stroke={COLORS.converted} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -161,7 +163,7 @@ export default function AdminSalespersonActivityPage() {
       </div>
 
       <p className="text-xs text-gray-400 mt-4">
-        Retención promedio de sus leads: {fmtHours(data?.avg_retention_hours)}.
+        {t('analytics.spDetail.avgRetention', { hours: fmtHours(data?.avg_retention_hours) })}
       </p>
     </div>
   )

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getFinancePaymentPlan,
@@ -10,8 +11,8 @@ import {
 
 const ACCEPT = '.pdf,.xlsx,.xls'
 
-function typeLabel(t) {
-  return t === 'excel' ? 'Excel' : 'PDF'
+function typeLabel(fileType) {
+  return fileType === 'excel' ? 'Excel' : 'PDF'
 }
 
 /**
@@ -21,6 +22,7 @@ function typeLabel(t) {
  * `mode="bootcamper"`: sólo lo ve (es su propio plan).
  */
 export default function PaymentPlanPanel({ mode = 'finance', bootcamperId }) {
+  const { t } = useTranslation()
   const isFinance = mode === 'finance'
   const qc = useQueryClient()
   const fileRef = useRef(null)
@@ -39,7 +41,7 @@ export default function PaymentPlanPanel({ mode = 'finance', bootcamperId }) {
   const uploadMutation = useMutation({
     mutationFn: (formData) => uploadFinancePaymentPlan(bootcamperId, formData),
     onSuccess: () => { setError(null); qc.invalidateQueries({ queryKey }) },
-    onError: (err) => setError(err?.response?.data?.error || 'No se pudo subir el archivo.'),
+    onError: (err) => setError(err?.response?.data?.error || t('payments.plan.uploadError')),
   })
 
   const deleteMutation = useMutation({
@@ -62,7 +64,7 @@ export default function PaymentPlanPanel({ mode = 'finance', bootcamperId }) {
       const url = await getPaymentPlanFileUrl(plan.id)
       window.open(url, '_blank', 'noopener,noreferrer')
     } catch {
-      setError('No se pudo abrir el archivo.')
+      setError(t('payments.plan.openError'))
     }
   }
 
@@ -71,14 +73,14 @@ export default function PaymentPlanPanel({ mode = 'finance', bootcamperId }) {
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h3 className="text-sm font-semibold text-gray-900">Plan de pagos</h3>
+        <h3 className="text-sm font-semibold text-gray-900">{t('payments.plan.title')}</h3>
         {has && (
           <span className="text-xs font-medium text-gray-500">{typeLabel(plan.file_type)}</span>
         )}
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-gray-400">Cargando…</p>
+        <p className="text-sm text-gray-400">{t('payments.plan.loading')}</p>
       ) : has ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -86,14 +88,14 @@ export default function PaymentPlanPanel({ mode = 'finance', bootcamperId }) {
             <span className="truncate">{plan.original_name || `plan.${plan.file_type === 'excel' ? 'xlsx' : 'pdf'}`}</span>
           </div>
           {plan.uploaded_by_name && (
-            <p className="text-xs text-gray-500">Subido por {plan.uploaded_by_name}</p>
+            <p className="text-xs text-gray-500">{t('payments.plan.uploadedBy', { name: plan.uploaded_by_name })}</p>
           )}
           <div className="flex flex-wrap gap-2">
             <button
               onClick={openFile}
               className="text-xs font-medium text-[#213A8E] border border-[#213A8E]/40 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
             >
-              Ver plan
+              {t('payments.plan.view')}
             </button>
             {isFinance && (
               <>
@@ -102,14 +104,14 @@ export default function PaymentPlanPanel({ mode = 'finance', bootcamperId }) {
                   disabled={uploadMutation.isPending}
                   className="text-xs font-medium text-gray-700 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 disabled:opacity-60 transition-colors"
                 >
-                  {uploadMutation.isPending ? 'Subiendo…' : 'Reemplazar'}
+                  {uploadMutation.isPending ? t('payments.plan.uploading') : t('payments.plan.replace')}
                 </button>
                 <button
                   onClick={() => deleteMutation.mutate()}
                   disabled={deleteMutation.isPending}
                   className="text-xs font-medium text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-60 transition-colors"
                 >
-                  Eliminar
+                  {t('payments.plan.delete')}
                 </button>
               </>
             )}
@@ -117,17 +119,17 @@ export default function PaymentPlanPanel({ mode = 'finance', bootcamperId }) {
         </div>
       ) : isFinance ? (
         <div className="space-y-2">
-          <p className="text-sm text-gray-500">Este bootcamper todavía no tiene un plan de pagos.</p>
+          <p className="text-sm text-gray-500">{t('payments.plan.noneFinance')}</p>
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploadMutation.isPending}
             className="text-xs font-medium text-white bg-[#213A8E] px-3 py-1.5 rounded-lg hover:bg-[#1a2f72] disabled:opacity-60 transition-colors"
           >
-            {uploadMutation.isPending ? 'Subiendo…' : 'Subir plan (PDF o Excel)'}
+            {uploadMutation.isPending ? t('payments.plan.uploading') : t('payments.plan.upload')}
           </button>
         </div>
       ) : (
-        <p className="text-sm text-gray-500">Aún no hay un plan de pagos cargado.</p>
+        <p className="text-sm text-gray-500">{t('payments.plan.noneBootcamper')}</p>
       )}
 
       {error && <p className="text-xs text-red-500 mt-2">{error}</p>}

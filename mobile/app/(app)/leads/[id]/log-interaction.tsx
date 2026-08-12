@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../../../src/theme/colors';
 import { logInteraction } from '../../../../src/api/leads.api';
 import { createMeeting } from '../../../../src/api/meetings.api';
@@ -27,19 +28,19 @@ import MeetingFormModal from '../../../../src/components/MeetingFormModal';
 // ─── config ──────────────────────────────────────────────────────────────────
 
 const TYPES = [
-  { value: 'CALL',     label: 'Llamada',  icon: 'call-outline' },
-  { value: 'WHATSAPP', label: 'WhatsApp', icon: 'logo-whatsapp' },
-  { value: 'EMAIL',    label: 'Email',    icon: 'mail-outline' },
-  { value: 'VISIT',    label: 'Visita',   icon: 'location-outline' },
-  { value: 'NOTE',     label: 'Nota',     icon: 'create-outline' },
+  { value: 'CALL',     icon: 'call-outline' },
+  { value: 'WHATSAPP', icon: 'logo-whatsapp' },
+  { value: 'EMAIL',    icon: 'mail-outline' },
+  { value: 'VISIT',    icon: 'location-outline' },
+  { value: 'NOTE',     icon: 'create-outline' },
 ] as const;
 
 const OUTCOMES = [
-  { value: 'CALL_AGAIN',        label: 'Llamar de nuevo',       bg: '#fef9c3', color: '#a16207' },
-  { value: 'SEND_INFO',         label: 'Enviar información',    bg: '#dcfce7', color: '#15803d' },
-  { value: 'SCHEDULE_VISIT',    label: 'Agendar visita',        bg: '#dbeafe', color: '#1d4ed8' },
-  { value: 'AWAIT_REPLY',       label: 'Esperar respuesta',     bg: '#f3f4f6', color: '#4b5563' },
-  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador',    bg: '#f3e8ff', color: '#7e22ce' },
+  { value: 'CALL_AGAIN',        bg: '#fef9c3', color: '#a16207' },
+  { value: 'SEND_INFO',         bg: '#dcfce7', color: '#15803d' },
+  { value: 'SCHEDULE_VISIT',    bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'AWAIT_REPLY',       bg: '#f3f4f6', color: '#4b5563' },
+  { value: 'SPEAK_COORDINATOR', bg: '#f3e8ff', color: '#7e22ce' },
 ] as const;
 
 // ─── shared form components ───────────────────────────────────────────────────
@@ -53,11 +54,12 @@ function SectionTitle({ children, required, optional }: {
   required?: boolean;
   optional?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <Text style={s.sectionTitle}>
       {children}
       {required && <Text style={s.required}> *</Text>}
-      {optional && <Text style={s.optional}> (opcional)</Text>}
+      {optional && <Text style={s.optional}> {t('leads.logInteraction.optional')}</Text>}
     </Text>
   );
 }
@@ -65,9 +67,10 @@ function SectionTitle({ children, required, optional }: {
 // ─── screen ──────────────────────────────────────────────────────────────────
 
 export default function LogInteractionScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
-  const leadName = name || 'tu lead';
+  const leadName = name || t('leads.logInteraction.yourLead');
 
   const [type, setType]             = useState<string | null>(null);
   const [outcome, setOutcome]       = useState<string | null>(null);
@@ -86,7 +89,7 @@ export default function LogInteractionScreen() {
 
   function openMeeting() {
     const f = emptyMeetingForm();
-    f.title = `Seguimiento: ${leadName}`;
+    f.title = t('leads.logInteraction.meetingTitle', { name: leadName });
     f.lead = id;
     f.leadName = leadName;
     f.description = notes.trim();
@@ -103,7 +106,7 @@ export default function LogInteractionScreen() {
       setMeetingOpen(false);
       setMeetingScheduled(true);
     } catch {
-      setError('No pudimos agendar la reunión. Intenta de nuevo.');
+      setError(t('leads.logInteraction.meetingError'));
     } finally {
       setMeetingSaving(false);
     }
@@ -132,7 +135,7 @@ export default function LogInteractionScreen() {
 
       showToast();
     } catch {
-      setError('No pudimos guardar la interacción. Intenta de nuevo.');
+      setError(t('leads.logInteraction.saveError'));
       setLoading(false);
     }
   }
@@ -145,7 +148,7 @@ export default function LogInteractionScreen() {
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={s.headerCenter}>
-          <Text style={s.headerTitle}>Registrar interacción</Text>
+          <Text style={s.headerTitle}>{t('leads.logInteraction.headerTitle')}</Text>
         </View>
         <TouchableOpacity
           style={[s.saveBtn, !canSubmit && s.saveBtnDisabled]}
@@ -155,7 +158,7 @@ export default function LogInteractionScreen() {
         >
           {loading
             ? <ActivityIndicator size="small" color={colors.white} />
-            : <Text style={s.saveBtnText}>Guardar</Text>
+            : <Text style={s.saveBtnText}>{t('leads.logInteraction.save')}</Text>
           }
         </TouchableOpacity>
       </View>
@@ -168,24 +171,24 @@ export default function LogInteractionScreen() {
         >
           {/* Tipo */}
           <SectionCard>
-            <SectionTitle required>Tipo de interacción</SectionTitle>
+            <SectionTitle required>{t('leads.logInteraction.typeTitle')}</SectionTitle>
             <View style={s.typeGrid}>
-              {TYPES.map((t) => {
-                const active = type === t.value;
+              {TYPES.map((ty) => {
+                const active = type === ty.value;
                 return (
                   <TouchableOpacity
-                    key={t.value}
+                    key={ty.value}
                     style={[s.typeBtn, active && s.typeBtnActive]}
-                    onPress={() => setType(t.value)}
+                    onPress={() => setType(ty.value)}
                     activeOpacity={0.8}
                   >
                     <Ionicons
-                      name={t.icon as any}
+                      name={ty.icon as any}
                       size={18}
                       color={active ? colors.white : colors.textMuted}
                     />
                     <Text style={[s.typeBtnText, active && s.typeBtnTextActive]}>
-                      {t.label}
+                      {t(`leads.interactionType.${ty.value}`)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -195,7 +198,7 @@ export default function LogInteractionScreen() {
 
           {/* Resultado */}
           <SectionCard>
-            <SectionTitle required>Resultado</SectionTitle>
+            <SectionTitle required>{t('leads.logInteraction.outcomeTitle')}</SectionTitle>
             <View style={s.outcomeList}>
               {OUTCOMES.map((o) => {
                 const active = outcome === o.value;
@@ -210,11 +213,11 @@ export default function LogInteractionScreen() {
                       {active && <View style={[s.radioDot, { backgroundColor: o.color }]} />}
                     </View>
                     <Text style={[s.outcomeText, active && { color: o.color, fontWeight: '600' }]}>
-                      {o.label}
+                      {t(`leads.outcome.${o.value}`)}
                     </Text>
                     {active && (
                       <View style={[s.outcomeBadge, { backgroundColor: o.bg }]}>
-                        <Text style={[s.outcomeBadgeText, { color: o.color }]}>{o.label}</Text>
+                        <Text style={[s.outcomeBadgeText, { color: o.color }]}>{t(`leads.outcome.${o.value}`)}</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -225,7 +228,7 @@ export default function LogInteractionScreen() {
 
           {/* Nivel de interés */}
           <SectionCard>
-            <SectionTitle optional>Nivel de interés</SectionTitle>
+            <SectionTitle optional>{t('leads.logInteraction.interestTitle')}</SectionTitle>
             <View style={s.starsRow}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <TouchableOpacity key={n} hitSlop={8} onPress={() => setStars(stars === n ? null : n)} activeOpacity={0.7}>
@@ -242,7 +245,7 @@ export default function LogInteractionScreen() {
           {/* Duración + Notas en el mismo card */}
           <SectionCard>
             <View style={s.durationSection}>
-              <SectionTitle optional>Duración de interacción</SectionTitle>
+              <SectionTitle optional>{t('leads.logInteraction.durationTitle')}</SectionTitle>
               <View style={s.durationRow}>
                 <TextInput
                   style={s.durationInput}
@@ -253,19 +256,19 @@ export default function LogInteractionScreen() {
                   keyboardType="numeric"
                   maxLength={3}
                 />
-                <Text style={s.durationUnit}>minutos</Text>
+                <Text style={s.durationUnit}>{t('leads.logInteraction.minutes')}</Text>
               </View>
             </View>
 
             <View style={s.cardDivider} />
 
             <View style={{ gap: 10 }}>
-              <SectionTitle optional>Notas</SectionTitle>
+              <SectionTitle optional>{t('leads.logInteraction.notesTitle')}</SectionTitle>
               <TextInput
                 style={s.notesInput}
                 value={notes}
                 onChangeText={setNotes}
-                placeholder="¿Cómo fue la interacción?"
+                placeholder={t('leads.logInteraction.notesPlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={4}
@@ -278,23 +281,23 @@ export default function LogInteractionScreen() {
           <SectionCard>
             <View style={s.followUpHeader}>
               <Ionicons name="calendar-outline" size={16} color={colors.navy} />
-              <Text style={s.sectionTitle}>Agendar próxima reunión</Text>
-              <Text style={s.optional}>(opcional)</Text>
+              <Text style={s.sectionTitle}>{t('leads.logInteraction.scheduleTitle')}</Text>
+              <Text style={s.optional}>{t('leads.logInteraction.optional')}</Text>
             </View>
             <Text style={s.followUpHint}>
-              Aparece en tu Agenda y se sincroniza con Google Calendar.
+              {t('leads.logInteraction.scheduleHint')}
             </Text>
 
             {meetingScheduled ? (
               <View style={s.selectedRow}>
                 <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
-                <Text style={s.selectedText}>Reunión agendada</Text>
+                <Text style={s.selectedText}>{t('leads.logInteraction.meetingScheduled')}</Text>
                 <Ionicons name="calendar" size={16} color={colors.navy} />
               </View>
             ) : (
               <TouchableOpacity style={s.scheduleBtn} onPress={openMeeting} activeOpacity={0.85}>
                 <Ionicons name="add" size={18} color={colors.navy} />
-                <Text style={s.scheduleBtnText}>Agendar reunión</Text>
+                <Text style={s.scheduleBtnText}>{t('leads.logInteraction.scheduleMeeting')}</Text>
               </TouchableOpacity>
             )}
           </SectionCard>
@@ -310,7 +313,7 @@ export default function LogInteractionScreen() {
 
       <Animated.View style={[s.toast, { opacity: toastOpacity }]}>
         <Ionicons name="checkmark-circle" size={18} color={colors.white} />
-        <Text style={s.toastText}>Interacción guardada</Text>
+        <Text style={s.toastText}>{t('leads.logInteraction.saved')}</Text>
       </Animated.View>
 
       <MeetingFormModal
