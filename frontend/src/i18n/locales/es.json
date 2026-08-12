@@ -724,6 +724,27 @@
       "assignedSeries": "Asignados",
       "convertedSeries": "Convertidos",
       "avgRetention": "Retención promedio de sus leads: {{hours}}."
+    },
+    "comparison": {
+      "loadError": "No pudimos cargar a los vendedores. Intenta de nuevo.",
+      "emptyNoSalespeople": "Todavía no hay vendedores con leads asignados.",
+      "choose": "Elige a quiénes comparar",
+      "removeAll": "Quitar todos",
+      "selectAll": "Seleccionar todos",
+      "allHistory": "Todo el histórico",
+      "period": "Período a comparar",
+      "rangeYear": "Último año",
+      "range6m": "Últimos 6 meses",
+      "range3m": "Últimos 3 meses",
+      "emptyPickTwo": "Marca dos o más vendedores para verlos lado a lado.",
+      "chartTitle": "Leads manejados y convertidos",
+      "periodSuffix": "{{label}} · por fecha de asignación",
+      "leadsSeries": "Leads",
+      "convertedSeries": "Convertidos",
+      "colSalesperson": "Vendedor",
+      "colLeads": "Leads",
+      "colConverted": "Convertidos",
+      "colRate": "Tasa"
     }
   },
   "nav": {

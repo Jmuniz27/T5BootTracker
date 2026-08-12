@@ -724,6 +724,27 @@
       "assignedSeries": "Assigned",
       "convertedSeries": "Converted",
       "avgRetention": "Average retention of their leads: {{hours}}."
+    },
+    "comparison": {
+      "loadError": "We couldn't load the salespeople. Please try again.",
+      "emptyNoSalespeople": "No salespeople with assigned leads yet.",
+      "choose": "Choose who to compare",
+      "removeAll": "Clear all",
+      "selectAll": "Select all",
+      "allHistory": "All time",
+      "period": "Period to compare",
+      "rangeYear": "Last year",
+      "range6m": "Last 6 months",
+      "range3m": "Last 3 months",
+      "emptyPickTwo": "Check two or more salespeople to see them side by side.",
+      "chartTitle": "Leads handled and converted",
+      "periodSuffix": "{{label}} · by assignment date",
+      "leadsSeries": "Leads",
+      "convertedSeries": "Converted",
+      "colSalesperson": "Salesperson",
+      "colLeads": "Leads",
+      "colConverted": "Converted",
+      "colRate": "Rate"
     }
   },
   "nav": {
