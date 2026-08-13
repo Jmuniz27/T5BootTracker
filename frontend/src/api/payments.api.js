@@ -138,3 +138,25 @@ export const getPaymentPlanFileUrl = (planId) =>
   client
     .get(`/payments/payment-plans/${planId}/file/`, { responseType: 'blob' })
     .then((r) => URL.createObjectURL(r.data))
+
+// ── CR-013: enlaces de pago con tarjeta ───────────────────────────────────────
+// Finanzas negocia con el bootcamper y pega en Boot-Tracker el link que generó
+// a mano en ESPOLTECH; el sistema no lo genera. Puede haber varios enlaces por
+// inscripción a lo largo del tiempo (una negociación distinta cada vez, como
+// una factura) — no se sobreescriben, se crea uno nuevo y el historial queda.
+
+// Historial completo (vigentes, expirados, revocados) de una inscripción.
+export const getPaymentLinks = (enrollmentId) =>
+  client.get(`/payments/enrollments/${enrollmentId}/payment-links/`).then((r) => r.data)
+
+// Crea un enlace nuevo. `data`: { url, amount?, note?, expires_at? }.
+// Dispara el correo al bootcamper al crearlo.
+export const createPaymentLink = (enrollmentId, data) =>
+  client.post(`/payments/enrollments/${enrollmentId}/payment-links/`, data).then((r) => r.data)
+
+export const revokePaymentLink = (id) =>
+  client.patch(`/payments/payment-links/${id}/revoke/`).then((r) => r.data)
+
+// Enlaces vigentes del bootcamper autenticado para un programa.
+export const getMyPaymentLinks = (programId) =>
+  client.get('/payments/my-payment-links/', { params: { program_id: programId } }).then((r) => r.data)

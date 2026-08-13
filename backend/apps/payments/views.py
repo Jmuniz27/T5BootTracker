@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.authentication.permissions import IsAdmin, IsFinanceOrAdmin
-from .models import BootcamperAssignmentSetting, Payment, PaymentPlan
+from .models import BootcamperAssignmentSetting, Payment, PaymentPlan, PaymentLink
 from .serializers import (
     PaymentUploadSerializer, PaymentListSerializer, PaymentDetailSerializer,
     PaymentApproveSerializer, PaymentRejectSerializer,
@@ -23,10 +23,12 @@ from .serializers import (
     BootcamperAssignmentSettingSerializer,
     PaymentPlanSerializer, PaymentPlanUploadSerializer,
     ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS,
+    PaymentLinkCreateSerializer, PaymentLinkSerializer,
 )
 from .services import (
     PaymentProgressService, read_receipt_token,
     get_bootcamper_self_assignment_enabled, set_bootcamper_self_assignment_enabled,
+    create_payment_link, revoke_payment_link, get_active_payment_links,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,18 +104,19 @@ class PaymentUploadView(APIView):
         },
         summary='Subir comprobante de pago',
         description=(
-            'El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). Se lanza OCR '
-            'asíncrono. `program_id` es opcional: sin él, el programa se deduce de la '
-            'inscripción activa del bootcamper. La respuesta incluye `ocr_queued`: en '
-            'false el comprobante se guardó pero el OCR no se pudo encolar y lo revisa '
-            'Finanzas a mano.'
+            'El bootcamper sube un comprobante (JPG, PNG o PDF, máx 10 MB). `program_id` es '
+            'opcional: sin él, el programa se deduce de la inscripción activa del bootcamper. '
+            '`payment_method` es TRANSFER por default; con LINK (CR-013, pago hecho en un enlace '
+            'negociado con Finanzas) hace falta `payment_link_id` — el enlace vigente que se usó '
+            '— y no se lanza OCR, la evidencia no es un comprobante bancario. Para TRANSFER se '
+            'lanza OCR asíncrono. La respuesta incluye `ocr_queued`: en false el comprobante se '
+            'guardó pero el OCR no se pudo encolar (o no aplica) y lo revisa Finanzas a mano.'
         ),
         tags=['Pagos — Bootcamper'],
     )
     def post(self, request):
         import os
         from apps.programs.models import Program
-        from .serializers import ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
         from .services import (
             ReceiptStorageError,
             UploadProgramError,
@@ -146,20 +149,47 @@ class PaymentUploadView(APIView):
             extension = os.path.splitext(file.name or '')[1].lower()
             file_type = ALLOWED_EXTENSIONS.get(extension, 'image')
 
+        payment_method = data.get('payment_method') or Payment.Method.TRANSFER
+
+        payment_link = None
+        if payment_method == Payment.Method.LINK:
+            payment_link = PaymentLink.objects.filter(
+                pk=data['payment_link_id'], enrollment__bootcamper=request.user,
+                enrollment__bootcamp=program,
+            ).first()
+            if not payment_link or not payment_link.is_active:
+                return Response(
+                    {
+                        'error': 'El enlace de pago seleccionado no es válido o ya no está vigente.',
+                        'code': 'INVALID_PAYMENT_LINK',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
-            payment = create_payment_with_receipt(request.user, program, file, file_type)
+            payment = create_payment_with_receipt(
+                request.user, program, file, file_type,
+                payment_method=payment_method, payment_link=payment_link,
+            )
         except ReceiptStorageError as exc:
             return Response(
                 {'error': exc.message, 'code': exc.code},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        # El pago ya existe aunque el OCR no se haya podido encolar: se avisa para
-        # que el bootcamper sepa que su comprobante entró y no lo vuelva a subir.
-        data = PaymentListSerializer(payment).data
-        data['ocr_queued'] = queue_receipt_ocr(payment.id)
+        # CR-013: la evidencia de un pago por link no es un comprobante bancario
+        # — no hay banco/cuenta/transacción que leer, así que correr el OCR
+        # encima sólo gastaría el cupo del servicio para nada.
+        result_data = PaymentListSerializer(payment).data
+        if payment_method == Payment.Method.LINK:
+            result_data['ocr_queued'] = False
+        else:
+            # El pago ya existe aunque el OCR no se haya podido encolar: se avisa
+            # para que el bootcamper sepa que su comprobante entró y no lo vuelva
+            # a subir.
+            result_data['ocr_queued'] = queue_receipt_ocr(payment.id)
 
-        return Response(data, status=status.HTTP_201_CREATED)
+        return Response(result_data, status=status.HTTP_201_CREATED)
 
 
 class PaymentMyProgramsView(APIView):
@@ -217,6 +247,7 @@ class PaymentMyStatusView(APIView):
             'surplus_amount':          drf_serializers.DecimalField(max_digits=12, decimal_places=2),
             'program_start':           drf_serializers.CharField(),
             'program_end':             drf_serializers.CharField(),
+            'enrollment_id':           drf_serializers.UUIDField(allow_null=True),
         })},
         summary='Mi resumen de pagos',
         tags=['Pagos — Bootcamper'],
@@ -790,6 +821,129 @@ class NotifyCoordinatorView(APIView):
         return Response({'detail': 'Alerta enviada.'}, status=status.HTTP_200_OK)
 
 
+class PaymentLinkListCreateView(APIView):
+    """GET/POST /api/payments/enrollments/{enrollment_id}/payment-links/ — CR-013.
+
+    Finanzas/Admin negocia con el bootcamper y pega el enlace de pago con
+    tarjeta que generó a mano en ESPOLTECH. Cada creación es un `PaymentLink`
+    nuevo — no reemplaza los anteriores, porque puede haber varios a lo largo
+    del tiempo (una negociación distinta cada vez, como una factura) y el
+    historial completo queda visible. Al crear uno, el sistema le manda el
+    link por correo al bootcamper (el envío no bloquea la creación si el
+    broker falla).
+    """
+    permission_classes = [IsFinanceOrAdmin]
+
+    @extend_schema(
+        responses={200: PaymentLinkSerializer(many=True)},
+        summary='Historial de enlaces de pago de una inscripción',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def get(self, request, enrollment_id):
+        from apps.programs.models import Enrollment
+
+        enrollment = get_object_or_404(Enrollment, pk=enrollment_id)
+        links = enrollment.payment_links.select_related('created_by')
+        return Response(PaymentLinkSerializer(links, many=True).data)
+
+    @extend_schema(
+        request=PaymentLinkCreateSerializer,
+        responses={
+            201: PaymentLinkSerializer,
+            400: OpenApiResponse(description='URL inválida o fecha de expiración en el pasado'),
+            404: OpenApiResponse(description='Inscripción no encontrada'),
+        },
+        summary='Crear enlace de pago con tarjeta',
+        description=(
+            'Crea un nuevo enlace de pago con tarjeta para la inscripción y notifica '
+            'al bootcamper por correo. El sistema no genera el link — lo hace Finanzas '
+            'en ESPOLTECH, fuera del sistema. No reemplaza enlaces anteriores: pueden '
+            'quedar varios vigentes a la vez si se negoció más de una cuota.'
+        ),
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def post(self, request, enrollment_id):
+        from apps.programs.models import Enrollment
+
+        enrollment = get_object_or_404(Enrollment, pk=enrollment_id)
+
+        serializer = PaymentLinkCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        link = create_payment_link(
+            enrollment,
+            data['url'],
+            request.user,
+            amount=data.get('amount'),
+            note=data.get('note', ''),
+            expires_at=data.get('expires_at'),
+        )
+        return Response(PaymentLinkSerializer(link).data, status=status.HTTP_201_CREATED)
+
+
+class PaymentLinkRevokeView(APIView):
+    """PATCH /api/payments/payment-links/{id}/revoke/ — CR-013.
+
+    Finanzas invalida un link antes de que expire por su cuenta (se negoció
+    mal el monto, el bootcamper pagó por otro medio, etc.).
+    """
+    permission_classes = [IsFinanceOrAdmin]
+
+    @extend_schema(
+        responses={
+            200: PaymentLinkSerializer,
+            400: OpenApiResponse(description='El enlace ya no está activo'),
+            404: OpenApiResponse(description='Enlace no encontrado'),
+        },
+        summary='Revocar enlace de pago',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def patch(self, request, pk):
+        link = get_object_or_404(PaymentLink, pk=pk)
+
+        if link.status != PaymentLink.Status.ACTIVE:
+            return Response(
+                {'error': 'Este enlace ya no está activo.', 'code': 'NOT_ACTIVE'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        revoke_payment_link(link, request.user)
+        return Response(PaymentLinkSerializer(link).data)
+
+
+class MyPaymentLinksView(APIView):
+    """GET /api/payments/my-payment-links/?program_id=... — CR-013, bootcamper.
+
+    Enlaces de pago vigentes (ACTIVE y no vencidos) de la inscripción del
+    bootcamper autenticado en ese programa. Puede haber más de uno si Finanzas
+    negoció varias cuotas por separado.
+    """
+    permission_classes = [IsBootcamper]
+
+    @extend_schema(
+        parameters=[OpenApiParameter('program_id', str, required=True, description='UUID del programa')],
+        responses={200: PaymentLinkSerializer(many=True)},
+        summary='Mis enlaces de pago vigentes',
+        tags=['Pagos — Bootcamper'],
+    )
+    def get(self, request):
+        from apps.programs.models import Enrollment
+
+        program_id = request.query_params.get('program_id')
+        if not program_id:
+            return Response({'error': 'program_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        enrollment = Enrollment.objects.filter(
+            bootcamper=request.user, bootcamp_id=program_id,
+        ).first()
+        if not enrollment:
+            return Response([])
+
+        links = get_active_payment_links(enrollment)
+        return Response(PaymentLinkSerializer(links, many=True).data)
+
+
 # ─── Pool de bootcampers ──────────────────────────────────────────────────────
 #
 # Misma mecánica que el pool de leads: al convertirse, un bootcamper queda sin
@@ -811,6 +965,7 @@ BOOTCAMPER_CARD_FIELDS = {
     'payment_status':          drf_serializers.CharField(),
     'time_elapsed_percentage': drf_serializers.FloatField(),
     'payment_count':           drf_serializers.IntegerField(),
+    'enrollment_id':           drf_serializers.UUIDField(allow_null=True),
 }
 
 

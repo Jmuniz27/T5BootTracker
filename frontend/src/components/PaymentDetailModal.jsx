@@ -139,10 +139,13 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
 
   const confidence = payment?.ocr_confidence || {}
 
-  // Sólo un pago sin revisar se puede aprobar o rechazar. En el historial la
-  // solicitud ya fue resuelta, así que ofrecer esas acciones era engañoso: el
-  // backend responde 400 porque el pago no está pendiente.
-  const isPending = payment ? ['PENDING', 'DRAFT'].includes(payment.status) : false
+  // Sólo un pago PENDING se puede aprobar o rechazar. DRAFT significa que el
+  // bootcamper todavía no lo confirmó (falta su paso de "Confirmar pago"), así
+  // que ofrecer esas acciones ahí era engañoso: el backend responde 400 porque
+  // el pago no está pendiente. En el historial la solicitud ya fue resuelta,
+  // por la misma razón tampoco se editan ni se ofrecen ahí.
+  const isEditable = payment?.status === 'PENDING'
+  const isDraft = payment?.status === 'DRAFT'
   const isRejected = payment?.status === 'REJECTED'
 
   function renderBody() {
@@ -197,12 +200,14 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
 
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-gray-700">
-              {isPending ? t('payments.detail.paymentData') : t('payments.detail.confirmedData')}
+              {isEditable ? t('payments.detail.paymentData') : isDraft ? t('payments.detail.draftData') : t('payments.detail.confirmedData')}
             </h3>
             <p className="text-xs text-gray-500 -mt-1">
-              {isPending
+              {isEditable
                 ? t('payments.detail.pendingHint')
-                : t('payments.detail.resolvedHint')}
+                : isDraft
+                  ? t('payments.detail.draftHint')
+                  : t('payments.detail.resolvedHint')}
             </p>
 
             {FIELDS.map(({ key, conf, labelKey, placeholderKey, inputMode }) => (
@@ -216,10 +221,10 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   type="text"
                   inputMode={inputMode}
                   data-testid={key === 'confirmed_amount' ? 'approve-amount' : key}
-                  placeholder={isPending ? t(`payments.detail.${placeholderKey}`) : '—'}
+                  placeholder={isEditable ? t(`payments.detail.${placeholderKey}`) : '—'}
                   value={fields[key]}
-                  readOnly={!isPending}
-                  disabled={!isPending}
+                  readOnly={!isEditable}
+                  disabled={!isEditable}
                   onChange={(e) => setField(key, e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
                 />
@@ -227,7 +232,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
             ))}
 
             {/* Fecha y cuenta/banco: en un pendiente, Finanzas los puede corregir. */}
-            {isPending ? (
+            {isEditable ? (
               <div className="space-y-3 pt-1">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -317,7 +322,15 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
             )}
           </div>
 
-          {isPending && (
+          {isDraft && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                El bootcamper todavía no confirmó este pago. Vuelve cuando lo haya enviado.
+              </p>
+            </div>
+          )}
+
+          {isEditable && (
             <div className="space-y-3 border-t border-gray-100 pt-4">
               {approveMutation.isError && (
                 <p className="text-red-500 text-xs animate-shake">{approveMutation.error?.response?.data?.error || t('payments.detail.approveError')}</p>

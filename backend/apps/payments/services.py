@@ -96,12 +96,18 @@ class ReceiptStorageError(Exception):
     code = 'RECEIPT_STORAGE_ERROR'
 
 
-def create_payment_with_receipt(bootcamper, program, file, file_type):
+def create_payment_with_receipt(
+    bootcamper, program, file, file_type, payment_method=None, payment_link=None,
+):
     """Create the Payment, writing the receipt to storage.
 
     El fallo de escritura (permisos del volumen de media, disco lleno) salía sin
     capturar, así que Django respondía su página de error en HTML y el bootcamper
     veía el traceback dentro del modal en vez de un mensaje.
+
+    `payment_link` (CR-013) referencia qué `PaymentLink` concreto usó el
+    bootcamper para pagar, cuando `payment_method` es LINK — puede haber
+    varios vigentes a la vez y conviene saber cuál generó esta evidencia.
 
     Raises:
         ReceiptStorageError: el archivo no se pudo escribir.
@@ -116,6 +122,8 @@ def create_payment_with_receipt(bootcamper, program, file, file_type):
             program=program,
             receipt_file=file,
             receipt_file_type=file_type,
+            payment_method=payment_method or Payment.Method.TRANSFER,
+            payment_link=payment_link,
             status=Payment.Status.DRAFT,
         )
     except (OSError, SuspiciousOperation) as exc:
@@ -191,6 +199,7 @@ class PaymentProgressService:
             payments.count(),
             agreed_price=enrollment.agreed_price if enrollment else None,
             discount_percentage=enrollment.discount_percentage if enrollment else None,
+            enrollment_id=enrollment.id if enrollment else None,
             cohort_id=enrollment.cohort_id if enrollment else None,
             cohort_number=enrollment.cohort.number if enrollment and enrollment.cohort else None,
         )
@@ -250,8 +259,8 @@ class PaymentProgressService:
         for row in visible:
             bootcamper = bootcampers[row['bootcamper_id']]
             program = program_map[row['program_id']]
-            price, discount, cohort_id, cohort_number = enrollments.get(
-                (row['bootcamper_id'], row['program_id']), (None, None, None, None),
+            price, discount, cohort_id, cohort_number, enrollment_id = enrollments.get(
+                (row['bootcamper_id'], row['program_id']), (None, None, None, None, None),
             )
             summary = self._build_summary(
                 program,
@@ -262,6 +271,7 @@ class PaymentProgressService:
                 discount_percentage=discount,
                 cohort_id=cohort_id,
                 cohort_number=cohort_number,
+                enrollment_id=enrollment_id,
             )
             if status_filter and summary['payment_status'] != status_filter:
                 continue
@@ -322,14 +332,15 @@ class PaymentProgressService:
         # La misma consulta que ya daba los pares trae el precio acordado y la
         # cohorte: no se agrega ninguna consulta al camino.
         enrollments = {
-            (bootcamper_id, program_id): (price, discount, cohort_id, cohort_number)
-            for bootcamper_id, program_id, price, discount, cohort_id, cohort_number in (
+            (bootcamper_id, program_id): (price, discount, cohort_id, cohort_number, enrollment_id)
+            for bootcamper_id, program_id, price, discount, cohort_id, cohort_number, enrollment_id in (
                 Enrollment.objects
                 .filter(bootcamper_id__in=by_id)
                 .values_list(
                     'bootcamper_id', 'bootcamp_id',
                     'agreed_price', 'discount_percentage',
                     'cohort_id', 'cohort__number',
+                    'id',
                 )
             )
         }
@@ -357,8 +368,8 @@ class PaymentProgressService:
             bootcamper = by_id[bootcamper_id]
             program    = programs[program_id]
             row        = totals.get((bootcamper_id, program_id), {})
-            price, discount, cohort_id, cohort_number = enrollments.get(
-                (bootcamper_id, program_id), (None, None, None, None),
+            price, discount, cohort_id, cohort_number, enrollment_id = enrollments.get(
+                (bootcamper_id, program_id), (None, None, None, None, None),
             )
             summary    = self._build_summary(
                 program,
@@ -369,6 +380,7 @@ class PaymentProgressService:
                 discount_percentage=discount,
                 cohort_id=cohort_id,
                 cohort_number=cohort_number,
+                enrollment_id=enrollment_id,
             )
             data.append({
                 'bootcamper_id':   str(bootcamper.id),
@@ -398,14 +410,15 @@ class PaymentProgressService:
             return {}
 
         return {
-            (bootcamper_id, program_id): (price, discount, cohort_id, cohort_number)
-            for bootcamper_id, program_id, price, discount, cohort_id, cohort_number in (
+            (bootcamper_id, program_id): (price, discount, cohort_id, cohort_number, enrollment_id)
+            for bootcamper_id, program_id, price, discount, cohort_id, cohort_number, enrollment_id in (
                 Enrollment.objects
                 .filter(bootcamper_id__in=bootcamper_ids, bootcamp_id__in=program_ids)
                 .values_list(
                     'bootcamper_id', 'bootcamp_id',
                     'agreed_price', 'discount_percentage',
                     'cohort_id', 'cohort__number',
+                    'id',
                 )
             )
         }
@@ -414,6 +427,7 @@ class PaymentProgressService:
         self, program, total_paid, pending_count, payment_count,
         agreed_price=None, discount_percentage=None,
         cohort_id=None, cohort_number=None,
+        enrollment_id=None,
     ) -> dict:
         """Métricas de avance de pago de un par bootcamper/programa.
 
@@ -479,7 +493,81 @@ class PaymentProgressService:
             'surplus_amount':          surplus_amount,
             'program_start':           str(program.start_date),
             'program_end':             str(program.end_date),
+            # CR-013: id de la inscripción, para que el bootcamper y Finanzas
+            # puedan consultar/crear los enlaces de pago (PaymentLink) de este
+            # par. No se incluye la lista de links acá: puede haber varios
+            # vigentes a la vez y se consultan aparte con get_active_payment_links.
+            'enrollment_id':           str(enrollment_id) if enrollment_id else None,
         }
+
+
+# CR-013: sin fecha explícita, cuánto dura un link antes de vencer. Finanzas
+# puede indicar otra al crearlo; este es sólo el default del formulario.
+DEFAULT_PAYMENT_LINK_VALIDITY_DAYS = 7
+
+
+def create_payment_link(enrollment, url, created_by, amount=None, note='', expires_at=None):
+    """CR-013: Finanzas negocia y pega un enlace de pago con tarjeta puntual.
+
+    Cada negociación con el bootcamper genera su propio `PaymentLink` — no se
+    sobreescribe el anterior, porque puede haber varios a lo largo del tiempo
+    (como facturas sucesivas) y conviene conservar el historial de qué se
+    negoció y cuándo. El correo se encola de forma no bloqueante, igual que el
+    OCR: si el broker falla, el link ya quedó guardado y visible en la
+    pantalla de pagos, así que no hace falta tumbar la creación por eso.
+    """
+    from datetime import timedelta
+
+    from .models import PaymentLink
+    from .tasks import send_payment_link_notification
+
+    link = PaymentLink.objects.create(
+        enrollment=enrollment,
+        url=url,
+        amount=amount,
+        note=note,
+        created_by=created_by,
+        expires_at=expires_at or (now() + timedelta(days=DEFAULT_PAYMENT_LINK_VALIDITY_DAYS)),
+    )
+
+    try:
+        send_payment_link_notification.delay(str(link.id))
+    except Exception:
+        logger.exception('No se pudo encolar el correo del link de pago %s.', link.id)
+
+    logger.info(
+        'Payment link %s created for enrollment %s by %s.',
+        link.id, enrollment.id, created_by.email,
+    )
+    return link
+
+
+def revoke_payment_link(link, revoked_by):
+    """Finanzas invalida un link antes de que expire por su cuenta (ej. se
+    negoció mal el monto, o el bootcamper ya pagó por otro medio)."""
+    from .models import PaymentLink
+
+    link.status = PaymentLink.Status.REVOKED
+    link.revoked_at = now()
+    link.save(update_fields=['status', 'revoked_at'])
+
+    logger.info('Payment link %s revoked by %s.', link.id, revoked_by.email)
+    return link
+
+
+def get_active_payment_links(enrollment):
+    """Links vigentes de una inscripción: ACTIVE y no vencidos todavía.
+
+    Puede haber más de uno vigente a la vez si Finanzas negoció varias cuotas
+    por separado; el bootcamper los ve todos y elige con cuál pagar.
+    """
+    from .models import PaymentLink
+
+    return (
+        PaymentLink.objects
+        .filter(enrollment=enrollment, status=PaymentLink.Status.ACTIVE, expires_at__gt=now())
+        .order_by('-created_at')
+    )
 
 
 def get_bootcamper_self_assignment_enabled():

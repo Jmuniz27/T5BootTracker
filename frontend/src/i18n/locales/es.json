@@ -517,7 +517,30 @@
       "noPendingReview": "Sin pagos pendientes de revisión.",
       "noAmount": "Sin monto",
       "noDate": "Sin fecha",
-      "viewDetail": "Ver detalle"
+      "viewDetail": "Ver detalle",
+      "paymentLinks": {
+        "title": "Enlaces de pago con tarjeta",
+        "newLink": "+ Nuevo enlace",
+        "intro": "Cada negociación con el bootcamper es un enlace propio: no reemplaza a los anteriores. El sistema no genera el link — lo generás en ESPOLTECH y lo pegás acá.",
+        "urlLabel": "Enlace *",
+        "amountLabel": "Monto negociado",
+        "amountPlaceholder": "Ej: 300.00",
+        "noteLabel": "Concepto",
+        "notePlaceholder": "Ej: Cuota 2",
+        "creating": "Creando...",
+        "createLink": "Crear enlace",
+        "cancel": "Cancelar",
+        "empty": "Sin enlaces creados todavía.",
+        "expiresOn": "Vence {{date}}",
+        "revoke": "Revocar",
+        "statusActive": "Activo",
+        "statusExpired": "Vencido",
+        "statusRevoked": "Revocado",
+        "createdToast": "Enlace creado. Se notificó al bootcamper por correo.",
+        "createErrorToast": "No se pudo crear el enlace. Revisa que la URL sea válida.",
+        "revokedToast": "Enlace revocado.",
+        "revokeErrorToast": "No se pudo revocar el enlace."
+      }
     },
     "bootcamper": {
       "uploadModal": {
@@ -533,7 +556,14 @@
         "orDrag": " o arrastra el archivo",
         "fileHint": "PNG, JPG o PDF (máx. 10 MB)",
         "uploading": "Subiendo...",
-        "submit": "Subir comprobante"
+        "submit": "Subir comprobante",
+        "introLink": "Sube la evidencia de tu pago realizado en el enlace de tarjeta.",
+        "paymentTypeLabel": "Tipo de pago",
+        "methodTransfer": "Transferencia",
+        "methodLink": "Pago con tarjeta",
+        "whichLinkLabel": "¿Cuál enlace pagaste?",
+        "evidenceLabel": "Evidencia de pago",
+        "selectLink": "Selecciona el enlace de pago que usaste."
       },
       "ocrModal": {
         "confidence": "{{pct}}% confianza",
@@ -543,6 +573,8 @@
         "confirm": "Confirmar pago",
         "titleReview": "Revisar comprobante de transferencia",
         "hintReview": "Compara tu comprobante con los datos escaneados y corrige lo necesario antes de confirmar",
+        "titleReviewLink": "Confirmar pago con tarjeta",
+        "hintReviewLink": "Indica el monto y la fecha del pago que hiciste en el enlace antes de confirmar",
         "titleEdit": "Editar y reenviar pago",
         "hintEdit": "Corrige los datos observados y reenvía el pago para una nueva revisión",
         "titleView": "Detalle del pago",
@@ -610,7 +642,9 @@
         "sortNewest": "Fecha: más reciente",
         "sortOldest": "Fecha: más antiguo",
         "empty": "No tienes pagos registrados aún.",
-        "uploadFirst": "Subir tu primer comprobante"
+        "uploadFirst": "Subir tu primer comprobante",
+        "payWithCard": "Pagar con tarjeta",
+        "payWithCardCount": "Pagar con tarjeta ({{count}})"
       },
       "toast": {
         "deleted": "Pago eliminado.",
@@ -618,7 +652,8 @@
         "receivedNoOcr": "Comprobante recibido. La lectura automática no está disponible ahora; Finanzas lo revisará a mano.",
         "uploadedScanning": "Comprobante subido. Estamos escaneando el texto…",
         "confirmed": "Pago confirmado. Queda pendiente de aprobación.",
-        "resent": "Pago reenviado. Queda pendiente de aprobación."
+        "resent": "Pago reenviado. Queda pendiente de aprobación.",
+        "linkEvidenceReceived": "Evidencia recibida. Confirma el monto y la fecha del pago."
       }
     },
     "queue": {
@@ -646,8 +681,10 @@
       "rejectedOn": " el {{date}}",
       "paymentData": "Datos del pago",
       "confirmedData": "Datos confirmados",
+      "draftData": "Datos enviados por el bootcamper",
       "pendingHint": "Precargados con lo que leyó el escaneo. Corrige lo que no coincida con el comprobante antes de aprobar.",
       "resolvedHint": "Datos con los que se resolvió esta solicitud.",
+      "draftHint": "El bootcamper subió esto pero todavía no lo confirmó — no se puede aprobar todavía.",
       "amountLabel": "Monto confirmado *",
       "amountPlaceholder": "Ej: 500.00",
       "bankLabel": "Banco",
