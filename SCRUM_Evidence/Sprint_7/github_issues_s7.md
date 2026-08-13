@@ -1,0 +1,67 @@
+# GitHub Issues -- Sprint 7
+
+Milestone de GitHub: #13. Datos obtenidos con gh api repos/Jmuniz27/T5BootTracker/issues (filtro por milestone, state=all) el 11 de agosto de 2026.
+
+| # | Title | Assignee | State | Opened | Closed |
+|---|---|---|---|---|---|
+| #342 | Frontend: responsive web en el flujo de comprobante y en la activación de cuenta del bootcamper | LockHurb | closed | 2026-08-07 | 2026-08-09 |
+| #337 | Backend: métricas por vendedor filtradas por rango de fechas | manzannita | closed | 2026-08-07 | 2026-08-07 |
+| #329 | Onboarding: el bootcamper debe aceptar el uso de sus datos al crear su cuenta | manzannita | closed | 2026-08-07 | 2026-08-07 |
+| #328 | Usuarios: mostrar programa y cohorte del bootcamper, y poder filtrar por ambos | manzannita | closed | 2026-08-07 | 2026-08-07 |
+| #327 | Analítica: pestaña comparativa entre vendedores | manzannita | closed | 2026-08-07 | 2026-08-07 |
+| #326 | Admin: repartir bootcampers a Finanzas en lote (checklist + seleccionar todo) | manzannita | closed | 2026-08-07 | 2026-08-07 |
+| #325 | Leads: cada interacción debe guardar el estado del lead en ese momento | manzannita | closed | 2026-08-07 | 2026-08-07 |
+| #324 | Leads: estado final para descartar un lead, con motivo obligatorio | manzannita | closed | 2026-08-07 | 2026-08-07 |
+| #323 | Frontend: mostrar desde cuándo el lead está asignado al vendedor | manzannita | closed | 2026-08-07 | 2026-08-07 |
+| #299 | Pagos: el admin habilita o deshabilita la auto-asignación de cobro | manzannita | closed | 2026-08-05 | 2026-08-05 |
+| #296 | [Sprint 7] Notificar coordinador: falta validación server-side del estado crítico + doc de verificación | sin-asignar | closed | 2026-08-05 | 2026-08-05 |
+| #295 | [Sprint 7] Enviar acceso por correo al crear un usuario en el panel admin | sin-asignar | closed | 2026-08-05 | 2026-08-05 |
+| #294 | [Sprint 7] Falta el backend para editar y reenviar un pago rechazado (404) | sin-asignar | closed | 2026-08-05 | 2026-08-05 |
+| #293 | [Sprint 7] Bootcamper no puede subir comprobante de pago (selector de programa vacío) | sin-asignar | closed | 2026-08-05 | 2026-08-05 |
+| #283 | Pagos: historial de solicitudes y que el admin pueda repartir el pool | manzannita | closed | 2026-08-05 | 2026-08-05 |
+| #270 | Conversión: elegir cohorte y descuento en el modal | manzannita | closed | 2026-08-03 | 2026-08-03 |
+| #266 | Analítica: pestañas Vista General y Vendedor, con rendimiento por persona | manzannita | closed | 2026-08-03 | 2026-08-03 |
+| #263 | Mobile: ocultar la agenda a FINANCE (alinear con web, solo SALESPERSON) | isabellaim | open | 2026-08-03 | -- |
+| #262 | Frontend: higiene de rutas — guard faltante en detalle de pagos, ruta muerta /my-leads, COORDINATOR sin manejo | manzannita | open | 2026-08-03 | -- |
+| #261 | Backend: last_name del bootcamper puede quedar literalmente 'N/A' | Jmuniz27 | open | 2026-08-03 | -- |
+| #260 | Backend: el endpoint de conversión no valida que el lead esté QUALIFIED | Jmuniz27 | open | 2026-08-03 | -- |
+| #259 | Frontend: verificación de datos del bootcamper por el vendedor dueño del lead | manzannita | closed | 2026-08-03 | 2026-08-05 |
+| #258 | Mobile: leer la respuesta de conversión (hoy se descarta la contraseña sin poder recuperarla) + reenvío | isabellaim | closed | 2026-08-03 | 2026-08-05 |
+| #257 | Frontend: reemplazar la contraseña de conversión por el link de invitación + reenvío | manzannita | closed | 2026-08-03 | 2026-08-05 |
+| #256 | Frontend: pantalla pública de onboarding del bootcamper | gabsjimz | closed | 2026-08-03 | 2026-08-05 |
+| #255 | Backend: email de invitación al bootcamper + regeneración/reenvío | Jmuniz27 | closed | 2026-08-03 | 2026-08-05 |
+| #254 | Backend: campos de perfil y estado de verificación del bootcamper | Jmuniz27 | closed | 2026-08-03 | 2026-08-04 |
+| #253 | Backend: token de invitación de un solo uso + endpoints de onboarding del bootcamper | Jmuniz27 | closed | 2026-08-03 | 2026-08-05 |
+| #252 | Backend: validador compartido de cédula y RUC ecuatorianos (persona natural, sociedad, público) | Jmuniz27 | closed | 2026-08-03 | 2026-08-04 |
+| #250 | Conversión: inscribir en una cohorte y validar que admita inscripciones | manzannita | closed | 2026-08-03 | 2026-08-03 |
+| #241 | Descuento por bootcamper: el vendedor lo elige al convertir y los pagos lo respetan | manzannita | closed | 2026-08-03 | 2026-08-03 |
+| #227 | Reasignación masiva de leads (opcional, sólo si entra en S7) | LockHurb | open | 2026-08-03 | -- |
+| #226 | Backend: RBAC — validar propiedad en conversión y detalle de lead | Jmuniz27 | closed | 2026-08-03 | 2026-08-03 |
+| #225 | Frontend: el admin debe poder asignar un lead sin dueño | manzannita | closed | 2026-08-03 | 2026-08-03 |
+| #224 | Frontend: pantalla de leads propia del Administrador (HST-025) | gabsjimz | closed | 2026-08-03 | 2026-08-03 |
+| #223 | Backend: separar la vista de leads del admin de "mis leads" (HST-025) | Jlchong3 | closed | 2026-08-03 | 2026-08-03 |
+| #222 | Admin: ver los bootcampers asignados a cada vendedor, en solo lectura | manzannita | closed | 2026-08-03 | 2026-08-03 |
+| #217 | Cohortes: mes de fin previsto obligatorio (prerrequisito para mover las fechas del programa) | manzannita | closed | 2026-08-03 | 2026-08-03 |
+| #203 | feat(programs): pantallas de administración de programas y cohortes | sin-asignar | closed | 2026-08-02 | 2026-08-03 |
+| #202 | Frontend: administración de programas y cohortes para el administrador | manzannita | closed | 2026-08-02 | 2026-08-03 |
+| #201 | feat(users): coordinador con varios programas y sin credenciales | sin-asignar | closed | 2026-08-02 | 2026-08-03 |
+| #200 | Coordinadores: varios programas por coordinador y sin credenciales | manzannita | closed | 2026-08-02 | 2026-08-03 |
+| #199 | feat(programs): modelo de cohortes con estados y endpoints por programa | sin-asignar | closed | 2026-08-02 | 2026-08-03 |
+| #198 | feat(users): alcance general o por programa para coordinadores | sin-asignar | closed | 2026-08-02 | 2026-08-03 |
+| #197 | Coordinadores: alcance general o por programa en notificaciones | manzannita | closed | 2026-08-02 | 2026-08-03 |
+| #196 | Cohortes: modelo, estados y endpoints por programa | manzannita | closed | 2026-08-02 | 2026-08-03 |
+| #195 | feat(analytics): tarjeta de leads sin asignar en Gestión de leads | sin-asignar | closed | 2026-08-02 | 2026-08-02 |
+| #194 | Analytics: tarjeta de leads sin asignar en Gestión de leads | manzannita | closed | 2026-08-02 | 2026-08-02 |
+| #54 | S7-6 — Mobile: Builds finales iOS/Android + entrega | isabellaim | open | 2026-06-08 | -- |
+| #53 | S7-5 — Docs: Contribuciones individuales + actualización documento final | manzannita | open | 2026-06-08 | -- |
+| #52 | S7-4 — Frontend: Demo final web + grabación del sistema | gabsjimz | open | 2026-06-08 | -- |
+| #51 | S7-3 — QA: Testing de aceptación final + reporte HST | LockHurb | open | 2026-06-08 | -- |
+| #50 | S7-2 — DevOps: Guía de despliegue + entrega final al cliente | Jmuniz27 | open | 2026-06-08 | -- |
+| #49 | S7-1 — Scrum: Cierre del proyecto + acta de aceptación Dra. Vaca | Jlchong3 | open | 2026-06-08 | -- |
+| #23 | S4-5: Frontend — Reportes exportables PDF/Excel | manzannita | closed | 2026-03-02 | 2026-08-07 |
+
+## Metrics summary
+
+- Total issues in milestone: 55
+- Closed: 44
+- Open at report time: 11
