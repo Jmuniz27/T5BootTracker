@@ -1,40 +1,60 @@
 flowchart TB
-    classDef planned fill:#F5F5F5,stroke:#AAAAAA,color:#888888,stroke-dasharray:5 5
+    classDef external fill:#EDE7F6,stroke:#5E35B1,color:#311B92
+    classDef ci fill:#FFF8E1,stroke:#F9A825,color:#000000
+    classDef edge fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef app fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef data fill:#FFEBEE,stroke:#C62828,color:#B71C1C
+    classDef foreign fill:#F5F5F5,stroke:#9E9E9E,color:#616161
 
-    Browser["User's Browser"]
-    MobileDevice["Mobile Device\nAndroid / iOS"]
+    Browser["User's Browser"]:::external
+    MobileDevice["Mobile Device<br/>Android APK - EAS Build"]:::external
 
-    subgraph ESPOL["ESPOL Server — taws.espol.edu.ec  (Coolify PaaS)"]
-        Coolify["Coolify\nReverse Proxy · TLS · DNS"]
-
-        subgraph Docker["Docker Stack — boottracker-network"]
-            Frontend["frontend\nNginx (Static SPA) · :80"]
-            Backend["backend\nGunicorn 4 workers · :8000"]
-            CeleryW["celery\nCelery Worker"]
-            CeleryB["celery beat\nplanned"]:::planned
-            DB[("db\nPostgreSQL 16 · :5432")]
-            RedisN["redis\nRedis 7 · :6379"]
-        end
+    subgraph CICD["Continuous Delivery - GitHub"]
+        direction LR
+        Repo["Repository Jmuniz27/T5BootTracker<br/>main = single source of truth"]:::ci
+        Actions["GitHub Actions - ci-pr.yml<br/>backend-ci · frontend-ci · mobile-ci · e2e-ci<br/>gates: ruff · ESLint+SonarJS · bandit · coverage"]:::ci
+        GHCR[("GHCR<br/>images tagged by commit SHA")]:::ci
     end
 
-    SMTP["SMTP Server\nGmail / any SMTP"]
-    ObjStorage["Object Storage\nS3 / MinIO\nplanned"]:::planned
-    GCalAPI["Google Calendar API\nplanned"]:::planned
+    subgraph VPS["Production VPS - Hetzner CX23 - 2 vCPU · 3.7 GiB · Ubuntu"]
+        direction LR
+        Nginx["nginx of the HOST - owns :80 and :443<br/>TLS termination · Certbot auto-renewal<br/>routes by hostname"]:::edge
 
-    Browser -->|HTTPS :443| Coolify
-    MobileDevice -->|HTTPS :443| Coolify
+        subgraph Stack["Docker stack - boot-tracker - loopback only"]
+            direction LR
+            Frontend["frontend<br/>nginx serving React SPA<br/>127.0.0.1:8080"]:::app
+            Backend["backend<br/>Django + gunicorn 2 workers<br/>:8000 internal"]:::app
+            Celery["celery worker<br/>email · OCR · invitations"]:::app
+            DB[("postgres 16<br/>volume postgres_data")]:::data
+            Redis[("redis 7<br/>broker + cache")]:::data
+            Media[("volume media_data<br/>payment receipts")]:::data
+        end
 
-    Coolify -->|proxy :80| Frontend
-    Coolify -->|proxy /api · /admin · /media :8000| Backend
+        Neighbour["attendance_api + attendance_db<br/>pre-existing production app<br/>NOT ours - must not be disturbed"]:::foreign
+    end
 
-    Frontend -->|Reverse Proxy /api · /admin · /media :8000| Backend
+    SMTP["SMTP provider<br/>transactional email"]:::external
+    GCal["Google Calendar API<br/>follow-up scheduling"]:::external
+    Bot["WhatsApp bot<br/>inbound leads · shared secret"]:::external
+
+    Browser -->|HTTPS :443| Nginx
+    MobileDevice -->|HTTPS :443| Nginx
+    Bot -->|HTTPS · X-Bot-Token| Nginx
+
+    Repo --> Actions
+    Actions -->|"build and push (main only)"| GHCR
+    GHCR -.->|"deploy job: SSH + docker compose pull and up -d"| Nginx
+
+    Nginx -->|boottracker.codingbootcampslatam.com| Frontend
+    Nginx -->|api.codingbootcampslatam.com| Neighbour
+
+    Frontend -->|"proxy /api /admin /media"| Backend
     Backend --> DB
-    Backend -->|token blacklist / cache| RedisN
-    Backend -->|enqueue tasks| CeleryW
-    CeleryW -->|broker / result| RedisN
-    CeleryW -->|email notifications| SMTP
-    CeleryW -->|OCR in-process| Backend
-
-    CeleryB -.->|periodic tasks - planned| CeleryW
-    Backend -.->|file storage - planned| ObjStorage
-    CeleryW -.->|calendar events - planned| GCalAPI
+    Backend --> Redis
+    Backend --> Media
+    Backend -->|enqueue| Celery
+    Celery --> Redis
+    Celery --> DB
+    Celery --> Media
+    Celery --> SMTP
+    Backend --> GCal
