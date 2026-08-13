@@ -1,9 +1,10 @@
 """Business logic for leads app."""
 import logging
+import unicodedata
 from decimal import Decimal
 
 from django.db import connection, transaction, IntegrityError
-from django.db.models import F, Func, Q, Value
+from django.db.models import F, Func, Value
 from django.utils.timezone import now
 from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import status
@@ -254,12 +255,64 @@ def set_self_assignment_enabled(enabled, user):
     return setting
 
 
-def find_duplicate_lead(phone, email):
-    """Return an existing Lead matching phone or email, if any (CR-011)."""
-    query = Q(phone=phone)
+def _normalize_name(raw):
+    """Lowercase, drop accents and collapse whitespace, for comparing names."""
+    text = unicodedata.normalize('NFKD', str(raw or ''))
+    text = ''.join(char for char in text if not unicodedata.combining(char))
+    return ' '.join(text.lower().split())
+
+
+def _find_by_name_and_program(name, program_interest):
+    """Return a lead with the same person and the same interest, or None.
+
+    Se exige que coincidan **las dos** cosas. Sólo el nombre daría falsos
+    positivos constantes —"Juan Pérez" hay muchos—, y el programa es lo que acota
+    la coincidencia a algo accionable.
+
+    Los descartados quedan fuera: descartar es un estado final con motivo, y si
+    bloqueara el alta dejaría a esa persona sin poder volver a registrarse nunca.
+    Los convertidos sí cuentan, porque detrás hay un bootcamper con matrícula.
+    """
+    target_name = _normalize_name(name)
+    target_program = _normalize_name(program_interest)
+    if not target_name or not target_program:
+        return None
+
+    # El filtro por SQL acota a los que tienen programa y no están descartados;
+    # la comparación fina se hace en Python porque hay que ignorar tildes, y
+    # `unaccent` de Postgres no está instalado. La tabla de leads es pequeña y
+    # este camino sólo corre cuando el teléfono y el email ya no cruzaron.
+    candidates = (
+        Lead.objects
+        .exclude(status=Lead.Status.DISCARDED)
+        .exclude(program_interest='')
+        .order_by('-created_at')
+    )
+    for lead in candidates:
+        if (_normalize_name(lead.name) == target_name
+                and _normalize_name(lead.program_interest) == target_program):
+            return lead
+    return None
+
+
+def find_duplicate_lead(phone, email, name=None, program_interest=None):
+    """Return an existing Lead that looks like the same person, if any (CR-011).
+
+    Tres criterios, del más fuerte al más débil. El teléfono cruza formatos con
+    `find_lead_by_phone`: el bot guarda en E.164 (593…) y el CRM en local (099…),
+    y comparar exacto —como se hacía— nunca cruzaba los dos, así que un vendedor
+    duplicaba sin aviso un lead que el bot ya había creado.
+    """
+    lead = find_lead_by_phone(phone)
+    if lead is not None:
+        return lead
+
     if email:
-        query |= Q(email=email)
-    return Lead.objects.filter(query).first()
+        lead = Lead.objects.filter(email=email).first()
+        if lead is not None:
+            return lead
+
+    return _find_by_name_and_program(name, program_interest)
 
 
 # Los teléfonos llegan al CRM en formato local ecuatoriano (0991000001, como los
@@ -342,13 +395,19 @@ def bot_lookup_payload(raw_phone):
     """
     lead = find_lead_by_phone(raw_phone)
     if lead is None:
-        return {'exists': False, 'status': '', 'owner': '', 'lead_id': ''}
+        return {'exists': False, 'status': '', 'owner': '', 'lead_id': '', 'program': ''}
+
+    # `program` es para que el bot pueda decir en qué programa quedó registrado.
+    # Gana el nombre del programa resuelto sobre el texto libre: la FK es el dato
+    # del catálogo, y el texto es lo que la persona escribió en el chat.
+    program = lead.program.name if lead.program else (lead.program_interest or '')
 
     return {
         'exists': True,
         'status': lead.status,
         'owner': lead.owner.get_full_name() if lead.owner else '',
         'lead_id': str(lead.id),
+        'program': program,
     }
 
 
