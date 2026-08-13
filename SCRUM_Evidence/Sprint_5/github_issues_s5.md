@@ -1,0 +1,24 @@
+# GitHub Issues -- Sprint 5
+
+Milestone de GitHub: #10. Datos obtenidos con gh api repos/Jmuniz27/T5BootTracker/issues (filtro por milestone, state=all) el 11 de agosto de 2026.
+
+| # | Title | Assignee | State | Opened | Closed |
+|---|---|---|---|---|---|
+| #146 | S5-11 — HST-023 mod. (CR-010): Notificación por email al rechazar un pago | Jmuniz27 | closed | 2026-07-09 | 2026-07-27 |
+| #145 | S5-10 — HST-016/021 mod. (CR-009): Expansión de extracción OCR + campos de facturación | Jmuniz27 | closed | 2026-07-09 | 2026-07-27 |
+| #144 | S5-9 — HST-007/012/024 mod. (CR-006): Trazabilidad temporal y métricas de gestión de leads | sin-asignar | closed | 2026-07-09 | 2026-08-02 |
+| #143 | S5-8 — HST-012 mod. (CR-005): Liberación y reasignación forzada de leads por el Administrador | LockHurb | closed | 2026-07-09 | 2026-08-02 |
+| #42 | S5-7 — Scrum: Sprint Review S5 + refinamiento S6 | Jlchong3 | open | 2026-06-08 | -- |
+| #34 | S5 - DevOps — Configurar email transaccional en producción | Jmuniz27 | closed | 2026-06-07 | 2026-06-14 |
+| #30 | S5-6: Mobile — Build iOS + Android para demo | isabellaim | open | 2026-03-02 | -- |
+| #29 | S5-5: Preparación y ensayo de demo al cliente | gabsjimz | open | 2026-03-02 | -- |
+| #28 | S5-4: Frontend — User Management UI | manzannita | closed | 2026-03-02 | 2026-07-28 |
+| #27 | S5-3: Testing de integración end-to-end | LockHurb | closed | 2026-03-02 | 2026-08-02 |
+| #26 | S5-2: DevOps — Deploy + CI/CD pipeline | Jmuniz27 | open | 2026-03-02 | -- |
+| #25 | S5-1: User Management CRUD — gestión de usuarios | Jlchong3 | closed | 2026-03-02 | 2026-06-10 |
+
+## Metrics summary
+
+- Total issues in milestone: 12
+- Closed: 8
+- Open at report time: 4

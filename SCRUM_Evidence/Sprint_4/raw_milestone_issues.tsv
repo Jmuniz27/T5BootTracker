@@ -1,0 +1,17 @@
+302	Frontend: historial de pagos del bootcamper tabular y subida sin selector de programa	LockHurb	closed	2026-08-05	2026-08-05
+290	Frontend: pantalla de pagos del bootcamper en español y tarjeta de adeudado	LockHurb	closed	2026-08-05	2026-08-05
+279	Backend: endpoints de consulta, alta y actualización de leads para el bot de WhatsApp	LockHurb	closed	2026-08-05	2026-08-11
+278	Backend: autenticación por secreto compartido para el bot de WhatsApp	LockHurb	closed	2026-08-05	2026-08-11
+277	Backend: normalización de teléfono para cruzar leads con el identificador de WhatsApp	LockHurb	closed	2026-08-05	2026-08-11
+142	S4-13 — HST-032 mod. (CR-011): Validación de leads duplicados en creación manual y carga CSV	Jmuniz27	closed	2026-07-09	2026-08-02
+141	S4-12 — HST-007/HST-027 mod. (CR-004): Control de administrador sobre auto-asignación de leads	Jmuniz27	closed	2026-07-09	2026-07-28
+140	S4-10 — DevOps: Configuración VPS ESPOL (Coolify) + despliegue v1 (entrega parcial)	Jmuniz27	open	2026-07-09	
+113	S4-9 — Frontend: Mejoras UX/UI Panel de Pagos OCR	manzannita	closed	2026-06-22	2026-07-28
+72	Integración con Meta	LockHurb	open	2026-06-10	
+41	S4-8 — Scrum: Sprint Review S4 + evidencia de aceptación cliente	Jlchong3	open	2026-06-08	
+40	S4-7 — DevOps: Servidor staging + email transaccional en prod	Jmuniz27	closed	2026-06-08	2026-06-10
+24	S4-6: Mobile — Calendar sync + push notifications	isabellaim	closed	2026-03-02	2026-08-02
+22	S4-4: Frontend — Dashboard de Analytics	gabsjimz	open	2026-03-02	
+21	S4-3: Monitoreo y alertas de pagos	sin-asignar	closed	2026-03-02	2026-03-21
+20	S4-2 — Backend: Role permissions + access control	LockHurb	open	2026-03-02	
+19	S4-1: Google Calendar API — sync de eventos	LockHurb	closed	2026-03-02	2026-07-19

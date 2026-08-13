@@ -22,6 +22,7 @@ import { api } from '../../../src/lib/api';
 import { useAuth } from '../../../src/context/AuthContext';
 import { FadeInView } from '../../../src/components/FadeInView';
 import { LeadCardSkeleton } from '../../../src/components/Skeleton';
+import LanguageSwitcher from '../../../src/components/LanguageSwitcher';
 import type { Lead, LeadStatus } from '../../../src/types/leads';
 
 interface MeData {
@@ -401,6 +402,14 @@ export default function LeadsScreen() {
                 <Text style={styles.menuUserName}>{me?.full_name ?? '—'}</Text>
                 <Text style={styles.menuUserEmail}>{me?.email ?? ''}</Text>
               </View>
+            </View>
+
+            <View style={styles.menuDivider} />
+
+            {/* Idioma */}
+            <View style={styles.menuLangRow}>
+              <Text style={styles.menuLangLabel}>{t('common.language')}</Text>
+              <LanguageSwitcher />
             </View>
 
             <View style={styles.menuDivider} />
@@ -791,6 +800,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 16,
+  },
+  menuLangRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+  },
+  menuLangLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
   menuItemTextDanger: {
     fontSize: 15,

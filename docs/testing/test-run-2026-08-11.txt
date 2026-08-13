@@ -1,0 +1,89 @@
+Ejecucion real de las tres suites de test de Boot-Tracker
+Fecha: 2026-08-11 (sesion de trabajo T-11)
+Entorno: Docker Compose local (db, redis, backend) para backend;
+         npm local para frontend y mobile.
+
+===============================================================================
+BACKEND -- pytest --cov=apps --cov-report=term-missing
+Comando: docker compose exec backend pytest --cov=apps --cov-report=term-missing --tb=short -q
+===============================================================================
+apps/programs/migrations/__init__.py                                                           0      0   100%
+apps/programs/models.py                                                                       82      4    95%   28, 88, 125, 199
+apps/programs/serializers.py                                                                  64      1    98%   120
+apps/programs/services.py                                                                     35      0   100%
+apps/programs/urls.py                                                                          3      0   100%
+apps/programs/views.py                                                                        87     12    86%   172-174, 187-191, 207-210
+apps/users/__init__.py                                                                         0      0   100%
+apps/users/apps.py                                                                             4      0   100%
+apps/users/finance_service.py                                                                 72      0   100%
+apps/users/finance_views.py                                                                   20      0   100%
+apps/users/salespeople_service.py                                                             35      0   100%
+apps/users/salespeople_views.py                                                               22      0   100%
+apps/users/serializers.py                                                                     62      3    95%   134, 140, 142
+apps/users/services.py                                                                        71      3    96%   47, 61-62
+apps/users/urls.py                                                                             8      0   100%
+apps/users/views.py                                                                           72      1    99%   88
+------------------------------------------------------------------------------------------------------------------------
+TOTAL                                                                                       4323    581    87%
+
+================== 910 passed, 1 warning in 468.45s (0:07:48) ==================
+
+Resumen: 40 archivos de test (tests/test_*.py), 910 tests, 0 fallos.
+Cobertura total sobre apps/: 87% (4323 statements, 581 sin cubrir).
+
+===============================================================================
+FRONTEND -- vitest run --coverage
+Comando: npx vitest run --coverage
+===============================================================================
+=============================== Coverage summary ===============================
+Statements   : 71.52% ( 2072/2897 )
+Branches     : 71.08% ( 1836/2583 )
+Functions    : 59.8% ( 692/1157 )
+Lines        : 75.85% ( 1850/2439 )
+================================================================================
+
+Resumen: 56 archivos de test, 497 tests, 0 fallos.
+Cobertura: Statements 71.52%, Branches 71.08%, Functions 59.8%, Lines 75.85%.
+
+Nota de entorno: con los contenedores de backend/db/redis todavia corriendo en
+la misma maquina (usados para la corrida de backend de arriba), esta suite
+fallo de forma reproducible en LeadsDashboard.adminAssign.test.jsx por un
+timeout de waitFor de @testing-library/dom (1000ms por defecto). Al parar los
+contenedores con `docker compose down`, la suite completa paso limpia. Mismo
+patron que la nota de entorno de mobile, mismo diagnostico: sensibilidad de
+waitFor/timers a la carga de CPU compartida, no un defecto de la UI.
+
+===============================================================================
+MOBILE -- jest --coverage
+Comando: npx jest --coverage --passWithNoTests --testTimeout=20000
+===============================================================================
+  colors.ts            |     100 |      100 |     100 |     100 |                                                           
+ src/utils             |   97.72 |    89.47 |     100 |     100 |                                                           
+  identificacion.ts    |   97.72 |    89.47 |     100 |     100 | 14-22,29                                                  
+-----------------------|---------|----------|---------|---------|-----------------------------------------------------------
+
+Test Suites: 18 passed, 18 total
+Tests:       84 passed, 84 total
+Snapshots:   0 total
+Time:        17.599 s, estimated 47 s
+Ran all test suites.
+
+Resumen: 18 archivos de test, 84 tests, 0 fallos.
+Cobertura: Statements 58.67%, Branches 52.54%, Functions 41.09%, Lines 59.59%.
+
+Nota de entorno: la primera corrida de esta suite (sin --testTimeout explicito,
+timeout por defecto de Jest 5000ms) fallo 4 de 18 archivos por timeout mientras
+los contenedores de backend/db/redis seguian corriendo en paralelo en la misma
+maquina. La segunda corrida, con testTimeout=20000 y sin cambiar ni una linea
+de codigo de produccion ni de test, paso las 18 suites completas. Es una
+sensibilidad real de la suite al tiempo de renderizado con react-test-renderer
+bajo carga de CPU compartida, no un defecto del codigo: vale la pena que el
+equipo evalue subir testTimeout en jest.config.js antes de que aparezca como
+flakiness intermitente en CI.
+
+===============================================================================
+TOTAL COMBINADO
+===============================================================================
+Archivos de test: 40 (backend) + 56 (frontend) + 18 (mobile) = 114
+Casos de test:    910 (backend) + 497 (frontend) + 84 (mobile) = 1491
+Fallos:           0

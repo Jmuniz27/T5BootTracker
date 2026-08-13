@@ -7,6 +7,16 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/setupTests.js',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      // Umbral real, no aspiracional: la corrida del 2026-08-11 midió 71.5%
+      // statements sobre src/ (ver docs/testing/test-run-2026-08-11.txt).
+      // 65% deja margen para fluctuación normal sin dejar de ser un gate.
+      thresholds: {
+        statements: 65,
+      },
+    },
   },
   server: {
     host: true,
