@@ -21,6 +21,17 @@ jest.mock('../../../src/context/AuthContext', () => ({
 
 jest.mock('react-native-calendars', () => ({ Calendar: () => null }));
 
+// AgendaScreen se envuelve en FadeInView (CB-115), que arranca un
+// Animated.timing con useNativeDriver: true. En este entorno de test ese
+// callback nunca resuelve, y como aca se monta la pantalla completa con
+// react-test-renderer (no solo un fragmento como en otros tests que ya
+// usan FadeInView), act(async () => ...) se queda esperando y el test
+// excede el timeout de 5s de Jest. Se mockea como passthrough, igual que
+// se hace con el resto de wrappers puramente visuales de este archivo.
+jest.mock('../../../src/components/FadeInView', () => ({
+  FadeInView: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 jest.mock('../../../src/api/meetings.api', () => ({
   getMeetings: jest.fn(),
   createMeeting: jest.fn(),
