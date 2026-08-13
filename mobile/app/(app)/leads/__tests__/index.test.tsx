@@ -21,6 +21,17 @@ jest.mock('../../../../src/context/AuthContext', () => ({
   useAuth: () => ({ logout: jest.fn(), user: { role: 'SALESPERSON' } }),
 }));
 
+// LeadsScreen se envuelve en FadeInView (CB-115), que arranca un
+// Animated.timing con useNativeDriver: true. Ese callback no siempre
+// resuelve dentro del tick que react-test-renderer + act() esperan bajo
+// carga (varios workers de Jest corriendo en paralelo), lo que hace flaky
+// este test — pasa en aislamiento pero puede exceder el timeout de 5s
+// corriendo junto al resto de la suite. Se mockea como passthrough, igual
+// que en app/(app)/__tests__/agenda.test.tsx.
+jest.mock('../../../../src/components/FadeInView', () => ({
+  FadeInView: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 describe('LeadsScreen', () => {
   beforeEach(() => { jest.useFakeTimers(); });
   afterEach(() => { jest.runOnlyPendingTimers(); jest.useRealTimers(); });
