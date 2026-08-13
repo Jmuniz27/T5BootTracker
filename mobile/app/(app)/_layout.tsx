@@ -3,11 +3,13 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth, isMobileRole } from '../../src/context/AuthContext';
+import { useReduceMotion } from '../../src/hooks/use-reduce-motion';
 import { colors } from '../../src/theme/colors';
 
 export default function AppLayout() {
   const { t } = useTranslation();
   const { token, user, logout } = useAuth();
+  const reduceMotion = useReduceMotion();
 
   if (!token) return <Redirect href="/(auth)/login" />;
 
@@ -30,7 +32,14 @@ export default function AppLayout() {
     );
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: reduceMotion ? 'none' : 'slide_from_right',
+      }}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
