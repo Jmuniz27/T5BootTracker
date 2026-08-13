@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../../../src/theme/colors';
 import { fetchInteractions, updateInteraction } from '../../../../src/api/leads.api';
 import type { Interaction } from '../../../../src/types/leads';
@@ -23,36 +24,28 @@ import type { Interaction } from '../../../../src/types/leads';
 
 // El ícono varía por tipo, pero el círculo usa un color uniforme (navy sobre
 // azul claro), igual que el historial del web.
-const TYPE_CONFIG: Record<string, { label: string; icon: string }> = {
-  CALL:     { label: 'Llamada',  icon: 'call' },
-  WHATSAPP: { label: 'WhatsApp', icon: 'logo-whatsapp' },
-  EMAIL:    { label: 'Email',    icon: 'mail' },
-  VISIT:    { label: 'Visita',   icon: 'location' },
-  NOTE:     { label: 'Nota',     icon: 'create' },
-};
-
-const OUTCOME_LABEL: Record<string, string> = {
-  CALL_AGAIN:        'Llamar de nuevo',
-  SEND_INFO:         'Enviar información',
-  SCHEDULE_VISIT:    'Agendar visita',
-  AWAIT_REPLY:       'Esperar respuesta',
-  SPEAK_COORDINATOR: 'Hablar coordinador',
+const TYPE_ICON: Record<string, string> = {
+  CALL:     'call',
+  WHATSAPP: 'logo-whatsapp',
+  EMAIL:    'mail',
+  VISIT:    'location',
+  NOTE:     'create',
 };
 
 const TYPES = [
-  { value: 'CALL',     label: 'Llamada',  icon: 'call-outline' },
-  { value: 'WHATSAPP', label: 'WhatsApp', icon: 'logo-whatsapp' },
-  { value: 'EMAIL',    label: 'Email',    icon: 'mail-outline' },
-  { value: 'VISIT',    label: 'Visita',   icon: 'location-outline' },
-  { value: 'NOTE',     label: 'Nota',     icon: 'create-outline' },
+  { value: 'CALL',     icon: 'call-outline' },
+  { value: 'WHATSAPP', icon: 'logo-whatsapp' },
+  { value: 'EMAIL',    icon: 'mail-outline' },
+  { value: 'VISIT',    icon: 'location-outline' },
+  { value: 'NOTE',     icon: 'create-outline' },
 ] as const;
 
 const OUTCOMES = [
-  { value: 'CALL_AGAIN',        label: 'Llamar de nuevo',     bg: '#fef9c3', color: '#a16207' },
-  { value: 'SEND_INFO',         label: 'Enviar información',  bg: '#dcfce7', color: '#15803d' },
-  { value: 'SCHEDULE_VISIT',    label: 'Agendar visita',      bg: '#dbeafe', color: '#1d4ed8' },
-  { value: 'AWAIT_REPLY',       label: 'Esperar respuesta',   bg: '#f3f4f6', color: '#4b5563' },
-  { value: 'SPEAK_COORDINATOR', label: 'Hablar coordinador',  bg: '#f3e8ff', color: '#7e22ce' },
+  { value: 'CALL_AGAIN',        bg: '#fef9c3', color: '#a16207' },
+  { value: 'SEND_INFO',         bg: '#dcfce7', color: '#15803d' },
+  { value: 'SCHEDULE_VISIT',    bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'AWAIT_REPLY',       bg: '#f3f4f6', color: '#4b5563' },
+  { value: 'SPEAK_COORDINATOR', bg: '#f3e8ff', color: '#7e22ce' },
 ] as const;
 
 function formatDate(iso: string) {
@@ -73,6 +66,7 @@ interface EditModalProps {
 }
 
 function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
+  const { t } = useTranslation();
   const [type, setType]             = useState(interaction?.interaction_type ?? '');
   const [outcome, setOutcome]       = useState(interaction?.outcome ?? '');
   const [stars, setStars]           = useState<number | null>(interaction?.interest_level ?? null);
@@ -98,7 +92,7 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
       });
       onSaved();
     } catch {
-      setError('No pudimos guardar los cambios. Intenta de nuevo.');
+      setError(t('leads.history.editError'));
       setLoading(false);
     }
   }
@@ -109,9 +103,9 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
         {/* Header */}
         <View style={m.header}>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
-            <Text style={m.cancelText}>Cancelar</Text>
+            <Text style={m.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={m.headerTitle}>Editar interacción</Text>
+          <Text style={m.headerTitle}>{t('leads.history.editTitle')}</Text>
           <TouchableOpacity
             style={[m.saveBtn, !canSave && m.saveBtnDisabled]}
             onPress={handleSave}
@@ -120,7 +114,7 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
           >
             {loading
               ? <ActivityIndicator size="small" color={colors.white} />
-              : <Text style={m.saveBtnText}>Guardar</Text>
+              : <Text style={m.saveBtnText}>{t('leads.history.save')}</Text>
             }
           </TouchableOpacity>
         </View>
@@ -130,19 +124,19 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
 
             {/* Tipo */}
             <View style={m.card}>
-              <Text style={m.sectionTitle}>Tipo <Text style={m.required}>*</Text></Text>
+              <Text style={m.sectionTitle}>{t('leads.history.type')} <Text style={m.required}>*</Text></Text>
               <View style={m.typeGrid}>
-                {TYPES.map((t) => {
-                  const active = type === t.value;
+                {TYPES.map((ty) => {
+                  const active = type === ty.value;
                   return (
                     <TouchableOpacity
-                      key={t.value}
+                      key={ty.value}
                       style={[m.typeBtn, active && m.typeBtnActive]}
-                      onPress={() => setType(t.value)}
+                      onPress={() => setType(ty.value)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name={t.icon as any} size={18} color={active ? colors.white : colors.textMuted} />
-                      <Text style={[m.typeBtnText, active && m.typeBtnTextActive]}>{t.label}</Text>
+                      <Ionicons name={ty.icon as any} size={18} color={active ? colors.white : colors.textMuted} />
+                      <Text style={[m.typeBtnText, active && m.typeBtnTextActive]}>{t(`leads.interactionType.${ty.value}`)}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -151,7 +145,7 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
 
             {/* Resultado */}
             <View style={m.card}>
-              <Text style={m.sectionTitle}>Resultado <Text style={m.required}>*</Text></Text>
+              <Text style={m.sectionTitle}>{t('leads.history.outcome')} <Text style={m.required}>*</Text></Text>
               <View style={m.outcomeList}>
                 {OUTCOMES.map((o) => {
                   const active = outcome === o.value;
@@ -166,7 +160,7 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
                         {active && <View style={[m.radioDot, { backgroundColor: o.color }]} />}
                       </View>
                       <Text style={[m.outcomeText, active && { color: o.color, fontWeight: '600' }]}>
-                        {o.label}
+                        {t(`leads.outcome.${o.value}`)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -176,7 +170,7 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
 
             {/* Interés */}
             <View style={m.card}>
-              <Text style={m.sectionTitle}>Nivel de interés <Text style={m.optional}>(opcional)</Text></Text>
+              <Text style={m.sectionTitle}>{t('leads.history.interest')} <Text style={m.optional}>{t('leads.history.optional')}</Text></Text>
               <View style={m.starsRow}>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <TouchableOpacity key={n} hitSlop={8} onPress={() => setStars(stars === n ? null : n)} activeOpacity={0.7}>
@@ -193,7 +187,7 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
             {/* Duración + Notas */}
             <View style={m.card}>
               <View style={{ gap: 10 }}>
-                <Text style={m.sectionTitle}>Duración <Text style={m.optional}>(opcional)</Text></Text>
+                <Text style={m.sectionTitle}>{t('leads.history.duration')} <Text style={m.optional}>{t('leads.history.optional')}</Text></Text>
                 <View style={m.durationRow}>
                   <TextInput
                     style={m.durationInput}
@@ -204,18 +198,18 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
                     keyboardType="numeric"
                     maxLength={3}
                   />
-                  <Text style={m.durationUnit}>minutos</Text>
+                  <Text style={m.durationUnit}>{t('leads.history.minutes')}</Text>
                 </View>
               </View>
               <View style={m.cardDivider} />
               <View style={{ gap: 10 }}>
-                <Text style={m.sectionTitle}>Notas <Text style={m.optional}>(opcional)</Text></Text>
+                <Text style={m.sectionTitle}>{t('leads.history.notes')} <Text style={m.optional}>{t('leads.history.optional')}</Text></Text>
                 <TextInput
                   ref={notesRef}
                   style={m.notesInput}
                   value={notes}
                   onChangeText={setNotes}
-                  placeholder="Notas de la interacción..."
+                  placeholder={t('leads.history.notesPlaceholder')}
                   placeholderTextColor={colors.textMuted}
                   multiline
                   numberOfLines={4}
@@ -240,21 +234,22 @@ function EditModal({ leadId, interaction, onClose, onSaved }: EditModalProps) {
 // ─── interaction card ─────────────────────────────────────────────────────────
 
 function InteractionCard({ item, onEdit, editable }: { item: Interaction; onEdit: () => void; editable: boolean }) {
-  const cfg = TYPE_CONFIG[item.interaction_type] ?? TYPE_CONFIG.NOTE;
+  const { t } = useTranslation();
+  const icon = TYPE_ICON[item.interaction_type] ?? TYPE_ICON.NOTE;
   const hasStars = item.interest_level != null && item.interest_level > 0;
 
   return (
     <View style={s.row}>
       {/* Icon circle (uniforme, como el web) */}
       <View style={s.iconCircle}>
-        <Ionicons name={cfg.icon as any} size={18} color={colors.navy} />
+        <Ionicons name={icon as any} size={18} color={colors.navy} />
       </View>
 
       {/* Content */}
       <View style={s.rowBody}>
         {/* Line 1: tipo + estrellas + duración */}
         <View style={s.line1}>
-          <Text style={s.typeLabel}>{cfg.label}</Text>
+          <Text style={s.typeLabel}>{t(`leads.interactionType.${item.interaction_type}`, item.interaction_type)}</Text>
           {hasStars && (
             <View style={s.inlineMeta}>
               <Ionicons name="star" size={13} color="#f59e0b" />
@@ -266,7 +261,7 @@ function InteractionCard({ item, onEdit, editable }: { item: Interaction; onEdit
               <Text style={s.sep}>|</Text>
               <View style={s.inlineMeta}>
                 <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-                <Text style={s.durText}>{item.duration_minutes} min</Text>
+                <Text style={s.durText}>{item.duration_minutes} {t('leads.history.minShort')}</Text>
               </View>
             </>
           ) : null}
@@ -275,7 +270,7 @@ function InteractionCard({ item, onEdit, editable }: { item: Interaction; onEdit
         {/* Line 2: badges (resultado gris + próxima acción azul) */}
         <View style={s.badgeRow}>
           <View style={s.outcomeBadge}>
-            <Text style={s.outcomeText}>{OUTCOME_LABEL[item.outcome] ?? item.outcome}</Text>
+            <Text style={s.outcomeText}>{t(`leads.outcome.${item.outcome}`, item.outcome)}</Text>
           </View>
           {item.next_action ? (
             <View style={s.nextBadge}>
@@ -305,6 +300,7 @@ function InteractionCard({ item, onEdit, editable }: { item: Interaction; onEdit
 // ─── screen ──────────────────────────────────────────────────────────────────
 
 export default function LeadHistoryScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { id, status } = useLocalSearchParams<{ id: string; status?: string }>();
   const isConverted = status === 'CONVERTED';
@@ -320,7 +316,7 @@ export default function LeadHistoryScreen() {
       setInteractions(data);
       setError(null);
     } catch {
-      setError('No pudimos cargar el historial. Intenta de nuevo.');
+      setError(t('leads.history.loadError'));
     } finally {
       setLoading(false);
     }
@@ -336,9 +332,9 @@ export default function LeadHistoryScreen() {
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={s.headerCenter}>
-          <Text style={s.headerTitle}>Historial</Text>
+          <Text style={s.headerTitle}>{t('leads.history.title')}</Text>
           {!loading && !error && (
-            <Text style={s.headerSub}>{interactions.length} interacciones</Text>
+            <Text style={s.headerSub}>{t('leads.history.count', { count: interactions.length })}</Text>
           )}
         </View>
         <View style={{ width: 36 }} />
@@ -353,7 +349,7 @@ export default function LeadHistoryScreen() {
             <Text style={s.errorText}>{error}</Text>
           </View>
           <TouchableOpacity style={s.retryBtn} onPress={load} activeOpacity={0.8}>
-            <Text style={s.retryText}>Reintentar</Text>
+            <Text style={s.retryText}>{t('leads.history.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -364,8 +360,8 @@ export default function LeadHistoryScreen() {
           ListEmptyComponent={
             <View style={s.center}>
               <Ionicons name="time-outline" size={44} color={colors.border} />
-              <Text style={s.emptyTitle}>Sin interacciones</Text>
-              <Text style={s.emptyText}>Aún no hay registros para este lead.</Text>
+              <Text style={s.emptyTitle}>{t('leads.history.emptyTitle')}</Text>
+              <Text style={s.emptyText}>{t('leads.history.emptyText')}</Text>
             </View>
           }
           renderItem={({ item }) => (

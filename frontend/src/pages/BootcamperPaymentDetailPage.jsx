@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { getMonitoring, getPaymentQueue, getPaymentHistory, notifyCoordinator } from '../api/payments.api'
@@ -6,13 +7,14 @@ import PaymentDetailModal from '../components/PaymentDetailModal'
 import Toast from '../components/Toast'
 import Skeleton from '../components/ui/Skeleton'
 import PaymentHistory from '../components/payments/PaymentHistory'
+import PaymentPlanPanel from '../components/payments/PaymentPlanPanel'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS = {
-  ON_TRACK: { label: 'Al día',    bg: 'bg-emerald-100', text: 'text-emerald-700', bar: 'bg-emerald-500' },
-  AT_RISK:  { label: 'En riesgo', bg: 'bg-amber-100',   text: 'text-amber-700',   bar: 'bg-amber-500'   },
-  CRITICAL: { label: 'Crítico',   bg: 'bg-red-100',     text: 'text-red-600',     bar: 'bg-red-500'     },
+  ON_TRACK: { bg: 'bg-emerald-100', text: 'text-emerald-700', bar: 'bg-emerald-500' },
+  AT_RISK:  { bg: 'bg-amber-100',   text: 'text-amber-700',   bar: 'bg-amber-500'   },
+  CRITICAL: { bg: 'bg-red-100',     text: 'text-red-600',     bar: 'bg-red-500'     },
 }
 
 const PAYMENT_STATUS_COLORS = {
@@ -20,13 +22,6 @@ const PAYMENT_STATUS_COLORS = {
   APPROVED: 'bg-green-100 text-green-700',
   REJECTED: 'bg-red-100 text-red-600',
   DRAFT:    'bg-gray-100 text-gray-500',
-}
-
-const PAYMENT_STATUS_LABELS = {
-  PENDING:  'Pendiente',
-  APPROVED: 'Aprobado',
-  REJECTED: 'Rechazado',
-  DRAFT:    'En revisión',
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -46,6 +41,7 @@ function fmt(v) {
 // ─── SVG Donut Chart ──────────────────────────────────────────────────────────
 
 function DonutChart({ totalCost, totalPaid, deficit }) {
+  const { t } = useTranslation()
   const r = 52, cx = 68, cy = 68
   const C = 2 * Math.PI * r
   const total = parseFloat(totalCost) || 1
@@ -62,7 +58,7 @@ function DonutChart({ totalCost, totalPaid, deficit }) {
     <svg
       viewBox="0 0 136 136"
       role="img"
-      aria-label={`${Math.round(paidPct * 100)}% pagado`}
+      aria-label={t('payments.bcDetail.donutAria', { pct: Math.round(paidPct * 100) })}
       className="w-28 h-28 sm:w-[8.5rem] sm:h-[8.5rem]"
     >
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth="13" />
@@ -79,7 +75,7 @@ function DonutChart({ totalCost, totalPaid, deficit }) {
       <text x={cx} y={cy - 6} textAnchor="middle" fontSize="22" fontWeight="700" fill="#111827">
         {Math.round(paidPct * 100)}%
       </text>
-      <text x={cx} y={cy + 13} textAnchor="middle" fontSize="11" fill="#9ca3af">pagado</text>
+      <text x={cx} y={cy + 13} textAnchor="middle" fontSize="11" fill="#9ca3af">{t('payments.bcDetail.paidWord')}</text>
     </svg>
   )
 }
@@ -105,19 +101,20 @@ function ProgressBar({ value, barClass, label, sublabel }) {
 // ─── Payment Row ──────────────────────────────────────────────────────────────
 
 function PaymentRow({ payment, onViewDetail }) {
+  const { t } = useTranslation()
   const date = payment.ocr_payment_date || payment.submitted_at?.slice(0, 10)
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
+    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 bg-white border border-gray-200 rounded-xl hover:shadow-sm transition-shadow">
       <div>
         <p className="text-sm font-medium text-gray-900">
-          {payment.ocr_amount ? fmt(payment.ocr_amount) : 'Sin monto'}
+          {payment.ocr_amount ? fmt(payment.ocr_amount) : t('payments.bcDetail.noAmount')}
           {payment.ocr_bank_name && <span className="text-gray-500 font-normal"> · {payment.ocr_bank_name}</span>}
         </p>
-        <p className="text-xs text-gray-500 mt-0.5">{date || 'Sin fecha'}</p>
+        <p className="text-xs text-gray-500 mt-0.5">{date || t('payments.bcDetail.noDate')}</p>
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_COLORS[payment.status]}`}>
-          {PAYMENT_STATUS_LABELS[payment.status]}
+          {t(`payments.status.${payment.status}`)}
         </span>
         <button
           onClick={() => onViewDetail(payment)}
@@ -127,7 +124,7 @@ function PaymentRow({ payment, onViewDetail }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
-          Ver detalle
+          {t('payments.bcDetail.viewDetail')}
         </button>
       </div>
     </div>
@@ -137,6 +134,7 @@ function PaymentRow({ payment, onViewDetail }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function BootcamperPaymentDetailPage() {
+  const { t } = useTranslation()
   const { bootcamperId, programId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
@@ -171,17 +169,17 @@ export default function BootcamperPaymentDetailPage() {
 
   const notifyMutation = useMutation({
     mutationFn: () => notifyCoordinator(bootcamperId, programId, { source: 'critical_deficit' }),
-    onSuccess: () => setToast({ message: 'Coordinador notificado.' }),
+    onSuccess: () => setToast({ message: t('payments.detail.toast.notified') }),
     // Sin esto un fallo dejaba el boton como si nada hubiera pasado, y no habia
     // forma de distinguirlo de no haber hecho clic.
-    onError: () => setToast({ message: 'No se pudo notificar al coordinador.', type: 'error' }),
+    onError: () => setToast({ message: t('payments.detail.toast.notifyError'), type: 'error' }),
   })
 
   // CB-114: el spinner centrado dejaba la pantalla practicamente en blanco.
   // El skeleton anticipa el layout real, asi que la vista no salta al cargar.
   if (!bc) {
     return (
-      <div aria-busy="true" aria-label="Cargando detalle del pago" className="p-4 sm:p-6 lg:p-8 animate-fade-in">
+      <div aria-busy="true" aria-label={t('payments.bcDetail.loadingAria')} className="p-4 sm:p-6 lg:p-8 animate-fade-in">
         <Skeleton className="h-4 w-32 mb-6" />
         <div className="flex items-center gap-4 mb-6">
           <Skeleton className="w-14 h-14" rounded="rounded-full" />
@@ -205,7 +203,8 @@ export default function BootcamperPaymentDetailPage() {
     )
   }
 
-  const cfg            = STATUS[bc.payment_status] || STATUS.ON_TRACK
+  const statusKey      = STATUS[bc.payment_status] ? bc.payment_status : 'ON_TRACK'
+  const cfg            = STATUS[statusKey]
   const totalCost      = parseFloat(bc.total_cost)              || 0
   const totalPaid      = parseFloat(bc.total_paid)              || 0
   const deficit        = parseFloat(bc.deficit)                 || 0
@@ -226,7 +225,7 @@ export default function BootcamperPaymentDetailPage() {
         <svg className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
-        Volver a monitoreo
+        {t('payments.bcDetail.backToMonitoring')}
       </button>
 
       {/* Header */}
@@ -243,7 +242,7 @@ export default function BootcamperPaymentDetailPage() {
           </div>
         </div>
         <span className={`px-3 py-1.5 rounded-full text-sm font-medium flex-shrink-0 ${cfg.bg} ${cfg.text}`}>
-          {cfg.label}
+          {t(`payments.monitoringStatus.${statusKey}`)}
         </span>
       </div>
 
@@ -251,7 +250,7 @@ export default function BootcamperPaymentDetailPage() {
 
         {/* ── Avance de pagos ── */}
         <div className="space-y-5">
-          <h2 className="text-base font-semibold text-gray-900">Avance de pagos</h2>
+          <h2 className="text-base font-semibold text-gray-900">{t('payments.bcDetail.paymentProgress')}</h2>
 
           {/* Donut + stats */}
           <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6">
@@ -265,26 +264,26 @@ export default function BootcamperPaymentDetailPage() {
               </div>
               <div className="flex-1 min-w-0 space-y-4">
                 <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total pagado</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t('payments.bcDetail.totalPaid')}</p>
                   <p className="text-2xl font-bold text-gray-900">{fmt(totalPaid)}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs text-gray-500">Costo total</p>
+                    <p className="text-xs text-gray-500">{t('payments.bcDetail.totalCost')}</p>
                     <p className="text-base font-semibold text-gray-700">{fmt(totalCost)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Adeudado</p>
+                    <p className="text-xs text-gray-500">{t('payments.bcDetail.owed')}</p>
                     <p className={`text-base font-semibold ${deficitColor(deficit, bc.is_critical)}`}>
-                      {deficit > 0 ? fmt(deficit) : 'Sin deuda'}
+                      {deficit > 0 ? fmt(deficit) : t('payments.bcDetail.noDebt')}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Pagos aprobados</p>
+                    <p className="text-xs text-gray-500">{t('payments.bcDetail.approvedPayments')}</p>
                     <p className="text-base font-semibold text-gray-700">{bc.payment_count ?? 0}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Pendientes</p>
+                    <p className="text-xs text-gray-500">{t('payments.bcDetail.pending')}</p>
                     <p className={`text-base font-semibold ${bc.pending_payments > 0 ? 'text-amber-600' : 'text-gray-700'}`}>
                       {bc.pending_payments ?? 0}
                     </p>
@@ -299,14 +298,14 @@ export default function BootcamperPaymentDetailPage() {
             <ProgressBar
               value={timePct}
               barClass="bg-slate-400"
-              label="Tiempo del programa"
+              label={t('payments.bcDetail.programTime')}
               sublabel={bc.program_start && bc.program_end ? `${bc.program_start} → ${bc.program_end}` : undefined}
             />
             <ProgressBar
               value={paymentPct}
               barClass={cfg.bar}
-              label="Pagos realizados"
-              sublabel={`${bc.payment_count ?? 0} pago${bc.payment_count !== 1 ? 's' : ''} aprobado${bc.payment_count !== 1 ? 's' : ''}`}
+              label={t('payments.bcDetail.paymentsMade')}
+              sublabel={t('payments.bcDetail.paymentsApproved', { count: bc.payment_count ?? 0 })}
             />
           </div>
 
@@ -318,9 +317,9 @@ export default function BootcamperPaymentDetailPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <div>
-                  <p className="text-sm font-semibold text-red-700">Pago crítico</p>
+                  <p className="text-sm font-semibold text-red-700">{t('payments.bcDetail.criticalTitle')}</p>
                   <p className="text-xs text-red-500 mt-1">
-                    El déficit supera el 10% del costo total. Debería haber pagado {fmt(expectedByNow)} según el tiempo transcurrido ({timePct.toFixed(1)}% del programa).
+                    {t('payments.bcDetail.criticalHint', { expected: fmt(expectedByNow), pct: timePct.toFixed(1) })}
                   </p>
                 </div>
               </div>
@@ -329,7 +328,7 @@ export default function BootcamperPaymentDetailPage() {
                 onClick={() => notifyMutation.mutate()}
                 className="w-full sm:w-auto shrink-0 text-xs font-medium text-red-600 border border-red-300 px-3 py-1.5 rounded-lg hover:bg-red-100 disabled:opacity-60 transition-colors whitespace-nowrap"
               >
-                {notifyMutation.isPending ? 'Enviando...' : 'Notificar coordinador'}
+                {notifyMutation.isPending ? t('payments.bcDetail.sending') : t('payments.bcDetail.notifyCoordinator')}
               </button>
             </div>
           )}
@@ -340,7 +339,7 @@ export default function BootcamperPaymentDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <p className="text-sm text-amber-700">
-                Atrasado en <strong>{fmt(behindBy)}</strong> respecto al avance esperado según el tiempo del programa.
+                {t('payments.bcDetail.behindPrefix')}<strong>{fmt(behindBy)}</strong>{t('payments.bcDetail.behindSuffix')}
               </p>
             </div>
           )}
@@ -351,16 +350,19 @@ export default function BootcamperPaymentDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-sm text-emerald-700">
-                Adelantado en <strong>{fmt(surplus)}</strong> respecto al avance esperado. ¡Al día!
+                {t('payments.bcDetail.aheadPrefix')}<strong>{fmt(surplus)}</strong>{t('payments.bcDetail.aheadSuffix')}
               </p>
             </div>
           )}
+
+          {/* Plan de pagos (lo gestiona Finanzas) */}
+          <PaymentPlanPanel mode="finance" bootcamperId={bootcamperId} />
         </div>
 
         {/* ── Pagos pendientes ── */}
         <div className="space-y-5">
           <h2 className="text-base font-semibold text-gray-900">
-            Pagos pendientes de revisión
+            {t('payments.bcDetail.pendingReviewTitle')}
             {payments.length > 0 && (
               <span className="ml-2 bg-amber-500 text-white text-xs font-bold rounded-full px-2 py-0.5">
                 {payments.length}
@@ -378,7 +380,7 @@ export default function BootcamperPaymentDetailPage() {
               <svg className="w-10 h-10 text-gray-200 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <p className="text-sm text-gray-500">Sin pagos pendientes de revisión.</p>
+              <p className="text-sm text-gray-500">{t('payments.bcDetail.noPendingReview')}</p>
             </div>
           )}
           {!loadingPayments && payments.length > 0 && (

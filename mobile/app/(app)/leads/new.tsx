@@ -14,8 +14,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../../src/theme/colors';
-import { createLead, getPrograms, type Program } from '../../../src/api/leads.api';
+import { createLead, getPrograms, assignLead, getSelfAssignmentEnabled, type Program } from '../../../src/api/leads.api';
 import ProgramSelect from '../../../src/components/ProgramSelect';
 
 const SOURCES = [
@@ -26,6 +27,7 @@ const SOURCES = [
 ] as const;
 
 export default function NewLeadScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -34,11 +36,14 @@ export default function NewLeadScreen() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [programId, setProgramId] = useState<string | null>(null);
   const [isCompany, setIsCompany] = useState(false);
+  const [autoAssign, setAutoAssign] = useState(true);
+  const [selfAssignEnabled, setSelfAssignEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getPrograms().then(setPrograms).catch(() => {});
+    getSelfAssignmentEnabled().then(setSelfAssignEnabled).catch(() => {});
   }, []);
 
   const canSubmit = name.trim() !== '' && phone.trim() !== '' && !loading;
@@ -59,14 +64,22 @@ export default function NewLeadScreen() {
       if (res?.duplicate && !confirmDuplicate) {
         setLoading(false);
         Alert.alert(
-          'Posible duplicado',
-          'Ya existe un lead parecido. ¿Crearlo igual?',
+          t('leads.form.duplicateTitle'),
+          t('leads.form.duplicateMsg'),
           [
-            { text: 'Cancelar', style: 'cancel' },
-            { text: 'Crear igual', onPress: () => submit(true) },
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('leads.form.createAnyway'), onPress: () => submit(true) },
           ],
         );
         return;
+      }
+      // Igual que web: se crea el lead y, si se pidió, se auto-asigna aparte.
+      if (autoAssign && selfAssignEnabled && res?.id) {
+        try {
+          await assignLead(res.id);
+        } catch {
+          // Si falla la asignación (p. ej. lo tomó otro), el lead ya quedó creado.
+        }
       }
       router.back();
     } catch (err: any) {
@@ -75,7 +88,7 @@ export default function NewLeadScreen() {
         detail && typeof detail === 'object' ? Object.values(detail)[0] : null;
       setError(
         (Array.isArray(firstError) ? firstError[0] : firstError) ??
-          'No pudimos crear el lead. Verifica los datos.',
+          t('leads.form.createError'),
       );
       setLoading(false);
     }
@@ -87,7 +100,7 @@ export default function NewLeadScreen() {
         <TouchableOpacity style={s.backBtn} hitSlop={8} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Nuevo lead</Text>
+        <Text style={s.headerTitle}>{t('leads.form.newTitle')}</Text>
         <TouchableOpacity
           style={[s.saveBtn, !canSubmit && s.saveBtnDisabled]}
           onPress={() => submit()}
@@ -97,7 +110,7 @@ export default function NewLeadScreen() {
           {loading ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text style={s.saveBtnText}>Crear</Text>
+            <Text style={s.saveBtnText}>{t('leads.form.create')}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -105,16 +118,16 @@ export default function NewLeadScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
           <View style={s.card}>
-            <Text style={s.label}>Nombre *</Text>
+            <Text style={s.label}>{t('leads.form.name')}</Text>
             <TextInput
               style={s.input}
               value={name}
               onChangeText={setName}
-              placeholder="Nombre del lead"
+              placeholder={t('leads.form.namePlaceholder')}
               placeholderTextColor={colors.textMuted}
             />
 
-            <Text style={s.label}>Teléfono *</Text>
+            <Text style={s.label}>{t('leads.form.phone')}</Text>
             <TextInput
               style={s.input}
               value={phone}
@@ -124,22 +137,22 @@ export default function NewLeadScreen() {
               keyboardType="phone-pad"
             />
 
-            <Text style={s.label}>Email</Text>
+            <Text style={s.label}>{t('leads.form.email')}</Text>
             <TextInput
               style={s.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="correo@ejemplo.com"
+              placeholder={t('leads.form.emailPlaceholder')}
               placeholderTextColor={colors.textMuted}
               keyboardType="email-address"
               autoCapitalize="none"
             />
 
-            <Text style={s.label}>Programa de interés</Text>
+            <Text style={s.label}>{t('leads.form.program')}</Text>
             <ProgramSelect programs={programs} selectedId={programId} onSelect={setProgramId} />
 
 
-            <Text style={s.label}>Origen</Text>
+            <Text style={s.label}>{t('leads.form.source')}</Text>
             <View style={s.chips}>
               {SOURCES.map((src) => {
                 const active = source === src.value;
@@ -165,8 +178,24 @@ export default function NewLeadScreen() {
                 {isCompany && <Ionicons name="checkmark" size={14} color={colors.white} />}
               </View>
               <Ionicons name="business-outline" size={16} color={colors.textMuted} />
-              <Text style={s.companyText}>Es una empresa</Text>
+              <Text style={s.companyText}>{t('leads.form.isCompany')}</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={s.companyRow}
+              onPress={() => selfAssignEnabled && setAutoAssign((v) => !v)}
+              disabled={!selfAssignEnabled}
+              activeOpacity={0.7}
+            >
+              <View style={[s.checkbox, autoAssign && selfAssignEnabled && s.checkboxOn, !selfAssignEnabled && s.checkboxDisabled]}>
+                {autoAssign && selfAssignEnabled && <Ionicons name="checkmark" size={14} color={colors.white} />}
+              </View>
+              <Ionicons name="person-add-outline" size={16} color={colors.textMuted} />
+              <Text style={[s.companyText, !selfAssignEnabled && s.companyTextDisabled]}>{t('leads.form.assignMe')}</Text>
+            </TouchableOpacity>
+            {!selfAssignEnabled && (
+              <Text style={s.assignHint}>{t('leads.form.assignByAdmin')}</Text>
+            )}
           </View>
 
           {error && (
@@ -254,7 +283,10 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxOn: { backgroundColor: colors.navy, borderColor: colors.navy },
+  checkboxDisabled: { opacity: 0.5 },
   companyText: { fontSize: 14, color: colors.textPrimary },
+  companyTextDisabled: { color: colors.textMuted },
+  assignHint: { fontSize: 12, color: colors.textMuted, marginTop: 4, marginLeft: 30 },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',

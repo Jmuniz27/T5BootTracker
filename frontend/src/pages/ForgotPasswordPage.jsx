@@ -1,19 +1,22 @@
+import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { requestPasswordReset } from '../api/auth.api';
 import AuthLayout from '../components/AuthLayout';
 import AuthInput, { EmailIcon } from '../components/AuthInput';
 import AuthButton from '../components/AuthButton';
 
-const schema = z.object({
-  email: z.string().email('Ingresa un email válido'),
-});
-
 export default function ForgotPasswordPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+
+  const schema = useMemo(() => z.object({
+    email: z.string().email(t('forgot.invalidEmail')),
+  }), [t]);
 
   const {
     register,
@@ -28,17 +31,17 @@ export default function ForgotPasswordPage() {
   });
 
   return (
-    <AuthLayout backTo="/login" backLabel="Volver al inicio de sesión">
+    <AuthLayout backTo="/login" backLabel={t('forgot.back')}>
       <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-        ¿Olvidaste tu <span className="text-[#5B9BD5]">contraseña</span>?
+        {t('forgot.headingA')}<span className="text-[#5B9BD5]">{t('forgot.headingB')}</span>{t('forgot.headingSuffix')}
       </h1>
       <p className="text-white/50 text-sm mb-6 sm:mb-10">
-        Ingresa tu correo para restablecer la contraseña
+        {t('forgot.subtitle')}
       </p>
 
       <form onSubmit={handleSubmit((d) => mutate(d))} noValidate>
         <div className="mb-6 sm:mb-10">
-          <label className="block text-sm font-medium text-white/70 mb-2">Email</label>
+          <label className="block text-sm font-medium text-white/70 mb-2">{t('forgot.email')}</label>
           <AuthInput
             {...register('email')}
             type="email"
@@ -48,13 +51,13 @@ export default function ForgotPasswordPage() {
           />
           {error && (
             <p className="text-red-400 text-xs mt-2 pl-4">
-              Error al enviar el correo. Intenta de nuevo.
+              {t('forgot.sendError')}
             </p>
           )}
         </div>
 
         <AuthButton type="submit" disabled={isPending}>
-          {isPending ? 'Enviando...' : 'Restablecer contraseña'}
+          {isPending ? t('forgot.submitting') : t('forgot.submit')}
         </AuthButton>
       </form>
     </AuthLayout>

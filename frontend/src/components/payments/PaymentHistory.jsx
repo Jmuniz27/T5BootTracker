@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Skeleton from '../ui/Skeleton'
 
 /**
@@ -12,10 +13,10 @@ import Skeleton from '../ui/Skeleton'
  */
 
 const STATUS_STYLE = {
-  APPROVED: { label: 'Aprobado',   badge: 'bg-emerald-100 text-emerald-700' },
-  REJECTED: { label: 'Rechazado',  badge: 'bg-red-100 text-red-600' },
-  PENDING:  { label: 'Pendiente',  badge: 'bg-amber-100 text-amber-700' },
-  DRAFT:    { label: 'En revisión', badge: 'bg-gray-100 text-gray-600' },
+  APPROVED: { badge: 'bg-emerald-100 text-emerald-700' },
+  REJECTED: { badge: 'bg-red-100 text-red-600' },
+  PENDING:  { badge: 'bg-amber-100 text-amber-700' },
+  DRAFT:    { badge: 'bg-gray-100 text-gray-600' },
 }
 
 /** Cuántas se ven antes de tener que desplegar el resto. */
@@ -36,27 +37,39 @@ function fmtDate(value) {
 }
 
 function HistoryRow({ item, onViewDetail }) {
+  const { t } = useTranslation()
   const style = STATUS_STYLE[item.status] ?? STATUS_STYLE.DRAFT
+  const statusKey = STATUS_STYLE[item.status] ? item.status : 'DRAFT'
   // El monto confirmado sólo existe tras aprobar; antes se muestra el del OCR.
   const amount = item.confirmed_amount ?? item.ocr_amount
 
   return (
-    <li className="bg-white border border-gray-200 rounded-xl p-4">
+    <li className={`bg-white border rounded-xl p-4 ${item.is_deleted ? 'border-gray-200 opacity-80' : 'border-gray-200'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${style.badge}`}>
-              {style.label}
+              {t(`payments.status.${statusKey}`)}
             </span>
+            {item.is_deleted && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600">
+                {t('payments.history.deletedByBootcamper')}
+              </span>
+            )}
             <span className="text-sm font-semibold text-gray-900">{fmtMoney(amount)}</span>
             {item.confirmed_amount == null && item.ocr_amount != null && (
-              <span className="text-xs text-gray-400">(según el comprobante)</span>
+              <span className="text-xs text-gray-400">{t('payments.history.perReceipt')}</span>
             )}
           </div>
-          <p className="text-xs text-gray-400 mt-1">Enviado {fmtDate(item.submitted_at)}</p>
+          <p className="text-xs text-gray-400 mt-1">{t('payments.history.sent', { date: fmtDate(item.submitted_at) })}</p>
           {item.validated_by_name && (
             <p className="text-xs text-gray-500 mt-0.5">
-              Revisado por {item.validated_by_name} · {fmtDate(item.validated_at)}
+              {t('payments.history.reviewedBy', { name: item.validated_by_name, date: fmtDate(item.validated_at) })}
+            </p>
+          )}
+          {item.is_deleted && item.deleted_by_name && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              {t('payments.history.deletedBy', { name: item.deleted_by_name })}
             </p>
           )}
         </div>
@@ -64,7 +77,7 @@ function HistoryRow({ item, onViewDetail }) {
           onClick={() => onViewDetail(item)}
           className="text-xs font-medium text-[#1D3176] hover:underline flex-shrink-0"
         >
-          Ver
+          {t('payments.history.view')}
         </button>
       </div>
       {/* El motivo del rechazo no se muestra acá: la lista resume y el detalle
@@ -74,6 +87,7 @@ function HistoryRow({ item, onViewDetail }) {
 }
 
 export default function PaymentHistory({ items = [], isLoading, onViewDetail }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? items : items.slice(0, VISIBLE_BY_DEFAULT)
   const hidden = items.length - visible.length
@@ -81,7 +95,7 @@ export default function PaymentHistory({ items = [], isLoading, onViewDetail }) 
   return (
     <section className="mt-8">
       <h2 className="text-base font-semibold text-gray-900 mb-4">
-        Historial de solicitudes
+        {t('payments.history.title')}
         {items.length > 0 && (
           <span className="ml-2 text-xs font-medium text-gray-400">{items.length}</span>
         )}
@@ -95,7 +109,7 @@ export default function PaymentHistory({ items = [], isLoading, onViewDetail }) 
 
       {!isLoading && items.length === 0 && (
         <div className="bg-white border border-gray-200 rounded-2xl py-10 text-center">
-          <p className="text-sm text-gray-500">Todavía no hay solicitudes de pago.</p>
+          <p className="text-sm text-gray-500">{t('payments.history.empty')}</p>
         </div>
       )}
 
@@ -111,7 +125,7 @@ export default function PaymentHistory({ items = [], isLoading, onViewDetail }) 
               onClick={() => setExpanded(true)}
               className="mt-3 text-sm font-medium text-[#1D3176] hover:underline"
             >
-              Ver {hidden} solicitud{hidden === 1 ? '' : 'es'} más
+              {t('payments.history.showMore', { count: hidden })}
             </button>
           )}
         </>

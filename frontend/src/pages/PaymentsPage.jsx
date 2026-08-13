@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getMyHistory, getMyStatus, getMyPrograms, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
 import { useModalA11y } from '../hooks/use-modal-a11y'
@@ -6,14 +7,8 @@ import Skeleton from '../components/ui/Skeleton'
 import Spinner from '../components/ui/Spinner'
 import Toast from '../components/Toast'
 import ReceiptPreview from '../components/payments/ReceiptPreview'
+import PaymentPlanPanel from '../components/payments/PaymentPlanPanel'
 import { flattenUploadError } from '../lib/payments'
-
-const STATUS_LABELS = {
-  DRAFT: 'En revisión',
-  PENDING: 'Pendiente',
-  APPROVED: 'Aprobado',
-  REJECTED: 'Rechazado',
-}
 
 const STATUS_COLORS = {
   DRAFT: 'bg-gray-100 text-gray-500',
@@ -34,9 +29,10 @@ function dropZoneClass(dragOver, file) {
 // grilla de dos columnas y 160px fijos las hacían desbordar un Android de
 // 360px (160+160+12 de gap + 32 de padding de página = 364).
 function StatCard({ label, value, sub, loading, className = '' }) {
+  const { t } = useTranslation()
   if (loading) {
     return (
-      <div aria-busy="true" aria-label={`Cargando ${label}`} className={`bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 sm:min-w-[160px] ${className}`}>
+      <div aria-busy="true" aria-label={t('common.loading')} className={`bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 sm:min-w-[160px] ${className}`}>
         <Skeleton className="h-3 w-20 mb-3" />
         <Skeleton className="h-8 w-24 mb-2" />
         <Skeleton className="h-3 w-32" />
@@ -55,6 +51,7 @@ function StatCard({ label, value, sub, loading, className = '' }) {
 // ─── Upload Modal ─────────────────────────────────────────────────────────────
 
 function UploadModal({ onClose, onSuccess }) {
+  const { t } = useTranslation()
   const [file, setFile] = useState(null)
   const [errors, setErrors] = useState({})
   const [dragOver, setDragOver] = useState(false)
@@ -73,11 +70,11 @@ function UploadModal({ onClose, onSuccess }) {
   const validateAndSetFile = (f) => {
     const allowed = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
     if (!allowed.includes(f.type)) {
-      setErrors((prev) => ({ ...prev, file: 'Solo PNG, JPG o PDF.' }))
+      setErrors((prev) => ({ ...prev, file: t('payments.bootcamper.uploadModal.onlyFormats') }))
       return
     }
     if (f.size > 10 * 1024 * 1024) {
-      setErrors((prev) => ({ ...prev, file: 'Máximo 10 MB.' }))
+      setErrors((prev) => ({ ...prev, file: t('payments.bootcamper.uploadModal.maxSize') }))
       return
     }
     setErrors((prev) => ({ ...prev, file: null }))
@@ -86,7 +83,7 @@ function UploadModal({ onClose, onSuccess }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!file) { setErrors({ file: 'Selecciona un comprobante.' }); return }
+    if (!file) { setErrors({ file: t('payments.bootcamper.uploadModal.selectReceipt') }); return }
 
     // Sin `program_id`: el backend lo deduce de la inscripción activa. El
     // bootcamper no tiene por qué elegir el programa en el que ya está inscrito.
@@ -114,15 +111,15 @@ function UploadModal({ onClose, onSuccess }) {
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label="Subir comprobante"
+        aria-label={t('payments.bootcamper.uploadModal.title')}
         className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-full flex flex-col overflow-hidden focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Subir comprobante</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('payments.bootcamper.uploadModal.title')}</h2>
           <button
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label={t('payments.bootcamper.uploadModal.close')}
             className="text-gray-500 hover:text-gray-700 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -134,13 +131,12 @@ function UploadModal({ onClose, onSuccess }) {
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-4 sm:px-6 space-y-4">
             <p className="text-sm text-gray-500 -mt-1">
-              Sube tu comprobante de transferencia. Revisarás el monto y la fecha en el siguiente paso,
-              una vez escaneado el documento.
+              {t('payments.bootcamper.uploadModal.intro')}
             </p>
 
             {/* File upload — drag & drop */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Comprobante de transferencia</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('payments.bootcamper.uploadModal.receiptLabel')}</label>
               <div
                 onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -165,7 +161,7 @@ function UploadModal({ onClose, onSuccess }) {
                       onClick={(e) => { e.stopPropagation(); setFile(null) }}
                       className="text-xs text-gray-500 hover:text-red-500 transition-colors"
                     >
-                      Quitar
+                      {t('payments.bootcamper.uploadModal.remove')}
                     </button>
                   </>
                 ) : (
@@ -174,10 +170,10 @@ function UploadModal({ onClose, onSuccess }) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium text-[#213A8E]">Haz clic para subir</span>
-                      <span className="hidden sm:inline"> o arrastra el archivo</span>
+                      <span className="font-medium text-[#213A8E]">{t('payments.bootcamper.uploadModal.clickToUpload')}</span>
+                      <span className="hidden sm:inline">{t('payments.bootcamper.uploadModal.orDrag')}</span>
                     </p>
-                    <p className="text-xs text-gray-500">PNG, JPG o PDF (máx. 10 MB)</p>
+                    <p className="text-xs text-gray-500">{t('payments.bootcamper.uploadModal.fileHint')}</p>
                   </>
                 )}
                 <input
@@ -209,7 +205,7 @@ function UploadModal({ onClose, onSuccess }) {
               className="w-full bg-[#213A8E] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#1a2f72] disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
             >
               {mutation.isPending && <Spinner />}
-              {mutation.isPending ? 'Subiendo...' : 'Subir comprobante'}
+              {mutation.isPending ? t('payments.bootcamper.uploadModal.uploading') : t('payments.bootcamper.uploadModal.submit')}
             </button>
           </div>
         </form>
@@ -226,6 +222,7 @@ function UploadModal({ onClose, onSuccess }) {
 // reenvía uno rechazado, y 'view' solo muestra. El de vista reusa este mismo
 // componente para que la ventana se lea igual que la de edición.
 function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
+  const { t } = useTranslation()
   const isEdit = mode === 'edit'
   const isView = mode === 'view'
   const [fields, setFields] = useState({
@@ -237,6 +234,8 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   })
   const qc = useQueryClient()
   const [timedOut, setTimedOut] = useState(false)
+  // Al editar un rechazado, el bootcamper puede adjuntar un comprobante nuevo.
+  const [newReceipt, setNewReceipt] = useState(null)
 
   // OCR runs async (Celery). Poll ocr-status until the backend writes the
   // confidence map (set only after the task finishes), then stop.
@@ -273,7 +272,17 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   }, [ocrData])
 
   const mutation = useMutation({
-    mutationFn: (data) => (isEdit ? updateMyPayment(payment.id, data) : confirmPayment(payment.id, data)),
+    mutationFn: (data) => {
+      if (!isEdit) return confirmPayment(payment.id, data)
+      // Con comprobante nuevo va como multipart; si no, como JSON de solo campos.
+      if (newReceipt) {
+        const fd = new FormData()
+        Object.entries(data).forEach(([k, v]) => fd.append(k, v ?? ''))
+        fd.append('receipt_file', newReceipt)
+        return updateMyPayment(payment.id, fd)
+      }
+      return updateMyPayment(payment.id, data)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-payments'] })
       onSuccess()
@@ -299,7 +308,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   const confLabel = (field) => {
     const v = confidenceOf(field)
     if (v == null) return ''
-    return `${Math.round(v * 100)}% confianza`
+    return t('payments.bootcamper.ocrModal.confidence', { pct: Math.round(v * 100) })
   }
 
   // Monto: solo dígitos y un único separador decimal. Normaliza coma → punto,
@@ -317,17 +326,17 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   }
 
   let submitLabel
-  if (mutation.isPending) submitLabel = isEdit ? 'Reenviando...' : 'Confirmando...'
-  else submitLabel = isEdit ? 'Reenviar pago' : 'Confirmar pago'
+  if (mutation.isPending) submitLabel = isEdit ? t('payments.bootcamper.ocrModal.resending') : t('payments.bootcamper.ocrModal.confirming')
+  else submitLabel = isEdit ? t('payments.bootcamper.ocrModal.resend') : t('payments.bootcamper.ocrModal.confirm')
 
-  let modalTitle = 'Revisar comprobante de transferencia'
-  let modalHint = 'Compara tu comprobante con los datos escaneados y corrige lo necesario antes de confirmar'
+  let modalTitle = t('payments.bootcamper.ocrModal.titleReview')
+  let modalHint = t('payments.bootcamper.ocrModal.hintReview')
   if (isEdit) {
-    modalTitle = 'Editar y reenviar pago'
-    modalHint = 'Corrige los datos observados y reenvía el pago para una nueva revisión'
+    modalTitle = t('payments.bootcamper.ocrModal.titleEdit')
+    modalHint = t('payments.bootcamper.ocrModal.hintEdit')
   } else if (isView) {
-    modalTitle = 'Detalle del pago'
-    modalHint = 'Datos registrados de tu comprobante. Esta vista es solo de consulta'
+    modalTitle = t('payments.bootcamper.ocrModal.titleView')
+    modalHint = t('payments.bootcamper.ocrModal.hintView')
   }
 
   const dialogRef = useModalA11y(onClose)
@@ -350,7 +359,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
           </div>
           <button
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label={t('payments.bootcamper.ocrModal.close')}
             className="text-gray-500 hover:text-gray-700 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -362,10 +371,27 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
         <div className="grid lg:grid-cols-2 gap-0">
           {/* Comprobante subido */}
           <div className="border-b lg:border-b-0 lg:border-r border-gray-100 p-4">
-            <p className="text-xs font-medium text-gray-500 mb-2">Comprobante subido</p>
+            <p className="text-xs font-medium text-gray-500 mb-2">{t('payments.bootcamper.ocrModal.uploadedReceipt')}</p>
             <div className="bg-gray-50 border border-gray-200 rounded-xl h-48 sm:h-64 lg:h-[26rem] overflow-hidden">
               <ReceiptPreview url={payment.receipt_file} type={payment.receipt_file_type} />
             </div>
+            {isEdit && (
+              <div className="mt-3">
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-[#213A8E] border border-[#213A8E]/40 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  {newReceipt ? t('payments.bootcamper.ocrModal.changeReceipt') : t('payments.bootcamper.ocrModal.replaceReceipt')}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    className="hidden"
+                    onChange={(e) => setNewReceipt(e.target.files?.[0] || null)}
+                  />
+                </label>
+                {newReceipt && (
+                  <p className="text-xs text-gray-500 mt-1 truncate">{t('payments.bootcamper.ocrModal.newFile', { name: newReceipt.name })}</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Datos extraídos */}
@@ -376,24 +402,24 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <p className="text-sm font-medium text-gray-700 mt-4">Escaneando texto…</p>
+              <p className="text-sm font-medium text-gray-700 mt-4">{t('payments.bootcamper.ocrModal.scanning')}</p>
               <p className="text-xs text-gray-500 mt-1 max-w-xs">
-                Estamos leyendo los datos de tu comprobante. Esto puede tardar unos segundos.
+                {t('payments.bootcamper.ocrModal.scanningHint')}
               </p>
             </div>
           ) : (
             <>
               {timedOut && !ocrReady && (
                 <p data-testid="ocr-timeout" className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
-                  No se pudieron extraer los datos automáticamente. Complétalos manualmente antes de confirmar.
+                  {t('payments.bootcamper.ocrModal.ocrTimeout')}
                 </p>
               )}
               {[
-                { key: 'ocr_bank_name', label: 'Banco', placeholder: 'Nombre del banco' },
-                { key: 'ocr_account_last_digits', label: 'Últimos dígitos cuenta', placeholder: 'Ej: 1234' },
-                { key: 'ocr_amount', label: 'Monto', placeholder: 'Ej: 500.00', type: 'text', inputMode: 'decimal' },
-                { key: 'ocr_transaction_id', label: 'Nro. de transacción', placeholder: 'ID de transacción' },
-                { key: 'ocr_payment_date', label: 'Fecha de pago', type: 'date' },
+                { key: 'ocr_bank_name', label: t('payments.bootcamper.ocrModal.bankLabel'), placeholder: t('payments.bootcamper.ocrModal.bankPlaceholder') },
+                { key: 'ocr_account_last_digits', label: t('payments.bootcamper.ocrModal.accountLabel'), placeholder: t('payments.bootcamper.ocrModal.accountPlaceholder') },
+                { key: 'ocr_amount', label: t('payments.bootcamper.ocrModal.amountLabel'), placeholder: t('payments.bootcamper.ocrModal.amountPlaceholder'), type: 'text', inputMode: 'decimal' },
+                { key: 'ocr_transaction_id', label: t('payments.bootcamper.ocrModal.txLabel'), placeholder: t('payments.bootcamper.ocrModal.txPlaceholder') },
+                { key: 'ocr_payment_date', label: t('payments.bootcamper.ocrModal.dateLabel'), type: 'date' },
               ].map(({ key, label, placeholder, type = 'text', inputMode }) => (
                 <div key={key}>
                   <div className="flex items-center justify-between mb-1">
@@ -421,7 +447,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
 
           {mutation.isError && (
             <p className="text-red-500 text-sm animate-shake">
-              {mutation.error?.response?.data?.error || 'Error al confirmar el pago.'}
+              {mutation.error?.response?.data?.error || t('payments.bootcamper.ocrModal.confirmError')}
             </p>
           )}
 
@@ -431,7 +457,7 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
               onClick={onClose}
               className={`border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors ${isView ? 'w-full' : 'flex-1'}`}
             >
-              {isView ? 'Cerrar' : 'Cancelar'}
+              {isView ? t('payments.bootcamper.ocrModal.close') : t('payments.bootcamper.ocrModal.cancel')}
             </button>
             {!isView && (
               <button
@@ -469,6 +495,7 @@ const MENU_WIDTH = 176
 const VIEWPORT_MARGIN = 8
 
 function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReason, onDelete }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -534,16 +561,17 @@ function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReaso
   // Un borrador se revisa; un rechazado se corrige, se consulta el motivo o se
   // descarta; lo aprobado y lo pendiente ya solo se consultan.
   const actions = []
-  if (payment.status === 'DRAFT') actions.push({ label: 'Revisar', run: onReview })
+  if (payment.status === 'DRAFT') actions.push({ label: t('payments.bootcamper.actions.review'), run: onReview })
   if (payment.status === 'REJECTED') {
-    actions.push({ label: 'Editar', run: onEdit })
-    if (payment.rejection_reason) actions.push({ label: 'Ver motivo', run: onViewReason })
+    actions.push({ label: t('payments.bootcamper.actions.edit'), run: onEdit })
+    if (payment.rejection_reason) actions.push({ label: t('payments.bootcamper.actions.viewReason'), run: onViewReason })
   }
   if (payment.status === 'APPROVED' || payment.status === 'PENDING') {
-    actions.push({ label: 'Ver información', run: onView })
+    actions.push({ label: t('payments.bootcamper.actions.viewInfo'), run: onView })
   }
-  if (payment.status === 'DRAFT' || payment.status === 'REJECTED') {
-    actions.push({ label: 'Eliminar', run: onDelete, danger: true })
+  // Se puede eliminar lo que aún no quedó aprobado: borrador, pendiente o rechazado.
+  if (['DRAFT', 'PENDING', 'REJECTED'].includes(payment.status)) {
+    actions.push({ label: t('payments.bootcamper.actions.delete'), run: onDelete, danger: true })
   }
 
   return (
@@ -551,7 +579,7 @@ function PaymentActionsDropdown({ payment, onReview, onEdit, onView, onViewReaso
       <button
         ref={btnRef}
         onClick={handleToggle}
-        aria-label={`Acciones del pago de ${payment.program_name || 'programa'}`}
+        aria-label={t('payments.bootcamper.actions.menuAria', { program: payment.program_name || t('payments.bootcamper.actions.programFallback') })}
         aria-expanded={open}
         className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
       >
@@ -599,6 +627,7 @@ const paymentInitial = (p) => (p.program_name || 'P')[0].toUpperCase()
 // ─── Payment Row ──────────────────────────────────────────────────────────────
 
 function PaymentRow({ payment, ...actions }) {
+  const { t } = useTranslation()
   return (
     <tr data-testid="payment-row" className="hover:bg-gray-50 transition-colors">
       <td className="py-3.5 px-3">
@@ -615,7 +644,7 @@ function PaymentRow({ payment, ...actions }) {
       </td>
       <td className="py-3.5 px-3">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[payment.status]}`}>
-          {STATUS_LABELS[payment.status]}
+          {t(`payments.status.${payment.status}`)}
         </span>
       </td>
       <td className="py-3.5 px-3">
@@ -636,6 +665,7 @@ function PaymentRow({ payment, ...actions }) {
  * Es un espejo de `PaymentRow`: si se agrega un dato a la fila, va también acá.
  */
 function PaymentCard({ payment, ...actions }) {
+  const { t } = useTranslation()
   return (
     <li data-testid="payment-card" className="border border-gray-200 rounded-xl p-4">
       <div className="flex items-start justify-between gap-3">
@@ -654,7 +684,7 @@ function PaymentCard({ payment, ...actions }) {
           <p className="text-xs text-gray-500 mt-0.5">{paymentDateLabel(payment)}</p>
         </div>
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${STATUS_COLORS[payment.status]}`}>
-          {STATUS_LABELS[payment.status]}
+          {t(`payments.status.${payment.status}`)}
         </span>
       </div>
       {/* El motivo del rechazo no se imprime acá, igual que en la fila: se lee
@@ -680,6 +710,7 @@ function SkeletonPaymentRow() {
 // ─── Rejection Reason Modal ───────────────────────────────────────────────────
 
 function RejectionReasonModal({ payment, onClose }) {
+  const { t } = useTranslation()
   const dialogRef = useModalA11y(onClose)
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
@@ -688,11 +719,11 @@ function RejectionReasonModal({ payment, onClose }) {
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label="Motivo del rechazo"
+        aria-label={t('payments.bootcamper.rejectionModal.title')}
         className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-full overflow-y-auto overscroll-contain p-5 sm:p-6 focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-gray-900">Motivo del rechazo</h2>
+        <h2 className="text-lg font-semibold text-gray-900">{t('payments.bootcamper.rejectionModal.title')}</h2>
         <p className="text-xs text-gray-500 mt-0.5">{payment.program_name}</p>
 
         <p className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -700,14 +731,14 @@ function RejectionReasonModal({ payment, onClose }) {
         </p>
 
         <p className="mt-3 text-xs text-gray-500">
-          Corrige los datos observados y reenvía el pago desde la acción «Editar».
+          {t('payments.bootcamper.rejectionModal.hint')}
         </p>
 
         <button
           onClick={onClose}
           className="mt-5 w-full border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors"
         >
-          Cerrar
+          {t('payments.bootcamper.rejectionModal.close')}
         </button>
       </div>
     </div>
@@ -717,6 +748,7 @@ function RejectionReasonModal({ payment, onClose }) {
 // ─── Delete Confirm Modal ─────────────────────────────────────────────────────
 
 function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
+  const { t } = useTranslation()
   const dialogRef = useModalA11y(onClose)
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
@@ -725,15 +757,14 @@ function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label="Eliminar pago"
+        aria-label={t('payments.bootcamper.deleteModal.title')}
         className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-full overflow-y-auto overscroll-contain p-5 sm:p-6 focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-gray-900">Eliminar pago</h2>
+        <h2 className="text-lg font-semibold text-gray-900">{t('payments.bootcamper.deleteModal.title')}</h2>
         <p className="text-sm text-gray-500 mt-2">
-          ¿Seguro que quieres eliminar el comprobante de{' '}
-          <span className="font-medium text-gray-700">{payment.program_name}</span>? Esta acción no se
-          puede deshacer.
+          {t('payments.bootcamper.deleteModal.confirmPrefix')}
+          <span className="font-medium text-gray-700">{payment.program_name}</span>{t('payments.bootcamper.deleteModal.confirmSuffix')}
         </p>
         <div className="flex gap-3 pt-5">
           <button
@@ -741,7 +772,7 @@ function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
             onClick={onClose}
             className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors"
           >
-            Cancelar
+            {t('payments.bootcamper.deleteModal.cancel')}
           </button>
           <button
             type="button"
@@ -750,7 +781,7 @@ function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
             className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-red-700 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
           >
             {isPending && <Spinner />}
-            {isPending ? 'Eliminando...' : 'Eliminar'}
+            {isPending ? t('payments.bootcamper.deleteModal.deleting') : t('payments.bootcamper.deleteModal.delete')}
           </button>
         </div>
       </div>
@@ -761,6 +792,7 @@ function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PaymentsPage() {
+  const { t } = useTranslation()
   const [showUpload, setShowUpload] = useState(false)
   const [reviewPayment, setReviewPayment] = useState(null)
   const [editPayment, setEditPayment] = useState(null)
@@ -778,9 +810,9 @@ export default function PaymentsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-payments'] })
       setDeleteTarget(null)
-      setToast({ message: 'Pago eliminado.' })
+      setToast({ message: t('payments.bootcamper.toast.deleted') })
     },
-    onError: () => setToast({ message: 'No se pudo eliminar el pago.', type: 'error' }),
+    onError: () => setToast({ message: t('payments.bootcamper.toast.deleteError'), type: 'error' }),
   })
 
   const { data: payments = [], isLoading } = useQuery({
@@ -841,19 +873,19 @@ export default function PaymentsPage() {
   // no hay nada que consultar: se muestra un guion en vez de un cero que diría
   // "no debes nada", que es justo lo contrario de su situación.
   let debtValue = '—'
-  let debtSub = 'Sube un comprobante para ver tu saldo'
+  let debtSub = t('payments.bootcamper.page.debtNoData')
   if (programIds.length > 0 && totalDebt !== undefined) {
     debtValue = totalDebt > 0
       ? `$${totalDebt.toLocaleString('en-US', { minimumFractionDigits: 0 })}`
-      : 'Sin deuda'
+      : t('payments.bootcamper.page.noDebt')
     if (totalDebt <= 0) {
-      debtSub = 'Completaste el pago de tu programa'
+      debtSub = t('payments.bootcamper.page.debtComplete')
     } else if (pendingCount > 0) {
       // Sólo los pagos aprobados descuentan, así que quien acaba de subir un
       // comprobante ve su pago en la lista y la deuda intacta. Se avisa acá.
-      debtSub = 'No incluye tus pagos en revisión'
+      debtSub = t('payments.bootcamper.page.debtNotIncludingPending')
     } else {
-      debtSub = 'Sobre el precio acordado de tu programa'
+      debtSub = t('payments.bootcamper.page.debtOverAgreed')
     }
   }
 
@@ -864,8 +896,8 @@ export default function PaymentsPage() {
   })
 
   const SORT_OPTIONS = [
-    { value: 'newest', label: 'Fecha: más reciente' },
-    { value: 'oldest', label: 'Fecha: más antiguo' },
+    { value: 'newest', label: t('payments.bootcamper.page.sortNewest') },
+    { value: 'oldest', label: t('payments.bootcamper.page.sortOldest') },
   ]
 
   const showToast = (message, type = 'success') => setToast({ message, type })
@@ -875,8 +907,8 @@ export default function PaymentsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pagos</h1>
-          <p className="text-sm text-gray-500 mt-1">Sube tus comprobantes y sigue el estado de tus pagos</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('payments.bootcamper.page.title')}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('payments.bootcamper.page.subtitle')}</p>
         </div>
         <button
           data-testid="upload-button"
@@ -886,26 +918,26 @@ export default function PaymentsPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
-          Subir pago
+          {t('payments.bootcamper.page.uploadPayment')}
         </button>
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 sm:flex sm:gap-4 mb-6 sm:mb-8">
         <StatCard
-          label="Total pagado"
+          label={t('payments.bootcamper.page.totalPaid')}
           value={`$${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 0 })}`}
-          sub={approved.length === 1 ? '1 pago aprobado' : `${approved.length} pagos aprobados`}
+          sub={t('payments.bootcamper.page.approved', { count: approved.length })}
           loading={isLoading}
         />
         <StatCard
-          label="Pendientes"
+          label={t('payments.bootcamper.page.pendingLabel')}
           value={`${pendingCount}`}
-          sub={pendingCount === 1 ? '1 pago en espera de aprobación' : `${pendingCount} pagos en espera de aprobación`}
+          sub={t('payments.bootcamper.page.pending', { count: pendingCount })}
           loading={isLoading}
         />
         <StatCard
-          label="Adeudado"
+          label={t('payments.bootcamper.page.owed')}
           value={debtValue}
           sub={debtSub}
           loading={isLoading || debtLoading}
@@ -913,10 +945,15 @@ export default function PaymentsPage() {
         />
       </div>
 
+      {/* Plan de pagos (lo sube Finanzas; el bootcamper solo lo consulta) */}
+      <div className="mb-6">
+        <PaymentPlanPanel mode="bootcamper" />
+      </div>
+
       {/* Payment History */}
       <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Historial de pagos</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('payments.bootcamper.page.historyTitle')}</h2>
 
           <div className="relative" ref={sortRef}>
             <button
@@ -926,7 +963,7 @@ export default function PaymentsPage() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
               </svg>
-              Ordenar por fecha
+              {t('payments.bootcamper.page.sortByDate')}
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
@@ -956,12 +993,12 @@ export default function PaymentsPage() {
             <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <p className="text-sm text-gray-500">No tienes pagos registrados aún.</p>
+            <p className="text-sm text-gray-500">{t('payments.bootcamper.page.empty')}</p>
             <button
               onClick={() => setShowUpload(true)}
               className="mt-3 text-sm text-[#213A8E] font-medium hover:underline"
             >
-              Subir tu primer comprobante
+              {t('payments.bootcamper.page.uploadFirst')}
             </button>
           </div>
         )}
@@ -994,9 +1031,15 @@ export default function PaymentsPage() {
               <table className="w-full text-sm min-w-[600px]">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    {['Programa', 'Fecha', 'Monto', 'Estado', 'Acciones'].map((h) => (
-                      <th key={h} className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide">
-                        {h}
+                    {[
+                      ['program', t('payments.queue.colProgram')],
+                      ['date', t('payments.queue.colDate')],
+                      ['amount', t('payments.queue.colAmount')],
+                      ['status', t('payments.queue.colStatus')],
+                      ['actions', t('payments.queue.colActions')],
+                    ].map(([key, label]) => (
+                      <th key={key} className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide">
+                        {label}
                       </th>
                     ))}
                   </tr>
@@ -1032,10 +1075,10 @@ export default function PaymentsPage() {
             // arrancó. Prometer que lo estamos leyendo dejaría al bootcamper
             // esperando un resultado que no va a llegar.
             if (data.ocr_queued === false) {
-              showToast('Comprobante recibido. La lectura automática no está disponible ahora; Finanzas lo revisará a mano.')
+              showToast(t('payments.bootcamper.toast.receivedNoOcr'))
               return
             }
-            showToast('Comprobante subido. Estamos escaneando el texto…')
+            showToast(t('payments.bootcamper.toast.uploadedScanning'))
             if (data.status === 'DRAFT') setReviewPayment(data)
           }}
         />
@@ -1047,7 +1090,7 @@ export default function PaymentsPage() {
           onClose={() => setReviewPayment(null)}
           onSuccess={() => {
             setReviewPayment(null)
-            showToast('Pago confirmado. Queda pendiente de aprobación.')
+            showToast(t('payments.bootcamper.toast.confirmed'))
           }}
         />
       )}
@@ -1059,7 +1102,7 @@ export default function PaymentsPage() {
           onClose={() => setEditPayment(null)}
           onSuccess={() => {
             setEditPayment(null)
-            showToast('Pago reenviado. Queda pendiente de aprobación.')
+            showToast(t('payments.bootcamper.toast.resent'))
           }}
         />
       )}

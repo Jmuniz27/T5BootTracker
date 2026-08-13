@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getFinancePortfolio } from '../../api/finance.api'
@@ -22,6 +23,7 @@ function fmtMoney(value) {
 }
 
 function FinanceCard({ person, onClick }) {
+  const { t } = useTranslation()
   const count = person.bootcamper_count ?? 0
   const critical = person.critical_count ?? 0
   const expected = parseFloat(person.expected_amount) || 0
@@ -42,7 +44,7 @@ function FinanceCard({ person, onClick }) {
         </div>
         {critical > 0 && (
           <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-600 flex-shrink-0">
-            {critical} crítico{critical === 1 ? '' : 's'}
+            {t('portfolios.critical', { count: critical })}
           </span>
         )}
       </div>
@@ -50,14 +52,14 @@ function FinanceCard({ person, onClick }) {
       <p className="text-2xl font-bold text-gray-900 leading-tight">
         {count}
         <span className="text-sm font-medium text-gray-400 ml-1.5">
-          bootcamper{count === 1 ? '' : 's'}
+          {t('portfolios.bootcampers', { count })}
         </span>
       </p>
 
       {count > 0 && (
         <div className="mt-3">
           <div className="flex justify-between mb-1">
-            <span className="text-xs text-gray-400">Cobrado</span>
+            <span className="text-xs text-gray-400">{t('portfolios.collected')}</span>
             <span className="text-xs font-semibold text-gray-700">{paidPct.toFixed(0)}%</span>
           </div>
           <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -67,7 +69,7 @@ function FinanceCard({ person, onClick }) {
             />
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            {fmtMoney(person.total_paid)} de {fmtMoney(person.expected_amount)}
+            {t('portfolios.ofAmount', { paid: fmtMoney(person.total_paid), expected: fmtMoney(person.expected_amount) })}
           </p>
         </div>
       )}
@@ -87,6 +89,7 @@ function SkeletonCard() {
 }
 
 export default function FinancePortfolios() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { data, isLoading, isError } = useQuery({
     queryKey: ['finance-portfolio'],
@@ -114,7 +117,7 @@ export default function FinancePortfolios() {
 
       {isError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-          No pudimos cargar las carteras. Intenta de nuevo.
+          {t('portfolios.loadError')}
         </div>
       )}
 
@@ -131,7 +134,7 @@ export default function FinancePortfolios() {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-4 flex items-center gap-3 flex-wrap">
           <span className="text-2xl font-bold text-amber-700">{unassigned}</span>
           <p className="text-sm text-amber-800 flex-1 min-w-[200px]">
-            bootcamper{unassigned === 1 ? '' : 's'} sin responsable de cobro, esperando en el pool.
+            {t('portfolios.unassignedBanner', { count: unassigned })}
           </p>
           {/* El aviso solía terminar acá: informaba de un problema que el
               administrador no podía resolver desde ninguna pantalla. */}
@@ -139,14 +142,14 @@ export default function FinancePortfolios() {
             onClick={() => setRepartiendo(true)}
             className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-xl hover:bg-amber-700 transition-colors"
           >
-            Repartir
+            {t('portfolios.distribute')}
           </button>
         </div>
       )}
 
       {!isLoading && !isError && portfolios.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
-          <p className="text-sm text-gray-500">No hay personas de Finanzas activas.</p>
+          <p className="text-sm text-gray-500">{t('portfolios.emptyFinance')}</p>
         </div>
       )}
 

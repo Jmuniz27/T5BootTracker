@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../../../src/theme/colors';
 import { useQuickCall } from '../../../../src/hooks/use-quick-call';
 import {
@@ -23,36 +24,31 @@ import {
   resendInvitation,
   discardLead,
   restoreLead,
+  getSelfAssignmentEnabled,
 } from '../../../../src/api/leads.api';
 import type { Lead, LeadStatus } from '../../../../src/types/leads';
 import { copyInvitationLink, shareInvitationLink } from '../../../../src/lib/invitation';
 
 // Estado de la cuenta del bootcamper tras convertir (espejo del badge web).
-const VERIFICATION_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  INVITED:              { label: 'Invitado',                 bg: '#f1f5f9', color: '#64748b' },
-  PENDING_VERIFICATION: { label: 'Pendiente de verificación', bg: '#fef9c3', color: '#a16207' },
-  VERIFIED:             { label: 'Cuenta activa',            bg: '#dcfce7', color: '#15803d' },
+const VERIFICATION_CONFIG: Record<string, { bg: string; color: string }> = {
+  INVITED:              { bg: '#f1f5f9', color: '#64748b' },
+  PENDING_VERIFICATION: { bg: '#fef9c3', color: '#a16207' },
+  VERIFIED:             { bg: '#dcfce7', color: '#15803d' },
 };
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  NEW:            { label: 'Nuevo',         bg: '#fefce8', color: '#a16207' },
-  QUALIFIED:      { label: 'Calificado',    bg: '#dbeafe', color: '#1d4ed8' },
-  INTERESTED:     { label: 'Interesado',    bg: '#dcfce7', color: '#15803d' },
-  NOT_INTERESTED: { label: 'No interesado', bg: '#fee2e2', color: '#dc2626' },
-  CONVERTED:      { label: 'Convertido',    bg: '#f3e8ff', color: '#7e22ce' },
-  DISCARDED:      { label: 'Descartado',    bg: '#f1f5f9', color: '#64748b' },
+const STATUS_CONFIG: Record<string, { bg: string; color: string }> = {
+  NEW:            { bg: '#fefce8', color: '#a16207' },
+  QUALIFIED:      { bg: '#dbeafe', color: '#1d4ed8' },
+  INTERESTED:     { bg: '#dcfce7', color: '#15803d' },
+  NOT_INTERESTED: { bg: '#fee2e2', color: '#dc2626' },
+  CONVERTED:      { bg: '#f3e8ff', color: '#7e22ce' },
+  DISCARDED:      { bg: '#f1f5f9', color: '#64748b' },
 };
 
 // "Nuevo" no es una opción manual: un lead nace en NEW y avanza desde ahí.
 const ASSIGNABLE: LeadStatus[] = ['QUALIFIED', 'INTERESTED', 'NOT_INTERESTED'];
 
-const DISCARD_REASONS: { value: string; label: string }[] = [
-  { value: 'NO_BUDGET',   label: 'Sin presupuesto' },
-  { value: 'SCHEDULE',    label: 'Los horarios no le sirven' },
-  { value: 'NO_RESPONSE', label: 'No responde / los correos rebotan' },
-  { value: 'FREE_ONLY',   label: 'Sólo busca contenido gratis' },
-  { value: 'OTHER',       label: 'Otro' },
-];
+const DISCARD_REASON_VALUES = ['NO_BUDGET', 'SCHEDULE', 'NO_RESPONSE', 'FREE_ONLY', 'OTHER'];
 
 const SOURCE_LABEL: Record<string, string> = {
   INSTAGRAM: 'Instagram',
@@ -73,6 +69,7 @@ function InfoRow({ icon, label, value }: { icon: any; label: string; value?: str
 }
 
 export default function LeadDetailScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string; lead?: string; owned?: string }>();
   const { startCall } = useQuickCall();
@@ -99,12 +96,16 @@ export default function LeadDetailScreen() {
   const [discardReason, setDiscardReason] = useState('');
   const [discardDetail, setDiscardDetail] = useState('');
   const [discardError, setDiscardError] = useState<string | null>(null);
+  const [selfAssignEnabled, setSelfAssignEnabled] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       getLead(params.id)
         .then((fresh) => { if (active && fresh?.id) setLead((prev) => ({ ...prev, ...fresh })); })
+        .catch(() => {});
+      getSelfAssignmentEnabled()
+        .then((enabled) => { if (active) setSelfAssignEnabled(enabled); })
         .catch(() => {});
       return () => { active = false; };
     }, [params.id]),
@@ -166,11 +167,11 @@ export default function LeadDetailScreen() {
 
   async function submitDiscard() {
     if (!discardReason) {
-      setDiscardError('Elige un motivo.');
+      setDiscardError(t('leads.detail.chooseReason'));
       return;
     }
     if (discardReason === 'OTHER' && !discardDetail.trim()) {
-      setDiscardError('Con el motivo “Otro” hay que escribir el detalle.');
+      setDiscardError(t('leads.detail.otherRequiresDetail'));
       return;
     }
     setBusy(true);
@@ -181,7 +182,7 @@ export default function LeadDetailScreen() {
       // Al descartar se desasigna: volvemos al listado.
       router.back();
     } catch (err: any) {
-      setDiscardError(err?.response?.data?.error ?? 'No se pudo descartar el lead.');
+      setDiscardError(err?.response?.data?.error ?? t('leads.detail.discardError'));
     } finally {
       setBusy(false);
     }
@@ -207,7 +208,7 @@ export default function LeadDetailScreen() {
       setResendLink(invitation_link);
     } catch (err: any) {
       setResendError(
-        err?.response?.data?.error ?? 'No pudimos reenviar la invitación. Intenta de nuevo.',
+        err?.response?.data?.error ?? t('leads.detail.resendError'),
       );
     } finally {
       setResendBusy(false);
@@ -237,7 +238,7 @@ export default function LeadDetailScreen() {
         <TouchableOpacity style={s.backBtn} hitSlop={8} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Lead</Text>
+        <Text style={s.headerTitle}>{t('leads.detail.headerTitle')}</Text>
         <View style={s.headerSpacer} />
       </View>
 
@@ -251,7 +252,7 @@ export default function LeadDetailScreen() {
               <Text style={s.name}>{lead.name}</Text>
               {cfg ? (
                 <View style={[s.badge, { backgroundColor: cfg.bg }]}>
-                  <Text style={[s.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
+                  <Text style={[s.badgeText, { color: cfg.color }]}>{t(`leads.status.${status}`)}</Text>
                 </View>
               ) : null}
             </View>
@@ -264,7 +265,7 @@ export default function LeadDetailScreen() {
                   params: { id: lead.id, lead: JSON.stringify(lead) },
                 })}
                 accessibilityRole="button"
-                accessibilityLabel="Editar información del lead"
+                accessibilityLabel={t('leads.detail.editAria')}
               >
                 <Ionicons name="pencil" size={16} color={colors.white} />
               </TouchableOpacity>
@@ -276,38 +277,38 @@ export default function LeadDetailScreen() {
           {lead.phone ? (
             <TouchableOpacity style={s.infoRow} onPress={() => startCall(lead as Lead)} activeOpacity={0.6}>
               <Ionicons name="call-outline" size={16} color={colors.navy} />
-              <Text style={s.infoLabel}>Teléfono</Text>
+              <Text style={s.infoLabel}>{t('leads.detail.phone')}</Text>
               <Text style={[s.infoValue, { color: colors.navy, textDecorationLine: 'underline' }]}>
                 {lead.phone}
               </Text>
             </TouchableOpacity>
           ) : null}
-          <InfoRow icon="mail-outline" label="Email" value={lead.email ?? undefined} />
-          <InfoRow icon="pricetag-outline" label="Origen" value={lead.source ? SOURCE_LABEL[lead.source] ?? lead.source : undefined} />
-          <InfoRow icon="school-outline" label="Programa" value={lead.program_interest} />
+          <InfoRow icon="mail-outline" label={t('leads.detail.email')} value={lead.email ?? undefined} />
+          <InfoRow icon="pricetag-outline" label={t('leads.detail.source')} value={lead.source ? SOURCE_LABEL[lead.source] ?? lead.source : undefined} />
+          <InfoRow icon="school-outline" label={t('leads.detail.program')} value={lead.program_interest} />
           <InfoRow
             icon="chatbubble-outline"
-            label="Interacciones"
+            label={t('leads.detail.interactions')}
             value={lead.interaction_count != null ? String(lead.interaction_count) : undefined}
           />
           {isConverted ? (
-            <InfoRow icon="ribbon-outline" label="Convertido por" value={lead.owner_name} />
+            <InfoRow icon="ribbon-outline" label={t('leads.detail.convertedBy')} value={lead.owner_name} />
           ) : null}
           {isConverted && verifCfg ? (
             <View style={s.infoRow}>
               <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
-              <Text style={s.infoLabel}>Cuenta</Text>
+              <Text style={s.infoLabel}>{t('leads.detail.account')}</Text>
               <View style={{ flex: 1, alignItems: 'flex-start' }}>
                 <View style={[s.verifBadge, { backgroundColor: verifCfg.bg }]}>
-                  <Text style={[s.verifBadgeText, { color: verifCfg.color }]}>{verifCfg.label}</Text>
+                  <Text style={[s.verifBadgeText, { color: verifCfg.color }]}>{verifStatus ? t(`leads.verification.${verifStatus}`) : ''}</Text>
                 </View>
               </View>
             </View>
           ) : null}
           {isDiscarded ? (
             <>
-              <InfoRow icon="close-circle-outline" label="Motivo" value={lead.discard_reason_display} />
-              <InfoRow icon="document-text-outline" label="Detalle" value={lead.discard_detail} />
+              <InfoRow icon="close-circle-outline" label={t('leads.detail.reason')} value={lead.discard_reason_display} />
+              <InfoRow icon="document-text-outline" label={t('leads.detail.detailLabel')} value={lead.discard_detail} />
             </>
           ) : null}
         </View>
@@ -317,7 +318,7 @@ export default function LeadDetailScreen() {
             <>
               <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.85}>
                 <Ionicons name="time-outline" size={18} color={colors.white} />
-                <Text style={s.actionPrimaryText}>Ver historial</Text>
+                <Text style={s.actionPrimaryText}>{t('leads.detail.viewHistory')}</Text>
               </TouchableOpacity>
               {canResendInvitation && (
                 <TouchableOpacity style={s.actionGhost} onPress={resend} disabled={resendBusy} activeOpacity={0.8}>
@@ -326,7 +327,7 @@ export default function LeadDetailScreen() {
                   ) : (
                     <>
                       <Ionicons name="paper-plane-outline" size={18} color={colors.navy} />
-                      <Text style={s.actionGhostText}>Reenviar invitación</Text>
+                      <Text style={s.actionGhostText}>{t('leads.detail.resendInvitation')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -339,7 +340,7 @@ export default function LeadDetailScreen() {
             <>
               <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.85}>
                 <Ionicons name="time-outline" size={18} color={colors.white} />
-                <Text style={s.actionPrimaryText}>Ver historial</Text>
+                <Text style={s.actionPrimaryText}>{t('leads.detail.viewHistory')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={s.actionGhost} onPress={restore} disabled={busy} activeOpacity={0.8}>
@@ -348,7 +349,7 @@ export default function LeadDetailScreen() {
                 ) : (
                   <>
                     <Ionicons name="refresh-outline" size={18} color={colors.navy} />
-                    <Text style={s.actionGhostText}>Reactivar lead</Text>
+                    <Text style={s.actionGhostText}>{t('leads.detail.reactivate')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -357,73 +358,92 @@ export default function LeadDetailScreen() {
             <>
               <TouchableOpacity style={s.actionPrimary} onPress={() => go('/(app)/leads/[id]/log-interaction')} activeOpacity={0.85}>
                 <Ionicons name="create-outline" size={18} color={colors.white} />
-                <Text style={s.actionPrimaryText}>Registrar interacción</Text>
+                <Text style={s.actionPrimaryText}>{t('leads.detail.logInteraction')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.8}>
                 <Ionicons name="time-outline" size={18} color={colors.navy} />
-                <Text style={s.actionGhostText}>Ver historial</Text>
+                <Text style={s.actionGhostText}>{t('leads.detail.viewHistory')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={s.actionGhost} onPress={() => setStatusOpen(true)} activeOpacity={0.8}>
                 <Ionicons name="flag-outline" size={18} color={colors.navy} />
-                <Text style={s.actionGhostText}>Cambiar estado</Text>
+                <Text style={s.actionGhostText}>{t('leads.detail.changeStatus')}</Text>
               </TouchableOpacity>
 
-              {isQualified && (
-                <TouchableOpacity
-                  style={s.actionGhost}
-                  onPress={() => router.push({
-                    pathname: '/(app)/leads/[id]/convert',
-                    params: {
-                      id: lead.id,
-                      name: lead.name,
-                      program: lead.program_interest ?? '',
-                      email: lead.email ?? '',
-                      phone: lead.phone ?? '',
-                    },
-                  })}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="ribbon-outline" size={18} color={colors.navy} />
-                  <Text style={s.actionGhostText}>Convertir a bootcamper</Text>
-                </TouchableOpacity>
-              )}
+              {/* Se muestra siempre, pero sólo se habilita en Calificado (el
+                  motivo se explica en el hint de más abajo). */}
+              <TouchableOpacity
+                style={[s.actionGhost, !isQualified && s.actionDisabled]}
+                disabled={!isQualified}
+                onPress={() => router.push({
+                  pathname: '/(app)/leads/[id]/convert',
+                  params: {
+                    id: lead.id,
+                    name: lead.name,
+                    program: lead.program_interest ?? '',
+                    email: lead.email ?? '',
+                    phone: lead.phone ?? '',
+                  },
+                })}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="ribbon-outline" size={18} color={colors.navy} />
+                <Text style={s.actionGhostText}>{t('leads.detail.convert')}</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity style={s.actionGhost} onPress={openDiscard} disabled={busy} activeOpacity={0.8}>
                 <Ionicons name="close-circle-outline" size={18} color={colors.navy} />
-                <Text style={s.actionGhostText}>Descartar lead</Text>
+                <Text style={s.actionGhostText}>{t('leads.detail.discard')}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={s.actionDanger} onPress={release} disabled={busy} activeOpacity={0.8}>
+              {/* Con la auto-asignación apagada el pool lo maneja el Admin: si
+                  soltás el lead no podrías retomarlo, así que tampoco se libera. */}
+              <TouchableOpacity
+                style={[s.actionDanger, !selfAssignEnabled && s.actionDisabled]}
+                onPress={release}
+                disabled={busy || !selfAssignEnabled}
+                activeOpacity={0.8}
+              >
                 {busy ? (
                   <ActivityIndicator size="small" color={colors.error} />
                 ) : (
-                  <Text style={s.actionDangerText}>Desasignar</Text>
+                  <Text style={s.actionDangerText}>{t('leads.detail.unassign')}</Text>
                 )}
               </TouchableOpacity>
 
+              {!selfAssignEnabled && (
+                <Text style={s.hint}>{t('leads.detail.assignByAdmin')}</Text>
+              )}
               {!isQualified && (
-                <Text style={s.hint}>Para convertir el lead, primero pásalo a “Calificado”.</Text>
+                <Text style={s.hint}>{t('leads.detail.convertHint')}</Text>
               )}
             </>
           ) : (
             <>
               <TouchableOpacity style={s.actionGhost} onPress={() => go('/(app)/leads/[id]/history')} activeOpacity={0.8}>
                 <Ionicons name="time-outline" size={18} color={colors.navy} />
-                <Text style={s.actionGhostText}>Ver historial</Text>
+                <Text style={s.actionGhostText}>{t('leads.detail.viewHistory')}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={s.actionPrimary} onPress={assign} disabled={busy} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[s.actionPrimary, !selfAssignEnabled && s.actionDisabled]}
+                onPress={assign}
+                disabled={busy || !selfAssignEnabled}
+                activeOpacity={0.85}
+              >
                 {busy ? (
                   <ActivityIndicator size="small" color={colors.white} />
                 ) : (
                   <>
                     <Ionicons name="add-outline" size={18} color={colors.white} />
-                    <Text style={s.actionPrimaryText}>Asignarme</Text>
+                    <Text style={s.actionPrimaryText}>{t('leads.detail.assignMe')}</Text>
                   </>
                 )}
               </TouchableOpacity>
+              {!selfAssignEnabled && (
+                <Text style={s.hint}>{t('leads.detail.assignByAdmin')}</Text>
+              )}
             </>
           )}
         </View>
@@ -434,7 +454,7 @@ export default function LeadDetailScreen() {
         <Pressable style={s.overlay} onPress={() => setStatusOpen(false)}>
           <View style={s.sheet}>
             <View style={s.handle} />
-            <Text style={s.sheetTitle}>Cambiar estado</Text>
+            <Text style={s.sheetTitle}>{t('leads.detail.changeStatus')}</Text>
             {ASSIGNABLE.map((st) => {
               const c = STATUS_CONFIG[st];
               const active = status === st;
@@ -446,7 +466,7 @@ export default function LeadDetailScreen() {
                   disabled={busy}
                   activeOpacity={0.8}
                 >
-                  <Text style={[s.statusOptionText, active && { color: c.color, fontWeight: '700' }]}>{c.label}</Text>
+                  <Text style={[s.statusOptionText, active && { color: c.color, fontWeight: '700' }]}>{t(`leads.status.${st}`)}</Text>
                   {busy && active && <ActivityIndicator size="small" color={c.color} />}
                 </TouchableOpacity>
               );
@@ -460,20 +480,20 @@ export default function LeadDetailScreen() {
         <Pressable style={s.overlay} onPress={() => setDiscardOpen(false)}>
           <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
             <View style={s.handle} />
-            <Text style={s.sheetTitle}>Descartar lead</Text>
-            <Text style={s.discardHint}>Sale del listado de seguimiento. Se puede reactivar después.</Text>
+            <Text style={s.sheetTitle}>{t('leads.detail.discard')}</Text>
+            <Text style={s.discardHint}>{t('leads.detail.discardSheetHint')}</Text>
 
-            {DISCARD_REASONS.map((r) => {
-              const active = discardReason === r.value;
+            {DISCARD_REASON_VALUES.map((value) => {
+              const active = discardReason === value;
               return (
                 <TouchableOpacity
-                  key={r.value}
+                  key={value}
                   style={[s.statusOption, active && { borderColor: colors.navy, backgroundColor: '#eff2fb' }]}
-                  onPress={() => setDiscardReason(r.value)}
+                  onPress={() => setDiscardReason(value)}
                   disabled={busy}
                   activeOpacity={0.8}
                 >
-                  <Text style={[s.statusOptionText, active && { color: colors.navy, fontWeight: '700' }]}>{r.label}</Text>
+                  <Text style={[s.statusOptionText, active && { color: colors.navy, fontWeight: '700' }]}>{t(`leads.discardReason.${value}`)}</Text>
                   {active && <Ionicons name="checkmark-circle" size={18} color={colors.navy} />}
                 </TouchableOpacity>
               );
@@ -483,7 +503,7 @@ export default function LeadDetailScreen() {
               style={s.discardInput}
               value={discardDetail}
               onChangeText={setDiscardDetail}
-              placeholder={discardReason === 'OTHER' ? 'Detalle (obligatorio)' : 'Detalle (opcional)'}
+              placeholder={discardReason === 'OTHER' ? t('leads.detail.detailRequired') : t('leads.detail.detailOptional')}
               placeholderTextColor={colors.textMuted}
               multiline
             />
@@ -492,13 +512,13 @@ export default function LeadDetailScreen() {
 
             <View style={s.resultActions}>
               <TouchableOpacity style={[s.actionGhost, { flex: 1 }]} onPress={() => setDiscardOpen(false)} disabled={busy} activeOpacity={0.8}>
-                <Text style={s.actionGhostText}>Cancelar</Text>
+                <Text style={s.actionGhostText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[s.actionPrimary, { flex: 1 }]} onPress={submitDiscard} disabled={busy} activeOpacity={0.85}>
                 {busy ? (
                   <ActivityIndicator size="small" color={colors.white} />
                 ) : (
-                  <Text style={s.actionPrimaryText}>Descartar</Text>
+                  <Text style={s.actionPrimaryText}>{t('leads.detail.discardConfirm')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -511,18 +531,18 @@ export default function LeadDetailScreen() {
         <Pressable style={s.overlay} onPress={closeResendModal}>
           <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
             <View style={s.handle} />
-            <Text style={s.sheetTitle}>Invitación reenviada</Text>
+            <Text style={s.sheetTitle}>{t('leads.detail.invitationResent')}</Text>
             <Text style={s.resultLink} selectable numberOfLines={2}>
               {resendLink}
             </Text>
             <View style={s.resultActions}>
               <TouchableOpacity style={[s.actionGhost, s.sheetBtn]} onPress={copyResendLink} activeOpacity={0.8}>
                 <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={20} color={colors.navy} />
-                <Text style={[s.actionGhostText, s.sheetBtnText]}>{copied ? 'Copiado' : 'Copiar'}</Text>
+                <Text style={[s.actionGhostText, s.sheetBtnText]}>{copied ? t('leads.detail.copied') : t('leads.detail.copy')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[s.actionPrimary, s.sheetBtn]} onPress={shareResendLink} activeOpacity={0.85}>
                 <Ionicons name="share-social-outline" size={20} color={colors.white} />
-                <Text style={[s.actionPrimaryText, s.sheetBtnText]}>Compartir</Text>
+                <Text style={[s.actionPrimaryText, s.sheetBtnText]}>{t('leads.detail.share')}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -609,6 +629,7 @@ const s = StyleSheet.create({
     paddingVertical: 14,
   },
   actionGhostText: { color: colors.navy, fontWeight: '700', fontSize: 15 },
+  actionDisabled: { opacity: 0.4 },
   verifBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   verifBadgeText: { fontSize: 11, fontWeight: '700' },
   actionDanger: {

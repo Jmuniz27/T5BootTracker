@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { usePrograms } from '../hooks/use-programs'
 import CreateProgramModal from '../components/programs/CreateProgramModal'
@@ -11,6 +12,7 @@ function fmtMoney(value) {
 }
 
 function ProgramCard({ program, onClick }) {
+  const { t } = useTranslation()
   const cohorts = program.cohort_count ?? 0
 
   return (
@@ -24,7 +26,7 @@ function ProgramCard({ program, onClick }) {
         </p>
         {!program.is_active && (
           <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 flex-shrink-0">
-            Inactivo
+            {t('programs.inactive')}
           </span>
         )}
       </div>
@@ -32,11 +34,11 @@ function ProgramCard({ program, onClick }) {
       <p className="text-2xl font-bold text-gray-900 leading-tight">
         {cohorts}
         <span className="text-sm font-medium text-gray-400 ml-1.5">
-          cohorte{cohorts === 1 ? '' : 's'}
+          {t('programs.cohorts', { count: cohorts })}
         </span>
       </p>
 
-      <p className="text-xs text-gray-400 mt-3">Costo del programa {fmtMoney(program.total_cost)}</p>
+      <p className="text-xs text-gray-400 mt-3">{t('programs.programCost', { amount: fmtMoney(program.total_cost) })}</p>
     </button>
   )
 }
@@ -52,6 +54,7 @@ function SkeletonCard() {
 }
 
 export default function ProgramsPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
   const [toast, setToast] = useState(null)
@@ -62,9 +65,9 @@ export default function ProgramsPage() {
     <div className="p-6 sm:p-8">
       <header className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Programas</h1>
+          <h1 className="text-xl font-semibold text-gray-900">{t('programs.title')}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Selecciona un programa para ver y administrar sus cohortes.
+            {t('programs.subtitle')}
           </p>
         </div>
         <button
@@ -74,13 +77,13 @@ export default function ProgramsPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Nuevo programa
+          {t('programs.newProgram')}
         </button>
       </header>
 
       {isError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-          No pudimos cargar los programas. Intenta de nuevo.
+          {t('programs.loadError')}
         </div>
       )}
 
@@ -94,12 +97,12 @@ export default function ProgramsPage() {
 
       {!isLoading && !isError && programs.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
-          <p className="text-sm text-gray-500">Todavía no hay programas creados.</p>
+          <p className="text-sm text-gray-500">{t('programs.emptyPrograms')}</p>
           <button
             onClick={() => setIsCreating(true)}
             className="mt-3 text-sm font-medium text-[#1D3176] hover:underline"
           >
-            Crear el primero
+            {t('programs.createFirst')}
           </button>
         </div>
       )}

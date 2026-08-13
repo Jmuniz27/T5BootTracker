@@ -1,6 +1,11 @@
 """URL configuration for leads app."""
 from django.urls import path
 
+from .bot_views import (
+    BotLeadCreateView,
+    BotLeadLookupView,
+    BotLeadUpdateByPhoneView,
+)
 from .views import (
     LeadListCreateView,
     LeadAssignView,
@@ -21,6 +26,10 @@ urlpatterns = [
     path('',                                                          LeadListCreateView.as_view(),        name='lead-list-create'),
     path('returning-bootcamper/',                                     ReturningBootcamperView.as_view(),   name='lead-returning-bootcamper'),
     path('settings/self-assignment/',                                 LeadAssignmentSettingView.as_view(), name='lead-assignment-setting'),
+    # Bot de WhatsApp (#279): se autentican por secreto compartido, no por JWT.
+    path('bot/lookup/',                                               BotLeadLookupView.as_view(),         name='bot-lead-lookup'),
+    path('bot/',                                                      BotLeadCreateView.as_view(),         name='bot-lead-create'),
+    path('bot/by-phone/<str:phone>/',                                 BotLeadUpdateByPhoneView.as_view(),  name='bot-lead-update-by-phone'),
     path('<uuid:pk>/assign/',                                         LeadAssignView.as_view(),            name='lead-assign'),
     path('<uuid:pk>/release/',                                        LeadReleaseView.as_view(),           name='lead-release'),
     path('<uuid:pk>/discard/',                                        LeadDiscardView.as_view(),           name='lead-discard'),

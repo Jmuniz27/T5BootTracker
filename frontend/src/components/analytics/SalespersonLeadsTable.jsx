@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useSalespersonLeads } from '../../hooks/use-salesperson-leads'
 import {
   SOURCE_LABELS,
@@ -52,15 +53,16 @@ function StatusBadge({ status }) {
  * cuadran con las tarjetas de arriba.
  */
 export default function SalespersonLeadsTable({ salespersonId, salespersonName, filters = {} }) {
+  const { t } = useTranslation()
   const { data, isLoading, isError, error } = useSalespersonLeads(salespersonId, filters)
 
   if (isError) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        No pudimos cargar los leads de este vendedor
+        {t('analytics.spLeads.loadError')}
         {error?.response?.status === 403
-          ? ' (requiere permisos de administrador).'
-          : '. Intenta de nuevo.'}
+          ? t('analytics.charts.loadError403')
+          : t('analytics.charts.loadErrorRetry')}
       </div>
     )
   }
@@ -71,28 +73,28 @@ export default function SalespersonLeadsTable({ salespersonId, salespersonName, 
     <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 text-sm text-gray-500">
         {isLoading
-          ? 'Cargando leads…'
-          : `${data?.leads_count ?? 0} leads asignados a ${salespersonName}`}
+          ? t('analytics.spLeads.loading')
+          : t('analytics.spLeads.summary', { count: data?.leads_count ?? 0, name: salespersonName })}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[900px]">
           <thead className="bg-gray-50 text-gray-500">
             <tr>
-              <th scope="col" className="text-left font-medium px-5 py-3">Lead</th>
-              <th scope="col" className="text-left font-medium px-5 py-3">Fuente</th>
-              <th scope="col" className="text-left font-medium px-5 py-3">Estado</th>
-              <th scope="col" className="text-left font-medium px-5 py-3">Programa</th>
-              <th scope="col" className="text-right font-medium px-5 py-3">Ingreso</th>
-              <th scope="col" className="text-right font-medium px-5 py-3">Asignado</th>
-              <th scope="col" className="text-right font-medium px-5 py-3">Retención</th>
-              <th scope="col" className="text-right font-medium px-5 py-3">Primer contacto</th>
-              <th scope="col" className="text-right font-medium px-5 py-3">Interacciones</th>
+              <th scope="col" className="text-left font-medium px-5 py-3">{t('analytics.spLeads.colLead')}</th>
+              <th scope="col" className="text-left font-medium px-5 py-3">{t('analytics.spLeads.colSource')}</th>
+              <th scope="col" className="text-left font-medium px-5 py-3">{t('analytics.spLeads.colStatus')}</th>
+              <th scope="col" className="text-left font-medium px-5 py-3">{t('analytics.spLeads.colProgram')}</th>
+              <th scope="col" className="text-right font-medium px-5 py-3">{t('analytics.spLeads.colCreated')}</th>
+              <th scope="col" className="text-right font-medium px-5 py-3">{t('analytics.spLeads.colAssigned')}</th>
+              <th scope="col" className="text-right font-medium px-5 py-3">{t('analytics.spLeads.colRetention')}</th>
+              <th scope="col" className="text-right font-medium px-5 py-3">{t('analytics.spLeads.colFirstContact')}</th>
+              <th scope="col" className="text-right font-medium px-5 py-3">{t('analytics.spLeads.colInteractions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {isLoading && <StateRow>Cargando leads…</StateRow>}
+            {isLoading && <StateRow>{t('analytics.spLeads.loading')}</StateRow>}
             {!isLoading && leads.length === 0 && (
-              <StateRow>Este vendedor no tiene leads asignados en el período</StateRow>
+              <StateRow>{t('analytics.spLeads.emptyPeriod')}</StateRow>
             )}
             {!isLoading &&
               leads.map((lead) => (
@@ -100,7 +102,7 @@ export default function SalespersonLeadsTable({ salespersonId, salespersonName, 
                   <td className="px-5 py-3 text-gray-900">
                     {lead.name}
                     {lead.is_released && (
-                      <span className="ml-2 text-xs text-gray-400">liberado</span>
+                      <span className="ml-2 text-xs text-gray-400">{t('analytics.spLeads.released')}</span>
                     )}
                   </td>
                   <td className="px-5 py-3 text-gray-700">

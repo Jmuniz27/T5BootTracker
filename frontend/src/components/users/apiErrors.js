@@ -12,11 +12,11 @@ const FORM_FIELDS = ['first_name', 'last_name', 'email', 'role', 'cedula', 'phon
  *   El mensaje general a mostrar, o `null` si el error completo quedó pintado
  *   bajo sus campos.
  */
-export function applyServerErrors(error, setError, fields = FORM_FIELDS) {
+export function applyServerErrors(error, setError, fields = FORM_FIELDS, defaultMessage = 'No se pudo completar la operación. Intenta de nuevo.') {
   const data = error?.response?.data
 
   if (!data || typeof data !== 'object') {
-    return 'No se pudo completar la operación. Intenta de nuevo.'
+    return defaultMessage
   }
 
   let matchedField = false
@@ -30,7 +30,7 @@ export function applyServerErrors(error, setError, fields = FORM_FIELDS) {
   const general = data.detail ?? data.error ?? data.non_field_errors
   if (general) return Array.isArray(general) ? general[0] : String(general)
 
-  return matchedField ? null : 'No se pudo completar la operación. Intenta de nuevo.'
+  return matchedField ? null : defaultMessage
 }
 
 /** Mensaje plano para acciones sin formulario (toggle, reset de contraseña). */

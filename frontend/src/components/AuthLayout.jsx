@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import logo from '../assets/logo.png';
+import LanguageSwitcher from './LanguageSwitcher';
 
 export default function AuthLayout({ children, backTo, backLabel = 'Volver' }) {
   return (
@@ -8,8 +9,11 @@ export default function AuthLayout({ children, backTo, backLabel = 'Volver' }) {
       // tarjeta. `py-10` es lo que evita que el centrado atrape el desborde —
       // un formulario alto (los 5 campos del onboarding) crece hacia abajo y el
       // documento scrollea, en vez de quedar recortado contra el borde.
-      className="relative min-h-screen overflow-hidden flex flex-col items-center justify-center gap-8 px-5 py-10 sm:px-8"
-      style={{ background: 'linear-gradient(135deg, #1a2f6e 0%, #0d1b4b 60%, #091336 100%)' }}
+      //
+      // `auth-canvas` es el gancho del que cuelga el degradado, que vive en
+      // index.css sobre el elemento raíz: aquí, en un div anidado, no llegaría
+      // al lienzo y el rebote del scroll descubriría blanco.
+      className="auth-canvas relative min-h-screen overflow-hidden flex flex-col items-center justify-center gap-8 px-5 py-10 sm:px-8"
     >
       {/* Radial glow */}
       <div
@@ -18,6 +22,11 @@ export default function AuthLayout({ children, backTo, backLabel = 'Volver' }) {
           background: 'radial-gradient(ellipse at 30% 50%, rgba(59,99,214,0.35) 0%, transparent 65%)',
         }}
       />
+
+      {/* Selector de idioma: arriba a la derecha, disponible antes de entrar. */}
+      <div className="absolute top-6 right-5 sm:right-8 z-20">
+        <LanguageSwitcher variant="dark" />
+      </div>
 
       {/* Logo: en el flujo hasta `lg`, flotando arriba a la izquierda desde ahí.
           Absoluto en pantallas chicas se superponía al formulario, porque nada

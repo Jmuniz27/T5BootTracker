@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -8,31 +10,35 @@ import { ROLE_OPTIONS } from './roles'
 import {
   coordinatorScopeFields,
   coordinatorScopePayload,
-  refineCoordinatorScope,
+  makeRefineCoordinatorScope,
 } from './coordinatorScope'
 import ModalShell from './ModalShell'
 import UserFormFields from './UserFormFields'
 import { applyServerErrors } from './apiErrors'
 
-const schema = z
-  .object({
-    first_name: z.string().trim().min(1, 'El nombre es requerido'),
-    last_name: z.string().trim().min(1, 'El apellido es requerido'),
-    email: z.string().trim().email('Ingresa un email válido'),
-    role: z.enum(
-      ROLE_OPTIONS.map((r) => r.value),
-      { message: 'Selecciona un rol' },
-    ),
-    cedula: z
-      .string()
-      .trim()
-      .refine((v) => v === '' || isValidCedula(v), 'Cédula ecuatoriana inválida'),
-    phone: z.string().trim(),
-    ...coordinatorScopeFields,
-  })
-  .superRefine(refineCoordinatorScope)
+function buildSchema(t) {
+  return z
+    .object({
+      first_name: z.string().trim().min(1, t('users.validation.firstNameRequired')),
+      last_name: z.string().trim().min(1, t('users.validation.lastNameRequired')),
+      email: z.string().trim().email(t('users.validation.emailInvalid')),
+      role: z.enum(
+        ROLE_OPTIONS.map((r) => r.value),
+        { message: t('users.validation.roleRequired') },
+      ),
+      cedula: z
+        .string()
+        .trim()
+        .refine((v) => v === '' || isValidCedula(v), t('users.validation.cedulaInvalid')),
+      phone: z.string().trim(),
+      ...coordinatorScopeFields,
+    })
+    .superRefine(makeRefineCoordinatorScope(t))
+}
 
 export default function EditUserModal({ user, onClose, onSuccess, onError }) {
+  const { t } = useTranslation()
+  const schema = useMemo(() => buildSchema(t), [t])
   const queryClient = useQueryClient()
 
   const {
@@ -59,11 +65,11 @@ export default function EditUserModal({ user, onClose, onSuccess, onError }) {
     mutationFn: (data) => updateUser(user.id, data),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      onSuccess(`Usuario ${updated.full_name} actualizado.`)
+      onSuccess(t('users.modals.updated', { name: updated.full_name }))
       onClose()
     },
     onError: (error) => {
-      const general = applyServerErrors(error, setError)
+      const general = applyServerErrors(error, setError, undefined, t('users.genericError'))
       if (general) onError(general)
     },
   })
@@ -77,7 +83,7 @@ export default function EditUserModal({ user, onClose, onSuccess, onError }) {
     })
 
   return (
-    <ModalShell title="Editar usuario" subtitle={user.email} onClose={onClose}>
+    <ModalShell title={t('users.modals.editTitle')} subtitle={user.email} onClose={onClose}>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
         <UserFormFields register={register} errors={errors} control={control} />
 
@@ -87,14 +93,14 @@ export default function EditUserModal({ user, onClose, onSuccess, onError }) {
             onClick={onClose}
             className="px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
           >
-            Cancelar
+            {t('users.modals.cancel')}
           </button>
           <button
             type="submit"
             disabled={mutation.isPending || !isDirty}
             className="px-4 py-2.5 bg-[#213A8E] text-white text-sm font-semibold rounded-xl hover:bg-[#1a2f72] transition-colors disabled:opacity-60"
           >
-            {mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+            {mutation.isPending ? t('users.modals.saving') : t('users.modals.saveChanges')}
           </button>
         </div>
       </form>

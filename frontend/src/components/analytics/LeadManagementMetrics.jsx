@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLeadManagementMetrics } from '../../hooks/use-lead-management-metrics'
 import CustomSelect from '../CustomSelect'
 import SalespersonLeadsTable from './SalespersonLeadsTable'
@@ -59,16 +60,17 @@ function SummaryCard({ label, value, footer, isLoading }) {
  * un endpoint de usuarios ni ofrecer nombres que darían una tabla vacía.
  */
 export default function LeadManagementMetrics({ filters = {} }) {
+  const { t } = useTranslation()
   const { data, isLoading, isError, error } = useLeadManagementMetrics(filters)
   const [salespersonId, setSalespersonId] = useState(ALL_SALESPEOPLE)
 
   if (isError) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        No pudimos cargar las métricas de gestión
+        {t('analytics.leadMgmt.loadError')}
         {error?.response?.status === 403
-          ? ' (requiere permisos de administrador).'
-          : '. Intenta de nuevo.'}
+          ? t('analytics.charts.loadError403')
+          : t('analytics.charts.loadErrorRetry')}
       </div>
     )
   }
@@ -82,42 +84,42 @@ export default function LeadManagementMetrics({ filters = {} }) {
   const showDetail = Boolean(salespersonId) && Boolean(selected)
 
   const salespersonOptions = [
-    { value: ALL_SALESPEOPLE, label: 'Todos los vendedores' },
+    { value: ALL_SALESPEOPLE, label: t('analytics.leadMgmt.allSalespeople') },
     ...rows.map((row) => ({ value: row.salesperson_id, label: row.salesperson })),
   ]
 
   return (
     <section className="mt-8">
       <header className="mb-3">
-        <h2 className="text-lg font-semibold text-gray-900">Gestión de leads por vendedor</h2>
+        <h2 className="text-lg font-semibold text-gray-900">{t('analytics.leadMgmt.title')}</h2>
         <p className="text-sm text-gray-500">
-          Tiempo de retención y de primer contacto sobre los leads asignados.
+          {t('analytics.leadMgmt.subtitle')}
         </p>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 mb-4">
         <SummaryCard
           isLoading={isLoading}
-          label="Retención promedio"
+          label={t('analytics.leadMgmt.avgRetention')}
           value={fmtHours(data?.avg_retention_hours)}
-          footer={`${data?.leads_considered ?? 0} leads asignados`}
+          footer={t('analytics.leadMgmt.leadsConsidered', { count: data?.leads_considered ?? 0 })}
         />
         <SummaryCard
           isLoading={isLoading}
-          label="Leads sin asignar"
+          label={t('analytics.leadMgmt.unassigned')}
           value={fmtCount(data?.unassigned_leads)}
-          footer="Esperando que un vendedor los tome"
+          footer={t('analytics.leadMgmt.unassignedFooter')}
         />
       </div>
 
       <div className="mb-4 max-w-xs">
-        <span className="block text-sm font-medium text-gray-700 mb-1">Vendedor</span>
+        <span className="block text-sm font-medium text-gray-700 mb-1">{t('analytics.leadMgmt.salesperson')}</span>
         <CustomSelect
           value={salespersonId}
           onChange={setSalespersonId}
           options={salespersonOptions}
-          placeholder="Todos los vendedores"
-          ariaLabel="Vendedor"
+          placeholder={t('analytics.leadMgmt.allSalespeople')}
+          ariaLabel={t('analytics.leadMgmt.salesperson')}
           testId="analytics-salesperson"
           disabled={isLoading || rows.length === 0}
         />
@@ -135,16 +137,16 @@ export default function LeadManagementMetrics({ filters = {} }) {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500">
                 <tr>
-                  <th scope="col" className="text-left font-medium px-5 py-3">Vendedor</th>
-                  <th scope="col" className="text-right font-medium px-5 py-3">Leads activos</th>
-                  <th scope="col" className="text-right font-medium px-5 py-3">Retención prom.</th>
-                  <th scope="col" className="text-right font-medium px-5 py-3">Primer contacto</th>
+                  <th scope="col" className="text-left font-medium px-5 py-3">{t('analytics.leadMgmt.colSalesperson')}</th>
+                  <th scope="col" className="text-right font-medium px-5 py-3">{t('analytics.leadMgmt.colActiveLeads')}</th>
+                  <th scope="col" className="text-right font-medium px-5 py-3">{t('analytics.leadMgmt.colRetention')}</th>
+                  <th scope="col" className="text-right font-medium px-5 py-3">{t('analytics.leadMgmt.colFirstContact')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {isLoading && <TableStateRow>Cargando métricas…</TableStateRow>}
+                {isLoading && <TableStateRow>{t('analytics.leadMgmt.loading')}</TableStateRow>}
                 {!isLoading && rows.length === 0 && (
-                  <TableStateRow>Sin leads asignados en este período</TableStateRow>
+                  <TableStateRow>{t('analytics.leadMgmt.noneInPeriod')}</TableStateRow>
                 )}
                 {!isLoading &&
                   rows.map((row) => (

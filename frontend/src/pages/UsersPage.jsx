@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUsers, toggleUserActive } from '../api/users.api'
 import { getSelfAssignmentSetting } from '../api/leads.api'
@@ -10,6 +11,7 @@ import UsersTable from '../components/users/UsersTable'
 import CreateUserModal from '../components/users/CreateUserModal'
 import EditUserModal from '../components/users/EditUserModal'
 import ConfirmToggleModal from '../components/users/ConfirmToggleModal'
+import ChangeCohortModal from '../components/users/ChangeCohortModal'
 import SelfAssignmentToggle from '../components/leads/SelfAssignmentToggle'
 import { ROLE_OPTIONS } from '../components/users/roles'
 import { errorMessage } from '../components/users/apiErrors'
@@ -18,13 +20,6 @@ import { errorMessage } from '../components/users/apiErrors'
 // de los bootcampers: estos últimos suelen llegar por conversión de leads y
 // hoy inundaban la misma tabla, tapando al resto.
 const STAFF_ROLE_OPTIONS = ROLE_OPTIONS.filter((r) => r.value !== 'BOOTCAMPER')
-const ROLE_FILTER_OPTIONS = [{ value: 'ALL', label: 'Todos los roles' }, ...STAFF_ROLE_OPTIONS]
-
-const STATUS_FILTER_OPTIONS = [
-  { value: 'ALL', label: 'Todos los estados' },
-  { value: 'ACTIVE', label: 'Activos' },
-  { value: 'INACTIVE', label: 'Inactivos' },
-]
 
 function matchesSearch(user, term) {
   if (!term) return true
@@ -39,8 +34,19 @@ function matchesStatus(user, statusFilter) {
 }
 
 export default function UsersPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const currentUserId = useAuthStore((s) => s.user?.id)
+
+  const ROLE_FILTER_OPTIONS = [
+    { value: 'ALL', label: t('users.allRoles') },
+    ...STAFF_ROLE_OPTIONS.map((r) => ({ value: r.value, label: t(`users.roles.${r.value}`) })),
+  ]
+  const STATUS_FILTER_OPTIONS = [
+    { value: 'ALL', label: t('users.allStatuses') },
+    { value: 'ACTIVE', label: t('users.active') },
+    { value: 'INACTIVE', label: t('users.inactive') },
+  ]
 
   const [activeTab, setActiveTab] = useState('staff') // 'staff' | 'bootcampers'
   // #328: la clienta agrupa a los bootcampers por programa y cohorte.
@@ -52,6 +58,7 @@ export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [toggleTarget, setToggleTarget] = useState(null)
+  const [cohortTarget, setCohortTarget] = useState(null) // { bootcamper, enrollment }
   const [toast, setToast] = useState(null)
 
   const showToast = (message, type = 'success') => setToast({ message, type })
@@ -93,10 +100,10 @@ export default function UsersPage() {
     bootcamperUsers.forEach((u) => {
       (u.enrollments ?? [])
         .filter((e) => e.program_id === programFilter && e.cohort_id)
-        .forEach((e) => porId.set(e.cohort_id, `Cohorte ${e.cohort_number}`))
+        .forEach((e) => porId.set(e.cohort_id, t('users.cohortNumber', { number: e.cohort_number })))
     })
     return [...porId.entries()].map(([value, label]) => ({ value, label }))
-  }, [bootcamperUsers, programFilter])
+  }, [bootcamperUsers, programFilter, t])
 
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -127,13 +134,13 @@ export default function UsersPage() {
       setToggleTarget(null)
       showToast(
         updated.is_active
-          ? `${updated.full_name} fue reactivado.`
-          : `${updated.full_name} fue desactivado.`,
+          ? t('users.reactivated', { name: updated.full_name })
+          : t('users.deactivated', { name: updated.full_name }),
       )
     },
     onError: (error) => {
       setToggleTarget(null)
-      showToast(errorMessage(error, 'No se pudo cambiar el estado del usuario.'), 'error')
+      showToast(errorMessage(error, t('users.toggleError')), 'error')
     },
   })
 
@@ -141,7 +148,7 @@ export default function UsersPage() {
     <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Gestión de usuarios</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('users.title')}</h1>
         <button
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 px-4 py-2.5 bg-[#213A8E] text-white text-sm font-semibold rounded-xl hover:bg-[#1a2f72] transition-colors"
@@ -149,7 +156,7 @@ export default function UsersPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Nuevo usuario
+          {t('users.newUser')}
         </button>
       </div>
 
@@ -161,17 +168,17 @@ export default function UsersPage() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-3 gap-3 mb-6 lg:mb-8">
-        <StatCard label="Total usuarios" value={tabUsers.length} loading={isLoading} />
-        <StatCard label="Activos" value={activeCount} loading={isLoading} />
+        <StatCard label={t('users.totalUsers')} value={tabUsers.length} loading={isLoading} />
+        <StatCard label={t('users.activeCount')} value={activeCount} loading={isLoading} />
         {activeTab === 'staff' ? (
-          <StatCard label="Administradores" value={adminCount} loading={isLoading} />
+          <StatCard label={t('users.admins')} value={adminCount} loading={isLoading} />
         ) : (
-          <StatCard label="Inactivos" value={tabUsers.length - activeCount} loading={isLoading} />
+          <StatCard label={t('users.inactiveCount')} value={tabUsers.length - activeCount} loading={isLoading} />
         )}
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">Usuarios</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">{t('users.tableTitle')}</h2>
 
         {/* Tabs */}
         <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-xl w-fit">
@@ -184,7 +191,7 @@ export default function UsersPage() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Administrativos ({staffUsers.length})
+            {t('users.tabStaff', { count: staffUsers.length })}
           </button>
           <button
             data-testid="tab-bootcampers"
@@ -195,7 +202,7 @@ export default function UsersPage() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Bootcampers ({bootcamperUsers.length})
+            {t('users.tabBootcampers', { count: bootcamperUsers.length })}
           </button>
         </div>
 
@@ -212,7 +219,7 @@ export default function UsersPage() {
             </svg>
             <input
               type="text"
-              placeholder="Buscar por nombre, email o cédula"
+              placeholder={t('users.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -225,18 +232,18 @@ export default function UsersPage() {
             <CustomSelect
               value={programFilter}
               onChange={(value) => { setProgramFilter(value); setCohortFilter('') }}
-              options={[{ value: '', label: 'Todos los programas' }, ...programOptions]}
-              placeholder="Todos los programas"
-              ariaLabel="Filtrar por programa"
+              options={[{ value: '', label: t('users.allPrograms') }, ...programOptions]}
+              placeholder={t('users.allPrograms')}
+              ariaLabel={t('users.filterByProgram')}
             />
           )}
           {activeTab === 'bootcampers' && programFilter && cohortOptions.length > 0 && (
             <CustomSelect
               value={cohortFilter}
               onChange={setCohortFilter}
-              options={[{ value: '', label: 'Todas las cohortes' }, ...cohortOptions]}
-              placeholder="Todas las cohortes"
-              ariaLabel="Filtrar por cohorte"
+              options={[{ value: '', label: t('users.allCohorts') }, ...cohortOptions]}
+              placeholder={t('users.allCohorts')}
+              ariaLabel={t('users.filterByCohort')}
             />
           )}
           <CustomSelect value={statusFilter} onChange={setStatusFilter} options={STATUS_FILTER_OPTIONS} />
@@ -244,7 +251,7 @@ export default function UsersPage() {
 
         {isError && (
           <p className="text-center text-red-500 py-8 text-sm">
-            No se pudieron cargar los usuarios. Verifica tu conexión y vuelve a intentar.
+            {t('users.loadError')}
           </p>
         )}
 
@@ -255,6 +262,7 @@ export default function UsersPage() {
           currentUserId={currentUserId}
           onEdit={setEditTarget}
           onToggle={setToggleTarget}
+          onChangeCohort={(bootcamper, enrollment) => setCohortTarget({ bootcamper, enrollment })}
         />
       </div>
 
@@ -281,6 +289,16 @@ export default function UsersPage() {
           isPending={toggleMutation.isPending}
           onConfirm={() => toggleMutation.mutate(toggleTarget)}
           onClose={() => setToggleTarget(null)}
+        />
+      )}
+
+      {cohortTarget && (
+        <ChangeCohortModal
+          bootcamper={cohortTarget.bootcamper}
+          enrollment={cohortTarget.enrollment}
+          onClose={() => setCohortTarget(null)}
+          onSuccess={(msg) => showToast(msg)}
+          onError={(msg) => showToast(msg, 'error')}
         />
       )}
 

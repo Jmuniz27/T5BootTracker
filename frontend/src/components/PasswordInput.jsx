@@ -1,4 +1,5 @@
 import { forwardRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import AuthInput, { LockIcon } from './AuthInput';
 
 const EyeIcon = (
@@ -18,6 +19,7 @@ const PasswordInput = forwardRef(function PasswordInput(
   { icon = LockIcon, error, ...props },
   ref
 ) {
+  const { t } = useTranslation();
   const [showPassword, setShowPassword] = useState(false);
 
   return (
@@ -30,7 +32,7 @@ const PasswordInput = forwardRef(function PasswordInput(
         <button
           type="button"
           onClick={() => setShowPassword((v) => !v)}
-          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+          aria-label={showPassword ? t('common.hidePassword') : t('common.showPassword')}
           // `right-2 p-2` en vez de `right-4`: el área táctil pasa de 20x20 a
           // 36x36 sin mover el ícono (right-2 + p-2 lo deja donde right-4).
           className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-white/40 hover:text-white/70 transition-colors"

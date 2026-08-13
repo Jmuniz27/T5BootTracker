@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import LanguageSwitcher from '../LanguageSwitcher'
 import SessionTimeoutWarning from '../SessionTimeoutWarning'
 import PageTransition from '../ui/PageTransition'
 import { useIdleTimeout } from '../../hooks/use-idle-timeout'
@@ -19,6 +21,7 @@ const AVATAR_COLORS = [
 ]
 
 export default function AppLayout() {
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const name = user?.full_name || user?.email || '?'
   const avatarColor = AVATAR_COLORS[(name.charCodeAt(0) ?? 0) % AVATAR_COLORS.length]
@@ -58,7 +61,7 @@ export default function AppLayout() {
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
-            aria-label="Abrir menú"
+            aria-label={t('common.openMenu')}
             aria-expanded={sidebarOpen}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -69,6 +72,7 @@ export default function AppLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-3">
+            <LanguageSwitcher />
             <div className="text-right hidden sm:block">
               <p className="text-sm font-normal text-gray-900 leading-tight">
                 {user?.full_name || user?.email || 'User'}

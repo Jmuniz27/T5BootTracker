@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { updateSelfAssignmentSetting } from '../../api/leads.api'
 
 function formatUpdatedAt(value) {
@@ -13,6 +14,7 @@ function formatUpdatedAt(value) {
  * Administrador — el backend igual rechaza el PATCH de cualquier otro rol.
  */
 export default function SelfAssignmentToggle({ setting, isLoading, onResult }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const enabled = setting?.self_assign_enabled ?? false
 
@@ -23,13 +25,13 @@ export default function SelfAssignmentToggle({ setting, isLoading, onResult }) {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       onResult(
         updated.self_assign_enabled
-          ? 'Auto-asignación habilitada. Los vendedores ya pueden asignarse leads.'
-          : 'Auto-asignación deshabilitada. Solo el Administrador asigna leads.',
+          ? t('leads.selfAssign.enabled')
+          : t('leads.selfAssign.disabled'),
       )
     },
     onError: (error) => {
       onResult(
-        error.response?.data?.error ?? 'No se pudo cambiar el control de auto-asignación.',
+        error.response?.data?.error ?? t('leads.selfAssign.error'),
         'error',
       )
     },
@@ -41,15 +43,15 @@ export default function SelfAssignmentToggle({ setting, isLoading, onResult }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 mb-6 flex flex-wrap items-center justify-between gap-4">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-gray-900">Auto-asignación de leads</p>
+        <p className="text-sm font-semibold text-gray-900">{t('leads.selfAssign.title')}</p>
         <p className="text-xs text-gray-500 mt-0.5">
           {enabled
-            ? 'Los vendedores pueden asignarse leads disponibles por su cuenta.'
-            : 'Solo el Administrador puede asignar leads. El botón “Asignarme” está deshabilitado.'}
+            ? t('leads.selfAssign.onHint')
+            : t('leads.selfAssign.offHint')}
         </p>
         {setting?.updated_by_name && updatedAt && (
           <p className="text-xs text-gray-500 mt-1">
-            Último cambio: {setting.updated_by_name} · {updatedAt}
+            {t('leads.selfAssign.lastChange', { name: setting.updated_by_name, date: updatedAt })}
           </p>
         )}
       </div>
@@ -58,7 +60,7 @@ export default function SelfAssignmentToggle({ setting, isLoading, onResult }) {
         type="button"
         role="switch"
         aria-checked={enabled}
-        aria-label="Auto-asignación de leads"
+        aria-label={t('leads.selfAssign.title')}
         disabled={busy}
         onClick={() => mutation.mutate(!enabled)}
         className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${

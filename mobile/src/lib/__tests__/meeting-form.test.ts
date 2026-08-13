@@ -1,5 +1,30 @@
-import { emptyMeetingForm, meetingToForm, formToPayload } from '../meeting-form';
+import { emptyMeetingForm, meetingToForm, formToPayload, validateMeetingForm } from '../meeting-form';
 import type { Meeting } from '../../api/meetings.api';
+
+describe('validateMeetingForm', () => {
+  const t = (key: string) => key;
+
+  it('sin errores cuando el form está completo y las fechas son válidas', () => {
+    const f = emptyMeetingForm();
+    f.title = 'Reunión';
+    f.lead = 'lead-1';
+    expect(validateMeetingForm(f, t)).toEqual({});
+  });
+
+  it('marca título y lead cuando faltan', () => {
+    const errs = validateMeetingForm(emptyMeetingForm(), t);
+    expect(errs.title).toBeTruthy();
+    expect(errs.lead).toBeTruthy();
+  });
+
+  it('marca fin cuando es anterior o igual al inicio', () => {
+    const f = emptyMeetingForm();
+    f.title = 'Reunión';
+    f.lead = 'lead-1';
+    f.end = new Date(f.start.getTime() - 60 * 1000);
+    expect(validateMeetingForm(f, t).end).toBeTruthy();
+  });
+});
 
 describe('emptyMeetingForm', () => {
   it('arranca mañana 9:00, 30 min, invitar activado', () => {

@@ -1,6 +1,7 @@
 """Views for payments app."""
 import logging
 import mimetypes
+import os
 from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db.models import Q
@@ -9,17 +10,19 @@ from django.utils.timezone import now
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, inline_serializer
 from rest_framework import status, serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
-from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.authentication.permissions import IsAdmin, IsFinanceOrAdmin
-from .models import BootcamperAssignmentSetting, Payment
+from .models import BootcamperAssignmentSetting, Payment, PaymentPlan
 from .serializers import (
     PaymentUploadSerializer, PaymentListSerializer, PaymentDetailSerializer,
     PaymentApproveSerializer, PaymentRejectSerializer,
     PaymentOCRStatusSerializer, PaymentConfirmSerializer,
     BootcamperAssignmentSettingSerializer,
+    PaymentPlanSerializer, PaymentPlanUploadSerializer,
+    ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS,
 )
 from .services import (
     PaymentProgressService, read_receipt_token,
@@ -247,7 +250,12 @@ class PaymentMyHistoryView(APIView):
         tags=['Pagos — Bootcamper'],
     )
     def get(self, request):
-        payments = Payment.objects.filter(bootcamper=request.user).select_related('program')
+        # Los eliminados por el propio bootcamper no aparecen en su dashboard.
+        payments = (
+            Payment.objects
+            .filter(bootcamper=request.user, deleted_at__isnull=True)
+            .select_related('program')
+        )
         return Response(PaymentListSerializer(payments, many=True).data)
 
 
@@ -344,7 +352,9 @@ class MyPaymentDetailView(APIView):
         tags=['Pagos — Bootcamper'],
     )
     def patch(self, request, pk):
-        payment = get_object_or_404(Payment, pk=pk, bootcamper=request.user)
+        payment = get_object_or_404(
+            Payment, pk=pk, bootcamper=request.user, deleted_at__isnull=True,
+        )
 
         if payment.status != Payment.Status.REJECTED:
             return Response(
@@ -366,6 +376,21 @@ class MyPaymentDetailView(APIView):
             if field in data:
                 setattr(payment, field, data[field])
 
+        # Al reenviar puede adjuntar un comprobante nuevo (foto/PDF distinto). No
+        # se re-corre OCR: el bootcamper ya corrigió los campos a mano.
+        new_file = request.FILES.get('receipt_file')
+        if new_file:
+            file_serializer = PaymentUploadSerializer(data={'receipt_file': new_file})
+            file_serializer.is_valid(raise_exception=True)
+            valid_file = file_serializer.validated_data['receipt_file']
+            mime = valid_file.content_type
+            file_type = ALLOWED_MIME_TYPES.get(mime)
+            if file_type is None:
+                ext = os.path.splitext(valid_file.name or '')[1].lower()
+                file_type = ALLOWED_EXTENSIONS.get(ext, 'image')
+            payment.receipt_file = valid_file
+            payment.receipt_file_type = file_type
+
         payment.status           = Payment.Status.PENDING
         payment.rejection_reason = ''
         payment.validated_by     = None
@@ -382,20 +407,36 @@ class MyPaymentDetailView(APIView):
             404: OpenApiResponse(description='Pago no encontrado'),
         },
         summary='Eliminar pago propio',
-        description='El bootcamper elimina un pago propio en estado DRAFT o REJECTED.',
+        description=(
+            'El bootcamper elimina un pago propio en estado DRAFT, PENDING o REJECTED. '
+            'Un REJECTED no se borra del todo: queda como "Eliminado por el bootcamper" en '
+            'el historial de Finanzas. DRAFT/PENDING se borran sin dejar rastro.'
+        ),
         tags=['Pagos — Bootcamper'],
     )
     def delete(self, request, pk):
-        payment = get_object_or_404(Payment, pk=pk, bootcamper=request.user)
+        payment = get_object_or_404(
+            Payment, pk=pk, bootcamper=request.user, deleted_at__isnull=True,
+        )
 
-        if payment.status not in (Payment.Status.DRAFT, Payment.Status.REJECTED):
+        if payment.status not in (
+            Payment.Status.DRAFT, Payment.Status.PENDING, Payment.Status.REJECTED,
+        ):
             return Response(
-                {'error': 'Solo se pueden eliminar pagos en revisión o rechazados.', 'code': 'NOT_DELETABLE'},
+                {'error': 'Este pago no se puede eliminar en su estado actual.', 'code': 'NOT_DELETABLE'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        logger.info("Payment %s deleted by bootcamper %s.", payment.id, request.user.id)
-        payment.delete()
+        if payment.status == Payment.Status.REJECTED:
+            # Finanzas ya lo revisó: soft-delete para que quede constancia.
+            payment.deleted_at = now()
+            payment.deleted_by = request.user
+            payment.save(update_fields=['deleted_at', 'deleted_by', 'updated_at'])
+            logger.info("Payment %s soft-deleted by bootcamper %s.", payment.id, request.user.id)
+        else:
+            # DRAFT/PENDING: Finanzas no lo aprobó/rechazó, se borra sin rastro.
+            logger.info("Payment %s hard-deleted by bootcamper %s.", payment.id, request.user.id)
+            payment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -442,10 +483,16 @@ class PaymentHistoryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # El historial son las solicitudes YA revisadas: aprobadas y rechazadas
+        # (incluye los rechazados que el bootcamper luego eliminó, marcados como
+        # tales). Los pendientes viven sólo en la cola, no acá.
         qs = (
             Payment.objects
-            .filter(bootcamper_id=bootcamper_id)
-            .select_related('bootcamper', 'program', 'validated_by')
+            .filter(
+                bootcamper_id=bootcamper_id,
+                status__in=[Payment.Status.APPROVED, Payment.Status.REJECTED],
+            )
+            .select_related('bootcamper', 'program', 'validated_by', 'deleted_by')
         )
 
         program_id = request.query_params.get('program_id')
@@ -479,9 +526,9 @@ class PaymentQueueView(APIView):
         tags=['Pagos — Vendedor/Admin'],
     )
     def get(self, request):
-        qs = Payment.objects.filter(status=Payment.Status.PENDING).select_related(
-            'bootcamper', 'program'
-        )
+        qs = Payment.objects.filter(
+            status=Payment.Status.PENDING, deleted_at__isnull=True,
+        ).select_related('bootcamper', 'program')
         program_id = request.query_params.get('program_id')
         search     = request.query_params.get('search')
         if program_id:
@@ -645,6 +692,52 @@ class PaymentRejectView(APIView):
         send_payment_status_notification.delay(str(payment.id), Payment.Status.REJECTED)
 
         return Response(PaymentListSerializer(payment).data)
+
+
+class PaymentEditView(APIView):
+    """PATCH /api/payments/{id}/edit/ — Finanzas corrige los datos de un pago PENDIENTE.
+
+    Al revisar un pago pendiente, Finanzas puede corregir la fecha, la cuenta/banco
+    y el resto de los datos del comprobante antes de aprobar o rechazar.
+    """
+    permission_classes = [IsFinanceOrAdmin]
+
+    @extend_schema(
+        request=PaymentConfirmSerializer,
+        responses={
+            200: PaymentDetailSerializer,
+            400: OpenApiResponse(description='El pago no está pendiente'),
+            404: OpenApiResponse(description='Pago no encontrado'),
+        },
+        summary='Editar datos de un pago pendiente (Finanzas/Admin)',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def patch(self, request, pk):
+        payment = get_object_or_404(Payment, pk=pk, deleted_at__isnull=True)
+
+        if payment.status != Payment.Status.PENDING:
+            return Response(
+                {'error': 'Solo se pueden editar pagos pendientes.', 'code': 'NOT_PENDING'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = PaymentConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        editable = (
+            'ocr_bank_name', 'ocr_account_last_digits',
+            'ocr_amount', 'ocr_transaction_id', 'ocr_payment_date',
+            'payer_name', 'payer_identification', 'payer_email',
+            'payer_address', 'payer_phone', 'document_number',
+        )
+        for field in editable:
+            if field in data:
+                setattr(payment, field, data[field])
+        payment.save()
+
+        logger.info("Payment %s edited by finance %s.", payment.id, request.user.id)
+        return Response(PaymentDetailSerializer(payment).data)
 
 
 class NotifyCoordinatorView(APIView):
@@ -1051,6 +1144,17 @@ class BootcamperReleaseView(APIView):
             CustomUser, pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER,
         )
         is_admin = request.user.role == CustomUser.Role.ADMINISTRATOR
+        # Si la auto-asignación está apagada, el pool lo maneja el Administrador:
+        # Finanzas no puede liberar (antes podía soltar uno que después no podría
+        # retomar). El admin sí libera siempre, para corregir un reparto.
+        if not is_admin and not get_bootcamper_self_assignment_enabled():
+            return Response(
+                {
+                    'error': 'La asignación de bootcampers la realiza el Administrador.',
+                    'code': 'SELF_ASSIGNMENT_DISABLED',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not is_admin and bootcamper.finance_owner_id != request.user.id:
             return Response(
                 {
@@ -1115,3 +1219,101 @@ class BootcamperAssignmentSettingView(APIView):
             serializer.validated_data['self_assign_enabled'], request.user,
         )
         return Response(BootcamperAssignmentSettingSerializer(setting).data)
+
+
+# ─── Plan de pagos ────────────────────────────────────────────────────────────
+#
+# Lo sube Finanzas/Admin para un bootcamper (PDF o Excel). Uno por bootcamper:
+# volver a subir reemplaza el anterior. El bootcamper sólo puede verlo.
+
+
+class FinancePaymentPlanView(APIView):
+    """GET/PUT/DELETE /api/payments/bootcampers/{bootcamper_id}/payment-plan/ —
+    Finanzas consulta, sube/reemplaza o elimina el plan de pagos de un bootcamper."""
+    permission_classes = [IsFinanceOrAdmin]
+
+    @extend_schema(
+        responses={200: PaymentPlanSerializer, 404: OpenApiResponse(description='Sin plan')},
+        summary='Ver plan de pagos de un bootcamper (Finanzas/Admin)',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def get(self, request, bootcamper_id):
+        plan = PaymentPlan.objects.filter(bootcamper_id=bootcamper_id).select_related('uploaded_by').first()
+        if plan is None:
+            return Response({'error': 'Este bootcamper no tiene plan de pagos.', 'code': 'NO_PLAN'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PaymentPlanSerializer(plan).data)
+
+    @extend_schema(
+        request=PaymentPlanUploadSerializer,
+        responses={200: PaymentPlanSerializer, 400: OpenApiResponse(description='Archivo inválido'), 404: OpenApiResponse(description='Bootcamper no encontrado')},
+        summary='Subir o reemplazar plan de pagos (Finanzas/Admin)',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def put(self, request, bootcamper_id):
+        from apps.authentication.models import CustomUser
+        bootcamper = get_object_or_404(CustomUser, pk=bootcamper_id, role=CustomUser.Role.BOOTCAMPER)
+
+        serializer = PaymentPlanUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        uploaded = serializer.validated_data['file']
+
+        plan = PaymentPlan.objects.filter(bootcamper=bootcamper).first() or PaymentPlan(bootcamper=bootcamper)
+        plan.file = uploaded
+        plan.file_type = serializer.file_type
+        plan.original_name = (getattr(uploaded, 'name', '') or '')[:255]
+        plan.uploaded_by = request.user
+        plan.save()
+
+        logger.info('Payment plan for bootcamper %s uploaded by %s.', bootcamper_id, request.user.id)
+        return Response(PaymentPlanSerializer(plan).data)
+
+    @extend_schema(
+        responses={204: OpenApiResponse(description='Plan eliminado'), 404: OpenApiResponse(description='Sin plan')},
+        summary='Eliminar plan de pagos (Finanzas/Admin)',
+        tags=['Pagos — Finanzas/Admin'],
+    )
+    def delete(self, request, bootcamper_id):
+        plan = get_object_or_404(PaymentPlan, bootcamper_id=bootcamper_id)
+        plan.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MyPaymentPlanView(APIView):
+    """GET /api/payments/my-payment-plan/ — el bootcamper ve su plan de pagos."""
+    permission_classes = [IsBootcamper]
+
+    @extend_schema(
+        responses={200: PaymentPlanSerializer, 404: OpenApiResponse(description='Sin plan')},
+        summary='Ver mi plan de pagos (Bootcamper)',
+        tags=['Pagos — Bootcamper'],
+    )
+    def get(self, request):
+        plan = PaymentPlan.objects.filter(bootcamper=request.user).select_related('uploaded_by').first()
+        if plan is None:
+            return Response({'error': 'Aún no tienes un plan de pagos.', 'code': 'NO_PLAN'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PaymentPlanSerializer(plan).data)
+
+
+class PaymentPlanFileView(APIView):
+    """GET /api/payments/payment-plans/{plan_id}/file/ — descarga el archivo del plan.
+
+    Lo puede ver Finanzas/Admin o el bootcamper dueño del plan.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: OpenApiResponse(description='Archivo'), 403: OpenApiResponse(description='Sin permiso'), 404: OpenApiResponse(description='No encontrado')},
+        summary='Descargar archivo del plan de pagos',
+        tags=['Pagos'],
+    )
+    def get(self, request, plan_id):
+        from apps.authentication.models import CustomUser
+        plan = get_object_or_404(PaymentPlan, pk=plan_id)
+        user = request.user
+        is_finance_admin = user.role in (CustomUser.Role.FINANCE, CustomUser.Role.ADMINISTRATOR)
+        is_owner = plan.bootcamper_id == user.id
+        if not (is_finance_admin or is_owner):
+            return Response({'error': 'No tienes acceso a este plan de pagos.', 'code': 'FORBIDDEN'}, status=status.HTTP_403_FORBIDDEN)
+        if not plan.file:
+            raise Http404
+        return FileResponse(plan.file.open('rb'), filename=plan.original_name or plan.file.name)

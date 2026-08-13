@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../src/lib/api';
+import LanguageSwitcher from '../../src/components/LanguageSwitcher';
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -59,6 +61,7 @@ function Field({ icon, placeholder, value, onChangeText, keyboardType }: FieldPr
 // ─── screen ──────────────────────────────────────────────────────────────────
 
 export default function ForgotPasswordScreen() {
+  const { t } = useTranslation();
   const [email, setEmail]     = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent]       = useState(false);
@@ -98,7 +101,7 @@ export default function ForgotPasswordScreen() {
       await api.post('/auth/password-reset/', { email: email.trim() });
       setSent(true);
     } catch {
-      setError('No pudimos procesar tu solicitud. Intenta de nuevo más tarde.');
+      setError(t('forgot.error'));
     } finally {
       setLoading(false);
     }
@@ -108,6 +111,9 @@ export default function ForgotPasswordScreen() {
 
   return (
     <View style={styles.screen}>
+      <View style={styles.langSwitch}>
+        <LanguageSwitcher variant="dark" />
+      </View>
       <Animated.View style={[styles.inner, { transform: [{ translateY: slideAnim }] }]}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -134,32 +140,31 @@ export default function ForgotPasswordScreen() {
               <View style={styles.successIcon}>
                 <Ionicons name="mail-outline" size={32} color={ACCENT} />
               </View>
-              <Text style={styles.headline}>Revisa tu correo</Text>
+              <Text style={styles.headline}>{t('forgot.sentTitle')}</Text>
               <Text style={styles.subtext}>
-                Si <Text style={{ color: ACCENT }}>{email}</Text> está registrado, recibirás
-                un enlace para restablecer tu contraseña.
+                {t('forgot.sentBody1')}<Text style={{ color: ACCENT }}>{email}</Text>{t('forgot.sentBody2')}
               </Text>
               <TouchableOpacity
-                style={styles.button}
+                style={[styles.button, styles.buttonBlock]}
                 onPress={() => router.replace('/(auth)/login')}
                 activeOpacity={0.88}
               >
-                <Text style={styles.buttonLabel}>Volver al inicio de sesión</Text>
+                <Text style={styles.buttonLabel}>{t('forgot.back')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             /* ── Form state ── */
             <View style={styles.form}>
               <Text style={styles.headline}>
-                Recuperar{' '}
-                <Text style={{ color: ACCENT }}>contraseña</Text>
+                {t('forgot.headingA')}
+                <Text style={{ color: ACCENT }}>{t('forgot.headingB')}</Text>
               </Text>
               <Text style={styles.subtext}>
-                Ingresa tu correo y te enviaremos instrucciones para recuperar tu acceso.
+                {t('forgot.subtitle')}
               </Text>
 
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Correo electrónico</Text>
+                <Text style={styles.fieldLabel}>{t('forgot.email')}</Text>
                 <Field
                   icon={<Ionicons name="mail-outline" size={18} color="rgba(255,255,255,0.35)" />}
                   placeholder="correo@ejemplo.com"
@@ -179,7 +184,7 @@ export default function ForgotPasswordScreen() {
               >
                 {loading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.buttonLabel}>Enviar instrucciones</Text>
+                  : <Text style={styles.buttonLabel}>{t('forgot.submit')}</Text>
                 }
               </TouchableOpacity>
 
@@ -189,7 +194,7 @@ export default function ForgotPasswordScreen() {
                 style={styles.backLink}
               >
                 <Ionicons name="chevron-back" size={14} color="rgba(255,255,255,0.5)" />
-                <Text style={styles.backLinkText}>Volver al inicio de sesión</Text>
+                <Text style={styles.backLinkText}>{t('forgot.back')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -203,6 +208,7 @@ export default function ForgotPasswordScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
+  langSwitch: { position: 'absolute', top: 52, right: 20, zIndex: 20 },
   inner:  { flex: 1 },
   scroll: {
     flexGrow: 1,
@@ -277,6 +283,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: PRIMARY,
   },
+  // En la pantalla de éxito el botón vive en un contenedor centrado; sin esto
+  // se encogía al ancho del texto y quedaba como una pastilla suelta.
+  buttonBlock: { alignSelf: 'stretch' },
   buttonDisabled: { opacity: 0.5 },
   buttonLabel: {
     color: '#ffffff',
