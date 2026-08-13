@@ -1,0 +1,45 @@
+# Diagrama de despliegue
+
+**Fuente de verdad:** `deployment-diagram.mmd` (Mermaid). El PNG se genera desde ahí.
+
+## Cómo regenerar el PNG
+
+```bash
+cd docs/diagrams/deployment
+npx -y @mermaid-js/mermaid-cli -i deployment-diagram.mmd -o deployment-diagram.png -b white -s 3
+cp deployment-diagram.png ../../../../overleaf_2p/Figures/deployment_diagram.png
+```
+
+Alternativa manual: pegar el `.mmd` en <https://mermaid.live> → *Actions → PNG*.
+
+> **El `.mmd` no lleva comentarios `%%` al principio.** El CLI de Mermaid los colapsa
+> con la primera línea y falla el parseo (`Expecting 'GRAPH', got 'NODE_STRING'`).
+> Cualquier nota va en este README, no en el `.mmd`.
+
+**Formato:** conviene que salga apaisado (~2:1). El capítulo 2 lo inserta con
+`height=0.45\textheight`, así que un diagrama muy alto se ve diminuto en el PDF.
+Las tres `direction LR` de los subgrafos son lo que consigue esa proporción — si se
+cambian a `TB` el diagrama sale de 2352x4254 y queda ilegible en la página.
+
+## Historial
+
+- **13-ago-2026 — reescrito con la arquitectura real.** La versión anterior dibujaba
+  **Coolify** sobre el VPS de ESPOL (`boottracker.taws.espol.edu.ec`). Las dos cosas
+  quedaron obsoletas: Coolify se descartó (quería los puertos 80/443 que ya tenía el
+  nginx del host sirviendo otra app en producción) y el VPS de ESPOL se dio de baja.
+  La imagen contradecía a su propio pie de figura y al capítulo 9 del informe.
+- Los `.puml` y `.drawio` de esta carpeta **siguen describiendo la topología vieja de
+  Coolify**. No se usan en el informe; se conservan como historial. Si se van a
+  reutilizar, hay que actualizarlos igual que el `.mmd`.
+
+## Qué debe reflejar (arquitectura verificada en el servidor)
+
+| Elemento | Detalle |
+|---|---|
+| Entrega continua | merge a `main` → GitHub Actions (`ci-pr.yml`, 6 jobs) → imágenes a GHCR etiquetadas por SHA → job `deploy` por SSH |
+| Servidor | VPS Hetzner **CX23** (2 vCPU, 3.7 GiB, x86_64), Ubuntu |
+| Borde | **nginx del host** dueño de `:80`/`:443`, TLS con Certbot, reparte por hostname |
+| Stack | frontend nginx `127.0.0.1:8080`, backend Django/gunicorn `:8000`, celery worker, Postgres 16, Redis 7, volúmenes `postgres_data` y `media_data` — **todo en loopback** |
+| Vecino | `attendance_api` + `attendance_db` en el mismo VPS, **proyecto ajeno**: se dibuja porque comparte el nginx y los recursos, y la regla número uno es no tocarlo |
+| Dominios | `boottracker.codingbootcampslatam.com` (nuestro) · `api.codingbootcampslatam.com` (el vecino) |
+| Salientes | SMTP transaccional, Google Calendar API, y el bot de WhatsApp como **entrante** con secreto compartido |
