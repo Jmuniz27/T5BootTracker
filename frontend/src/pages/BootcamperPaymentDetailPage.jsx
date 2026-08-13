@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { getMonitoring, getPaymentQueue, getPaymentHistory, notifyCoordinator } from '../api/payments.api'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getMonitoring, getPaymentQueue, getPaymentHistory, notifyCoordinator, getPaymentLinks, createPaymentLink, revokePaymentLink } from '../api/payments.api'
 import PaymentDetailModal from '../components/PaymentDetailModal'
 import Toast from '../components/Toast'
 import Skeleton from '../components/ui/Skeleton'
+import Spinner from '../components/ui/Spinner'
 import PaymentHistory from '../components/payments/PaymentHistory'
 import PaymentPlanPanel from '../components/payments/PaymentPlanPanel'
 
@@ -127,6 +128,189 @@ function PaymentRow({ payment, onViewDetail }) {
           {t('payments.bcDetail.viewDetail')}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── Payment Links Card (CR-013) ──────────────────────────────────────────────
+
+// Cada negociación puntual con Finanzas es un enlace propio — no se
+// sobreescriben, se crean nuevos y el historial completo queda visible.
+function linkStatusBadge(link, t) {
+  if (link.status === 'ACTIVE' && !link.is_active) return { label: t('payments.bcDetail.paymentLinks.statusExpired'), className: 'bg-gray-100 text-gray-500' }
+  if (link.status === 'ACTIVE') return { label: t('payments.bcDetail.paymentLinks.statusActive'), className: 'bg-green-100 text-green-700' }
+  if (link.status === 'REVOKED') return { label: t('payments.bcDetail.paymentLinks.statusRevoked'), className: 'bg-red-100 text-red-600' }
+  return { label: link.status, className: 'bg-gray-100 text-gray-500' }
+}
+
+// Monto: sólo dígitos y un separador decimal, máximo 2 decimales. Mismo criterio
+// que el formulario del bootcamper (PaymentsPage.jsx) y el de Finanzas al aprobar
+// (PaymentDetailModal.jsx).
+function sanitizeAmount(raw) {
+  const v = raw.replace(/[^\d.,]/g, '').replace(/,/g, '.')
+  const [intPart, ...rest] = v.split('.')
+  if (rest.length === 0) return intPart
+  return `${intPart}.${rest.join('').slice(0, 2)}`
+}
+
+function PaymentLinksCard({ enrollmentId, onNotice }) {
+  const { t } = useTranslation()
+  const [showForm, setShowForm] = useState(false)
+  const [url, setUrl] = useState('')
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+  const qc = useQueryClient()
+
+  const { data: links = [], isLoading } = useQuery({
+    queryKey: ['payment-links', enrollmentId],
+    queryFn: () => getPaymentLinks(enrollmentId),
+    enabled: Boolean(enrollmentId),
+  })
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['payment-links', enrollmentId] })
+    qc.invalidateQueries({ queryKey: ['payment-monitoring'] })
+  }
+
+  const createMutation = useMutation({
+    mutationFn: () => createPaymentLink(enrollmentId, {
+      url,
+      ...(amount ? { amount } : {}),
+      ...(note ? { note } : {}),
+    }),
+    onSuccess: () => {
+      invalidate()
+      setShowForm(false)
+      setUrl('')
+      setAmount('')
+      setNote('')
+      onNotice(t('payments.bcDetail.paymentLinks.createdToast'))
+    },
+    onError: () => onNotice(t('payments.bcDetail.paymentLinks.createErrorToast'), 'error'),
+  })
+
+  const revokeMutation = useMutation({
+    mutationFn: (id) => revokePaymentLink(id),
+    onSuccess: () => { invalidate(); onNotice(t('payments.bcDetail.paymentLinks.revokedToast')) },
+    onError: () => onNotice(t('payments.bcDetail.paymentLinks.revokeErrorToast'), 'error'),
+  })
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <h2 className="text-base font-semibold text-gray-900">{t('payments.bcDetail.paymentLinks.title')}</h2>
+        {!showForm && (
+          <button
+            type="button"
+            data-testid="payment-link-new"
+            onClick={() => setShowForm(true)}
+            className="shrink-0 text-xs font-medium text-[#213A8E] border border-[#213A8E]/30 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            {t('payments.bcDetail.paymentLinks.newLink')}
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-gray-500 mb-3">
+        {t('payments.bcDetail.paymentLinks.intro')}
+      </p>
+
+      {showForm && (
+        <div className="border border-gray-200 rounded-xl p-4 mb-4 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{t('payments.bcDetail.paymentLinks.urlLabel')}</label>
+            <input
+              type="url"
+              data-testid="payment-link-input"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://pagos.espoltech.edu.ec/..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('payments.bcDetail.paymentLinks.amountLabel')}</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(sanitizeAmount(e.target.value))}
+                placeholder={t('payments.bcDetail.paymentLinks.amountPlaceholder')}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('payments.bcDetail.paymentLinks.noteLabel')}</label>
+              <input
+                type="text"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={t('payments.bcDetail.paymentLinks.notePlaceholder')}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              data-testid="payment-link-save"
+              disabled={!url.trim() || createMutation.isPending}
+              onClick={() => createMutation.mutate()}
+              className="bg-[#213A8E] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#1a2f72] disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
+            >
+              {createMutation.isPending && <Spinner />}
+              {createMutation.isPending ? t('payments.bcDetail.paymentLinks.creating') : t('payments.bcDetail.paymentLinks.createLink')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              {t('payments.bcDetail.paymentLinks.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isLoading && <Skeleton className="h-16 w-full" rounded="rounded-xl" />}
+
+      {!isLoading && links.length === 0 && !showForm && (
+        <p className="text-sm text-gray-500 py-2">{t('payments.bcDetail.paymentLinks.empty')}</p>
+      )}
+
+      {!isLoading && links.length > 0 && (
+        <ul className="space-y-2">
+          {links.map((link) => {
+            const badge = linkStatusBadge(link, t)
+            return (
+              <li key={link.id} className="flex items-center justify-between gap-3 border border-gray-100 rounded-xl px-3 py-2.5">
+                <div className="min-w-0">
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm text-[#213A8E] font-medium hover:underline truncate block">
+                    {link.note || link.url}
+                  </a>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {link.amount ? `$${parseFloat(link.amount).toLocaleString('en-US', { minimumFractionDigits: 0 })} · ` : ''}
+                    {t('payments.bcDetail.paymentLinks.expiresOn', { date: new Date(link.expires_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>{badge.label}</span>
+                  {link.status === 'ACTIVE' && (
+                    <button
+                      type="button"
+                      disabled={revokeMutation.isPending}
+                      onClick={() => revokeMutation.mutate(link.id)}
+                      className="text-xs font-medium text-red-600 hover:underline disabled:opacity-60"
+                    >
+                      {t('payments.bcDetail.paymentLinks.revoke')}
+                    </button>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }
@@ -357,6 +541,13 @@ export default function BootcamperPaymentDetailPage() {
 
           {/* Plan de pagos (lo gestiona Finanzas) */}
           <PaymentPlanPanel mode="finance" bootcamperId={bootcamperId} />
+
+          {bc.enrollment_id && (
+            <PaymentLinksCard
+              enrollmentId={bc.enrollment_id}
+              onNotice={(msg, type) => setToast({ message: msg, type })}
+            />
+          )}
         </div>
 
         {/* ── Pagos pendientes ── */}

@@ -101,3 +101,38 @@ def send_payment_status_notification(self, payment_id, new_status):
             "Error sending payment status notification for %s.", payment_id
         )
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_payment_link_notification(self, payment_link_id):
+    """CR-013: notify the bootcamper that a card payment link is available."""
+    try:
+        from .models import PaymentLink
+
+        link = PaymentLink.objects.select_related(
+            "enrollment__bootcamper", "enrollment__bootcamp",
+        ).get(id=payment_link_id)
+        enrollment = link.enrollment
+        bootcamper = enrollment.bootcamper
+
+        send_templated_email(
+            template="payment_link",
+            context={
+                "recipient_name": bootcamper.get_full_name(),
+                "program_name": enrollment.bootcamp.name,
+                "payment_link_url": link.url,
+                "amount": link.amount,
+                "note": link.note,
+                "expires_at": link.expires_at,
+            },
+            subject=f"Enlace de pago con tarjeta — {enrollment.bootcamp.name}",
+            to=[bootcamper.email],
+        )
+
+        logger.info("Payment link notification sent for link %s.", payment_link_id)
+
+    except Exception as exc:
+        logger.exception(
+            "Error sending payment link notification for link %s.", payment_link_id
+        )
+        raise self.retry(exc=exc)
