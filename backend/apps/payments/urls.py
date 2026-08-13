@@ -24,6 +24,9 @@ from .views import (
     FinancePaymentPlanView,
     MyPaymentPlanView,
     PaymentPlanFileView,
+    PaymentLinkListCreateView,
+    PaymentLinkRevokeView,
+    MyPaymentLinksView,
 )
 
 urlpatterns = [
@@ -47,6 +50,9 @@ urlpatterns = [
     path('queue/',                                    PaymentQueueView.as_view(),        name='payment-queue'),
     path('monitoring/',                               PaymentMonitoringView.as_view(),   name='payment-monitoring'),
     path('notify-coordinator/<uuid:bootcamper_id>/',  NotifyCoordinatorView.as_view(),   name='payment-notify-coordinator'),
+    path('my-payment-links/',                          MyPaymentLinksView.as_view(),      name='my-payment-links'),
+    path('enrollments/<uuid:enrollment_id>/payment-links/', PaymentLinkListCreateView.as_view(), name='payment-links'),
+    path('payment-links/<uuid:pk>/revoke/',            PaymentLinkRevokeView.as_view(),   name='payment-link-revoke'),
     path('<uuid:pk>/approve/',                        PaymentApproveView.as_view(),      name='payment-approve'),
     path('<uuid:pk>/reject/',                         PaymentRejectView.as_view(),       name='payment-reject'),
     path('<uuid:pk>/edit/',                           PaymentEditView.as_view(),         name='payment-edit'),

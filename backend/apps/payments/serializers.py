@@ -4,7 +4,7 @@ from django.urls import reverse
 from rest_framework import serializers
 from apps.authentication.validators import validate_identificacion
 from apps.notifications.services import ALERT_SOURCES
-from .models import BootcamperAssignmentSetting, Payment, PaymentPlan
+from .models import BootcamperAssignmentSetting, Payment, PaymentPlan, PaymentLink
 from .services import make_receipt_token
 
 MAX_FILE_SIZE_MB = 10
@@ -35,6 +35,22 @@ class PaymentUploadSerializer(serializers.Serializer):
     # aceptando para los clientes que ya lo enviaban y para desempatar a quien
     # curse dos programas a la vez.
     program_id = serializers.UUIDField(required=False, allow_null=True)
+    # CR-013: 'LINK' cuando la evidencia es de un pago hecho en un enlace
+    # externo (ESPOLTECH), no una transferencia. Default TRANSFER — el link es
+    # la excepción negociada por Finanzas, no el flujo normal.
+    payment_method = serializers.ChoiceField(
+        choices=Payment.Method.choices, required=False, default=Payment.Method.TRANSFER,
+    )
+    # Requerido sólo cuando payment_method=LINK: puede haber varios links
+    # vigentes por inscripción, así que hay que saber cuál usó el bootcamper.
+    payment_link_id = serializers.UUIDField(required=False, allow_null=True)
+
+    def validate(self, data):
+        if data.get('payment_method') == Payment.Method.LINK and not data.get('payment_link_id'):
+            raise serializers.ValidationError({
+                'payment_link_id': 'Selecciona el enlace de pago que usaste.',
+            })
+        return data
 
     def validate_receipt_file(self, file):
         import os
@@ -71,6 +87,8 @@ class PaymentListSerializer(serializers.ModelSerializer):
             "program_name",
             "receipt_file",
             "receipt_file_type",
+            "payment_method",
+            "payment_link",
             "ocr_bank_name",
             "ocr_account_last_digits",
             "ocr_amount",
@@ -170,6 +188,7 @@ class PaymentOCRStatusSerializer(serializers.ModelSerializer):
         model = Payment
         fields = (
             "id",
+            "payment_method",
             "ocr_bank_name",
             "ocr_account_last_digits",
             "ocr_amount",
@@ -238,6 +257,49 @@ class PaymentDetailSerializer(PaymentListSerializer):
 
     class Meta(PaymentListSerializer.Meta):
         fields = PaymentListSerializer.Meta.fields + ("ocr_raw_text",)
+
+
+class PaymentLinkCreateSerializer(serializers.Serializer):
+    """CR-013: Finanzas negocia y pega un enlace de pago con tarjeta puntual.
+
+    Cada creación es un `PaymentLink` nuevo — no reemplaza los anteriores,
+    porque puede haber varios vigentes por inscripción (una negociación
+    distinta cada vez, como una factura).
+    """
+
+    url = serializers.URLField()
+    amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, allow_null=True,
+    )
+    note = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    expires_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate_expires_at(self, value):
+        from django.utils.timezone import now
+
+        if value and value <= now():
+            raise serializers.ValidationError(
+                'La fecha de expiración debe ser en el futuro.'
+            )
+        return value
+
+
+class PaymentLinkSerializer(serializers.ModelSerializer):
+    """Enlace de pago para lectura — lo consume tanto Finanzas como el bootcamper."""
+
+    is_active = serializers.BooleanField(read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaymentLink
+        fields = (
+            'id', 'enrollment', 'url', 'amount', 'note', 'status', 'is_active',
+            'created_by', 'created_by_name', 'expires_at', 'revoked_at', 'created_at',
+        )
+        read_only_fields = fields
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.get_full_name() if obj.created_by else None
 
 
 class BootcamperAssignmentSettingSerializer(serializers.ModelSerializer):

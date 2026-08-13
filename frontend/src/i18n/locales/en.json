@@ -517,7 +517,30 @@
       "noPendingReview": "No payments pending review.",
       "noAmount": "No amount",
       "noDate": "No date",
-      "viewDetail": "View detail"
+      "viewDetail": "View detail",
+      "paymentLinks": {
+        "title": "Card payment links",
+        "newLink": "+ New link",
+        "intro": "Each negotiation with the bootcamper is its own link: it doesn't replace the previous ones. The system doesn't generate the link — you generate it in ESPOLTECH and paste it here.",
+        "urlLabel": "Link *",
+        "amountLabel": "Negotiated amount",
+        "amountPlaceholder": "E.g.: 300.00",
+        "noteLabel": "Note",
+        "notePlaceholder": "E.g.: Installment 2",
+        "creating": "Creating...",
+        "createLink": "Create link",
+        "cancel": "Cancel",
+        "empty": "No links created yet.",
+        "expiresOn": "Expires {{date}}",
+        "revoke": "Revoke",
+        "statusActive": "Active",
+        "statusExpired": "Expired",
+        "statusRevoked": "Revoked",
+        "createdToast": "Link created. The bootcamper was notified by email.",
+        "createErrorToast": "Couldn't create the link. Check that the URL is valid.",
+        "revokedToast": "Link revoked.",
+        "revokeErrorToast": "Couldn't revoke the link."
+      }
     },
     "bootcamper": {
       "uploadModal": {
@@ -533,7 +556,14 @@
         "orDrag": " or drag the file",
         "fileHint": "PNG, JPG or PDF (max. 10 MB)",
         "uploading": "Uploading...",
-        "submit": "Upload receipt"
+        "submit": "Upload receipt",
+        "introLink": "Upload the evidence of your payment made on the card link.",
+        "paymentTypeLabel": "Payment type",
+        "methodTransfer": "Transfer",
+        "methodLink": "Card payment",
+        "whichLinkLabel": "Which link did you pay?",
+        "evidenceLabel": "Payment evidence",
+        "selectLink": "Select the payment link you used."
       },
       "ocrModal": {
         "confidence": "{{pct}}% confidence",
@@ -543,6 +573,8 @@
         "confirm": "Confirm payment",
         "titleReview": "Review transfer receipt",
         "hintReview": "Compare your receipt with the scanned data and fix what's needed before confirming",
+        "titleReviewLink": "Confirm card payment",
+        "hintReviewLink": "Enter the amount and date of the payment you made on the link before confirming",
         "titleEdit": "Edit and resend payment",
         "hintEdit": "Fix the flagged data and resend the payment for a new review",
         "titleView": "Payment detail",
@@ -610,7 +642,9 @@
         "sortNewest": "Date: newest",
         "sortOldest": "Date: oldest",
         "empty": "You have no recorded payments yet.",
-        "uploadFirst": "Upload your first receipt"
+        "uploadFirst": "Upload your first receipt",
+        "payWithCard": "Pay with card",
+        "payWithCardCount": "Pay with card ({{count}})"
       },
       "toast": {
         "deleted": "Payment deleted.",
@@ -618,7 +652,8 @@
         "receivedNoOcr": "Receipt received. Automatic reading isn't available right now; Finance will review it manually.",
         "uploadedScanning": "Receipt uploaded. We're scanning the text…",
         "confirmed": "Payment confirmed. It's now pending approval.",
-        "resent": "Payment resent. It's now pending approval."
+        "resent": "Payment resent. It's now pending approval.",
+        "linkEvidenceReceived": "Evidence received. Confirm the amount and date of the payment."
       }
     },
     "queue": {
@@ -646,8 +681,10 @@
       "rejectedOn": " on {{date}}",
       "paymentData": "Payment data",
       "confirmedData": "Confirmed data",
+      "draftData": "Data submitted by the bootcamper",
       "pendingHint": "Prefilled with what the scan read. Fix anything that doesn't match the receipt before approving.",
       "resolvedHint": "Data this request was resolved with.",
+      "draftHint": "The bootcamper submitted this but hasn't confirmed it yet — it can't be approved yet.",
       "amountLabel": "Confirmed amount *",
       "amountPlaceholder": "E.g.: 500.00",
       "bankLabel": "Bank",
