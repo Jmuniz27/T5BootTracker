@@ -14,6 +14,7 @@ import { Calendar } from 'react-native-calendars';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../src/theme/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { FadeInView } from '../../src/components/FadeInView';
 import { fetchLeads } from '../../src/api/leads.api';
 import {
   getMeetings,
@@ -169,6 +170,7 @@ export default function AgendaScreen() {
   }
 
   return (
+    <FadeInView style={st.screen}>
     <SafeAreaView style={st.screen}>
       <View style={st.header}>
         <TouchableOpacity style={st.backBtn} hitSlop={8} onPress={() => router.back()}>
@@ -240,6 +242,7 @@ export default function AgendaScreen() {
         onClose={() => setModalOpen(false)}
       />
     </SafeAreaView>
+    </FadeInView>
   );
 }
 
