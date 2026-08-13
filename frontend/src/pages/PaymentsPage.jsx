@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMyHistory, getMyStatus, getMyPrograms, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment } from '../api/payments.api'
+import { getMyHistory, getMyStatus, getMyPrograms, getOCRStatus, uploadPayment, confirmPayment, getPrograms, updateMyPayment, deleteMyPayment, getMyPaymentLinks } from '../api/payments.api'
 import { useModalA11y } from '../hooks/use-modal-a11y'
 import Skeleton from '../components/ui/Skeleton'
 import Spinner from '../components/ui/Spinner'
@@ -50,11 +50,18 @@ function StatCard({ label, value, sub, loading, className = '' }) {
 
 // ─── Upload Modal ─────────────────────────────────────────────────────────────
 
-function UploadModal({ onClose, onSuccess }) {
+function UploadModal({ onClose, onSuccess, availableLinks = [] }) {
   const { t } = useTranslation()
   const [file, setFile] = useState(null)
   const [errors, setErrors] = useState({})
   const [dragOver, setDragOver] = useState(false)
+  const hasPaymentLink = availableLinks.length > 0
+  // CR-013: cuando hay enlace(s) de pago disponibles, el bootcamper elige si
+  // lo que sube es un comprobante de transferencia o la evidencia de haber
+  // pagado en uno de esos enlaces (no es un comprobante bancario, así que no
+  // pasa por OCR). Con más de un enlace vigente, además indica cuál usó.
+  const [paymentMethod, setPaymentMethod] = useState('TRANSFER')
+  const [paymentLinkId, setPaymentLinkId] = useState(availableLinks[0]?.id || '')
   const fileRef = useRef(null)
   const qc = useQueryClient()
   const dialogRef = useModalA11y(onClose)
@@ -84,11 +91,18 @@ function UploadModal({ onClose, onSuccess }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!file) { setErrors({ file: t('payments.bootcamper.uploadModal.selectReceipt') }); return }
+    if (paymentMethod === 'LINK' && !paymentLinkId) {
+      setErrors({ file: t('payments.bootcamper.uploadModal.selectLink') }); return
+    }
 
     // Sin `program_id`: el backend lo deduce de la inscripción activa. El
     // bootcamper no tiene por qué elegir el programa en el que ya está inscrito.
     const fd = new FormData()
     fd.append('receipt_file', file)
+    if (hasPaymentLink) {
+      fd.append('payment_method', paymentMethod)
+      if (paymentMethod === 'LINK') fd.append('payment_link_id', paymentLinkId)
+    }
     mutation.mutate(fd)
   }
 
@@ -131,12 +145,56 @@ function UploadModal({ onClose, onSuccess }) {
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-4 sm:px-6 space-y-4">
             <p className="text-sm text-gray-500 -mt-1">
-              {t('payments.bootcamper.uploadModal.intro')}
+              {paymentMethod === 'LINK'
+                ? t('payments.bootcamper.uploadModal.introLink')
+                : t('payments.bootcamper.uploadModal.intro')}
             </p>
+
+            {hasPaymentLink && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('payments.bootcamper.uploadModal.paymentTypeLabel')}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: 'TRANSFER', label: t('payments.bootcamper.uploadModal.methodTransfer') },
+                    { value: 'LINK', label: t('payments.bootcamper.uploadModal.methodLink') },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setPaymentMethod(opt.value)}
+                      className={`text-sm font-medium rounded-lg px-3 py-2 border transition-colors ${
+                        paymentMethod === opt.value
+                          ? 'border-[#213A8E] bg-blue-50 text-[#213A8E]'
+                          : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {paymentMethod === 'LINK' && availableLinks.length > 1 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('payments.bootcamper.uploadModal.whichLinkLabel')}</label>
+                <select
+                  value={paymentLinkId}
+                  onChange={(e) => setPaymentLinkId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base sm:py-2 sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#213A8E] focus:border-transparent"
+                >
+                  {availableLinks.map((link) => (
+                    <option key={link.id} value={link.id}>{paymentLinkLabel(link, t)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* File upload — drag & drop */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('payments.bootcamper.uploadModal.receiptLabel')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {paymentMethod === 'LINK' ? t('payments.bootcamper.uploadModal.evidenceLabel') : t('payments.bootcamper.uploadModal.receiptLabel')}
+              </label>
               <div
                 onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -225,6 +283,9 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   const { t } = useTranslation()
   const isEdit = mode === 'edit'
   const isView = mode === 'view'
+  // CR-013: la evidencia de pago por link no pasa por OCR ni tiene datos
+  // bancarios que leer — sólo se confirma el monto y la fecha.
+  const isLink = payment.payment_method === 'LINK'
   const [fields, setFields] = useState({
     ocr_bank_name: payment.confirmed_bank_name || payment.ocr_bank_name || '',
     ocr_account_last_digits: payment.ocr_account_last_digits || '',
@@ -244,20 +305,20 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   const { data: ocrData, isLoading: ocrLoading } = useQuery({
     queryKey: ['ocr-status', payment.id],
     queryFn: () => getOCRStatus(payment.id),
-    enabled: !isEdit && !isView && payment.status === 'DRAFT',
+    enabled: !isEdit && !isView && !isLink && payment.status === 'DRAFT',
     refetchInterval: (query) =>
       isOcrDone(query.state.data) || timedOut ? false : 1500,
   })
 
   // Give up polling after 30s so a stuck/slow OCR doesn't block manual entry.
   useEffect(() => {
-    if (isEdit || isView || payment.status !== 'DRAFT') return
+    if (isEdit || isView || isLink || payment.status !== 'DRAFT') return
     const t = setTimeout(() => setTimedOut(true), 30000)
     return () => clearTimeout(t)
-  }, [isEdit, isView, payment.status])
+  }, [isEdit, isView, isLink, payment.status])
 
   const ocrReady = isOcrDone(ocrData) || isOcrDone(payment)
-  const ocrProcessing = !isEdit && !isView && payment.status === 'DRAFT' && !ocrReady && !timedOut
+  const ocrProcessing = !isEdit && !isView && !isLink && payment.status === 'DRAFT' && !ocrReady && !timedOut
 
   useEffect(() => {
     if (ocrData) {
@@ -329,8 +390,8 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
   if (mutation.isPending) submitLabel = isEdit ? t('payments.bootcamper.ocrModal.resending') : t('payments.bootcamper.ocrModal.confirming')
   else submitLabel = isEdit ? t('payments.bootcamper.ocrModal.resend') : t('payments.bootcamper.ocrModal.confirm')
 
-  let modalTitle = t('payments.bootcamper.ocrModal.titleReview')
-  let modalHint = t('payments.bootcamper.ocrModal.hintReview')
+  let modalTitle = isLink ? t('payments.bootcamper.ocrModal.titleReviewLink') : t('payments.bootcamper.ocrModal.titleReview')
+  let modalHint = isLink ? t('payments.bootcamper.ocrModal.hintReviewLink') : t('payments.bootcamper.ocrModal.hintReview')
   if (isEdit) {
     modalTitle = t('payments.bootcamper.ocrModal.titleEdit')
     modalHint = t('payments.bootcamper.ocrModal.hintEdit')
@@ -338,6 +399,19 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
     modalTitle = t('payments.bootcamper.ocrModal.titleView')
     modalHint = t('payments.bootcamper.ocrModal.hintView')
   }
+
+  const fieldDefs = isLink
+    ? [
+        { key: 'ocr_amount', label: t('payments.bootcamper.ocrModal.amountLabel'), placeholder: t('payments.bootcamper.ocrModal.amountPlaceholder'), type: 'text', inputMode: 'decimal' },
+        { key: 'ocr_payment_date', label: t('payments.bootcamper.ocrModal.dateLabel'), type: 'date' },
+      ]
+    : [
+        { key: 'ocr_bank_name', label: t('payments.bootcamper.ocrModal.bankLabel'), placeholder: t('payments.bootcamper.ocrModal.bankPlaceholder') },
+        { key: 'ocr_account_last_digits', label: t('payments.bootcamper.ocrModal.accountLabel'), placeholder: t('payments.bootcamper.ocrModal.accountPlaceholder') },
+        { key: 'ocr_amount', label: t('payments.bootcamper.ocrModal.amountLabel'), placeholder: t('payments.bootcamper.ocrModal.amountPlaceholder'), type: 'text', inputMode: 'decimal' },
+        { key: 'ocr_transaction_id', label: t('payments.bootcamper.ocrModal.txLabel'), placeholder: t('payments.bootcamper.ocrModal.txPlaceholder') },
+        { key: 'ocr_payment_date', label: t('payments.bootcamper.ocrModal.dateLabel'), type: 'date' },
+      ]
 
   const dialogRef = useModalA11y(onClose)
 
@@ -409,18 +483,12 @@ function OCRReviewModal({ payment, mode = 'review', onClose, onSuccess }) {
             </div>
           ) : (
             <>
-              {timedOut && !ocrReady && (
+              {!isLink && timedOut && !ocrReady && (
                 <p data-testid="ocr-timeout" className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
                   {t('payments.bootcamper.ocrModal.ocrTimeout')}
                 </p>
               )}
-              {[
-                { key: 'ocr_bank_name', label: t('payments.bootcamper.ocrModal.bankLabel'), placeholder: t('payments.bootcamper.ocrModal.bankPlaceholder') },
-                { key: 'ocr_account_last_digits', label: t('payments.bootcamper.ocrModal.accountLabel'), placeholder: t('payments.bootcamper.ocrModal.accountPlaceholder') },
-                { key: 'ocr_amount', label: t('payments.bootcamper.ocrModal.amountLabel'), placeholder: t('payments.bootcamper.ocrModal.amountPlaceholder'), type: 'text', inputMode: 'decimal' },
-                { key: 'ocr_transaction_id', label: t('payments.bootcamper.ocrModal.txLabel'), placeholder: t('payments.bootcamper.ocrModal.txPlaceholder') },
-                { key: 'ocr_payment_date', label: t('payments.bootcamper.ocrModal.dateLabel'), type: 'date' },
-              ].map(({ key, label, placeholder, type = 'text', inputMode }) => (
+              {fieldDefs.map(({ key, label, placeholder, type = 'text', inputMode }) => (
                 <div key={key}>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-sm font-medium text-gray-700">{label}</label>
@@ -789,6 +857,72 @@ function DeleteConfirmModal({ payment, isPending, onClose, onConfirm }) {
   )
 }
 
+// ─── Payment Links Menu (CR-013) ──────────────────────────────────────────────
+
+// Un solo enlace vigente: link directo. Más de uno (Finanzas negoció varias
+// cuotas) — menú para elegir cuál abrir.
+function paymentLinkLabel(link, t) {
+  if (link.note) return link.note
+  if (link.amount) return `$${parseFloat(link.amount).toLocaleString('en-US', { minimumFractionDigits: 0 })}`
+  return t('payments.bcDetail.paymentLinks.title')
+}
+
+function PaymentLinksMenu({ links }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  if (links.length === 0) return null
+
+  const buttonClass = 'flex w-full items-center justify-center gap-2 border border-[#213A8E] text-[#213A8E] px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors sm:w-auto'
+  const icon = (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-9 4h16a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  )
+
+  if (links.length === 1) {
+    return (
+      <a data-testid="pay-with-card-link" href={links[0].url} target="_blank" rel="noopener noreferrer" className={buttonClass}>
+        {icon}
+        {t('payments.bootcamper.page.payWithCard')}
+      </a>
+    )
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button data-testid="pay-with-card-menu" onClick={() => setOpen((v) => !v)} className={buttonClass}>
+        {icon}
+        {t('payments.bootcamper.page.payWithCardCount', { count: links.length })}
+      </button>
+      {open && (
+        <div className="absolute left-0 sm:right-0 sm:left-auto mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 min-w-[220px] py-1 animate-fade-in">
+          {links.map((link) => (
+            <a
+              key={link.id}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              {paymentLinkLabel(link, t)}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PaymentsPage() {
@@ -860,14 +994,23 @@ export default function PaymentsPage() {
   // de uno: se consulta cada uno y se suma el adeudado. Va en una sola query con
   // Promise.all en vez de useQueries porque ese hook no se usa en el proyecto.
   const programIds = programs.map((p) => p.id).filter(Boolean)
-  const { data: totalDebt, isLoading: debtLoading } = useQuery({
+  const { data: statusSummaries, isLoading: debtLoading } = useQuery({
     queryKey: ['my-debt', programIds],
-    queryFn: () =>
-      Promise.all(programIds.map((id) => getMyStatus(id))).then((summaries) =>
-        summaries.reduce((sum, s) => sum + parseFloat(s?.deficit || 0), 0)
-      ),
+    queryFn: () => Promise.all(programIds.map((id) => getMyStatus(id))),
     enabled: programIds.length > 0,
   })
+
+  const totalDebt = statusSummaries?.reduce((sum, s) => sum + parseFloat(s?.deficit || 0), 0)
+
+  // CR-013: enlaces de pago vigentes por programa — puede haber varios a la
+  // vez (Finanzas negoció más de una cuota). Se consultan todos los programas
+  // en una sola query, igual que la deuda.
+  const { data: paymentLinksByProgram } = useQuery({
+    queryKey: ['my-payment-links', programIds],
+    queryFn: () => Promise.all(programIds.map((id) => getMyPaymentLinks(id))),
+    enabled: programIds.length > 0,
+  })
+  const activePaymentLinks = (paymentLinksByProgram || []).flat()
 
   // Sin programas descubribles (un bootcamper que todavía no subió ningún pago)
   // no hay nada que consultar: se muestra un guion en vez de un cero que diría
@@ -910,16 +1053,19 @@ export default function PaymentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">{t('payments.bootcamper.page.title')}</h1>
           <p className="text-sm text-gray-500 mt-1">{t('payments.bootcamper.page.subtitle')}</p>
         </div>
-        <button
-          data-testid="upload-button"
-          onClick={() => setShowUpload(true)}
-          className="flex w-full items-center justify-center gap-2 bg-[#213A8E] text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#1a2f72] transition-colors sm:w-auto sm:justify-start"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
-          {t('payments.bootcamper.page.uploadPayment')}
-        </button>
+        <div className="flex flex-col w-full gap-2 sm:flex-row sm:w-auto">
+          <PaymentLinksMenu links={activePaymentLinks} />
+          <button
+            data-testid="upload-button"
+            onClick={() => setShowUpload(true)}
+            className="flex w-full items-center justify-center gap-2 bg-[#213A8E] text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#1a2f72] transition-colors sm:w-auto sm:justify-start"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            {t('payments.bootcamper.page.uploadPayment')}
+          </button>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -1068,9 +1214,19 @@ export default function PaymentsPage() {
       {/* Modals */}
       {showUpload && (
         <UploadModal
+          availableLinks={activePaymentLinks}
           onClose={() => setShowUpload(false)}
           onSuccess={(data) => {
             setShowUpload(false)
+            // Pago por link: nunca hay OCR que correr (no es un comprobante
+            // bancario), pero igual hay que pedirle monto y fecha al bootcamper
+            // antes de dejarlo en Pendiente — a diferencia del caso de abajo,
+            // acá sí se abre el modal de confirmación.
+            if (data.payment_method === 'LINK') {
+              showToast(t('payments.bootcamper.toast.linkEvidenceReceived'))
+              setReviewPayment(data)
+              return
+            }
             // `ocr_queued: false` = el comprobante se guardó pero el escaneo no
             // arrancó. Prometer que lo estamos leyendo dejaría al bootcamper
             // esperando un resultado que no va a llegar.

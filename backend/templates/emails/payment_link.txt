@@ -1,0 +1,10 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Ya tienes disponible tu enlace para pagar con tarjeta el programa {{ program_name }}{% if note %} ({{ note }}){% endif %}{% if amount %}, por USD ${{ amount|floatformat:"2u" }}{% endif %}.
+
+Pagar con tarjeta: {{ payment_link_url }}
+{% if expires_at %}
+Este enlace vence el {{ expires_at|date:"d/m/Y H:i" }}.
+{% endif %}
+Una vez que completes el pago en el enlace, sube tu comprobante en Boot-Tracker para que Finanzas lo confirme.
+{% endblock %}
