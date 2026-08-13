@@ -31,6 +31,7 @@ LOOKUP_RESPONSE = inline_serializer('BotLeadLookupResponse', fields={
     'status':  drf_serializers.CharField(allow_blank=True),
     'owner':   drf_serializers.CharField(allow_blank=True),
     'lead_id': drf_serializers.CharField(allow_blank=True),
+    'program': drf_serializers.CharField(allow_blank=True),
 })
 
 

@@ -190,7 +190,9 @@ class TestBotLeadLookup:
         response = bot_client.get(LOOKUP_URL, {'phone': '593987654321'})
 
         assert response.status_code == 200, 'nunca 404: el flujo trata el error como lead nuevo'
-        assert response.data == {'exists': False, 'status': '', 'owner': '', 'lead_id': ''}
+        assert response.data == {
+            'exists': False, 'status': '', 'owner': '', 'lead_id': '', 'program': '',
+        }
 
     def test_reports_an_unassigned_lead_with_owner_as_empty_string(self, bot_client):
         """Un None aquí se interpola como texto y desvía a la rama de 'ya asignado'."""
@@ -228,6 +230,32 @@ class TestBotLeadLookup:
 
         assert response.status_code == 200
         assert response.data['exists'] is False
+
+    def test_reports_the_program_so_the_bot_can_name_it(self, bot_client, program):
+        """El bot dice "ya estás registrado en X": necesita recibir la X."""
+        Lead.objects.create(
+            name='Con Programa', phone='0991000021',
+            program_interest='Data Science', program=program,
+        )
+
+        response = bot_client.get(LOOKUP_URL, {'phone': '593991000021'})
+
+        assert response.data['program'] == program.name
+
+    def test_falls_back_to_the_free_text_when_the_fk_is_empty(self, bot_client):
+        Lead.objects.create(name='Solo Texto', phone='0991000022', program_interest='Algo Raro')
+
+        response = bot_client.get(LOOKUP_URL, {'phone': '593991000022'})
+
+        assert response.data['program'] == 'Algo Raro'
+
+    def test_the_program_is_blank_never_null_when_there_is_none(self, bot_client):
+        """Mismo motivo que `owner`: un None se interpola como el texto "None"."""
+        Lead.objects.create(name='Sin Nada', phone='0991000023')
+
+        response = bot_client.get(LOOKUP_URL, {'phone': '593991000023'})
+
+        assert response.data['program'] == ''
 
 
 @pytest.mark.django_db

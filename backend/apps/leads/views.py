@@ -270,6 +270,8 @@ class LeadListCreateView(APIView):
             duplicate = find_duplicate_lead(
                 serializer.validated_data['phone'],
                 serializer.validated_data.get('email'),
+                serializer.validated_data.get('name'),
+                serializer.validated_data.get('program_interest'),
             )
             if duplicate is not None:
                 return Response(
