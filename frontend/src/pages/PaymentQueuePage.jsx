@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { getPaymentQueue, getPrograms } from '../api/payments.api'
 import PaymentDetailModal from '../components/PaymentDetailModal'
@@ -13,16 +14,10 @@ const STATUS_COLORS = {
   DRAFT: 'bg-gray-100 text-gray-500',
 }
 
-const STATUS_LABELS = {
-  PENDING: 'Pendiente',
-  APPROVED: 'Aprobado',
-  REJECTED: 'Rechazado',
-  DRAFT: 'En revisión',
-}
-
 // ─── Queue Row ────────────────────────────────────────────────────────────────
 
 function QueueRow({ payment, onClick }) {
+  const { t } = useTranslation()
   const date = payment.ocr_payment_date || payment.submitted_at?.slice(0, 10)
   const amount = payment.ocr_amount
 
@@ -42,11 +37,11 @@ function QueueRow({ payment, onClick }) {
       <td className="py-3.5 px-4 text-sm text-gray-500">{date || '—'}</td>
       <td className="py-3.5 px-4">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[payment.status]}`}>
-          {STATUS_LABELS[payment.status]}
+          {t(`payments.status.${payment.status}`)}
         </span>
       </td>
       <td className="py-3.5 px-4">
-        <button className="p-1.5 bg-[#213A8E] hover:bg-[#1a2f72] text-white rounded-lg transition-colors" title="Ver detalle">
+        <button className="p-1.5 bg-[#213A8E] hover:bg-[#1a2f72] text-white rounded-lg transition-colors" title={t('payments.queue.viewDetail')}>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -72,6 +67,7 @@ function SkeletonQueueRow() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PaymentQueuePage() {
+  const { t } = useTranslation()
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [search, setSearch] = useState('')
   const [programId, setProgramId] = useState('')
@@ -94,12 +90,12 @@ export default function PaymentQueuePage() {
     <div className="p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Cola de pagos</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('payments.queue.title')}</h1>
       </div>
 
       {/* Table card — mirrors dashboard layout */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">Comprobantes pendientes</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">{t('payments.queue.subtitle')}</h2>
 
         {/* Filters */}
         <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 sm:mb-5 items-center">
@@ -109,7 +105,7 @@ export default function PaymentQueuePage() {
             </svg>
             <input
               type="text"
-              placeholder="Buscar bootcamper..."
+              placeholder={t('payments.queue.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-transparent bg-white"
@@ -119,10 +115,10 @@ export default function PaymentQueuePage() {
             value={programId}
             onChange={setProgramId}
             options={[
-              { value: '', label: 'Todos los programas' },
+              { value: '', label: t('payments.queue.allPrograms') },
               ...programs.map((p) => ({ value: p.id, label: p.name })),
             ]}
-            placeholder="Todos los programas"
+            placeholder={t('payments.queue.allPrograms')}
           />
           {isFetching && !isLoading && (
             <svg className="w-4 h-4 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -137,12 +133,12 @@ export default function PaymentQueuePage() {
           <table className="w-full min-w-[600px]">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Bootcamper</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Programa</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Monto</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Fecha</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Acciones</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('payments.queue.colBootcamper')}</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('payments.queue.colProgram')}</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('payments.queue.colAmount')}</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('payments.queue.colDate')}</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('payments.queue.colStatus')}</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('payments.queue.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -153,7 +149,7 @@ export default function PaymentQueuePage() {
                     <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    <p className="text-sm text-gray-500">No hay pagos pendientes de revisión.</p>
+                    <p className="text-sm text-gray-500">{t('payments.queue.empty')}</p>
                   </td>
                 </tr>
               )}

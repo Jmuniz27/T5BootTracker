@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { COORDINATOR_SCOPE_LABELS, ROLE_BADGE_CLASSES, ROLE_LABELS } from './roles'
+import { useTranslation } from 'react-i18next'
+import { ROLE_BADGE_CLASSES } from './roles'
 
-const COLUMNS = ['Usuario', 'Rol', 'Cédula', 'Estado', 'Acciones']
+const COLUMN_KEYS = ['colUser', 'colRole', 'colCedula', 'colStatus', 'colActions']
 
 /**
  * Programa y cohorte del bootcamper (#328).
@@ -14,8 +15,9 @@ const COLUMNS = ['Usuario', 'Rol', 'Cédula', 'Estado', 'Acciones']
  * fijaba una vez, al convertir el lead.
  */
 function EnrollmentLines({ enrollments, onChangeCohort }) {
+  const { t } = useTranslation()
   if (!enrollments?.length) {
-    return <p className="text-xs text-gray-400 mt-1">Sin inscripción</p>
+    return <p className="text-xs text-gray-400 mt-1">{t('users.table.noEnrollment')}</p>
   }
 
   return (
@@ -24,15 +26,15 @@ function EnrollmentLines({ enrollments, onChangeCohort }) {
         <p key={e.enrollment_id} className="text-xs text-gray-500 truncate">
           {e.program_name}
           {e.cohort_number != null
-            ? <span className="text-gray-400"> · Cohorte {e.cohort_number}</span>
-            : <span className="text-gray-400"> · Sin cohorte</span>}
+            ? <span className="text-gray-400"> · {t('users.cohortNumber', { number: e.cohort_number })}</span>
+            : <span className="text-gray-400"> · {t('users.table.noCohort')}</span>}
           {' '}
           <button
             type="button"
             onClick={() => onChangeCohort(e)}
             className="text-[#213A8E] hover:underline font-medium"
           >
-            Cambiar
+            {t('users.table.change')}
           </button>
         </p>
       ))}
@@ -43,7 +45,7 @@ function EnrollmentLines({ enrollments, onChangeCohort }) {
 function SkeletonRow() {
   return (
     <tr>
-      {COLUMNS.map((c) => (
+      {COLUMN_KEYS.map((c) => (
         <td key={c} className="py-3.5 px-3">
           <div className="h-4 bg-gray-100 rounded animate-pulse" />
         </td>
@@ -53,18 +55,20 @@ function SkeletonRow() {
 }
 
 function RoleBadge({ role }) {
+  const { t } = useTranslation()
   return (
     <span
       className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium ${
         ROLE_BADGE_CLASSES[role] ?? 'bg-gray-100 text-gray-600'
       }`}
     >
-      {ROLE_LABELS[role] ?? role}
+      {t(`users.roles.${role}`, role)}
     </span>
   )
 }
 
 function StatusBadge({ isActive }) {
+  const { t } = useTranslation()
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${
@@ -72,7 +76,7 @@ function StatusBadge({ isActive }) {
       }`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-500' : 'bg-gray-400'}`} />
-      {isActive ? 'Activo' : 'Inactivo'}
+      {isActive ? t('users.table.active') : t('users.table.inactive')}
     </span>
   )
 }
@@ -85,6 +89,7 @@ function StatusBadge({ isActive }) {
  * sea consistente con el resto de la app.
  */
 function UserActionsDropdown({ user, isSelf, onEdit, onToggle }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -122,7 +127,7 @@ function UserActionsDropdown({ user, isSelf, onEdit, onToggle }) {
         ref={btnRef}
         type="button"
         onClick={handleToggle}
-        aria-label={`Acciones para ${user.full_name}`}
+        aria-label={t('users.table.menuAria', { name: user.full_name })}
         aria-haspopup="menu"
         aria-expanded={open}
         className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#213A8E] text-white hover:bg-[#1a2f72] transition-colors"
@@ -136,7 +141,7 @@ function UserActionsDropdown({ user, isSelf, onEdit, onToggle }) {
         <div
           ref={menuRef}
           role="menu"
-          aria-label={`Acciones para ${user.full_name}`}
+          aria-label={t('users.table.menuAria', { name: user.full_name })}
           className={`fixed w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 ${openUpward ? '-translate-y-full' : ''}`}
           style={{ top: pos.top, left: pos.left }}
         >
@@ -146,19 +151,19 @@ function UserActionsDropdown({ user, isSelf, onEdit, onToggle }) {
             onClick={() => { onEdit(user); setOpen(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            Editar
+            {t('users.table.edit')}
           </button>
           <button
             type="button"
             role="menuitem"
             onClick={() => { onToggle(user); setOpen(false) }}
             disabled={isSelf}
-            title={isSelf ? 'No puedes cambiar tu propio estado' : undefined}
+            title={isSelf ? t('users.table.cantToggleSelf') : undefined}
             className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 disabled:hover:bg-transparent disabled:opacity-40 disabled:cursor-not-allowed ${
               user.is_active ? 'text-red-600' : 'text-green-700'
             }`}
           >
-            {user.is_active ? 'Desactivar' : 'Activar'}
+            {user.is_active ? t('users.table.deactivate') : t('users.table.activate')}
           </button>
         </div>
       )}
@@ -167,17 +172,18 @@ function UserActionsDropdown({ user, isSelf, onEdit, onToggle }) {
 }
 
 export default function UsersTable({ users, isLoading, isError, currentUserId, onEdit, onToggle, onChangeCohort }) {
+  const { t } = useTranslation()
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm min-w-[640px]">
         <thead>
           <tr className="border-b border-gray-100">
-            {COLUMNS.map((h) => (
+            {COLUMN_KEYS.map((key) => (
               <th
-                key={h}
+                key={key}
                 className="text-left py-3 px-3 text-gray-500 font-medium text-xs uppercase tracking-wide"
               >
-                {h}
+                {t(`users.table.${key}`)}
               </th>
             ))}
           </tr>
@@ -187,8 +193,8 @@ export default function UsersTable({ users, isLoading, isError, currentUserId, o
 
           {!isLoading && !isError && users.length === 0 && (
             <tr>
-              <td colSpan={COLUMNS.length} className="text-center text-gray-500 py-10">
-                No se encontraron usuarios.
+              <td colSpan={COLUMN_KEYS.length} className="text-center text-gray-500 py-10">
+                {t('users.table.empty')}
               </td>
             </tr>
           )}
@@ -209,7 +215,7 @@ export default function UsersTable({ users, isLoading, isError, currentUserId, o
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate">
                           {user.full_name}
-                          {isSelf && <span className="ml-2 text-xs text-gray-500 font-normal">(tú)</span>}
+                          {isSelf && <span className="ml-2 text-xs text-gray-500 font-normal">{t('users.table.you')}</span>}
                         </p>
                         <p className="text-xs text-gray-500 truncate">{user.email}</p>
                       </div>
@@ -229,7 +235,7 @@ export default function UsersTable({ users, isLoading, isError, currentUserId, o
                             y el que no tiene alcance caen a la etiqueta. */}
                         {user.coordinator_program_names?.length
                           ? user.coordinator_program_names.join(', ')
-                          : COORDINATOR_SCOPE_LABELS[user.coordinator_scope] ?? 'Sin alcance'}
+                          : (user.coordinator_scope ? t(`users.scope.${user.coordinator_scope}`, t('users.table.noScope')) : t('users.table.noScope'))}
                       </p>
                     )}
                   </td>

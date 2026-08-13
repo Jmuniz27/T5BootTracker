@@ -1,8 +1,10 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import AuthLayout from '../components/AuthLayout';
 import AuthButton from '../components/AuthButton';
 
 export default function OnboardingSuccessPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -18,13 +20,13 @@ export default function OnboardingSuccessPage() {
         </div>
       </div>
 
-      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 text-center">Cuenta activada</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 text-center">{t('onboardingSuccess.title')}</h1>
       <p className="text-white/50 text-sm mb-8 sm:mb-10 text-center">
-        Tu cuenta ya está lista. Inicia sesión con tu correo y la contraseña que acabas de crear.
+        {t('onboardingSuccess.message')}
       </p>
 
       <AuthButton onClick={() => navigate('/login')}>
-        Ir al inicio de sesión
+        {t('onboardingSuccess.goToLogin')}
       </AuthButton>
     </AuthLayout>
   );

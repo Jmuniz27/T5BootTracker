@@ -9,6 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 
 export interface ProgramOption {
@@ -23,16 +24,18 @@ interface Props {
   placeholder?: string;
 }
 
-export default function ProgramSelect({ programs, selectedId, onSelect, placeholder = 'Selecciona un programa' }: Props) {
+export default function ProgramSelect({ programs, selectedId, onSelect, placeholder }: Props) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const selected = programs.find((p) => p.id === selectedId);
   const empty = programs.length === 0;
+  const ph = placeholder ?? t('leads.programSelect.placeholder');
 
   return (
     <>
       <TouchableOpacity style={s.control} onPress={() => setOpen(true)} activeOpacity={0.7} disabled={empty}>
         <Text style={[s.controlText, !selected && s.placeholder]} numberOfLines={1}>
-          {empty ? 'Cargando programas…' : selected ? selected.name : placeholder}
+          {empty ? t('leads.programSelect.loading') : selected ? selected.name : ph}
         </Text>
         <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
       </TouchableOpacity>
@@ -41,7 +44,7 @@ export default function ProgramSelect({ programs, selectedId, onSelect, placehol
         <Pressable style={s.overlay} onPress={() => setOpen(false)}>
           <View style={s.sheet}>
             <View style={s.handle} />
-            <Text style={s.title}>Programa</Text>
+            <Text style={s.title}>{t('leads.programSelect.title')}</Text>
             <ScrollView style={{ maxHeight: 340 }}>
               {programs.map((p) => {
                 const active = p.id === selectedId;

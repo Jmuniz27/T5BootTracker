@@ -7,3 +7,7 @@ node_modules/
 playwright-report/
 test-results/
 reports/
+
+# Specs generados por bddgen a partir de features/*.feature + steps/*.js
+# (playwright-bdd). Se regeneran con `npm run pretest:bdd` — no se versionan.
+.features-gen/

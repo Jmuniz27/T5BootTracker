@@ -1,10 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../store/auth.store'
 
 const NAV_ITEMS = [
   {
     to: '/dashboard',
-    label: 'Dashboard',
+    labelKey: 'nav.dashboard',
     icon: (
       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
         <path d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
@@ -13,7 +14,7 @@ const NAV_ITEMS = [
   },
   {
     to: '/agenda',
-    label: 'Agenda',
+    labelKey: 'nav.agenda',
     commercialOnly: true,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -23,7 +24,7 @@ const NAV_ITEMS = [
   },
   {
     to: '/payments',
-    label: 'Payment',
+    labelKey: 'nav.payments',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -32,7 +33,7 @@ const NAV_ITEMS = [
   },
   {
     to: '/analytics',
-    label: 'Analítica',
+    labelKey: 'nav.analytics',
     adminOnly: true,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -42,7 +43,7 @@ const NAV_ITEMS = [
   },
   {
     to: '/admin/programs',
-    label: 'Programas',
+    labelKey: 'nav.programs',
     adminOnly: true,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -52,7 +53,7 @@ const NAV_ITEMS = [
   },
   {
     to: '/admin/users',
-    label: 'Usuarios',
+    labelKey: 'nav.users',
     adminOnly: true,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -63,6 +64,7 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ onClose }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
   const user = useAuthStore((s) => s.user)
@@ -95,7 +97,7 @@ export default function Sidebar({ onClose }) {
         <button
           onClick={onClose}
           className="lg:hidden p-1 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
-          aria-label="Cerrar menú"
+          aria-label={t('common.closeMenu')}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -104,7 +106,7 @@ export default function Sidebar({ onClose }) {
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
-        {visibleItems.map(({ to, label, icon }) => (
+        {visibleItems.map(({ to, labelKey, icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -118,12 +120,12 @@ export default function Sidebar({ onClose }) {
             }
           >
             {icon}
-            {label}
+            {t(labelKey)}
           </NavLink>
         ))}
       </nav>
 
-      <div className="px-3 pb-6">
+      <div className="px-3 pb-6 space-y-3">
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#213A8E] transition-colors"
@@ -131,7 +133,7 @@ export default function Sidebar({ onClose }) {
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
             <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v16a1 1 0 001 1h8a1 1 0 100-2H4V5h7a1 1 0 100-2H3zm14.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L18.586 12H9a1 1 0 110-2h9.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
           </svg>
-          Log out
+          {t('nav.logout')}
         </button>
       </div>
     </aside>

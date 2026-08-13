@@ -48,7 +48,10 @@ mobile/.env
 
 # Test / coverage artifacts
 .coverage
+coverage.xml
 htmlcov/
+frontend/coverage/
+mobile/coverage/
 
 # Scratch / internal files — keep out of public repo
 scratch_*.md
@@ -65,3 +68,7 @@ backend/query.sql
 docs/audit/
 
 google-credentials.json
+
+# Informe LaTeX 2P y spec de la entrega final (repo aparte / local)
+doc_ing2_2p/
+02FinalProjectSpec_en*.txt

@@ -1,8 +1,10 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import AuthLayout from '../components/AuthLayout';
 import AuthButton from '../components/AuthButton';
 
 export default function ResetSuccessPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -18,13 +20,13 @@ export default function ResetSuccessPage() {
         </div>
       </div>
 
-      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 text-center">Contraseña actualizada</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 text-center">{t('resetSuccess.title')}</h1>
       <p className="text-white/50 text-sm mb-8 sm:mb-10 text-center">
-        Tu contraseña se actualizó correctamente. Inicia sesión con tu nueva contraseña.
+        {t('resetSuccess.message')}
       </p>
 
       <AuthButton onClick={() => navigate('/login')}>
-        Ir al inicio de sesión
+        {t('resetSuccess.goToLogin')}
       </AuthButton>
     </AuthLayout>
   );

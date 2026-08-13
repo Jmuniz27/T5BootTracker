@@ -1,10 +1,12 @@
 import { Redirect, Stack } from 'expo-router';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth, isMobileRole } from '../../src/context/AuthContext';
 import { colors } from '../../src/theme/colors';
 
 export default function AppLayout() {
+  const { t } = useTranslation();
   const { token, user, logout } = useAuth();
 
   if (!token) return <Redirect href="/(auth)/login" />;
@@ -16,12 +18,12 @@ export default function AppLayout() {
       <SafeAreaView style={styles.screen}>
         <View style={styles.card}>
           <Ionicons name="lock-closed-outline" size={40} color={colors.navy} />
-          <Text style={styles.title}>Acceso restringido</Text>
+          <Text style={styles.title}>{t('app.restrictedTitle')}</Text>
           <Text style={styles.msg}>
-            Esta aplicación es para el equipo comercial (vendedores y finanzas). Ingresa con una cuenta autorizada.
+            {t('app.restrictedMsg')}
           </Text>
           <TouchableOpacity style={styles.btn} onPress={logout} activeOpacity={0.85}>
-            <Text style={styles.btnText}>Cerrar sesión</Text>
+            <Text style={styles.btnText}>{t('app.logout')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

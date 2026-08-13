@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getPayment, approvePayment, rejectPayment, editPayment, notifyCoordinator, getMonitoring } from '../api/payments.api'
 import { useModalA11y } from '../hooks/use-modal-a11y'
@@ -22,9 +23,9 @@ function ConfidenceBadge({ value }) {
 // dato está a la vista en el comprobante, así que hacer que se reescriba a mano
 // sólo invitaba a equivocarse.
 const FIELDS = [
-  { key: 'confirmed_amount',         ocr: 'ocr_amount',         conf: 'amount',         label: 'Monto confirmado *', placeholder: 'Ej: 500.00', inputMode: 'decimal' },
-  { key: 'confirmed_bank_name',      ocr: 'ocr_bank_name',      conf: 'bank_name',      label: 'Banco',              placeholder: 'Nombre del banco' },
-  { key: 'confirmed_transaction_id', ocr: 'ocr_transaction_id', conf: 'transaction_id', label: 'Nro. transacción',   placeholder: 'ID de transacción' },
+  { key: 'confirmed_amount',         ocr: 'ocr_amount',         conf: 'amount',         labelKey: 'amountLabel', placeholderKey: 'amountPlaceholder', inputMode: 'decimal' },
+  { key: 'confirmed_bank_name',      ocr: 'ocr_bank_name',      conf: 'bank_name',      labelKey: 'bankLabel',   placeholderKey: 'bankPlaceholder' },
+  { key: 'confirmed_transaction_id', ocr: 'ocr_transaction_id', conf: 'transaction_id', labelKey: 'txLabel',     placeholderKey: 'txPlaceholder' },
 ]
 
 // Monto: sólo dígitos y un separador decimal, máximo 2 decimales. Mismo criterio
@@ -40,6 +41,7 @@ function sanitizeAmount(raw) {
 // pero notificar al coordinador no, y usar `onSuccess` para ambos hacia que
 // avisarle al coordinador cerrara la pantalla del comprobante que se revisaba.
 export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, onSuccess, onNotice }) {
+  const { t } = useTranslation()
   const [fields, setFields] = useState({ confirmed_amount: '', confirmed_bank_name: '', confirmed_transaction_id: '' })
   // Datos del comprobante que Finanzas puede corregir en un pendiente (fecha,
   // banco/cuenta y últimos dígitos) antes de aprobar o rechazar.
@@ -95,12 +97,12 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
 
   const approveMutation = useMutation({
     mutationFn: (data) => approvePayment(paymentId, data),
-    onSuccess: () => { invalidate(); onSuccess('Pago aprobado.') },
+    onSuccess: () => { invalidate(); onSuccess(t('payments.detail.toast.approved')) },
   })
 
   const rejectMutation = useMutation({
     mutationFn: (data) => rejectPayment(paymentId, data),
-    onSuccess: () => { invalidate(); onSuccess('Pago rechazado.') },
+    onSuccess: () => { invalidate(); onSuccess(t('payments.detail.toast.rejected')) },
   })
 
   const editMutation = useMutation({
@@ -108,7 +110,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payment-detail', paymentId] })
       qc.invalidateQueries({ queryKey: ['payment-queue'] })
-      onSuccess('Datos del comprobante actualizados.')
+      onSuccess(t('payments.detail.toast.updated'))
     },
   })
 
@@ -120,8 +122,8 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
         source: 'receipt_review',
         paymentId,
       }),
-    onSuccess: () => notify('Coordinador notificado.'),
-    onError: () => notify('No se pudo notificar al coordinador.', 'error'),
+    onSuccess: () => notify(t('payments.detail.toast.notified')),
+    onError: () => notify(t('payments.detail.toast.notifyError'), 'error'),
   })
 
   const handleCopy = () => {
@@ -149,7 +151,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
         {/* Comprobante — el documento oficial contra el que se valida */}
         <div className="lg:w-1/2 flex flex-col border-b lg:border-b-0 lg:border-r border-gray-100 p-4 sm:p-6 gap-3 lg:min-h-0">
           <div className="flex items-center justify-between flex-shrink-0">
-            <h3 className="text-sm font-semibold text-gray-700">Comprobante</h3>
+            <h3 className="text-sm font-semibold text-gray-700">{t('payments.detail.receipt')}</h3>
             {payment.receipt_file && (
               <a
                 href={payment.receipt_file}
@@ -161,7 +163,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
-                Abrir o descargar
+                {t('payments.detail.openDownload')}
               </a>
             )}
           </div>
@@ -177,17 +179,17 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
         <div className="lg:w-1/2 p-4 sm:p-6 space-y-5 lg:overflow-y-auto lg:min-h-0">
           {isRejected && (
             <div>
-              <h3 className="text-sm font-semibold text-red-600 mb-2">Motivo del rechazo</h3>
+              <h3 className="text-sm font-semibold text-red-600 mb-2">{t('payments.detail.rejectionTitle')}</h3>
               <p
                 data-testid="payment-rejection-reason"
                 className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 whitespace-pre-wrap"
               >
-                {payment.rejection_reason || 'No se registró un motivo.'}
+                {payment.rejection_reason || t('payments.detail.noReason')}
               </p>
               {payment.validated_by_name && (
                 <p className="mt-2 text-xs text-gray-500">
-                  Rechazado por {payment.validated_by_name}
-                  {payment.validated_at && ` el ${new Date(payment.validated_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                  {t('payments.detail.rejectedBy', { name: payment.validated_by_name })}
+                  {payment.validated_at && t('payments.detail.rejectedOn', { date: new Date(payment.validated_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) })}
                 </p>
               )}
             </div>
@@ -195,18 +197,18 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
 
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-gray-700">
-              {isPending ? 'Datos del pago' : 'Datos confirmados'}
+              {isPending ? t('payments.detail.paymentData') : t('payments.detail.confirmedData')}
             </h3>
             <p className="text-xs text-gray-500 -mt-1">
               {isPending
-                ? 'Precargados con lo que leyó el escaneo. Corrige lo que no coincida con el comprobante antes de aprobar.'
-                : 'Datos con los que se resolvió esta solicitud.'}
+                ? t('payments.detail.pendingHint')
+                : t('payments.detail.resolvedHint')}
             </p>
 
-            {FIELDS.map(({ key, conf, label, placeholder, inputMode }) => (
+            {FIELDS.map(({ key, conf, labelKey, placeholderKey, inputMode }) => (
               <div key={key}>
                 <div className="flex items-center justify-between mb-1">
-                  <label htmlFor={key} className="text-xs font-medium text-gray-600">{label}</label>
+                  <label htmlFor={key} className="text-xs font-medium text-gray-600">{t(`payments.detail.${labelKey}`)}</label>
                   <ConfidenceBadge value={confidence[conf]} />
                 </div>
                 <input
@@ -214,7 +216,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   type="text"
                   inputMode={inputMode}
                   data-testid={key === 'confirmed_amount' ? 'approve-amount' : key}
-                  placeholder={isPending ? placeholder : '—'}
+                  placeholder={isPending ? t(`payments.detail.${placeholderKey}`) : '—'}
                   value={fields[key]}
                   readOnly={!isPending}
                   disabled={!isPending}
@@ -229,7 +231,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
               <div className="space-y-3 pt-1">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label htmlFor="ocr_payment_date" className="block text-xs font-medium text-gray-600 mb-1">Fecha de pago</label>
+                    <label htmlFor="ocr_payment_date" className="block text-xs font-medium text-gray-600 mb-1">{t('payments.detail.paymentDate')}</label>
                     <input
                       id="ocr_payment_date"
                       type="date"
@@ -240,7 +242,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                     />
                   </div>
                   <div>
-                    <label htmlFor="ocr_account_last_digits" className="block text-xs font-medium text-gray-600 mb-1">Cuenta (últimos dígitos)</label>
+                    <label htmlFor="ocr_account_last_digits" className="block text-xs font-medium text-gray-600 mb-1">{t('payments.detail.accountLastDigits')}</label>
                     <input
                       id="ocr_account_last_digits"
                       type="text"
@@ -252,7 +254,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="ocr_bank_name" className="block text-xs font-medium text-gray-600 mb-1">Banco / cuenta destino</label>
+                  <label htmlFor="ocr_bank_name" className="block text-xs font-medium text-gray-600 mb-1">{t('payments.detail.bankAccountDest')}</label>
                   <input
                     id="ocr_bank_name"
                     type="text"
@@ -268,17 +270,17 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   className="text-xs font-medium text-[#213A8E] border border-[#213A8E] px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition-colors inline-flex items-center gap-2"
                 >
                   {editMutation.isPending && <Spinner />}
-                  {editMutation.isPending ? 'Guardando…' : 'Guardar fecha y cuenta'}
+                  {editMutation.isPending ? t('payments.detail.saving') : t('payments.detail.saveDateAccount')}
                 </button>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div>
-                  <p className="text-xs text-gray-500">Fecha de pago</p>
+                  <p className="text-xs text-gray-500">{t('payments.detail.paymentDate')}</p>
                   <p className="text-sm text-gray-900">{payment.ocr_payment_date || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Cuenta (últimos dígitos)</p>
+                  <p className="text-xs text-gray-500">{t('payments.detail.accountLastDigits')}</p>
                   <p className="text-sm text-gray-900">{payment.ocr_account_last_digits || '—'}</p>
                 </div>
               </div>
@@ -299,17 +301,17 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-              Texto extraído por el escaneo
+              {t('payments.detail.rawTextToggle')}
             </button>
             {showRaw && (
               <div className="mt-2">
                 <div className="flex justify-end mb-1">
                   <button onClick={handleCopy} className="text-xs font-medium text-[#213A8E] hover:underline">
-                    {copied ? 'Copiado!' : 'Copiar'}
+                    {copied ? t('payments.detail.copied') : t('payments.detail.copy')}
                   </button>
                 </div>
                 <pre className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-700 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
-                  {payment.ocr_raw_text || 'Sin texto disponible.'}
+                  {payment.ocr_raw_text || t('payments.detail.noRawText')}
                 </pre>
               </div>
             )}
@@ -318,7 +320,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
           {isPending && (
             <div className="space-y-3 border-t border-gray-100 pt-4">
               {approveMutation.isError && (
-                <p className="text-red-500 text-xs animate-shake">{approveMutation.error?.response?.data?.error || 'Error al aprobar.'}</p>
+                <p className="text-red-500 text-xs animate-shake">{approveMutation.error?.response?.data?.error || t('payments.detail.approveError')}</p>
               )}
               <button
                 data-testid="approve-submit"
@@ -327,7 +329,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                 className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
               >
                 {approveMutation.isPending && <Spinner />}
-                {approveMutation.isPending ? 'Aprobando...' : 'Aprobar pago'}
+                {approveMutation.isPending ? t('payments.detail.approving') : t('payments.detail.approve')}
               </button>
 
               {!showReject ? (
@@ -336,24 +338,24 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                   onClick={() => setShowReject(true)}
                   className="w-full border border-red-300 text-red-600 py-2.5 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors"
                 >
-                  Rechazar pago
+                  {t('payments.detail.reject')}
                 </button>
               ) : (
                 <div className="border border-red-200 rounded-xl p-4 space-y-3">
-                  <label htmlFor="reject-reason" className="block text-xs font-medium text-gray-600">Motivo de rechazo *</label>
+                  <label htmlFor="reject-reason" className="block text-xs font-medium text-gray-600">{t('payments.detail.rejectReasonLabel')}</label>
                   <textarea
                     id="reject-reason"
                     rows={3}
                     maxLength={300}
                     data-testid="reject-reason"
-                    placeholder="Describe el motivo del rechazo..."
+                    placeholder={t('payments.detail.rejectPlaceholder')}
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value.slice(0, 300))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
                   />
                   <p className="text-right text-xs text-gray-400">{rejectReason.length}/300</p>
                   {rejectMutation.isError && (
-                    <p className="text-red-500 text-xs animate-shake">{rejectMutation.error?.response?.data?.error || 'Error al rechazar.'}</p>
+                    <p className="text-red-500 text-xs animate-shake">{rejectMutation.error?.response?.data?.error || t('payments.detail.rejectError')}</p>
                   )}
                   <button
                     data-testid="reject-submit"
@@ -362,7 +364,7 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
                     className="w-full bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2"
                   >
                     {rejectMutation.isPending && <Spinner />}
-                    {rejectMutation.isPending ? 'Rechazando...' : 'Confirmar rechazo'}
+                    {rejectMutation.isPending ? t('payments.detail.rejecting') : t('payments.detail.confirmReject')}
                   </button>
                 </div>
               )}
@@ -370,15 +372,15 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
               {isCritical && (
                 <div className="border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-700">Notificar coordinador</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Avisa que estás revisando este comprobante y hay pagos atrasados.</p>
+                    <h3 className="text-sm font-semibold text-gray-700">{t('payments.detail.notifyTitle')}</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">{t('payments.detail.notifyHint')}</p>
                   </div>
                   <button
                     disabled={notifyMutation.isPending}
                     onClick={() => notifyMutation.mutate()}
                     className="flex-shrink-0 text-sm text-[#213A8E] font-medium border border-[#213A8E] px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition-colors"
                   >
-                    {notifyMutation.isPending ? 'Enviando...' : 'Notificar'}
+                    {notifyMutation.isPending ? t('payments.detail.sending') : t('payments.detail.notify')}
                   </button>
                 </div>
               )}
@@ -396,21 +398,21 @@ export default function PaymentDetailModal({ paymentId, bootcamperId, onClose, o
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label="Detalle del pago"
+        aria-label={t('payments.detail.title')}
         className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden focus:outline-none animate-zoom-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Detalle del pago</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t('payments.detail.title')}</h2>
             {payment && (
               <p className="text-xs text-gray-500 mt-0.5">{payment.bootcamper_name} · {payment.program_name}</p>
             )}
           </div>
           <button
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label={t('payments.detail.close')}
             className="text-gray-500 hover:text-gray-700 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#213A8E]"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
