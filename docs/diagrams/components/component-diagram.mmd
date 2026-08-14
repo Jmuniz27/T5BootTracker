@@ -1,28 +1,33 @@
 flowchart TB
     classDef planned fill:#F5F5F5,stroke:#AAAAAA,color:#888888,stroke-dasharray:5 5
 
-    subgraph Clients
-        subgraph Browser["Web Browser"]
-            Frontend["React SPA\nVite · Zustand · TanStack Query"]
-        end
-        subgraph Mobile["Mobile Device"]
-            MobileApp["Expo App\nExpo Router · AuthContext"]
-        end
+    subgraph Clients["Clients"]
+        direction LR
+        Frontend["React SPA\nVite · Zustand · TanStack Query"]
+        MobileApp["Expo App\nExpo Router · AuthContext"]
     end
 
     subgraph Backend["Backend — Django 5.1 + DRF"]
+        direction TB
         Auth["Authentication\n— JWT simplejwt —\naccess 2 h / refresh 1 d\nRoles: Admin · Salesperson · Bootcamper\nCoordinator · Finance"]
-        Leads["Leads"]
-        Payments["Payments"]
-        Programs["Programs\nprograms and cohorts"]
-        Users["Users"]
-        Meetings["Meetings\nfollow-up scheduling"]
-        Notif["Notifications\nCelery tasks only"]
-        Analytics["Analytics\nsalesperson metrics"]
-        Swagger["API Docs\ndrf-spectacular"]
+        subgraph Domain["Domain apps"]
+            direction LR
+            Leads["Leads"]
+            Payments["Payments"]
+            Programs["Programs\nprograms and cohorts"]
+            Meetings["Meetings\nfollow-up scheduling"]
+        end
+        subgraph Support["Supporting apps"]
+            direction LR
+            Users["Users"]
+            Analytics["Analytics\nsalesperson metrics"]
+            Notif["Notifications\nCelery tasks only"]
+            Swagger["API Docs\ndrf-spectacular"]
+        end
     end
 
     subgraph Infra["Data & Infrastructure"]
+        direction LR
         PG[("PostgreSQL 16")]
         Redis["Redis 7"]
         Celery["Celery Worker"]
@@ -31,44 +36,26 @@ flowchart TB
     end
 
     subgraph Ext["External Services"]
+        direction LR
         GCal["Google Calendar API"]
         S3["Object Storage\nS3 / MinIO — planned"]:::planned
     end
 
-    %% Clients → Backend
-    Frontend -->|REST + JWT| Auth
-    Frontend --> Leads
-    Frontend --> Payments
-    Frontend --> Programs
-    Frontend --> Users
-    Frontend --> Meetings
-    Frontend --> Analytics
-    MobileApp -->|REST + JWT| Auth
-    MobileApp --> Leads
-    MobileApp --> Meetings
+    Clients -->|REST + JWT| Auth
+    Auth --> Domain
+    Auth --> Support
 
-    %% Backend → DB
-    Auth --> PG
-    Leads --> PG
-    Payments --> PG
-    Programs --> PG
-    Users --> PG
-    Meetings --> PG
-    Analytics --> PG
-
-    %% Backend → Async
+    Domain --> PG
+    Support --> PG
     Auth -->|token blacklist| Redis
-    Leads -->|enqueue tasks| Celery
+
     Payments -->|enqueue OCR| Celery
+    Leads -->|enqueue tasks| Celery
     Notif --> Celery
 
-    %% Celery → infra
     Celery -->|broker / result| Redis
     Celery -->|send emails| SMTP
     Celery -->|parse receipts| OCR
 
-    %% External integrations
     Meetings -->|sync events| GCal
-
-    %% Planned
     Payments -.->|upload receipts - planned| S3
