@@ -11,13 +11,14 @@ flowchart TB
     end
 
     subgraph Backend["Backend — Django 5.1 + DRF"]
-        Auth["Authentication\n— JWT simplejwt —\naccess 2 h / refresh 1 d\nRoles: Admin · Salesperson · Bootcamper"]
+        Auth["Authentication\n— JWT simplejwt —\naccess 2 h / refresh 1 d\nRoles: Admin · Salesperson · Bootcamper\nCoordinator · Finance"]
         Leads["Leads"]
         Payments["Payments"]
-        Programs["Programs"]
+        Programs["Programs\nprograms and cohorts"]
         Users["Users"]
+        Meetings["Meetings\nfollow-up scheduling"]
         Notif["Notifications\nCelery tasks only"]
-        Analytics["Analytics\nplanned"]:::planned
+        Analytics["Analytics\nsalesperson metrics"]
         Swagger["API Docs\ndrf-spectacular"]
     end
 
@@ -29,9 +30,9 @@ flowchart TB
         OCR["OCR Engine\nTesseract"]
     end
 
-    subgraph Ext["External Services — planned"]
-        S3["Object Storage\nS3 / MinIO"]:::planned
-        GCal["Google Calendar API"]:::planned
+    subgraph Ext["External Services"]
+        GCal["Google Calendar API"]
+        S3["Object Storage\nS3 / MinIO — planned"]:::planned
     end
 
     %% Clients → Backend
@@ -39,8 +40,12 @@ flowchart TB
     Frontend --> Leads
     Frontend --> Payments
     Frontend --> Programs
+    Frontend --> Users
+    Frontend --> Meetings
+    Frontend --> Analytics
     MobileApp -->|REST + JWT| Auth
     MobileApp --> Leads
+    MobileApp --> Meetings
 
     %% Backend → DB
     Auth --> PG
@@ -48,6 +53,8 @@ flowchart TB
     Payments --> PG
     Programs --> PG
     Users --> PG
+    Meetings --> PG
+    Analytics --> PG
 
     %% Backend → Async
     Auth -->|token blacklist| Redis
@@ -60,6 +67,8 @@ flowchart TB
     Celery -->|send emails| SMTP
     Celery -->|parse receipts| OCR
 
+    %% External integrations
+    Meetings -->|sync events| GCal
+
     %% Planned
     Payments -.->|upload receipts - planned| S3
-    Leads -.->|schedule calls - planned| GCal
