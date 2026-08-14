@@ -6,8 +6,10 @@
 
 ```bash
 cd docs/diagrams/deployment
-npx -y @mermaid-js/mermaid-cli -i deployment-diagram.mmd -o deployment-diagram.png -b white -s 3
-cp deployment-diagram.png ../../../../overleaf_2p/Figures/deployment_diagram.png
+echo '{"theme":"default","themeVariables":{"fontSize":"28px"}}' > /tmp/mmdc.json
+npx -y @mermaid-js/mermaid-cli -i deployment-diagram.mmd -o deployment-diagram.png \
+    -b white -s 3 -c /tmp/mmdc.json
+cp deployment-diagram.png ../../../../doc_ing2_2p/Figures/deployment_diagram.png
 ```
 
 Alternativa manual: pegar el `.mmd` en <https://mermaid.live> → *Actions → PNG*.
@@ -16,10 +18,19 @@ Alternativa manual: pegar el `.mmd` en <https://mermaid.live> → *Actions → P
 > con la primera línea y falla el parseo (`Expecting 'GRAPH', got 'NODE_STRING'`).
 > Cualquier nota va en este README, no en el `.mmd`.
 
-**Formato:** conviene que salga apaisado (~2:1). El capítulo 2 lo inserta con
-`height=0.45\textheight`, así que un diagrama muy alto se ve diminuto en el PDF.
-Las tres `direction LR` de los subgrafos son lo que consigue esa proporción — si se
-cambian a `TB` el diagrama sale de 2352x4254 y queda ilegible en la página.
+**El `fontSize` de 28px no es cosmético, no lo quites.** Con la fuente por defecto
+(16px) el diagrama sale 2352x1113, o sea 2.11:1, y al reducirlo al ancho de página
+del informe el texto queda en unos 2.7 puntos: ilegible impreso. Los márgenes de las
+cajas y el largo de las flechas no escalan con la fuente, así que subirla hace que el
+texto ocupe más proporción del lienzo: la relación pasa a 1.31:1 y el texto a unos
+5 puntos. Mismo contenido, mismas cajas, mismas aristas — sólo cambia el tamaño
+relativo.
+
+**Formato:** el capítulo 2 lo inserta con `width=\textwidth, height=0.8\textheight`.
+El tope de alto era `0.45\textheight` y achicaba la figura todavía más de lo
+necesario; se subió junto con el cambio de fuente. Las `direction LR` de los
+subgrafos son lo que evita que el diagrama se estire en vertical — si se cambian a
+`TB` sale desproporcionadamente alto y vuelve a quedar ilegible.
 
 ## Historial
 
