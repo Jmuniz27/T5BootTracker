@@ -5,7 +5,9 @@ credentials.json
 *.p8
 *.p12
 *.mobileprovision
-.npmrc
+# .npmrc SI se versiona: lleva legacy-peer-deps=true, sin el cual
+# npm install falla por el conflicto de peers y el build de EAS no arranca.
 
 # EAS / build config con datos sensibles
-eas.json
+# eas.json SI se versiona: no lleva secretos (las credenciales van en
+# credentials.json, que si esta ignorado) y define a que backend apunta cada build.
