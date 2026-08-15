@@ -34,6 +34,13 @@
       "expo-router",
       "expo-asset",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b2315f10-900e-4c28-b027-c21543f87b18"
+      }
+    },
+    "owner": "isabellitam"
   }
 }
