@@ -9,6 +9,7 @@
 | `erd.mmd` | **Fuente de verdad.** 13 modelos + 1 tabla M2M = 14 tablas, 26 FKs. | A mano, desde los modelos Django. |
 | `erd.drawio` | **Diagrama completo**: 14 tablas, 162 columnas, 28 relaciones. | `gen_erd_drawio.py` (abajo). **No editar a mano.** |
 | `erd-resumen.drawio` | **Versión resumida** para el informe: mismas tablas y relaciones, 88 columnas. | `gen_erd_drawio.py --resumen`. **No editar a mano.** |
+| `erd-resumen.png` | **La imagen del informe**, exportada del anterior desde draw.io. | Exportar de nuevo desde draw.io, ver abajo. |
 | `gen_erd_drawio.py` | Generador de los dos `.drawio` desde `erd.mmd`. | A mano; sólo librería estándar. |
 | `erd.png` | Render rápido de Mermaid, sin estilo. | CLI de Mermaid (abajo). |
 | `schema.dbml` | Mismo esquema en DBML, para drawSQL / dbdiagram. | A mano, en paralelo con `erd.mmd`. |
@@ -51,6 +52,18 @@ Para regenerarlos después de tocar `erd.mmd`:
 python3 docs/diagrams/database/gen_erd_drawio.py             # erd.drawio
 python3 docs/diagrams/database/gen_erd_drawio.py --resumen   # erd-resumen.drawio
 ```
+
+### La imagen del informe
+
+`erd-resumen.png` sale de abrir `erd-resumen.drawio` en draw.io y exportar
+(*File → Export as → PNG*). **Las posiciones de las cajas de esa imagen están
+acomodadas a mano**: el generador reparte las tablas en cuatro columnas y deja
+las líneas cruzándose, que es legible pero feo para una página del informe.
+
+Consecuencia: regenerar el `.drawio` **descarta ese acomodo**. Si se regenera y
+hace falta la imagen otra vez, hay que volver a acomodar y exportar. Es el precio
+de tener el diagrama derivado de una fuente en vez de dibujado a mano, y conviene
+pagarlo sólo cuando el esquema cambie de verdad.
 
 Qué produce el generador:
 
