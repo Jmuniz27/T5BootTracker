@@ -27,6 +27,7 @@ It is the only table of contents kept in the folder.
 | 018 | `Client_Communications/Sprint_5` | `sprint_review_s5.pdf` | Signed Sprint 5 review document (User Mgmt/DevOps/Testing/Demo). Digitally signed by PhD. Carmen Vaca. | PDF (signed) | PhD. Carmen Vaca, full team | Jul 2026 | Sprint 5 |
 | 019 | `Client_Communications/Sprint_6` | `sprint_review_s6.pdf` | Signed Sprint 6 review document (Hardening & QA, usability-driven responsive campaign). Digitally signed by PhD. Carmen Vaca. | PDF (signed) | PhD. Carmen Vaca, full team | Aug 2026 | Sprint 6, CB-342, CB-352 |
 | 020 | `Client_Communications/Sprint_7` | `sprint_review_s7.pdf` | Signed Sprint 7 review document (Final Delivery). Digitally signed by PhD. Carmen Vaca. | PDF (signed) | PhD. Carmen Vaca, full team | Aug 2026 | Sprint 7 |
+| 021 | `Client_Communications/Final_Delivery` | `final_delivery_acceptance.pdf` | Consolidated Final Delivery Acceptance Report: 32/32 HST delivered, 18 change requests, production URL, and the client's formal acceptance of the system. Digitally signed by PhD. Carmen Vaca (Aug 15, 2026, 10:05 -05:00). | PDF (signed) | PhD. Carmen Vaca, Juan Munizaga (PO) | Aug 15, 2026 | All sprints, CR-001..CR-018 |
 
 ## Notes
 
