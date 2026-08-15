@@ -13,7 +13,9 @@ from apps.authentication.models import CustomUser
 from apps.authentication.validators import validate_identificacion
 from apps.authentication.services import make_onboarding_token, build_invitation_link
 from apps.programs.models import Program, Enrollment
-from apps.programs.services import apply_discount, resolve_assignable_cohort
+from apps.programs.services import (
+    apply_discount, resolve_active_program_by_id, resolve_assignable_cohort,
+)
 from apps.notifications.tasks import send_conversion_notification, send_bootcamper_invitation_email
 from .models import Interaction, Lead, LeadAssignmentSetting
 
@@ -384,6 +386,38 @@ def resolve_program_by_name(name):
     return partial[0] if len(partial) == 1 else None
 
 
+def resolve_bot_program(program_id, program_interest):
+    """El programa al que apunta el bot: por id si lo eligió de la lista, si no
+    por nombre.
+
+    El id gana porque es exacto: sale del catálogo que el propio backend le
+    sirvió al bot (`bot_program_catalog`), así que no hay nada que adivinar. El
+    cruce por nombre queda como red para la rama de texto libre, donde lo único
+    que se conoce es lo que la persona escribió en el chat, y para el caso raro
+    de que el programa se desactive entre que se pintó la lista y se eligió.
+
+    Args:
+        program_id: UUID que mandó el bot, o None.
+        program_interest: el texto del programa, siempre presente.
+
+    Returns:
+        El `Program` activo, o None si no se pudo resolver por ninguna vía.
+    """
+    program = resolve_active_program_by_id(program_id)
+    if program is not None:
+        return program
+
+    if program_id:
+        # No es un caso de error —el alta sigue— pero conviene verlo: significa
+        # que el bot ofreció algo que ya no está en el catálogo.
+        logger.warning(
+            'El bot mandó un program_id que no corresponde a un programa activo: %s',
+            program_id,
+        )
+
+    return resolve_program_by_name(program_interest)
+
+
 def bot_lookup_payload(raw_phone):
     """Build the dedup answer the bot's conversational flow branches on.
 
@@ -444,7 +478,7 @@ def bot_create_lead(validated_data):
         phone=validated_data['phone'],
         email=validated_data.get('email') or None,
         program_interest=program_interest,
-        program=resolve_program_by_name(program_interest),
+        program=resolve_bot_program(validated_data.get('program_id'), program_interest),
         source=Lead.Source.WHATSAPP,
         status=Lead.Status.NEW,
     )
@@ -481,7 +515,9 @@ def bot_update_lead_by_phone(raw_phone, validated_data):
     if 'program_interest' in validated_data:
         lead.program_interest = validated_data['program_interest']
         updated_fields.append('program_interest')
-        program = resolve_program_by_name(lead.program_interest)
+        program = resolve_bot_program(
+            validated_data.get('program_id'), lead.program_interest,
+        )
         if program is not None:
             lead.program = program
             updated_fields.append('program')
