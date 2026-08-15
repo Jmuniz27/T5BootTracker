@@ -323,6 +323,14 @@ def find_duplicate_lead(phone, email, name=None, program_interest=None):
 # Lo único que ambos comparten es el número de abonado: los últimos 9 dígitos.
 SUBSCRIBER_DIGITS = 9
 
+#: Nombre con el que queda un lead que el bot dio de alta antes de preguntarlo.
+#: El bot registra el teléfono en cuanto abre la conversación, así que el que
+#: abandona a mitad igual queda en el pool; el vendedor necesita ver de un
+#: vistazo que ahí no hay un nombre real, y no una cadena vacía que se lee como
+#: un fallo de la aplicación. El PATCH del propio bot lo sobrescribe en cuanto
+#: la persona dice cómo se llama.
+PARTIAL_LEAD_NAME = 'Sin completar'
+
 
 def normalize_phone(raw):
     """Return only the digits in ``raw``; empty string when there are none."""
@@ -474,7 +482,9 @@ def bot_create_lead(validated_data):
 
     program_interest = validated_data.get('program_interest', '')
     lead = Lead.objects.create(
-        name=validated_data['name'],
+        # Sin nombre todavía: el alta corre al abrir la conversación, antes de
+        # preguntarlo, para no perder el teléfono de quien la abandona.
+        name=(validated_data.get('name') or '').strip() or PARTIAL_LEAD_NAME,
         phone=validated_data['phone'],
         email=validated_data.get('email') or None,
         program_interest=program_interest,

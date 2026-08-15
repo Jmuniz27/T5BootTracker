@@ -8,7 +8,7 @@ from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.leads.bot_permissions import BOT_TOKEN_HEADER, IsJelouBot
 from apps.leads.models import Lead
-from apps.leads.services import find_lead_by_phone, normalize_phone
+from apps.leads.services import PARTIAL_LEAD_NAME, find_lead_by_phone, normalize_phone
 
 BOT_TOKEN = 'un-secreto-de-prueba-suficientemente-largo'
 
@@ -324,12 +324,81 @@ class TestBotLeadCreate:
 
     @pytest.mark.parametrize('payload', [
         {'name': 'Sin Telefono'},
-        {'phone': '593991000009'},
         {'phone': '', 'name': 'Vacio'},
-        {'phone': '593991000009', 'name': '   '},
+        {'phone': '   '},
     ])
-    def test_rejects_a_payload_without_phone_or_name(self, bot_client, payload):
+    def test_rejects_a_payload_without_phone(self, bot_client, payload):
+        """El teléfono es lo único obligatorio: es la clave de deduplicación."""
         assert bot_client.post(CREATE_URL, payload, format='json').status_code == 400
+
+
+@pytest.mark.django_db
+class TestBotLeadCreateWithOnlyThePhone:
+    """El bot registra el teléfono al abrir la conversación, antes del nombre.
+
+    Antes el alta corría recién después de `PASO 3 - Nombre completo`, así que
+    quien saludaba, miraba los programas y se iba no dejaba rastro. Ese número
+    es justamente un interesado al que el equipo podría llamar.
+    """
+
+    def test_creates_the_lead_with_the_placeholder_name(self, bot_client):
+        response = bot_client.post(CREATE_URL, {'phone': '593991000030'}, format='json')
+
+        assert response.status_code == 201
+        lead = Lead.objects.get(pk=response.data['lead_id'])
+        assert lead.name == PARTIAL_LEAD_NAME
+        assert lead.phone == '593991000030'
+        assert lead.source == Lead.Source.WHATSAPP
+        assert lead.status == Lead.Status.NEW
+        assert lead.owner is None, 'entra al pool disponible como cualquier otro'
+        assert lead.program_interest == ''
+
+    @pytest.mark.parametrize('name', ['', '   '])
+    def test_a_blank_name_also_gets_the_placeholder(self, bot_client, name):
+        """No puede quedar en cadena vacía: en la tabla se lee como un fallo."""
+        response = bot_client.post(
+            CREATE_URL, {'phone': '593991000031', 'name': name}, format='json',
+        )
+
+        assert response.status_code == 201
+        assert Lead.objects.get(pk=response.data['lead_id']).name == PARTIAL_LEAD_NAME
+
+    def test_the_later_patch_overwrites_the_placeholder(self, bot_client, program):
+        """El camino real: se guarda el teléfono y luego llega el nombre."""
+        bot_client.post(CREATE_URL, {'phone': '593991000032'}, format='json')
+
+        response = bot_client.patch(by_phone_url('593991000032'), {
+            'name': 'Nombre Real',
+            'program': program.name,
+            'program_id': str(program.id),
+        }, format='json')
+
+        assert response.status_code == 200
+        lead = Lead.objects.get(pk=response.data['lead_id'])
+        assert lead.name == 'Nombre Real'
+        assert lead.program == program
+
+    def test_reopening_the_conversation_does_not_duplicate(self, bot_client):
+        """El bot vuelve a dar de alta cada vez que alguien retoma el chat."""
+        first = bot_client.post(CREATE_URL, {'phone': '593991000033'}, format='json')
+        before = Lead.objects.count()
+
+        second = bot_client.post(CREATE_URL, {'phone': '593991000033'}, format='json')
+
+        assert second.status_code == 200
+        assert second.data['created'] is False
+        assert second.data['lead_id'] == first.data['lead_id']
+        assert Lead.objects.count() == before
+
+    def test_a_completed_lead_is_not_reset_by_a_new_hello(self, bot_client):
+        """Volver a saludar no puede pisar el nombre que ya se había capturado."""
+        created = bot_client.post(
+            CREATE_URL, {'phone': '593991000034', 'name': 'Ya Se Llamaba'}, format='json',
+        )
+
+        bot_client.post(CREATE_URL, {'phone': '593991000034'}, format='json')
+
+        assert Lead.objects.get(pk=created.data['lead_id']).name == 'Ya Se Llamaba'
 
 
 @pytest.mark.django_db
