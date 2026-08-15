@@ -1,27 +1,33 @@
 flowchart TB
     classDef planned fill:#F5F5F5,stroke:#AAAAAA,color:#888888,stroke-dasharray:5 5
 
-    subgraph Clients
-        subgraph Browser["Web Browser"]
-            Frontend["React SPA\nVite · Zustand · TanStack Query"]
-        end
-        subgraph Mobile["Mobile Device"]
-            MobileApp["Expo App\nExpo Router · AuthContext"]
-        end
+    subgraph Clients["Clients"]
+        direction LR
+        Frontend["React SPA\nVite · Zustand · TanStack Query"]
+        MobileApp["Expo App\nExpo Router · AuthContext"]
     end
 
     subgraph Backend["Backend — Django 5.1 + DRF"]
-        Auth["Authentication\n— JWT simplejwt —\naccess 2 h / refresh 1 d\nRoles: Admin · Salesperson · Bootcamper"]
-        Leads["Leads"]
-        Payments["Payments"]
-        Programs["Programs"]
-        Users["Users"]
-        Notif["Notifications\nCelery tasks only"]
-        Analytics["Analytics\nplanned"]:::planned
-        Swagger["API Docs\ndrf-spectacular"]
+        direction TB
+        Auth["Authentication\n— JWT simplejwt —\naccess 2 h / refresh 1 d\nRoles: Admin · Salesperson · Bootcamper\nCoordinator · Finance"]
+        subgraph Domain["Domain apps"]
+            direction LR
+            Leads["Leads"]
+            Payments["Payments"]
+            Programs["Programs\nprograms and cohorts"]
+            Meetings["Meetings\nfollow-up scheduling"]
+        end
+        subgraph Support["Supporting apps"]
+            direction LR
+            Users["Users"]
+            Analytics["Analytics\nsalesperson metrics"]
+            Notif["Notifications\nCelery tasks only"]
+            Swagger["API Docs\ndrf-spectacular"]
+        end
     end
 
     subgraph Infra["Data & Infrastructure"]
+        direction LR
         PG[("PostgreSQL 16")]
         Redis["Redis 7"]
         Celery["Celery Worker"]
@@ -29,37 +35,27 @@ flowchart TB
         OCR["OCR Engine\nTesseract"]
     end
 
-    subgraph Ext["External Services — planned"]
-        S3["Object Storage\nS3 / MinIO"]:::planned
-        GCal["Google Calendar API"]:::planned
+    subgraph Ext["External Services"]
+        direction LR
+        GCal["Google Calendar API"]
+        S3["Object Storage\nS3 / MinIO — planned"]:::planned
     end
 
-    %% Clients → Backend
-    Frontend -->|REST + JWT| Auth
-    Frontend --> Leads
-    Frontend --> Payments
-    Frontend --> Programs
-    MobileApp -->|REST + JWT| Auth
-    MobileApp --> Leads
+    Clients -->|REST + JWT| Auth
+    Auth --> Domain
+    Auth --> Support
 
-    %% Backend → DB
-    Auth --> PG
-    Leads --> PG
-    Payments --> PG
-    Programs --> PG
-    Users --> PG
-
-    %% Backend → Async
+    Domain --> PG
+    Support --> PG
     Auth -->|token blacklist| Redis
-    Leads -->|enqueue tasks| Celery
+
     Payments -->|enqueue OCR| Celery
+    Leads -->|enqueue tasks| Celery
     Notif --> Celery
 
-    %% Celery → infra
     Celery -->|broker / result| Redis
     Celery -->|send emails| SMTP
     Celery -->|parse receipts| OCR
 
-    %% Planned
+    Meetings -->|sync events| GCal
     Payments -.->|upload receipts - planned| S3
-    Leads -.->|schedule calls - planned| GCal

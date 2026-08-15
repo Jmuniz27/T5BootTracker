@@ -1,0 +1,141 @@
+Ejecucion real de las tres suites de test de Boot-Tracker
+Fecha: 2026-08-13
+Commit medido: 812f0fcab0e695a2a0b61f55c47caa9c547e565f (main, PR #373)
+Entorno: Docker Compose local (db, redis, backend) para backend;
+         npm local para frontend y mobile.
+         Las tres suites se corrieron en serie, no en paralelo: con los
+         contenedores compitiendo por CPU aparecen timeouts de render que no
+         son defectos del codigo (ver nota al final).
+
+===============================================================================
+BACKEND -- pytest --cov=apps --cov-report=term-missing
+Comando: docker compose exec -T backend pytest --cov=apps --cov-report=term-missing --tb=short -q -rs
+===============================================================================
+apps/authentication/validators.py                              53      2    96%   12, 56
+apps/leads/services.py                                        270      9    97%   138-140, 184-185, 229-230, 555, 559, 633
+apps/payments/ocr.py                                          296     50    83%   108, 169-184, 193-200, 204-225, 352-353, ...
+apps/payments/services.py                                     188      5    97%   277, 465, 665-667
+apps/payments/views.py                                        522     35    93%   79, 82-84, 266-267, 420-421, 531, 568, ...
+------------------------------------------------------------------------------
+TOTAL                                                        4489    612    86%
+
+============ 940 passed, 12 skipped, 1 warning in 165.66s (0:02:45) ============
+
+Resumen: 41 archivos de test, 952 tests recolectados,
+         940 pasados, 12 saltados, 0 fallos.
+Cobertura total sobre apps/: 86% (4489 statements, 612 sin cubrir).
+Gate de CI: --cov-fail-under=85 -> pasa con 1 punto de margen.
+
+--- Tests recolectados por dominio ---
+Dominio                              Archivos  Tests
+Autenticacion y validacion                  4     65
+Leads (CRUD, autoasignacion, bot)           8    209
+Conversion e inscripcion                    5     88
+Pagos, pools y OCR                         11    317
+Onboarding e invitaciones                   4     33
+Gestion de usuarios y analitica             6    168
+Catalogo de programas                       1     32
+Notificaciones                              1     37
+Health checks                               1      3
+                                          ---   ----
+                                           41    952
+
+--- Tests recolectados por archivo (pytest --collect-only -q) ---
+92 test_ocr_service.py             17 test_payment_flow_updates.py
+76 test_leads.py                   17 test_conversion_cohort.py
+72 test_payments.py                16 test_reject_bootcamper.py
+65 test_leads_bot.py               16 test_bootcamper_assignment_setting.py
+65 test_analytics.py               14 test_lead_duplicates.py
+37 test_emails.py                  12 test_onboarding.py
+32 test_programs.py                11 test_bootcamper_bulk_assign.py
+32 test_payment_history_and_pool.py 10 test_verify_bootcamper.py
+31 test_validators.py              10 test_lead_email_staff_guard.py
+30 test_payment_link.py            10 test_lead_assignment_setting.py
+30 test_finance_portfolio.py        9 test_ocr.py
+29 test_users.py                    9 test_invitation_email.py
+28 test_conversion.py               8 test_salespeople_range.py
+25 test_lead_discard.py             7 test_staff_invitation.py
+20 test_bootcamper_pool.py          7 test_interaction_lead_status.py
+19 test_salespeople_activity.py     6 test_users_enrollments.py
+19 test_enrollment_discount.py      5 test_verification.py
+19 test_auth.py                     5 test_data_consent.py
+18 test_enrollment_cohort_assignment.py  3 test_health.py
+17 test_salesperson_activity_detail.py   2 test_payments_query_count.py
+                                     2 test_lead_to_payment_journey.py
+
+--- HALLAZGO: 12 tests saltados, todos en test_ocr_service.py ---
+
+SKIPPED [1] tests/test_ocr_service.py:692: Receipt not found: /app/media/receipts/Comprobantes/banco_pichincha.jpeg
+SKIPPED [1] tests/test_ocr_service.py:692: Receipt not found: /app/media/receipts/Comprobantes/banco_guayaquil.jpeg
+SKIPPED [1] tests/test_ocr_service.py:692: Receipt not found: /app/media/receipts/Comprobantes/banco_pacifico.jpeg
+SKIPPED [1] tests/test_ocr_service.py:692: Receipt not found: /app/media/receipts/Comprobantes/banco_bolivariano.jpeg
+SKIPPED [1] tests/test_ocr_service.py:692: Receipt not found: /app/media/receipts/Comprobantes/espoltech/bg_juan.jpeg
+SKIPPED [1] tests/test_ocr_service.py:692: Receipt not found: /app/media/receipts/Comprobantes/espoltech/bg_nahin1.jpeg
+SKIPPED [1] tests/test_ocr_service.py:692: Receipt not found: /app/media/receipts/Comprobantes/espoltech/bg_nahin2.jpeg
+SKIPPED [5] tests/test_ocr_service.py:766: Receipt not found: /app/media/receipts/Comprobantes/test/WhatsApp Image ...
+
+Causa: el corpus de comprobantes vive en backend/media/, que esta en
+.gitignore (`git ls-files backend/media` devuelve 0 archivos). El test hace
+pytest.skip() cuando el archivo no existe (test_ocr_service.py:691-692). En un
+checkout limpio --y por lo tanto tambien en CI-- esos 12 casos nunca se
+ejecutan, y el job pasa en verde igual.
+
+Impacto medido: apps/payments/ocr.py cubre 83% en un checkout limpio, contra el
+90% registrado el 2026-08-11, cuando el corpus si estaba presente en la maquina
+que corrio la suite. La diferencia es exactamente ese corpus.
+
+Accion pendiente para el equipo: o se versionan los comprobantes (o
+equivalentes sinteticos/anonimizados) para que el corpus corra de verdad en CI,
+o se asume explicitamente que 12 de los 92 casos de ese archivo dependen de
+fixtures locales. Ojo que la convencion de /linear-sync del CLAUDE.md exige
+tests "no-skippeados" para mover un issue a Done.
+
+===============================================================================
+FRONTEND -- vitest run --coverage
+Comando: npx vitest run --coverage
+===============================================================================
+=============================== Coverage summary ===============================
+Statements   : 71.44% ( 2219/3106 )
+Branches     : 70.37% ( 1853/2633 )
+Functions    : 59.5%  ( 720/1210 )
+Lines        : 75.65% ( 1980/2617 )
+================================================================================
+
+Test Files  56 passed (56)
+     Tests  497 passed (497)
+
+Resumen: 56 archivos de test, 497 tests, 0 fallos.
+Gate en vite.config.js: thresholds.statements = 65 -> pasa.
+
+Nota de entorno: la primera ejecucion fallo los 56 archivos con
+"Failed to resolve import i18next from src/i18n/index.js". No es un defecto del
+codigo: el node_modules del checkout estaba desincronizado de package.json
+(i18next, react-i18next e i18next-browser-languagedetector estan declarados y en
+el lockfile, pero no instalados). Se resolvio con `npm ci`, que es lo que corre
+CI. Mismo sintoma que documenta CLAUDE.md para el contenedor, pero en local:
+conviene correr `npm ci` despues de un pull que toque dependencias.
+
+===============================================================================
+MOBILE -- jest --coverage
+Comando: npx jest --coverage --passWithNoTests --testTimeout=20000
+===============================================================================
+All files              |   60.08 |    52.87 |    43.1 |   61.07 |
+
+Test Suites: 19 passed, 19 total
+Tests:       86 passed, 86 total
+
+Resumen: 19 archivos de test, 86 tests, 0 fallos.
+Cobertura: Statements 60.08%, Branches 52.87%, Functions 43.1%, Lines 61.07%.
+
+Nota: con los mocks de FadeInView que agrego el PR #374 y los contenedores
+detenidos, la suite paso limpia sin necesidad de subir el testTimeout por
+encima del valor ya configurado.
+
+===============================================================================
+TOTAL COMBINADO
+===============================================================================
+Archivos de test: 41 (backend) + 56 (frontend) + 19 (mobile) = 116
+Casos de test:    952 (backend) + 497 (frontend) + 86 (mobile) = 1535
+Pasados:          940 + 497 + 86 = 1523
+Saltados:         12 (todos en test_ocr_service.py, ver hallazgo arriba)
+Fallos:           0
