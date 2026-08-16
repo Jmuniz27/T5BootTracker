@@ -1,5 +1,7 @@
 """URL configuration for programs app."""
 from django.urls import path
+
+from .bot_views import BotProgramCatalogView
 from .views import (
     ProgramListCreateView,
     CohortListCreateView, CohortDetailView,
@@ -8,6 +10,9 @@ from .views import (
 
 urlpatterns = [
     path('', ProgramListCreateView.as_view(), name='program-list-create'),
+    # Bot de WhatsApp (CB-84): se autentica por secreto compartido, no por JWT.
+    # Va antes de las rutas con <uuid:pk> para que 'bot' no se lea como un id.
+    path('bot/', BotProgramCatalogView.as_view(), name='bot-program-catalog'),
     path('<uuid:pk>/cohorts/', CohortListCreateView.as_view(), name='cohort-list-create'),
     path('<uuid:pk>/cohorts/<uuid:cohort_id>/', CohortDetailView.as_view(), name='cohort-detail'),
     path('<uuid:pk>/coordinators/', CoordinatorListCreateView.as_view(), name='coordinator-list-create'),

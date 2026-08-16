@@ -332,6 +332,116 @@ class TestBotLeadCreate:
         assert bot_client.post(CREATE_URL, payload, format='json').status_code == 400
 
 
+@pytest.mark.django_db
+class TestBotLeadCreateWithProgramId:
+    """CB-84: elegir de la lista del catálogo vincula la FK por id, no por texto.
+
+    El cruce por nombre sigue existiendo como red para la rama de texto libre,
+    pero cuando el bot manda el id no hay nada que adivinar: sale del catálogo
+    que le sirvió este mismo backend.
+    """
+
+    def test_links_the_fk_by_id(self, bot_client, program):
+        response = bot_client.post(CREATE_URL, {
+            'phone': '593991000020',
+            'name': 'Eligio De La Lista',
+            'program': program.name,
+            'program_id': str(program.id),
+        }, format='json')
+
+        assert response.status_code == 201
+        assert Lead.objects.get(pk=response.data['lead_id']).program == program
+
+    def test_the_id_wins_over_a_name_that_points_elsewhere(self, bot_client, program):
+        """El id es el dato exacto; el texto es lo que se conversó."""
+        from apps.programs.models import Program
+        otro = Program.objects.create(
+            name='Data Science Junio 2026',
+            start_date=program.start_date, end_date=program.end_date,
+            total_cost=program.total_cost,
+        )
+
+        response = bot_client.post(CREATE_URL, {
+            'phone': '593991000021',
+            'name': 'Id Manda',
+            'program': otro.name,
+            'program_id': str(program.id),
+        }, format='json')
+
+        lead = Lead.objects.get(pk=response.data['lead_id'])
+        assert lead.program == program
+        assert lead.program_interest == otro.name, 'el texto se conserva como rastro'
+
+    def test_an_empty_program_id_behaves_like_the_free_text_branch(self, bot_client, program):
+        """El nodo HTTP interpola '' cuando la variable no tiene valor.
+
+        Sin admitirlo, cada lead que responde por texto libre daría 400.
+        """
+        response = bot_client.post(CREATE_URL, {
+            'phone': '593991000022',
+            'name': 'Texto Libre',
+            'program': program.name,
+            'program_id': '',
+        }, format='json')
+
+        assert response.status_code == 201
+        assert Lead.objects.get(pk=response.data['lead_id']).program == program, \
+            'cae al cruce por nombre'
+
+    def test_falls_back_to_the_name_when_the_id_is_unknown(self, bot_client, program):
+        import uuid
+
+        response = bot_client.post(CREATE_URL, {
+            'phone': '593991000023',
+            'name': 'Id Fantasma',
+            'program': program.name,
+            'program_id': str(uuid.uuid4()),
+        }, format='json')
+
+        assert response.status_code == 201, 'un id viejo no puede perder el lead'
+        assert Lead.objects.get(pk=response.data['lead_id']).program == program
+
+    def test_falls_back_when_the_program_was_deactivated_after_the_list_was_sent(
+        self, bot_client, program,
+    ):
+        """Caso real: la persona tarda en contestar y el admin cierra el programa."""
+        program.is_active = False
+        program.save(update_fields=['is_active'])
+
+        response = bot_client.post(CREATE_URL, {
+            'phone': '593991000024',
+            'name': 'Programa Cerrado',
+            'program': program.name,
+            'program_id': str(program.id),
+        }, format='json')
+
+        lead = Lead.objects.get(pk=response.data['lead_id'])
+        assert response.status_code == 201
+        assert lead.program is None, 'no se vincula a un programa que ya no se dicta'
+        assert lead.program_interest == program.name
+
+    def test_rejects_a_program_id_that_is_not_a_uuid(self, bot_client, program):
+        response = bot_client.post(CREATE_URL, {
+            'phone': '593991000025',
+            'name': 'Id Basura',
+            'program': program.name,
+            'program_id': 'no-es-un-uuid',
+        }, format='json')
+
+        assert response.status_code == 400
+
+    def test_the_update_by_phone_also_links_by_id(self, bot_client, program):
+        Lead.objects.create(name='Por Completar', phone='0991000026')
+
+        response = bot_client.patch(by_phone_url('593991000026'), {
+            'program': program.name,
+            'program_id': str(program.id),
+        }, format='json')
+
+        assert response.status_code == 200
+        assert Lead.objects.get(pk=response.data['lead_id']).program == program
+
+
 @pytest.mark.django_db(transaction=True)
 class TestBotLeadCreateIsRaceFree:
     """El alta concurrente del mismo teléfono no puede dejar dos leads.
