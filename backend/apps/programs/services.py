@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from rest_framework.exceptions import NotFound, ValidationError
 
-from .models import Cohort
+from .models import Cohort, Program
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,102 @@ logger = logging.getLogger(__name__)
 def current_month():
     """Primer día del mes en curso — la granularidad del dominio es el mes."""
     return date.today().replace(day=1)
+
+
+#: Filas que admite una lista de WhatsApp. Mandar más no recorta: Meta rechaza
+#: el mensaje entero y la conversación se queda sin respuesta.
+BOT_CATALOG_LIMIT = 10
+#: Caracteres del título de una fila y de su descripción, también de Meta.
+BOT_LABEL_MAX = 24
+BOT_DESCRIPTION_MAX = 72
+
+#: Se escriben aquí en vez de usar el locale: el mes sale en un mensaje de
+#: WhatsApp, y depender de que el contenedor tenga instalada la locale es una
+#: forma silenciosa de que un día diga "Jul" en medio de una frase en español.
+_MONTHS_ES = ('ene', 'feb', 'mar', 'abr', 'may', 'jun',
+              'jul', 'ago', 'sep', 'oct', 'nov', 'dic')
+
+
+def _short_label(name):
+    """`name` recortado al último espacio que quepa en BOT_LABEL_MAX.
+
+    Se corta por palabra y no a mitad de una: "Python Full Stack Abril 2026" son
+    28 caracteres y quedaría en "Python Full Stack Abri", que se lee como un
+    error. El nombre completo no se pierde — va en la descripción de la fila.
+    """
+    if len(name) <= BOT_LABEL_MAX:
+        return name
+
+    cut = name[:BOT_LABEL_MAX]
+    space = cut.rfind(' ')
+    # Una sola palabra más larga que el tope no tiene dónde cortarse por
+    # palabra; ahí sí se corta a lo bruto, que es mejor que no mandar nada.
+    return (cut[:space] if space > 0 else cut).rstrip()
+
+
+def bot_program_catalog():
+    """Catálogo de programas que el bot de WhatsApp ofrece en su lista.
+
+    Sólo los activos: es el mismo criterio con el que `resolve_program_by_name`
+    vincula la FK del lead, así que ofrecer uno inactivo daría una opción que
+    después no se puede enlazar. Los más recientes primero.
+
+    Cada entrada trae el texto ya listo para pintar, porque el recorte a los
+    topes de Meta se prueba con pytest y así el flujo de Jelou no lleva lógica:
+
+      - `label`: el nombre recortado por palabra al tope de un título de fila.
+      - `description`: el nombre completo cuando hubo recorte —para que no se
+        pierda— y la fecha de inicio cuando el nombre entró entero.
+      - `id` y `name`: lo que el bot devuelve al alta para vincular la FK por id
+        en vez de por coincidencia de texto.
+
+    Returns:
+        Lista de dicts, vacía si no hay programas activos.
+    """
+    programs = list(
+        Program.objects.filter(is_active=True).order_by('-start_date')[:BOT_CATALOG_LIMIT + 1]
+    )
+
+    if len(programs) > BOT_CATALOG_LIMIT:
+        logger.warning(
+            'Hay más de %s programas activos: el bot sólo puede ofrecer los %s más '
+            'recientes porque es el máximo de filas de una lista de WhatsApp.',
+            BOT_CATALOG_LIMIT, BOT_CATALOG_LIMIT,
+        )
+        programs = programs[:BOT_CATALOG_LIMIT]
+
+    catalog = []
+    for program in programs:
+        label = _short_label(program.name)
+        if label != program.name:
+            description = program.name
+        else:
+            start = program.start_date
+            description = f'Inicia {start.day} {_MONTHS_ES[start.month - 1]} {start.year}'
+
+        catalog.append({
+            'id': str(program.id),
+            'name': program.name,
+            'label': label,
+            'description': description[:BOT_DESCRIPTION_MAX],
+        })
+
+    return catalog
+
+
+def resolve_active_program_by_id(program_id):
+    """El `Program` activo con ese id, o None.
+
+    Devuelve None en vez de fallar cuando el id no existe o el programa se
+    desactivó entre que el bot pintó la lista y la persona eligió: el alta cae
+    entonces a la resolución por nombre, que es la misma red que sostiene la
+    rama de texto libre. Un 400 aquí perdería el lead por un detalle del
+    catálogo.
+    """
+    if not program_id:
+        return None
+
+    return Program.objects.filter(pk=program_id, is_active=True).first()
 
 
 #: Estados en los que una cohorte todavía admite inscripciones. Una finalizada

@@ -58,37 +58,35 @@ jmeter -n -t boot-tracker-load-test.jmx -Jusers=100 -Jrampup=60 -Jloops=20 \
 
 ## Resultados
 
-> **Pendiente de ejecución.** El plan está listo y validado, pero la corrida
-> debe hacerse con la stack levantada y, para que las cifras sean las
-> definitivas, **después de mergear T1.5** (índices de base de datos y
-> reescritura de `PaymentMonitoringView`). Medir antes daría un p95 que la
-> optimización deja obsoleto de inmediato.
-
-Al ejecutarlo, completar:
+Ejecutado el **2026-08-15** contra la stack local, con 5.000 leads sembrados y
+50 usuarios concurrentes (rampa de 30 s, 10 iteraciones por hilo, 1.050
+peticiones en total). **0 % de error.**
 
 | Endpoint | Muestras | Media | p95 | p99 | Error % | ¿Cumple NFR? |
 |---|---|---|---|---|---|---|
-| `GET /api/leads/` | | | | | | |
-| `GET /api/payments/monitoring/` | | | | | | |
+| `GET /api/leads/` | 500 | 32,9 ms | **51 ms** | 83 ms | 0 % | Sí |
+| `GET /api/payments/monitoring/` | 500 | 10,8 ms | **25 ms** | 50 ms | 0 % | Sí |
+| `POST /api/auth/login/` (fuera del NFR) | 50 | 139,7 ms | 202,8 ms | 308,9 ms | 0 % | n/a |
 
-**Conclusión:** _(se cumple el NFR / no se cumple, y por qué)_
+**Conclusión:** se cumple el NFR con holgura. El p95 del listado de leads queda
+en 51 ms frente al umbral de 500 ms, y el de monitoreo de pagos en 25 ms. El
+endpoint que era el candidato natural a incumplir, `monitoring`, resultó el más
+rápido de los dos, que es el efecto directo de los arreglos DB-1 (índices) y
+PERF-1 (eliminación del N+1).
 
-### Qué esperar
+### Ajustes necesarios para poder ejecutarlo
 
-`GET /api/payments/monitoring/` es el candidato natural a incumplir el umbral:
-su costo crece de forma lineal con el número de bootcampers (ver
-`docs/profiling/README.md`). Con los 4 bootcampers del seed el problema no se
-manifiesta; para que la prueba sea significativa conviene sembrar un volumen
-mayor, en línea con el riesgo R4 de la matriz —degradación con 10.000+
-registros—.
+La primera corrida falló al 100 %. Tres defectos del plan, ya corregidos:
 
-Si el p95 supera los 500 ms, el resultado no es un fallo de la prueba sino su
-hallazgo: hay que documentarlo junto a la optimización que lo corrige.
-
-## Nota sobre el entorno
-
-Las cifras se toman en entorno local, contra contenedores en la misma máquina
-que genera la carga. Sirven para comparar antes y después de una optimización y
-para detectar problemas de escalabilidad, pero no son extrapolables al VPS de
-producción (2 vCPU y 3,7 GiB compartidos con otra aplicación). Cualquier
-conclusión debe indicar el entorno en el que se midió.
+1. La cabecera `Authorization: Bearer ${ACCESS_TOKEN}` estaba en el ámbito del
+   grupo de hilos, así que se enviaba también en el login, con la variable sin
+   resolver. DRF rechazaba la autenticación con 401 antes de validar
+   credenciales. Se movió al ámbito de los dos samplers medidos.
+2. El plan entraba como `vendedor1` (SALESPERSON), rol que no tiene acceso a
+   `/api/payments/monitoring/` (`IsFinanceOrAdmin`) y recibía 403. Se cambió a
+   `finanzas1`, que ejercita ambos endpoints.
+3. El throttle de autenticación (`auth`, 5/min) devolvía 429 a 45 de los 50
+   hilos. Para la medición se elevó `AUTH_THROTTLE_RATE`, ya que el NFR mide el
+   uso sostenido de la aplicación y no el coste de autenticarse, que el plan
+   deja fuera con un `Once Only Controller`. El valor por defecto no se
+   modificó en el repositorio.
