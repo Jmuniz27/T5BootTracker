@@ -41,7 +41,7 @@ These links point to the external folders and recordings that support the commun
 - [Validation videos folder](https://drive.google.com/drive/folders/1VHH5W_TlDjmUPLqSkHuR_777D2SbYxp1?usp=sharing)
 - [Email signatures and requirement changes](https://espolec.sharepoint.com/:u:/s/Ing.desoftwareBoot-Tracker/IQDqrxOr_agVSZOz87MXzAFJAYk3yB830SkRu0lPIvkVNaE?e=de8YUY)
 - [SCRUM recordings folder](https://espolec.sharepoint.com/:f:/s/Ing.desoftwareBoot-Tracker/IgAqUtEYd3VTSrgHe1nhqRN7AfVYiGT-lxp0Pp6pnhOVZSk?e=I80cAb)
-- [Client audio recordings](https://espolec.sharepoint.com/:f:/s/Ing.desoftwareBoot-Tracker/IgDQUgS9ewVTR4VLkO5RwDxhAd8btm0u3vQA6q4W_2N4HBs?e=L6sbhz)
+- [Client audio recordings](https://espolec.sharepoint.com/:f:/s/Ing.desoftwareBoot-Tracker/IgDQUgS9ewVTR4VLkO5RwDxhAW6HodjmDL1c5rxSm-B-GMU?e=ChCkYt)
 - [Sprint 4 Planning / Kick-off Restart recording (2026-07-14)](https://espolec.sharepoint.com/:v:/s/Ing.desoftwareBoot-Tracker/IQCjyDJJim8LTJ2LJjzDU95CAR747nbvOq1NYT9OQ25vihk?e=GnNgpe) — entry 012
 - [Sprint 5 Retro + Sprint 6 Planning recording (2026-07-27)](https://espolec.sharepoint.com/:v:/s/Ing.desoftwareBoot-Tracker/IQCbDL_4_DySRo6zL5wn-mX4AeE5a0PfGZnpC_MbeTo8rSA?e=5w7rAO) — entry 013
 - [Finance usability validation recording](https://drive.google.com/file/d/1IfwRG_F8gShED66I_4BbaEm8fk6wnFfn/view?usp=drive_link) — entry 014
