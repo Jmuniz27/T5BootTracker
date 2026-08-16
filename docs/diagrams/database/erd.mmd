@@ -1,0 +1,283 @@
+erDiagram
+
+%% ============================================================
+%% Boot-Tracker — Diagrama Entidad-Relación
+%% FUENTE DE VERDAD. Escrito a mano desde los modelos Django.
+%% Ver README.md para cómo regenerar el PNG y cómo verificarlo.
+%% OJO: `erDiagram` va en la primera línea; un comentario antes
+%% rompe el parser de Mermaid, y una línea con `%%` a secas también.
+%% ---
+%% Cobertura: 13 modelos + 1 tabla M2M = 14 tablas.
+%% Se omiten las tablas internas de Django (django_migrations,
+%% django_content_type, auth_permission, auth_group,
+%% authentication_customuser_groups, ..._user_permissions).
+%% ---
+%% Convenciones del campo de comentario:
+%%   NN      = NOT NULL
+%%   NULL    = admite NULL
+%%   d=X     = valor por defecto
+%%   idx     = tiene índice (db_index)
+%%   ''      = NOT NULL con default cadena vacía (Django blank=True)
+%%   Las longitudes van en el comentario, no en el tipo.
+%% ============================================================
+
+    %% ─── App: authentication ────────────────────────────────
+
+    authentication_customuser {
+        uuid      id                            PK "uuid4"
+        varchar   email                         UK "254 · NN"
+        varchar   password                         "128 · NN"
+        varchar   first_name                       "150 · NN"
+        varchar   last_name                        "150 · NN"
+        varchar   phone                            "20 · NULL"
+        varchar   cedula                        UK "13 · NULL · cedula o RUC"
+        varchar   role                             "20 · NN · d=BOOTCAMPER · SALESPERSON|BOOTCAMPER|ADMINISTRATOR|COORDINATOR|FINANCE"
+        varchar   coordinator_scope                "20 · NN · '' · GENERAL|PROGRAM · solo rol COORDINATOR"
+        uuid      finance_owner_id              FK "NULL · self-FK · quien de Finanzas cobra a este bootcamper"
+        timestamptz finance_assigned_at              "NULL"
+        varchar   verification_status              "25 · NN · d=VERIFIED · INVITED|PENDING_VERIFICATION|VERIFIED|REJECTED"
+        uuid      verified_by_id                FK "NULL · self-FK · quien reviso el perfil"
+        timestamptz verified_at                      "NULL"
+        text      verification_rejection_reason    "NN · ''"
+        timestamptz onboarding_completed_at          "NULL"
+        timestamptz onboarding_token_issued_at       "NULL · invalida el link de invitacion anterior"
+        timestamptz data_consent_at                  "NULL · consentimiento de datos"
+        varchar   data_consent_version             "20 · NN · ''"
+        boolean   is_active                        "NN · d=true"
+        boolean   is_staff                         "NN · d=false"
+        boolean   is_superuser                     "NN · d=false"
+        timestamptz last_login                       "NULL"
+        timestamptz created_at                       "NN"
+        timestamptz updated_at                       "NN"
+    }
+
+    authentication_customuser_coordinator_programs {
+        bigint id            PK "autoincrement"
+        uuid   customuser_id FK "NN"
+        uuid   program_id    FK "NN"
+    }
+
+    %% ─── App: programs ──────────────────────────────────────
+
+    programs_program {
+        uuid      id         PK "uuid4"
+        varchar   name          "200 · NN"
+        date      start_date    "NN"
+        date      end_date      "NN"
+        decimal   total_cost    "10,2 · NN"
+        boolean   is_active     "NN · d=true"
+        timestamptz created_at    "NN"
+    }
+
+    programs_cohort {
+        uuid      id          PK "uuid4"
+        uuid      program_id  FK "NN"
+        int       number         "NN · CHECK >= 0"
+        date      start_month    "NN · siempre dia 1"
+        date      end_month      "NN · fin previsto, se resella al finalizar"
+        varchar   status         "20 · NN · d=UPCOMING · UPCOMING|IN_PROGRESS|FINISHED"
+        timestamptz created_at     "NN"
+        timestamptz updated_at     "NN"
+    }
+
+    programs_coordinatoremailconfig {
+        uuid      id             PK "uuid4"
+        uuid      program_id     FK "NN"
+        varchar   email             "254 · NN"
+        varchar   name              "200 · NN"
+        varchar   recipient_type    "2 · NN · d=TO · TO|CC"
+        boolean   is_active         "NN · d=true"
+        timestamptz created_at        "NN"
+    }
+
+    programs_enrollment {
+        uuid      id                  PK "uuid4"
+        uuid      bootcamper_id       FK "NN"
+        uuid      bootcamp_id         FK "NN · apunta a programs_program"
+        uuid      cohort_id           FK "NULL · edicion concreta"
+        date      start_date             "NN"
+        decimal   discount_percentage    "5,2 · NN · d=0.00 · 0-100 validado en la app, sin CHECK"
+        decimal   agreed_price           "10,2 · NN · derivado del descuento"
+        varchar   status                 "20 · NN · d=ACTIVE · ACTIVE|DROPPED|GRADUATED"
+        timestamptz created_at             "NN"
+        timestamptz updated_at             "NN"
+    }
+
+    %% ─── App: payments ──────────────────────────────────────
+
+    payments_payment {
+        uuid      id                       PK "uuid4"
+        uuid      bootcamper_id            FK "NN · limit_choices_to role=BOOTCAMPER (regla de app, no de DB)"
+        uuid      program_id               FK "NN"
+        uuid      payment_link_id          FK "NULL · solo si payment_method=LINK"
+        varchar   receipt_file                "100 · NN · receipts/YYYY/MM/"
+        varchar   receipt_file_type           "10 · NN · image|pdf"
+        varchar   payment_method              "10 · NN · d=TRANSFER · TRANSFER|LINK"
+        varchar   ocr_bank_name               "200 · NN · ''"
+        varchar   ocr_account_last_digits     "10 · NN · ''"
+        decimal   ocr_amount                  "12,2 · NULL"
+        varchar   ocr_transaction_id          "100 · NN · ''"
+        date      ocr_payment_date            "NULL"
+        jsonb     ocr_confidence              "NN · d={}"
+        text      ocr_raw_text                "NN · ''"
+        varchar   payer_name                  "200 · NN · '' · facturacion"
+        varchar   payer_identification        "20 · NN · '' · cedula o RUC"
+        varchar   payer_email                 "254 · NN · ''"
+        varchar   payer_address               "255 · NN · '' · siempre manual"
+        varchar   payer_phone                 "20 · NN · '' · siempre manual"
+        varchar   document_number             "50 · NN · '' · N de comprobante"
+        decimal   confirmed_amount            "12,2 · NULL · verificado por persona"
+        varchar   confirmed_bank_name         "200 · NN · ''"
+        varchar   confirmed_transaction_id    "100 · NN · ''"
+        varchar   status                      "10 · NN · d=PENDING · idx · DRAFT|PENDING|APPROVED|REJECTED"
+        text      rejection_reason            "NN · ''"
+        uuid      validated_by_id          FK "NULL · quien valido"
+        timestamptz validated_at                "NULL"
+        timestamptz submitted_at                "NN · idx"
+        timestamptz updated_at                  "NN"
+        timestamptz deleted_at                  "NULL · idx · soft-delete SIN manager que lo filtre"
+        uuid      deleted_by_id            FK "NULL"
+    }
+
+    payments_paymentplan {
+        uuid      id            PK "uuid4"
+        uuid      bootcamper_id FK,UK "NN · OneToOne · uno por bootcamper"
+        varchar   file             "100 · NN · payment_plans/YYYY/MM/"
+        varchar   file_type        "10 · NN · pdf|excel"
+        varchar   original_name    "255 · NN · ''"
+        uuid      uploaded_by_id FK "NULL"
+        timestamptz uploaded_at      "NN"
+        timestamptz updated_at       "NN"
+    }
+
+    payments_paymentlink {
+        uuid      id            PK "uuid4"
+        uuid      enrollment_id FK "NN"
+        varchar   url              "200 · NN · generado fuera del sistema (ESPOLTECH)"
+        decimal   amount           "12,2 · NULL · monto negociado, no validado contra el saldo"
+        varchar   note             "200 · NN · ''"
+        varchar   status           "10 · NN · d=ACTIVE · idx · ACTIVE|EXPIRED|REVOKED"
+        uuid      created_by_id FK "NULL"
+        timestamptz expires_at       "NN · vencer se calcula al vuelo, no hay cron"
+        timestamptz revoked_at       "NULL"
+        timestamptz created_at       "NN · idx"
+    }
+
+    payments_bootcamperassignmentsetting {
+        bigint    id                  PK "autoincrement · singleton pk=1 por convencion"
+        boolean   self_assign_enabled    "NN · d=true"
+        uuid      updated_by_id       FK "NULL"
+        timestamptz updated_at             "NN"
+    }
+
+    %% ─── App: leads ─────────────────────────────────────────
+
+    leads_lead {
+        uuid      id                    PK "uuid4"
+        varchar   name                     "200 · NN"
+        varchar   phone                    "20 · NN"
+        varchar   email                    "254 · NULL"
+        varchar   program_interest         "200 · NN · '' · texto libre, distinto de program_id"
+        varchar   source                   "20 · NN · d=MANUAL · INSTAGRAM|WHATSAPP|LANDING_PAGE|MANUAL"
+        boolean   is_company               "NN · d=false"
+        varchar   status                   "30 · NN · d=NEW · idx · NEW|QUALIFIED|INTERESTED|NOT_INTERESTED|CONVERTED|DISCARDED"
+        uuid      owner_id              FK "NULL · vendedor asignado"
+        uuid      bootcamper_id         FK "NULL · usuario resultante de la conversion"
+        uuid      program_id            FK "NULL"
+        timestamptz assigned_at              "NULL"
+        timestamptz released_at              "NULL · con assigned_at da el tiempo de retencion"
+        timestamptz last_contact             "NULL"
+        varchar   discard_reason           "20 · NN · '' · NO_BUDGET|SCHEDULE|NO_RESPONSE|FREE_ONLY|OTHER"
+        text      discard_detail           "NN · ''"
+        timestamptz discarded_at             "NULL"
+        uuid      discarded_by_id       FK "NULL"
+        varchar   status_before_discard    "30 · NN · '' · para deshacer el descarte"
+        int       version                  "NN · d=0 · CHECK >= 0 · bloqueo optimista"
+        timestamptz deleted_at               "NULL · idx · soft-delete filtrado por LeadManager"
+        timestamptz created_at               "NN · idx"
+        timestamptz updated_at               "NN"
+    }
+
+    leads_interaction {
+        uuid      id                  PK "uuid4"
+        uuid      lead_id             FK "NN"
+        uuid      salesperson_id      FK "NN · PROTECT: no se borra un usuario con interacciones"
+        varchar   interaction_type       "20 · NN · CALL|WHATSAPP|EMAIL|VISIT|NOTE|SYSTEM"
+        varchar   outcome                "30 · NN · CALL_AGAIN|SEND_INFO|SCHEDULE_VISIT|AWAIT_REPLY|SPEAK_COORDINATOR|REASSIGNED|DISCARDED|RESTORED|COHORT_CHANGED"
+        int       interest_level         "NULL · 1-5 validado en la app, sin CHECK en la DB"
+        text      notes                  "NN · ''"
+        varchar   campaign               "100 · NN · ''"
+        int       duration_minutes       "NULL · CHECK >= 0"
+        text      next_action            "NN · ''"
+        date      next_action_date       "NULL"
+        varchar   lead_status            "20 · NULL · estado del lead sellado tras la interaccion"
+        timestamptz created_at             "NN"
+    }
+
+    leads_leadassignmentsetting {
+        bigint    id                  PK "autoincrement · singleton pk=1 por convencion"
+        boolean   self_assign_enabled    "NN · d=true"
+        uuid      updated_by_id       FK "NULL"
+        timestamptz updated_at             "NN"
+    }
+
+    %% ─── App: meetings ──────────────────────────────────────
+
+    meetings_meeting {
+        bigint    id              PK "autoincrement · DEUDA: unica entidad de negocio sin PK uuid"
+        varchar   title              "255 · NN"
+        text      description        "NN · ''"
+        timestamptz start_time         "NN"
+        timestamptz end_time           "NN"
+        uuid      lead_id         FK "NN"
+        uuid      assigned_to_id  FK "NULL"
+        varchar   google_event_id    "255 · NULL · id del evento en Google Calendar"
+        timestamptz created_at         "NN"
+    }
+
+    %% ─── Relaciones ─────────────────────────────────────────
+    %% Etiqueta: columna FK · comportamiento on_delete
+    %% Cardinalidad: ||--o{ = FK obligatoria · |o--o{ = FK opcional
+    %% OJO: CASCADE / SET_NULL / PROTECT los aplica DJANGO, no la DB.
+    %% En Postgres las 28 FKs son DEFERRABLE INITIALLY DEFERRED y ninguna
+    %% declara ON DELETE: un borrado por SQL crudo se salta esta semantica.
+
+    authentication_customuser |o--o{ authentication_customuser                      : "finance_owner_id · SET_NULL"
+    authentication_customuser |o--o{ authentication_customuser                      : "verified_by_id · SET_NULL"
+
+    authentication_customuser ||--o{ authentication_customuser_coordinator_programs  : "customuser_id · CASCADE"
+    programs_program          ||--o{ authentication_customuser_coordinator_programs  : "program_id · CASCADE"
+
+    programs_program          ||--o{ programs_cohort                                 : "program_id · CASCADE"
+    programs_program          ||--o{ programs_coordinatoremailconfig                 : "program_id · CASCADE"
+
+    authentication_customuser ||--o{ programs_enrollment                             : "bootcamper_id · CASCADE"
+    programs_program          ||--o{ programs_enrollment                             : "bootcamp_id · CASCADE"
+    programs_cohort           |o--o{ programs_enrollment                             : "cohort_id · SET_NULL"
+
+    authentication_customuser ||--o{ payments_payment                                : "bootcamper_id · CASCADE"
+    programs_program          ||--o{ payments_payment                                : "program_id · CASCADE"
+    payments_paymentlink      |o--o{ payments_payment                                : "payment_link_id · SET_NULL"
+    authentication_customuser |o--o{ payments_payment                                : "validated_by_id · SET_NULL"
+    authentication_customuser |o--o{ payments_payment                                : "deleted_by_id · SET_NULL"
+
+    authentication_customuser ||--o| payments_paymentplan                            : "bootcamper_id · CASCADE · 1:1"
+    authentication_customuser |o--o{ payments_paymentplan                            : "uploaded_by_id · SET_NULL"
+
+    programs_enrollment       ||--o{ payments_paymentlink                            : "enrollment_id · CASCADE"
+    authentication_customuser |o--o{ payments_paymentlink                            : "created_by_id · SET_NULL"
+
+    authentication_customuser |o--o{ payments_bootcamperassignmentsetting            : "updated_by_id · SET_NULL"
+
+    authentication_customuser |o--o{ leads_lead                                      : "owner_id · SET_NULL"
+    authentication_customuser |o--o{ leads_lead                                      : "bootcamper_id · SET_NULL"
+    authentication_customuser |o--o{ leads_lead                                      : "discarded_by_id · SET_NULL"
+    programs_program          |o--o{ leads_lead                                      : "program_id · SET_NULL"
+
+    leads_lead                ||--o{ leads_interaction                               : "lead_id · CASCADE"
+    authentication_customuser ||--o{ leads_interaction                               : "salesperson_id · PROTECT"
+
+    authentication_customuser |o--o{ leads_leadassignmentsetting                     : "updated_by_id · SET_NULL"
+
+    leads_lead                ||--o{ meetings_meeting                                : "lead_id · CASCADE"
+    authentication_customuser |o--o{ meetings_meeting                                : "assigned_to_id · SET_NULL"

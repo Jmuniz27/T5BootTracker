@@ -1,25 +1,61 @@
 // ============================================================
 // Boot-Tracker — Database Schema
-// Generated from Django models — grouped by app
+// Escrito desde los modelos Django. Espejo de `erd.mmd` (fuente de verdad).
+// Formato DBML: se importa en drawsql.app y dbdiagram.io.
+//
+// 13 modelos + 1 tabla M2M = 14 tablas. Se omiten las tablas internas de
+// Django (django_migrations, django_content_type, auth_permission, auth_group,
+// authentication_customuser_groups, authentication_customuser_user_permissions).
+//
+// OJO con la nulabilidad: en Django `blank=True` sin `null=True` produce
+// NOT NULL DEFAULT '' — no una columna nullable. Los CharField/TextField de
+// abajo marcados [not null, default: ''] son exactamente ese caso.
+//
+// OJO con las notas CASCADE / SET_NULL / PROTECT de los `ref`: las aplica
+// DJANGO, no Postgres. En la DB las 28 FKs son DEFERRABLE INITIALLY DEFERRED
+// y ninguna declara ON DELETE. Un borrado por SQL crudo se salta esa semántica.
 // ============================================================
 
 // ─── App: authentication ────────────────────────────────────
 
 Table authentication_customuser {
-  id            uuid         [pk, note: "uuid4"]
-  email         varchar(254) [unique, not null]
-  first_name    varchar(150) [not null]
-  last_name     varchar(150) [not null]
-  phone         varchar(20)  [null]
-  cedula        varchar(10)  [unique, null]
-  role          varchar(20)  [not null, default: "BOOTCAMPER", note: "SALESPERSON | BOOTCAMPER | ADMINISTRATOR | COORDINATOR | FINANCE"]
-  password      varchar(128) [not null]
-  last_login    timestamp    [null]
-  is_active     boolean      [not null, default: true]
-  is_staff      boolean      [not null, default: false]
-  is_superuser  boolean      [not null, default: false]
-  created_at    timestamp    [not null]
-  updated_at    timestamp    [not null]
+  id                            uuid         [pk, note: "uuid4"]
+  email                         varchar(254) [unique, not null]
+  password                      varchar(128) [not null]
+  first_name                    varchar(150) [not null]
+  last_name                     varchar(150) [not null]
+  phone                         varchar(20)  [null]
+  cedula                        varchar(13)  [unique, null, note: "cédula o RUC — validate_cedula()"]
+  role                          varchar(20)  [not null, default: "BOOTCAMPER", note: "SALESPERSON | BOOTCAMPER | ADMINISTRATOR | COORDINATOR | FINANCE"]
+  coordinator_scope             varchar(20)  [not null, default: "", note: "GENERAL | PROGRAM — sólo aplica al rol COORDINATOR"]
+  finance_owner_id              uuid         [null, ref: > authentication_customuser.id, note: "SET_NULL — quién de Finanzas cobra a este bootcamper"]
+  finance_assigned_at           timestamptz    [null]
+  verification_status           varchar(25)  [not null, default: "VERIFIED", note: "INVITED | PENDING_VERIFICATION | VERIFIED | REJECTED"]
+  verified_by_id                uuid         [null, ref: > authentication_customuser.id, note: "SET_NULL — quién revisó el perfil"]
+  verified_at                   timestamptz    [null]
+  verification_rejection_reason text         [not null, default: ""]
+  onboarding_completed_at       timestamptz    [null]
+  onboarding_token_issued_at    timestamptz    [null, note: "invalida el link de invitación anterior al reenviar"]
+  data_consent_at               timestamptz    [null, note: "consentimiento de uso de datos"]
+  data_consent_version          varchar(20)  [not null, default: ""]
+  is_active                     boolean      [not null, default: true]
+  is_staff                      boolean      [not null, default: false]
+  is_superuser                  boolean      [not null, default: false]
+  last_login                    timestamptz    [null]
+  created_at                    timestamptz    [not null]
+  updated_at                    timestamptz    [not null]
+}
+
+Table authentication_customuser_coordinator_programs {
+  id            bigint [pk, increment]
+  customuser_id uuid   [not null, ref: > authentication_customuser.id, note: "CASCADE"]
+  program_id    uuid   [not null, ref: > programs_program.id, note: "CASCADE"]
+
+  indexes {
+    (customuser_id, program_id) [unique]
+  }
+
+  Note: "Único ManyToMany real del esquema. programs_enrollment NO lo es: tiene atributos propios."
 }
 
 // ─── App: programs ──────────────────────────────────────────
@@ -31,17 +67,32 @@ Table programs_program {
   end_date    date          [not null]
   total_cost  decimal(10,2) [not null]
   is_active   boolean       [not null, default: true]
-  created_at  timestamp     [not null]
+  created_at  timestamptz     [not null]
+}
+
+Table programs_cohort {
+  id          uuid        [pk, note: "uuid4"]
+  program_id  uuid        [not null, ref: > programs_program.id, note: "CASCADE"]
+  number      int         [not null, note: "CHECK number >= 0"]
+  start_month date        [not null, note: "normalizado al día 1"]
+  end_month   date        [not null, note: "arranca como fin previsto; se resella con el mes real al finalizar"]
+  status      varchar(20) [not null, default: "UPCOMING", note: "UPCOMING | IN_PROGRESS | FINISHED — los tres son manuales"]
+  created_at  timestamptz   [not null]
+  updated_at  timestamptz   [not null]
+
+  indexes {
+    (program_id, number) [unique, name: "unique_cohort_number_per_program"]
+  }
 }
 
 Table programs_coordinatoremailconfig {
   id             uuid         [pk, note: "uuid4"]
-  program_id     uuid         [not null, ref: > programs_program.id]
+  program_id     uuid         [not null, ref: > programs_program.id, note: "CASCADE"]
   email          varchar(254) [not null]
   name           varchar(200) [not null]
   recipient_type varchar(2)   [not null, default: "TO", note: "TO | CC"]
   is_active      boolean      [not null, default: true]
-  created_at     timestamp    [not null]
+  created_at     timestamptz    [not null]
 
   indexes {
     (program_id, email) [unique]
@@ -49,81 +100,171 @@ Table programs_coordinatoremailconfig {
 }
 
 Table programs_enrollment {
-  id            uuid          [pk, note: "uuid4"]
-  bootcamper_id uuid          [not null, ref: > authentication_customuser.id]
-  bootcamp_id   uuid          [not null, ref: > programs_program.id]
-  start_date    date          [not null]
-  agreed_price  decimal(10,2) [not null]
-  status        varchar(20)   [not null, default: "ACTIVE", note: "ACTIVE | DROPPED | GRADUATED"]
-  created_at    timestamp     [not null]
-  updated_at    timestamp     [not null]
+  id                  uuid          [pk, note: "uuid4"]
+  bootcamper_id       uuid          [not null, ref: > authentication_customuser.id, note: "CASCADE"]
+  bootcamp_id         uuid          [not null, ref: > programs_program.id, note: "CASCADE"]
+  cohort_id           uuid          [null, ref: > programs_cohort.id, note: "SET_NULL — borrar una cohorte no borra a la persona"]
+  start_date          date          [not null]
+  discount_percentage decimal(5,2)  [not null, default: 0, note: "0-100 validado en la app (sin CHECK) — se guarda además del precio para poder auditarlo"]
+  agreed_price        decimal(10,2) [not null, note: "derivado del descuento; es lo que cobran los pagos"]
+  status              varchar(20)   [not null, default: "ACTIVE", note: "ACTIVE | DROPPED | GRADUATED"]
+  created_at          timestamptz     [not null]
+  updated_at          timestamptz     [not null]
 
   indexes {
-    (bootcamper_id, bootcamp_id) [unique]
+    (bootcamper_id, bootcamp_id, cohort_id) [unique, name: "unique_enrollment_per_cohort"]
   }
-}
 
-// ─── App: leads ─────────────────────────────────────────────
-
-Table leads_lead {
-  id               uuid         [pk, note: "uuid4"]
-  name             varchar(200) [not null]
-  phone            varchar(20)  [not null]
-  email            varchar(254) [null]
-  program_interest varchar(200)
-  source           varchar(20)  [not null, default: "MANUAL", note: "INSTAGRAM | WHATSAPP | LANDING_PAGE | MANUAL"]
-  is_company       boolean      [not null, default: false]
-  status           varchar(30)  [not null, default: "NEW", note: "NEW | CONTACTED | QUALIFIED | INTERESTED | NOT_INTERESTED | SPEAK_COORDINATOR | CONVERTED"]
-  owner_id         uuid         [null, ref: > authentication_customuser.id]
-  program_id       uuid         [null, ref: > programs_program.id]
-  assigned_at      timestamp    [null]
-  last_contact     timestamp    [null]
-  version          int          [not null, default: 0]
-  deleted_at       timestamp    [null, note: "soft delete"]
-  created_at       timestamp    [not null]
-  updated_at       timestamp    [not null]
-}
-
-Table leads_interaction {
-  id               uuid        [pk, note: "uuid4"]
-  lead_id          uuid        [not null, ref: > leads_lead.id]
-  salesperson_id   uuid        [not null, ref: > authentication_customuser.id]
-  interaction_type varchar(20) [not null, note: "CALL | WHATSAPP | EMAIL | VISIT | NOTE"]
-  outcome          varchar(30) [not null, note: "INTERESTED | NOT_INTERESTED | NO_ANSWER | CALLBACK | SPEAK_COORDINATOR"]
-  interest_level   int         [null, note: "1–5"]
-  notes            text
-  campaign         varchar(100)
-  duration_minutes int         [null]
-  next_action      text
-  next_action_date date        [null]
-  created_at       timestamp   [not null]
+  Note: "Segunda constraint PARCIAL, no expresable en DBML: UNIQUE (bootcamper_id, bootcamp_id) WHERE cohort_id IS NULL (unique_enrollment_per_program_without_cohort). Hace falta porque Postgres no trata dos NULL como iguales. La unicidad es por COHORTE, no por programa: se puede reinscribir al mismo programa en otra cohorte."
 }
 
 // ─── App: payments ──────────────────────────────────────────
 
 Table payments_payment {
   id                       uuid          [pk, note: "uuid4"]
-  bootcamper_id            uuid          [not null, ref: > authentication_customuser.id]
-  program_id               uuid          [not null, ref: > programs_program.id]
-  receipt_file             varchar(255)  [not null]
+  bootcamper_id            uuid          [not null, ref: > authentication_customuser.id, note: "CASCADE — limit_choices_to role=BOOTCAMPER es regla de app, no de DB"]
+  program_id               uuid          [not null, ref: > programs_program.id, note: "CASCADE"]
+  payment_link_id          uuid          [null, ref: > payments_paymentlink.id, note: "SET_NULL — sólo cuando payment_method=LINK"]
+  receipt_file             varchar(100)  [not null, note: "receipts/YYYY/MM/ — FileField sin max_length: Django usa 100"]
   receipt_file_type        varchar(10)   [not null, note: "image | pdf"]
-  ocr_bank_name            varchar(200)
-  ocr_account_last_digits  varchar(10)
+  payment_method           varchar(10)   [not null, default: "TRANSFER", note: "TRANSFER | LINK"]
+  ocr_bank_name            varchar(200)  [not null, default: ""]
+  ocr_account_last_digits  varchar(10)   [not null, default: ""]
   ocr_amount               decimal(12,2) [null]
-  ocr_transaction_id       varchar(100)
+  ocr_transaction_id       varchar(100)  [not null, default: ""]
   ocr_payment_date         date          [null]
-  ocr_confidence           json
-  ocr_raw_text             text
-  confirmed_amount         decimal(12,2) [null]
-  confirmed_bank_name      varchar(200)
-  confirmed_transaction_id varchar(100)
+  ocr_confidence           jsonb         [not null, default: "{}"]
+  ocr_raw_text             text          [not null, default: ""]
+  payer_name               varchar(200)  [not null, default: "", note: "facturación — OCR"]
+  payer_identification     varchar(20)   [not null, default: "", note: "cédula o RUC — OCR best-effort"]
+  payer_email              varchar(254)  [not null, default: "", note: "facturación — OCR"]
+  payer_address            varchar(255)  [not null, default: "", note: "nunca sale del comprobante: siempre manual"]
+  payer_phone              varchar(20)   [not null, default: "", note: "nunca sale del comprobante: siempre manual"]
+  document_number          varchar(50)   [not null, default: "", note: "Nº de comprobante"]
+  confirmed_amount         decimal(12,2) [null, note: "verificado por una persona"]
+  confirmed_bank_name      varchar(200)  [not null, default: ""]
+  confirmed_transaction_id varchar(100)  [not null, default: ""]
   status                   varchar(10)   [not null, default: "PENDING", note: "DRAFT | PENDING | APPROVED | REJECTED"]
-  rejection_reason         text
-  validated_by_id          uuid          [null, ref: > authentication_customuser.id]
-  validated_at             timestamp     [null]
-  submitted_at             timestamp     [not null]
-  updated_at               timestamp     [not null]
+  rejection_reason         text          [not null, default: ""]
+  validated_by_id          uuid          [null, ref: > authentication_customuser.id, note: "SET_NULL"]
+  validated_at             timestamptz     [null]
+  submitted_at             timestamptz     [not null]
+  updated_at               timestamptz     [not null]
+  deleted_at               timestamptz     [null, note: "soft-delete, SIN manager que lo filtre (a diferencia de leads_lead)"]
+  deleted_by_id            uuid          [null, ref: > authentication_customuser.id, note: "SET_NULL"]
+
+  indexes {
+    status
+    submitted_at
+    deleted_at
+  }
+
+  Note: "Los campos ocr_* son lo extraído del comprobante; los confirmed_* lo verificado por una persona. El OCR corre en Celery, nunca inline."
 }
 
-// ─── App: notifications — stub, no models yet ───────────────
-// ─── App: analytics     — stub, no models yet ───────────────
+Table payments_paymentplan {
+  id            uuid         [pk, note: "uuid4"]
+  bootcamper_id uuid         [unique, not null, ref: - authentication_customuser.id, note: "OneToOne CASCADE — uno por bootcamper, subir de nuevo reemplaza"]
+  file          varchar(100) [not null, note: "payment_plans/YYYY/MM/"]
+  file_type     varchar(10)  [not null, note: "pdf | excel"]
+  original_name varchar(255) [not null, default: ""]
+  uploaded_by_id uuid        [null, ref: > authentication_customuser.id, note: "SET_NULL"]
+  uploaded_at   timestamptz    [not null]
+  updated_at    timestamptz    [not null]
+}
+
+Table payments_paymentlink {
+  id            uuid          [pk, note: "uuid4"]
+  enrollment_id uuid          [not null, ref: > programs_enrollment.id, note: "CASCADE"]
+  url           varchar(200)  [not null, note: "generado fuera del sistema (ESPOLTECH) y pegado a mano"]
+  amount        decimal(12,2) [null, note: "monto negociado; NO se valida contra el saldo del programa"]
+  note          varchar(200)  [not null, default: ""]
+  status        varchar(10)   [not null, default: "ACTIVE", note: "ACTIVE | EXPIRED | REVOKED"]
+  created_by_id uuid          [null, ref: > authentication_customuser.id, note: "SET_NULL"]
+  expires_at    timestamptz     [not null, note: "vencer se calcula al vuelo; no hay cron que pase a EXPIRED"]
+  revoked_at    timestamptz     [null]
+  created_at    timestamptz     [not null]
+
+  indexes {
+    status
+    created_at
+  }
+}
+
+Table payments_bootcamperassignmentsetting {
+  id                  bigint    [pk, increment, note: "singleton pk=1 por convención, no por constraint"]
+  self_assign_enabled boolean   [not null, default: true]
+  updated_by_id       uuid      [null, ref: > authentication_customuser.id, note: "SET_NULL"]
+  updated_at          timestamptz [not null]
+}
+
+// ─── App: leads ─────────────────────────────────────────────
+
+Table leads_lead {
+  id                    uuid         [pk, note: "uuid4"]
+  name                  varchar(200) [not null]
+  phone                 varchar(20)  [not null]
+  email                 varchar(254) [null]
+  program_interest      varchar(200) [not null, default: "", note: "texto libre; distinto de program_id"]
+  source                varchar(20)  [not null, default: "MANUAL", note: "INSTAGRAM | WHATSAPP | LANDING_PAGE | MANUAL"]
+  is_company            boolean      [not null, default: false]
+  status                varchar(30)  [not null, default: "NEW", note: "NEW | QUALIFIED | INTERESTED | NOT_INTERESTED | CONVERTED | DISCARDED"]
+  owner_id              uuid         [null, ref: > authentication_customuser.id, note: "SET_NULL — vendedor asignado"]
+  bootcamper_id         uuid         [null, ref: > authentication_customuser.id, note: "SET_NULL — usuario resultante de la conversión"]
+  program_id            uuid         [null, ref: > programs_program.id, note: "SET_NULL"]
+  assigned_at           timestamptz    [null]
+  released_at           timestamptz    [null, note: "con assigned_at da el tiempo de retención"]
+  last_contact          timestamptz    [null]
+  discard_reason        varchar(20)  [not null, default: "", note: "NO_BUDGET | SCHEDULE | NO_RESPONSE | FREE_ONLY | OTHER"]
+  discard_detail        text         [not null, default: ""]
+  discarded_at          timestamptz    [null]
+  discarded_by_id       uuid         [null, ref: > authentication_customuser.id, note: "SET_NULL"]
+  status_before_discard varchar(30)  [not null, default: "", note: "para deshacer un descarte sin adivinar"]
+  version               int          [not null, default: 0, note: "CHECK version >= 0 — bloqueo optimista"]
+  deleted_at            timestamptz    [null, note: "soft-delete; LeadManager lo filtra por defecto"]
+  created_at            timestamptz    [not null]
+  updated_at            timestamptz    [not null]
+
+  indexes {
+    status
+    deleted_at
+    created_at
+  }
+}
+
+Table leads_interaction {
+  id               uuid         [pk, note: "uuid4"]
+  lead_id          uuid         [not null, ref: > leads_lead.id, note: "CASCADE"]
+  salesperson_id   uuid         [not null, ref: > authentication_customuser.id, note: "PROTECT — no se borra un usuario con interacciones"]
+  interaction_type varchar(20)  [not null, note: "CALL | WHATSAPP | EMAIL | VISIT | NOTE | SYSTEM"]
+  outcome          varchar(30)  [not null, note: "CALL_AGAIN | SEND_INFO | SCHEDULE_VISIT | AWAIT_REPLY | SPEAK_COORDINATOR | REASSIGNED | DISCARDED | RESTORED | COHORT_CHANGED"]
+  interest_level   int          [null, note: "1-5 validado en la app; la DB no tiene CHECK"]
+  notes            text         [not null, default: ""]
+  campaign         varchar(100) [not null, default: ""]
+  duration_minutes int          [null, note: "CHECK duration_minutes >= 0"]
+  next_action      text         [not null, default: ""]
+  next_action_date date         [null]
+  lead_status      varchar(20)  [null, note: "estado del lead sellado tras la interacción; nulo sólo en las anteriores a la migración 0014"]
+  created_at       timestamptz    [not null]
+}
+
+Table leads_leadassignmentsetting {
+  id                  bigint    [pk, increment, note: "singleton pk=1 por convención, no por constraint"]
+  self_assign_enabled boolean   [not null, default: true]
+  updated_by_id       uuid      [null, ref: > authentication_customuser.id, note: "SET_NULL"]
+  updated_at          timestamptz [not null]
+}
+
+// ─── App: meetings ──────────────────────────────────────────
+
+Table meetings_meeting {
+  id              bigint       [pk, increment, note: "DEUDA: única entidad de negocio sin PK uuid"]
+  title           varchar(255) [not null]
+  description     text         [not null, default: ""]
+  start_time      timestamptz    [not null]
+  end_time        timestamptz    [not null]
+  lead_id         uuid         [not null, ref: > leads_lead.id, note: "CASCADE"]
+  assigned_to_id  uuid         [null, ref: > authentication_customuser.id, note: "SET_NULL"]
+  google_event_id varchar(255) [null, note: "id del evento en Google Calendar"]
+  created_at      timestamptz    [not null]
+}
