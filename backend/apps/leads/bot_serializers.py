@@ -46,6 +46,12 @@ class BotLeadCreateSerializer(serializers.ModelSerializer):
         fields = ('phone', 'name', 'email', 'program', 'program_id')
         extra_kwargs = {
             'email': {'required': False, 'allow_null': True, 'allow_blank': True},
+            # El nombre deja de ser obligatorio: el bot da de alta el lead en
+            # cuanto sabe el teléfono, antes de preguntarlo, para no perder a
+            # quien abandona la conversación a mitad. Sin nombre, el servicio
+            # guarda el marcador `PARTIAL_LEAD_NAME` y el PATCH posterior lo
+            # sobrescribe cuando la persona por fin lo dice.
+            'name': {'required': False, 'allow_blank': True},
         }
 
 
